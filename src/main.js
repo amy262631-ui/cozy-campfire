@@ -587,6 +587,46 @@ async function init() {
   window.addEventListener('resize', onResize);
   onResize();
 
+  /** 要送給伺服器的狀態 */
+  function netState(actionState) {
+    return {
+      ...player.getNetworkState(),
+      actionState: actionState ?? ((actions.state === 'fish' && fishing.netAction) || player.actionState), // 拉竿、舉魚
+      doneness: actions.state === 'roast' ? actions.doneness : 0,
+      extra: fishing.netExtra || (forest.carrying ? STONE_FLAG : 0), // 舉起來的魚（魚種＋公分），或頭上頂著石頭
+    };
+  }
+
+  // ---------- 掛機自動打盹 ----------
+  // 超過 3 分鐘沒操作（或分頁切到背景超過 1 分鐘），角色自動裹上毯子打盹、頭上冒 Zzz；一動就醒來。
+  // 用 setInterval 檢查：分頁在背景時畫面不會更新，但計時器還會跑，別人才看得到他睡著了。
+  const AFK_SLEEP = Number(params.get('afk')) || 180;
+  const HIDDEN_SLEEP = 60;
+  let autoSleep = false;
+  let hiddenSince = 0;
+  document.addEventListener('visibilitychange', () => {
+    hiddenSince = document.hidden ? performance.now() : 0;
+  });
+  setInterval(() => {
+    if (!joined || editing) return;
+    const idle = input.idleSeconds;
+    const hiddenFor = hiddenSince ? (performance.now() - hiddenSince) / 1000 : 0;
+    if (!autoSleep) {
+      const sleepy = idle > AFK_SLEEP || hiddenFor > HIDDEN_SLEEP;
+      if (sleepy && actions.state === 'free' && !roomMgr?.busy) {
+        forest.dropStone(player.character);
+        actions.start('blanket');
+        autoSleep = true;
+        net.update(1, netState('blanket')); // 背景分頁不會跑畫面迴圈，直接送一次
+      }
+    } else if (actions.state !== 'blanket') {
+      autoSleep = false; // 自己起身了（移動或按 Z）
+    } else if (idle < 2 && !document.hidden) {
+      actions.stop(); // 有操作（滑鼠、觸控、按鍵）就醒來
+      autoSleep = false;
+    }
+  }, 2000);
+
   // ---------- Loop ----------
   const clock = new THREE.Clock();
   let joined = false;
@@ -620,12 +660,7 @@ async function init() {
     player.update(dt, input, cameraRig.yaw, room, elapsed, action);
     remotes.pushOut(player.position, player.radius);
     remotes.update(dt, elapsed);
-    net.update(dt, {
-      ...player.getNetworkState(),
-      actionState: (actions.state === 'fish' && fishing.netAction) || player.actionState, // 拉竿、舉魚
-      doneness: actions.state === 'roast' ? actions.doneness : 0,
-      extra: fishing.netExtra || (forest.carrying ? STONE_FLAG : 0), // 舉起來的魚（魚種＋公分），或頭上頂著石頭
-    });
+    net.update(dt, netState());
     cameraRig.showOff = fishing.phase === 'show';
     cameraRig.update(dt);
 
