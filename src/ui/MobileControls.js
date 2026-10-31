@@ -60,7 +60,32 @@ export class MobileControls {
       tent_focus: { interact: null, roast: null, stargaze: null },
       tent_social: { interact: ['☕', t('喝茶')], roast: null, stargaze: null },
     };
-    const layout = LAYOUT[roomId] ?? LAYOUT.forest_main;
+    this.layout = LAYOUT[roomId] ?? LAYOUT.forest_main;
+    this.override = undefined;
+    this.#apply();
+  }
+
+  /**
+   * 依所在位置換掉「互動」按鈕：走到祈福處變「⛩️ 祈福」、告示牌前變「📌 告示牌」，
+   * 並讓按鈕發光提示可以按。傳 null 表示回到房間預設。
+   * @param {[string, string] | null} conf
+   */
+  setInteract(conf) {
+    const k = conf ? conf.join('|') : '';
+    if (k === this.override) return;
+    this.override = k;
+    this.#apply(conf);
+  }
+
+  /** 提示文字裡的按鍵 → 對應手機按鈕的圖示（E、F、Z、空白鍵） */
+  keyIcon(key) {
+    const map = { E: 'interact', F: 'roast', Z: 'blanket', 空白鍵: 'stargaze' };
+    const btn = map[key] && document.querySelector(`.action-btn[data-action="${map[key]}"]`);
+    return btn && !btn.classList.contains('disabled') ? btn.querySelector('span').textContent : null;
+  }
+
+  #apply(override = null) {
+    const layout = override ? { ...this.layout, interact: override } : this.layout;
     document.querySelectorAll('.action-btn').forEach((btn) => {
       const a = btn.dataset.action;
       const def = BUTTONS.find((b) => b.action === a);
@@ -69,6 +94,7 @@ export class MobileControls {
       const [icon, label] = conf ?? [def.icon, def.label];
       btn.querySelector('span').textContent = icon;
       btn.querySelector('small').textContent = label;
+      btn.classList.toggle('glow', a === 'interact' && !!override);
     });
   }
 

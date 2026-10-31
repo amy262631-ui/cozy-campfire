@@ -426,6 +426,13 @@ export function createForestRoom() {
       return false;
     },
 
+    /** 手機的互動按鈕要顯示什麼（null ＝預設的「添柴」） */
+    interactHint(actions) {
+      if (nearShrine(actions)) return ['⛩️', t('祈福')];
+      if (nearBoard(actions)) return ['📌', t('告示牌')];
+      return null;
+    },
+
     prompt(actions) {
       if (nearShrine(actions)) return t('<kbd>E</kbd> 參拜・擲筊・抽籤・寫繪馬');
       if (nearBoard(actions)) return t('<kbd>E</kbd> 看告示牌・留言　<kbd>F</kbd> 烤棉花糖');

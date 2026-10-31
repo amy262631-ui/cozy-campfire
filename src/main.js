@@ -451,7 +451,15 @@ async function init() {
 
     hud.setFire(campfire.fuelRatio);
     hud.setSoundBlocked(joined && !audio.running); // 聲音還沒被瀏覽器放行時，顯示「點一下開啟聲音」
-    hud.setPrompt(actions.prompt);
+    if (mobile) {
+      // 手機：互動按鈕跟著位置換（祈福處、告示牌），提示裡的按鍵換成按鈕圖示
+      mobile.setInteract(actions.state === 'free' ? (roomMgr.current.interactHint?.(actions) ?? null) : null);
+      const p = actions.prompt;
+      hud.setPrompt(p && p.replace(/<kbd>([^<]*)<\/kbd>/g, (_, k) => {
+        const icon = mobile.keyIcon(k);
+        return icon ? `<kbd class="key-icon">${icon}</kbd>` : '';
+      }));
+    } else hud.setPrompt(actions.prompt);
     document.body.classList.toggle('in-action', actions.state !== 'free');
 
     renderer.render(scene, camera);
