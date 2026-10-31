@@ -124,6 +124,17 @@ function buildTasks(touch) {
       },
     },
 
+    hang: {
+      icon: '🌳',
+      name: t('裝飾心願大樹'),
+      steps: 2,
+      on: 'hang',
+      guide(s) {
+        if (!s.inForest) return back;
+        return walk(s, s.tree, 1.8, '走到<b>心願大樹</b>下（還有 {n} 公尺）', k(t('按 <b>E</b>，用松果換一個裝飾掛上去'), t('點 <b>🌳 大樹</b>，用松果換一個裝飾掛上去')));
+      },
+    },
+
     meteor: {
       icon: '🌠',
       name: t('看見一顆流星'),
@@ -143,8 +154,10 @@ export class RitualGuide {
    * @param {{ scene, hud, touch?: boolean, onDone?: (id) => Promise<number|null> }} opts
    *   onDone：任務完成時呼叫，回傳「今天第幾位完成」（單人模式回傳 null）
    */
-  constructor({ scene, hud, touch = false, onDone, root = document.getElementById('ui') }) {
+  constructor({ scene, hud, touch = false, onDone, canPick, root = document.getElementById('ui') }) {
     this.hud = hud;
+    /** 某個任務現在能不能出（例如松果不夠就不出「裝飾心願大樹」） */
+    this.canPick = canPick ?? (() => true);
     this.touch = touch;
     this.onDone = onDone;
     this.tasks = buildTasks(touch);
@@ -220,7 +233,7 @@ export class RitualGuide {
     } catch {
       /* 無痕模式 */
     }
-    const ids = Object.keys(this.tasks).filter((id) => id !== last);
+    const ids = Object.keys(this.tasks).filter((id) => id !== last && this.canPick(id));
     return ids[Math.floor(Math.random() * ids.length)];
   }
 

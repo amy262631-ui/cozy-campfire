@@ -27,7 +27,7 @@ export class HUD {
 
       <div class="prompt" id="prompt"></div>
 
-      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button></div>
+      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span></div>
       <div class="today" id="today" hidden></div>
 
       <button type="button" class="sound-unlock" id="sound-unlock">${t('🔈 輕點這裡開啟聲音')}</button>
@@ -48,6 +48,7 @@ export class HUD {
       chChip: root.querySelector('#ch-chip'),
       meChip: root.querySelector('#me-chip'),
       today: root.querySelector('#today'),
+      pcChip: root.querySelector('#pc-chip'),
     };
     this.onMeClick = null;
     this.el.meChip.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -101,6 +102,24 @@ export class HUD {
   setMe(name) {
     this.el.meChip.textContent = `${name} ✏️`;
     this.el.meChip.title = t('改名字・換動物');
+  }
+
+  /** 松果數（null＝單人模式不顯示）；delta ＞ 0 時飄出「+n」 */
+  setPinecones(n, delta = 0) {
+    const el = this.el.pcChip;
+    el.hidden = n == null;
+    if (n == null) return;
+    el.textContent = `🌰 ${n}`;
+    if (delta > 0) {
+      const f = document.createElement('span');
+      f.className = 'pc-float';
+      f.textContent = `+${delta}`;
+      el.appendChild(f);
+      setTimeout(() => f.remove(), 1400);
+      el.classList.remove('bump');
+      void el.offsetWidth;
+      el.classList.add('bump');
+    }
   }
 
   /** 「今天有 N 位旅人來過 · 疊了 N 顆石頭」：就算現在只有你一個人，也知道有人來過 */

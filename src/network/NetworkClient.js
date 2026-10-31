@@ -93,7 +93,7 @@ export class NetworkClient {
     socket.on('disconnect', () => this.#setStatus('offline'));
     socket.on('connect_error', () => this.#setStatus('offline'));
 
-    for (const ev of ['playerJoined', 'playerLeft', 'states', 'fire', 'fireSync', 'song', 'caught', 'board', 'chat', 'emoji', 'wishes', 'notes', 'stone', 'lakeNews']) {
+    for (const ev of ['playerJoined', 'playerLeft', 'states', 'fire', 'fireSync', 'song', 'caught', 'board', 'chat', 'emoji', 'wishes', 'notes', 'stone', 'lakeNews', 'wallet', 'ornament']) {
       socket.on(ev, (data) => this.#emit(ev, data));
     }
   }
@@ -187,6 +187,18 @@ export class NetworkClient {
   /** 在營火告示牌留言 */
   note(text, color = 0) {
     if (this.online) this.socket.emit('note', { text, color });
+  }
+
+  /** 在心願大樹掛一個裝飾；回傳 { ok, pc, item, reason } */
+  hang(o) {
+    if (!this.online) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), 5000);
+      this.socket.emit('hang', { o }, (res) => {
+        clearTimeout(timer);
+        resolve(res);
+      });
+    });
   }
 
   /** 完成每日任務；回傳 { ok, n }（今天第幾位完成） */

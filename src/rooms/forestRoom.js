@@ -4,6 +4,7 @@ import { Campfire } from '../scene/Campfire.js';
 import { makeSign, lowpoly, shadowAll } from './shared.js';
 import { buildShrine } from './shrine.js';
 import { buildCairnGarden, CAIRN_GARDEN_CLEARING } from './cairns.js';
+import { buildWishTree, WISH_TREE_CLEARING } from './wishTree.js';
 import { EMOTE_IDS } from '../social/emotes.js';
 import { t } from '../i18n/i18n.js';
 
@@ -336,7 +337,7 @@ export function createForestRoom() {
   const defs = ENTRANCES.map((e) => ({ ...e, trigger: polar(e.angle, TRIGGER_R), build: polar(e.angle, BUILD_R) }));
   const shrinePos = polar(SHRINE_ANGLE, SHRINE_R);
   const world = createWorld(group, {
-    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING],
+    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING, WISH_TREE_CLEARING],
   });
 
   const campfire = new Campfire();
@@ -395,6 +396,10 @@ export function createForestRoom() {
   const nearShrine = (actions) =>
     Math.hypot(actions.player.position.x - shrineFront.x, actions.player.position.z - shrineFront.z) < 2.2;
 
+  // ---------- 心願大樹（大家用松果換裝飾掛上去） ----------
+  const wishTree = buildWishTree(world);
+  group.add(wishTree.group);
+
   // ---------- 石塔祈願（祈福處步道旁） ----------
   const cairnGarden = buildCairnGarden(world);
   group.add(cairnGarden.group);
@@ -425,6 +430,7 @@ export function createForestRoom() {
     noticeBoard,
     boardFront,
     cairnGarden,
+    wishTree,
     get carrying() {
       return carrying;
     },
@@ -438,6 +444,10 @@ export function createForestRoom() {
       if (carrying && name !== 'interact') setCarry(actions.character, false);
       // 正在打招呼、合十時按 E：先結束動作再互動
       if (name === 'interact' && EMOTE_IDS.has(actions.state)) actions.stop();
+      if (name === 'interact' && actions.state === 'free' && !carrying && wishTree.near(actions.player.position)) {
+        actions.onTree?.();
+        return true;
+      }
       if (name === 'interact' && actions.state === 'free') {
         const pos = actions.player.position;
         const ci = cairnGarden.nearCairn(pos);
@@ -486,6 +496,7 @@ export function createForestRoom() {
       }
       if (cairnGarden.nearPile(pos)) return ['🪨', t('撿石頭')];
       if (ci >= 0) return ['🗿', t('石塔')];
+      if (wishTree.near(pos)) return ['🌳', t('大樹')];
       return null;
     },
 
@@ -501,12 +512,14 @@ export function createForestRoom() {
       }
       if (cairnGarden.nearPile(pos)) return t('<kbd>E</kbd> 撿一顆石頭');
       if (ci >= 0) return t('<kbd>E</kbd> 看石塔紀錄（{n} 顆）', { n: cairnGarden.cairns[ci].stones.length });
+      if (wishTree.near(pos)) return t('<kbd>E</kbd> 心願大樹・掛一個裝飾');
       return actions.nearFire ? t('<kbd>E</kbd> 添柴火　<kbd>F</kbd> 烤棉花糖') : null;
     },
 
     update(dt, t, camera) {
       shrine.update(dt, t);
       cairnGarden.update(dt, t);
+      wishTree.update(dt, t);
       // world / campfire 由 RoomManager 另外更新（星空與火勢要持續運作）
       // 招牌離鏡頭太近時淡出，避免擋住畫面
       for (const sgn of signs) {

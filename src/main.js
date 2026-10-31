@@ -33,6 +33,8 @@ import { ChannelPanel } from './ui/ChannelPanel.js';
 import { CairnPanel } from './ui/CairnPanel.js';
 import { RitualGuide } from './ui/RitualGuide.js';
 import { LakeNews } from './ui/LakeNews.js';
+import { TreePanel } from './ui/TreePanel.js';
+import { ORNAMENT_BY_ID } from './game/ornaments.js';
 import { STONE_FLAG, CAIRN_MAX } from './rooms/cairns.js';
 import { FishingGame } from './fishing/FishingGame.js';
 import { FISH } from './fishing/fishData.js';
@@ -252,6 +254,49 @@ async function init() {
   actions.onNoticeBoard = () => noticePanel.open();
   let myReward = 0;
 
+  // ---------- 松果與心願大樹 ----------
+  /** 我的松果（null＝還沒連上伺服器） */
+  let pinecones = null;
+  const setCoins = (n, delta = 0) => {
+    pinecones = n;
+    hud.setPinecones(n, delta);
+    treePanel.refresh();
+  };
+  const treePanel = new TreePanel({
+    getItems: () => forest.wishTree.items,
+    getCoins: () => (net.online ? pinecones : null),
+    onHang: async (id) => {
+      const res = await net.hang(id);
+      if (res?.ok) {
+        const o = ORNAMENT_BY_ID[id];
+        hud.toast(t('{icon} 把{name}掛上心願大樹了，許個願吧 ✨', { icon: o.icon, name: o.name }), 3500);
+        audio.sfx('bell');
+        ritual?.event('hang');
+        return true;
+      }
+      if (res?.reason === 'poor') hud.toast(t('松果不夠喔，做小任務或釣魚可以撿到更多 🌰'));
+      else if (res?.reason === 'tooFast') hud.toast(t('慢慢來，一個一個掛 ✨'));
+      else hud.toast(t('沒掛上去，再試一次吧'));
+      return false;
+    },
+  });
+  actions.onTree = () => treePanel.open();
+  net.on('wallet', ({ pc, delta, reason }) => {
+    setCoins(pc, delta);
+    if (delta <= 0) return;
+    if (reason === 'sit') hud.toast(t('🌰 在營地待了一會兒，撿到 {n} 顆松果', { n: delta }));
+    else if (reason === 'quest') hud.toast(t('🌰 完成任務，拿到 {n} 顆松果！可以去心願大樹換裝飾', { n: delta }), 3500);
+    else if (reason === 'fish') hud.toast(t('🌰 釣到魚，撿到 {n} 顆松果', { n: delta }));
+  });
+  net.on('ornament', ({ item, by }) => {
+    forest.wishTree.add(item);
+    treePanel.refresh();
+    if (by !== net.id && roomMgr?.current.id === 'forest_main') {
+      const o = ORNAMENT_BY_ID[item.o];
+      if (o) hud.toast(t('🌳 {name} 在心願大樹掛了一個{o}', { name: item.n, o: o.name }));
+    }
+  });
+
   // ---------- 石塔祈願 ----------
   /** 全部石塔的石頭：[[{ n, s, at }]]（連線時由伺服器提供，單人模式存在這裡） */
   let cairnData = forest.cairnGarden.cairns.map(() => []);
@@ -276,6 +321,7 @@ async function init() {
     scene,
     hud,
     touch: !!mobile,
+    canPick: (id) => id !== 'hang' || (pinecones ?? 0) >= 3,
     // 完成小任務：問伺服器「今天第幾位完成」（單人模式沒有數字）
     onDone: async (id) => (net.online ? ((await net.quest(id))?.n ?? null) : null),
   });
@@ -310,6 +356,7 @@ async function init() {
     shrine: forest.shrineFront,
     board: forest.boardFront,
     lakeGate: forest.entrances.find((e) => e.to === 'lake_dock'),
+    tree: forest.wishTree.pos,
     dockEnd: rooms.lake_dock.dockEnd,
     pile: garden.pile,
     cairnTop: (i) => ({ x: garden.cairns[i].spot.x, y: 0, z: garden.cairns[i].spot.z }),
@@ -374,6 +421,10 @@ async function init() {
     if (res.cairns) applyCairns(res.cairns);
     if (res.today) hud.setToday(res.today);
     if (res.lakeNews) lakeNews.setAll(res.lakeNews);
+    if (res.tree) {
+      forest.wishTree.setAll(res.tree);
+      treePanel.refresh();
+    }
     refreshOnline();
   }
   const localWishes = [];
@@ -393,6 +444,19 @@ async function init() {
       hud.toast(res.reward === 2 ? t('🍀 謝謝你的支持！頭上長出了一片四葉草') : t('🌼 謝謝你的支持！頭上開了一朵小黃花'), 5000);
     }
     myReward = res.reward || 0;
+    // 松果：每天第一次來會送松果（連續越多天越多）
+    if (res.wallet) {
+      const w = res.wallet;
+      setCoins(w.pc, w.daily?.gain ?? 0);
+      if (w.daily) {
+        hud.toast(
+          w.daily.streak > 1
+            ? t('🔥 連續第 {d} 天來營火旁，送你 {n} 顆松果 🌰', { d: w.daily.streak, n: w.daily.gain })
+            : t('🌰 歡迎來到營火旁，送你 {n} 顆松果，可以去心願大樹換裝飾', { n: w.daily.gain }),
+          5000,
+        );
+      }
+    }
     player.character.setAccessory?.(myReward);
     applySnapshot(res);
   });
@@ -480,6 +544,7 @@ async function init() {
       if (room.id !== 'forest_main') forest.dropStone(player.character);
       cairnPanel.close();
       lakeNews.setRoom(room.id);
+      treePanel.close();
       pomodoro.show(!!room.focusMode);
       mobile?.setRoom(room.id);
       fishingUI.showTools(room.id === 'lake_dock');
@@ -501,6 +566,7 @@ async function init() {
       if (res.notes) applyNotes(res.notes);
       if (res.cairns) applyCairns(res.cairns);
       if (res.lakeNews) lakeNews.setAll(res.lakeNews);
+      if (res.tree) forest.wishTree.setAll(res.tree);
     } else if (res && !res.ok && res.reason === 'full') {
       hud.toast(fullMsg(), 4000);
     }
@@ -685,7 +751,7 @@ async function init() {
 
   // 方便在瀏覽器 console 除錯（開發模式或網址加 ?debug）
   if (import.meta.env.DEV || params.has('debug')) {
-    window.__cozy = { scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual };
+    window.__cozy = { scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel };
   }
 }
 
