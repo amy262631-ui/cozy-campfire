@@ -1,0 +1,25 @@
+{
+  "name": "cozy-campfire",
+  "private": true,
+  "version": "0.1.0",
+  "description": "迷霧森林露營地：3D 多人療癒陪伴空間",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "node server/index.js",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "preview": "vite preview",
+    "check": "node scripts/check-i18n.mjs"
+  },
+  "dependencies": {
+    "express": "^4.22.3",
+    "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "acorn": "^8.19.0",
+    "vite": "^5.4.0"
+  }
+}

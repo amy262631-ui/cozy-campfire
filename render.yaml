@@ -1,0 +1,18 @@
+# Render 一鍵部署設定（Blueprint）
+# 在 Render 後台選 New → Blueprint，連到這個專案的 GitHub repo 即可。
+services:
+  - type: web
+    name: cozy-campfire
+    runtime: node
+    plan: free            # 免費方案：15 分鐘沒人會休眠，下一位訪客約等 1 分鐘喚醒
+    region: singapore     # 離台灣最近
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: CHANNEL_MAX   # 每個分流最多幾人
+        value: "100"
+      - key: CHANNELS      # 平常開幾個分流（全滿時會自動加開）
+        value: "3"
