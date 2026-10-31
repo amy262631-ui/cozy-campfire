@@ -2778,3 +2778,135 @@ body.touch .title-sub {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* ---------- 湖畔即時動態 ---------- */
+.lake-news {
+  position: absolute;
+  top: 118px;
+  right: 18px;
+  width: 250px;
+  padding: 9px 11px;
+  border-radius: 14px;
+  background: rgba(16, 28, 38, 0.72);
+  border: 1px solid rgba(140, 200, 255, 0.28);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+  font-size: 12px;
+}
+
+.lake-news[hidden] {
+  display: none;
+}
+
+.ln-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #a9d8ff;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.ln-go {
+  padding: 2px 9px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(140, 200, 255, 0.22);
+  color: #dff0ff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ln-item {
+  padding: 5px 0;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.ln-item:first-child {
+  border-top: none;
+}
+
+.ln-main b {
+  color: #ffe6b0;
+}
+
+.ln-meta {
+  margin-top: 1px;
+  opacity: 0.65;
+  font-size: 11px;
+}
+
+.ln-stars {
+  color: #ffd25e;
+  letter-spacing: -1px;
+}
+
+.ln-item.rare .ln-main b {
+  color: #ffb3d1;
+  text-shadow: 0 0 8px rgba(255, 140, 190, 0.6);
+}
+
+.ln-item.legend .ln-main b {
+  color: #ffd84a;
+  text-shadow: 0 0 10px rgba(255, 200, 60, 0.8);
+}
+
+.ln-item.fresh {
+  animation: ln-in 1.2s ease;
+}
+
+@keyframes ln-in {
+  0% { opacity: 0; transform: translateX(14px); background: rgba(140, 200, 255, 0.25); }
+  40% { opacity: 1; transform: none; }
+  100% { background: transparent; }
+}
+
+/* 手機：只顯示最新一筆，放右上；小任務卡片縮窄一點讓出位置 */
+body.touch .lake-news {
+  top: 112px;
+  right: 8px;
+  width: 42vw;
+  padding: 7px 9px;
+  font-size: 11px;
+}
+
+body.touch .ritual {
+  width: min(230px, 52vw);
+}
+
+/* ---------- 告示牌：支持營地 ---------- */
+.notice-support {
+  padding: 14px 12px 6px;
+  border-radius: 12px;
+  background: #f5e6c8;
+  color: #4a2f1c;
+  text-align: center;
+}
+
+.notice-support p {
+  margin: 6px 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.support-cup {
+  font-size: 40px;
+}
+
+.support-btn {
+  display: inline-block;
+  margin: 10px 0 4px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #c0784a, #8a4d2c);
+  color: #fff6e6;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(80, 40, 20, 0.3);
+}
+
+.notice-support .notice-hint {
+  opacity: 0.7;
+  color: #4a2f1c;
+}

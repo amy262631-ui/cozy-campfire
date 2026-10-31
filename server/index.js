@@ -63,7 +63,7 @@ const FISH_MAX_CM = 130;
 
 // ---------- 分流與房間資料 ----------
 /** 所有分流共用：繪馬、告示牌留言、釣魚排行 */
-const shared = { wishes: [], notes: [], board: [], cairns: [] };
+const shared = { wishes: [], notes: [], board: [], cairns: [], lakeNews: [] };
 /** @type {Map<number, { ch: number, fuel: number, rooms: Map<string, { players: Map<string, any>, song: number }> }>} */
 const channels = new Map();
 const key = (ch, roomId) => `${ch}:${roomId}`;
@@ -306,6 +306,7 @@ function roomSnapshot(c, id, selfId) {
     wishes: id === 'forest_main' ? shared.wishes : undefined,
     notes: id === 'forest_main' ? shared.notes : undefined,
     cairns: id === 'forest_main' ? shared.cairns : undefined,
+    lakeNews: shared.lakeNews,
     today: todayPublic(),
     players: [...r.players.values()].filter((p) => p.id !== selfId).map(publicInfo),
   };
@@ -577,6 +578,13 @@ io.on('connection', (socket) => {
       }
     }
     bump('fish');
+    // 湖畔即時動態：所有分流、所有地點都看得到（垃圾不算）
+    if (!JUNK.has(fish)) {
+      const item = { name: player.name, fish, size, rank, ch: chan.ch, at: now };
+      shared.lakeNews.push(item);
+      shared.lakeNews = shared.lakeNews.slice(-6);
+      io.emit('lakeNews', item);
+    }
     io.to(rkey).emit('caught', { id: socket.id, name: player.name, fish, size, rank });
   });
 

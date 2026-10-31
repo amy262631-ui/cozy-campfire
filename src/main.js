@@ -32,6 +32,7 @@ import { NoticePanel } from './ui/NoticePanel.js';
 import { ChannelPanel } from './ui/ChannelPanel.js';
 import { CairnPanel } from './ui/CairnPanel.js';
 import { RitualGuide } from './ui/RitualGuide.js';
+import { LakeNews } from './ui/LakeNews.js';
 import { STONE_FLAG, CAIRN_MAX } from './rooms/cairns.js';
 import { FishingGame } from './fishing/FishingGame.js';
 import { FISH } from './fishing/fishData.js';
@@ -372,6 +373,7 @@ async function init() {
     if (res.notes) applyNotes(res.notes);
     if (res.cairns) applyCairns(res.cairns);
     if (res.today) hud.setToday(res.today);
+    if (res.lakeNews) lakeNews.setAll(res.lakeNews);
     refreshOnline();
   }
   const localWishes = [];
@@ -439,6 +441,14 @@ async function init() {
     else hud.toast(t('🎣 {name} 釣到了 {size} 公分的{fish}', { name, size, fish: f.name }));
   });
   net.on('board', ({ board }) => fishingUI.setBoard(board, true));
+
+  // 湖畔即時動態：在營火旁也看得到湖邊誰釣到什麼
+  const lakeNews = new LakeNews({
+    hud,
+    compact: !!mobile,
+    onGo: () => roomMgr?.switchTo('lake_dock', switchOnServer),
+  });
+  net.on('lakeNews', (item) => lakeNews.push(item));
   net.on('chat', ({ id, name, text }) => {
     if (id === net.id) return;
     bubbles.show(id, text);
@@ -469,6 +479,7 @@ async function init() {
       remotes.reset([]); // 先清掉上一個房間的人，伺服器回應後再補上
       if (room.id !== 'forest_main') forest.dropStone(player.character);
       cairnPanel.close();
+      lakeNews.setRoom(room.id);
       pomodoro.show(!!room.focusMode);
       mobile?.setRoom(room.id);
       fishingUI.showTools(room.id === 'lake_dock');
@@ -489,6 +500,7 @@ async function init() {
       if (res.wishes) applyWishes(res.wishes);
       if (res.notes) applyNotes(res.notes);
       if (res.cairns) applyCairns(res.cairns);
+      if (res.lakeNews) lakeNews.setAll(res.lakeNews);
     } else if (res && !res.ok && res.reason === 'full') {
       hud.toast(fullMsg(), 4000);
     }

@@ -107,11 +107,6 @@ export class JoinScreen {
           <div class="ch-grid" id="join-ch-grid"></div>
         </div>
 
-        <details class="join-sponsor"${saved.code ? ' open' : ''}>
-          <summary>${t('🌼 我是贊助者（選填兌換碼）')}</summary>
-          <input id="join-code" class="join-input" maxlength="32" autocomplete="off" placeholder="${t('有收到兌換碼的話填在這裡')}" />
-        </details>
-
         <button type="submit" class="join-go">${this.edit ? t('好了') : t('進入營地')}</button>
         ${this.edit ? `<button type="button" class="join-cancel" id="join-cancel">${t('取消')}</button>` : ''}
       </form>
@@ -119,7 +114,6 @@ export class JoinScreen {
     document.body.appendChild(el);
 
     if (!this.edit) bindLanguageRow(el);
-    el.querySelector('#join-code').value = saved.code || '';
     const input = el.querySelector('#join-name');
     // 暱稱：自己打過的名字會留著；沒改過的話，每次都換一個新的隨機名字
     let autoName = randomName();
@@ -199,7 +193,7 @@ export class JoinScreen {
       el.querySelector('form').addEventListener('submit', (e) => {
         e.preventDefault();
         const name = input.value.trim().slice(0, 12) || autoName || randomName();
-        const code = el.querySelector('#join-code').value.trim();
+        const code = saved.code || '';
         // 在「我的樣子」裡換了動物或毛色，才記住外型；沒動就維持每次隨機
         const customLook = this.edit ? !!saved.customLook || fur !== startFur || species !== startSpecies : true;
         saveProfile({ name, fur, species, custom: name !== autoName, customLook, code });

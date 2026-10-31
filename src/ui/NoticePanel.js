@@ -2,7 +2,6 @@ import { t } from '../i18n/i18n.js';
 import { SPONSOR_URL } from '../config.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const ICON = { flower: '🌼', clover: '🍀' };
 /** 便條紙的顏色（與木牌上畫的一致） */
 export const NOTE_COLORS = ['#fff3b0', '#ffd6dc', '#d4f0d0', '#d6e6ff'];
 const NOTE_MAX = 60;
@@ -21,7 +20,7 @@ function ago(at) {
 /**
  * 營火告示牌（走到木牌前按 E 打開）：
  *  - 💬 留言板：看大家的便條、自己貼一張（所有分流共用）
- *  - 🌼 贊助者：贊助者名冊
+ *  - ☕ 支持營地：單純支持這個遊戲（不綁名字、沒有名冊）
  *  - 最下面不起眼的小字：☕ 請作者喝杯熱可可
  *
  *   onPost(text, color)  貼出留言
@@ -31,7 +30,6 @@ export class NoticePanel {
     this.hud = hud;
     this.onPost = onPost;
     this.notes = [];
-    this.sponsors = null;
     this.tab = 'notes';
     this.color = 0;
     this.lastPost = 0;
@@ -44,7 +42,7 @@ export class NoticePanel {
           <div class="notice-title">${t('📌 營火告示牌')}</div>
           <div class="notice-tabs">
             <button type="button" data-tab="notes" class="on">${t('💬 留言板')}</button>
-            <button type="button" data-tab="sponsors">${t('🌼 贊助者')}</button>
+            <button type="button" data-tab="support">${t('☕ 支持營地')}</button>
           </div>
 
           <div class="notice-page" data-page="notes">
@@ -61,14 +59,18 @@ export class NoticePanel {
             <div class="notice-list" id="notice-list"></div>
           </div>
 
-          <div class="notice-page" data-page="sponsors" hidden>
-            <div class="notice-sub">${t('謝謝每一位讓這團火繼續燒下去的人')}</div>
-            <div class="notice-sponsors" id="notice-sponsors"></div>
-            <div class="notice-hint">${t('贊助後在進場時輸入同樣的暱稱，頭上就會開出一朵小花 🌼')}</div>
+          <div class="notice-page" data-page="support" hidden>
+            <div class="notice-support">
+              <div class="support-cup">☕</div>
+              <p>${t('這座小營地是一個人慢慢做出來的。')}<br />${t('伺服器和網址都需要一點費用。')}</p>
+              <p>${t('如果你喜歡在這裡坐一下，可以請我喝杯熱可可，讓這團營火繼續燒下去 🔥')}</p>
+              <a class="support-btn" id="notice-cocoa" href="${SPONSOR_URL ? esc(SPONSOR_URL) : '#'}" ${SPONSOR_URL ? 'target="_blank" rel="noopener"' : ''}>☕ ${t('請作者喝杯熱可可')}</a>
+              <div class="notice-hint">${t('支援信用卡、ATM、超商代碼 · 金額隨意，心意最重要 💛')}</div>
+            </div>
           </div>
 
           <div class="notice-foot">
-            <a class="notice-cocoa" id="notice-cocoa" href="${SPONSOR_URL ? esc(SPONSOR_URL) : '#'}" ${SPONSOR_URL ? 'target="_blank" rel="noopener"' : ''}>☕ ${t('請作者喝杯熱可可')}</a>
+            <span></span>
             <button type="button" class="notice-close" id="notice-close">${t('關閉')}</button>
           </div>
         </div>
@@ -78,7 +80,6 @@ export class NoticePanel {
     const $ = (s) => root.querySelector(s);
     this.el = $('#notice');
     this.listEl = $('#notice-list');
-    this.sponsorEl = $('#notice-sponsors');
     this.text = $('#notice-text');
     this.count = $('#notice-count');
 
@@ -126,7 +127,6 @@ export class NoticePanel {
   open() {
     this.el.classList.add('show');
     this.#renderNotes();
-    if (this.tab === 'sponsors') this.#loadSponsors();
   }
 
   close() {
@@ -144,7 +144,6 @@ export class NoticePanel {
     this.tab = tab;
     this.el.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
     this.el.querySelectorAll('[data-page]').forEach((p) => (p.hidden = p.dataset.page !== tab));
-    if (tab === 'sponsors') this.#loadSponsors();
   }
 
   #post() {
@@ -175,29 +174,5 @@ export class NoticePanel {
           )
           .join('')
       : `<div class="notice-empty">${t('還沒有人留言，來貼第一張吧 📌')}</div>`;
-  }
-
-  async #loadSponsors() {
-    if (!this.sponsors) this.sponsorEl.innerHTML = `<div class="notice-empty">${t('翻開名冊中⋯')}</div>`;
-    try {
-      const res = await fetch('api/sponsors', { cache: 'no-store' });
-      if (!res.ok) throw new Error(res.status);
-      this.sponsors = await res.json();
-    } catch {
-      this.sponsorEl.innerHTML = `<div class="notice-empty">${t('目前是單人模式，連上伺服器後就能看到贊助名單')}</div>`;
-      return;
-    }
-    this.sponsorEl.innerHTML = this.sponsors.length
-      ? this.sponsors
-          .map(
-            (s) => `
-          <div class="notice-sponsor">
-            <span>${ICON[s.reward] ?? '🌼'}</span>
-            <b>${esc(s.name)}</b>
-            <small>${esc(s.date ?? '')}</small>
-          </div>`,
-          )
-          .join('')
-      : `<div class="notice-empty">${t('還沒有贊助者')}</div>`;
   }
 }
