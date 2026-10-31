@@ -16,18 +16,47 @@ export const remote = !!(URL_ && TOKEN);
 const PREFIX = 'cozy:';
 
 let dataDir = '';
-export function init(dir) {
+/** 給 /api/health 看的狀態 */
+export const status = { mode: remote ? 'upstash' : 'local', ok: !remote, lastError: null, lastSave: null };
+
+/** 啟動時：確認 Upstash 真的能寫入、讀回（不只是有設定） */
+export async function init(dir) {
   dataDir = dir;
-  console.log(remote ? '[存檔] 使用 Upstash，重新部署也不會遺失資料 ✅' : '[存檔] 使用本機檔案（Render 重新部署會清空；建議設定 Upstash）');
+  if (!remote) {
+    console.log('[存檔] 使用本機檔案（Render 重新部署會清空；建議設定 Upstash）');
+    return;
+  }
+  if (/^["'\s]|["'\s]$/.test(URL_) || /^["'\s]|["'\s]$/.test(TOKEN)) {
+    console.warn('[存檔] ⚠️ UPSTASH 網址或 token 前後有引號或空格，請到 Render 的 Environment 刪掉');
+  }
+  try {
+    const stamp = String(Date.now());
+    await redis(['SET', PREFIX + '_check', stamp]);
+    const back = await redis(['GET', PREFIX + '_check']);
+    if (back !== stamp) throw new Error('寫入後讀回的值不一樣');
+    status.ok = true;
+    console.log('[存檔] Upstash 連線測試：可以寫入、讀取 ✅ 重新部署也不會遺失資料');
+  } catch (err) {
+    status.ok = false;
+    status.lastError = err.message;
+    console.error(`[存檔] ❌ Upstash 連線測試失敗：${err.message}`);
+    console.error('[存檔] ❌ 請檢查 Render 的 UPSTASH_REDIS_REST_URL／TOKEN（不要用「只讀令牌」、不要有引號或空格）');
+  }
 }
 
 async function redis(args) {
-  const res = await fetch(URL_, {
+  const res = await fetch(URL_.trim().replace(/^["']|["']$/g, ''), {
     method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}` },
+    headers: { Authorization: `Bearer ${TOKEN.trim().replace(/^["']|["']$/g, '')}` },
     body: JSON.stringify(args),
   });
-  const json = await res.json();
+  const text = await res.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`Upstash 回應不是 JSON（HTTP ${res.status}）：${text.slice(0, 80)}`);
+  }
   if (json.error) throw new Error(json.error);
   return json.result;
 }
@@ -68,20 +97,39 @@ export async function load(file) {
 }
 
 const timers = {};
+/** 還沒寫出去的資料（伺服器要關機時要先寫完） */
+const pending = new Map();
+
+async function write(file) {
+  const data = pending.get(file);
+  pending.delete(file);
+  clearTimeout(timers[file]);
+  delete timers[file];
+  if (data === undefined) return;
+  writeLocal(file, data);
+  if (!remote) return;
+  try {
+    await redis(['SET', PREFIX + file, JSON.stringify(data)]);
+    status.ok = true;
+    status.lastSave = new Date().toISOString();
+  } catch (err) {
+    status.ok = false;
+    status.lastError = err.message;
+    console.error(`[存檔] ❌ 寫入 Upstash 的 ${file} 失敗：`, err.message);
+  }
+}
+
 /**
  * 存一份資料。連續修改時延遲合併成一次（省 Upstash 的使用量）。
  * @param {number} delay 毫秒
  */
 export function save(file, data, delay = 2000) {
+  pending.set(file, data);
   clearTimeout(timers[file]);
-  timers[file] = setTimeout(async () => {
-    delete timers[file];
-    writeLocal(file, data);
-    if (!remote) return;
-    try {
-      await redis(['SET', PREFIX + file, JSON.stringify(data)]);
-    } catch (err) {
-      console.warn(`[存檔] 寫入 Upstash 的 ${file} 失敗：`, err.message);
-    }
-  }, delay);
+  timers[file] = setTimeout(() => write(file), delay);
+}
+
+/** 立刻把所有還沒寫出去的資料寫完（重新部署、關機前呼叫） */
+export async function flush() {
+  await Promise.all([...pending.keys()].map((f) => write(f)));
 }
