@@ -261,6 +261,8 @@ export function createLakeRoom() {
     occluders,
     entrances: [{ to: 'forest_main', x: 0, z: 8.3, r: 0.8, label: t('回到營火') }],
     spawn: { x: 0, z: 6.0, ry: Math.PI },
+    /** 每日任務「湖邊釣魚」的指引位置：碼頭盡頭 */
+    dockEnd: { x: 0, z: DOCK_END + 0.8 },
     cameraDistance: 6,
     audio: { fire: 0, wind: 0.6, ambient: 0.8, water: 1, music: 0.45, song: 1 },
     resolveCollision,

@@ -52,6 +52,7 @@ export class ActionStateMachine {
     world.onMeteor = () => {
       if (this.state === 'stargaze' && !this._meteorSeen) {
         this._meteorSeen = true;
+        this.onMeteor?.(); // 每日任務「看見流星」
         hud.toast(t('🌠 流星！快許個願吧'));
       }
     };
@@ -179,6 +180,7 @@ export class ActionStateMachine {
     else if (d < 1.0) msg = t('有點焦，但焦香味很讚 👍');
     else msg = t('烤成黑炭了⋯ 還是勇敢吃掉 😵');
     this.hud.toast(t('{msg}（已吃掉 {n} 顆）', { msg, n: this.eaten }));
+    this.onRoastDone?.(d); // 每日任務「完美棉花糖」
     this.character.setProp('stick', false);
     this.hud.showRoast(false);
     this.state = 'free'; // 不走 #exit，避免「收起來了」提示

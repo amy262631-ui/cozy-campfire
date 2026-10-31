@@ -204,7 +204,20 @@ scripts/ch_test.mjs             # 分流邏輯測試（CHANNEL_MAX=2 啟動伺�
 打開 `你的網址/stats`，會看到最近 30 天每天的：進來次數、不重複旅人、手機比例、平均停留、**30 秒內離開的比例**、疊過石頭的人、石頭／繪馬／留言／釣魚／聊天數量。只記數字，不存個人資料（訪客代號是瀏覽器隨機產生的）。
 
 - 想加密碼：在 Render 的 Environment 加 `STATS_KEY`，之後用 `/stats?key=你的密碼` 看。
-- 資料存在 `server/data/stats.json`；Render 免費版重新部署會清空，記得常截圖或升級加掛硬碟。
+- 有接 Upstash 的話統計會永久保存；沒接的話 Render 重新部署會清空。
+
+## 資料永久保存（Upstash，免費）
+
+Render 免費版**每次重新部署都會清空硬碟**，留言、繪馬、石塔、排行、統計會一起不見。接上 Upstash（免費方案 256 MB、每月 50 萬次指令，這個遊戲用不完）就能永久保存：
+
+1. 到 upstash.com 免費註冊 → **Create Database**（Redis），名稱隨意，區域選離 Render 近的（例如 Singapore / ap-southeast-1）。
+2. 在資料庫頁面找到 **REST API** 區塊，複製 `UPSTASH_REDIS_REST_URL` 和 `UPSTASH_REDIS_REST_TOKEN`。
+3. 到 Render → 你的服務 → **Environment**，新增這兩個變數，儲存時選 **Save only**（先不要部署）。
+4. 之後上傳新版到 GitHub 時才一起部署。伺服器紀錄出現「使用 Upstash，重新部署也不會遺失資料 ✅」就成功了。
+
+第一次接上時，如果 Upstash 裡還沒有資料，會用 `server/data/` 裡的檔案當初始資料（用來還原備份）。
+
+**備份**：隨時打開 `你的網址/api/backup` 就能下載全部資料（有設 `STATS_KEY` 時要加 `?key=密碼`）。
 
 ## 防止伺服器睡著（Render 免費版）
 

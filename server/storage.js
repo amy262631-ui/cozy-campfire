@@ -1,0 +1,87 @@
+/**
+ * 資料存放：留言、繪馬、石塔、釣魚排行、統計。
+ *
+ * Render 免費版每次重新部署都會清空硬碟，所以：
+ *   - 有設定 Upstash（環境變數 UPSTASH_REDIS_REST_URL、UPSTASH_REDIS_REST_TOKEN）→ 存在 Upstash，永久保存
+ *   - 沒設定 → 存在 server/data/*.json（本機開發用；Render 上重新部署會不見）
+ *
+ * 第一次接上 Upstash 時，如果 Upstash 裡還沒有資料，會用 server/data/ 裡的檔案當初始資料（用來還原備份）。
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+
+const URL_ = process.env.UPSTASH_REDIS_REST_URL;
+const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+export const remote = !!(URL_ && TOKEN);
+const PREFIX = 'cozy:';
+
+let dataDir = '';
+export function init(dir) {
+  dataDir = dir;
+  console.log(remote ? '[存檔] 使用 Upstash，重新部署也不會遺失資料 ✅' : '[存檔] 使用本機檔案（Render 重新部署會清空；建議設定 Upstash）');
+}
+
+async function redis(args) {
+  const res = await fetch(URL_, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify(args),
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json.result;
+}
+
+function readLocal(file) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(dataDir, file), 'utf8'));
+  } catch {
+    return undefined;
+  }
+}
+
+function writeLocal(file, data) {
+  fs.mkdir(dataDir, { recursive: true }, () =>
+    fs.writeFile(path.join(dataDir, file), JSON.stringify(data), (err) => err && console.warn(`[存檔] ${file} 寫入失敗：`, err.message)),
+  );
+}
+
+/**
+ * 讀一份資料（啟動時呼叫）。Upstash 沒有的話，用本機檔案（並順便存進 Upstash）。
+ * @returns {Promise<any>}
+ */
+export async function load(file) {
+  const local = readLocal(file);
+  if (!remote) return local;
+  try {
+    const raw = await redis(['GET', PREFIX + file]);
+    if (raw != null) return JSON.parse(raw);
+    if (local !== undefined) {
+      await redis(['SET', PREFIX + file, JSON.stringify(local)]);
+      console.log(`[存檔] 已把 ${file} 匯入 Upstash`);
+    }
+    return local;
+  } catch (err) {
+    console.warn(`[存檔] 讀取 Upstash 的 ${file} 失敗，先用本機檔案：`, err.message);
+    return local;
+  }
+}
+
+const timers = {};
+/**
+ * 存一份資料。連續修改時延遲合併成一次（省 Upstash 的使用量）。
+ * @param {number} delay 毫秒
+ */
+export function save(file, data, delay = 2000) {
+  clearTimeout(timers[file]);
+  timers[file] = setTimeout(async () => {
+    delete timers[file];
+    writeLocal(file, data);
+    if (!remote) return;
+    try {
+      await redis(['SET', PREFIX + file, JSON.stringify(data)]);
+    } catch (err) {
+      console.warn(`[存檔] 寫入 Upstash 的 ${file} 失敗：`, err.message);
+    }
+  }, delay);
+}

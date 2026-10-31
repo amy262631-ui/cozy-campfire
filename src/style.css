@@ -2768,3 +2768,13 @@ body.touch .title-sub {
     animation: none;
   }
 }
+
+/* 給搜尋引擎看的遊戲說明：畫面上不顯示（但仍在網頁內容裡） */
+.seo-intro {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

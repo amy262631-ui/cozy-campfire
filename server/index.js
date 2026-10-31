@@ -17,6 +17,7 @@ import { Server } from 'socket.io';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import * as storage from './storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -115,38 +116,21 @@ function pickChannel(wanted) {
   return open[0] ?? null;
 }
 
-// ---------- 留言與繪馬存檔（server/data/*.json，重開伺服器也不會不見） ----------
+// ---------- 存檔：留言、繪馬、石塔、排行、統計（見 storage.js；有設定 Upstash 就永久保存） ----------
 const DATA_DIR = path.resolve(__dirname, 'data');
-const readJson = (file, fallback) => {
-  try {
-    const v = JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8'));
-    return Array.isArray(v) ? v : fallback;
-  } catch {
-    return fallback;
-  }
-};
-const saveTimers = {};
-// （saveJson 也拿來存 stats.json 這種物件）
-/** 延遲 1 秒寫檔，連續留言只寫一次 */
-function saveJson(file, data) {
-  clearTimeout(saveTimers[file]);
-  saveTimers[file] = setTimeout(() => {
-    fs.mkdir(DATA_DIR, { recursive: true }, () =>
-      fs.writeFile(path.join(DATA_DIR, file), JSON.stringify(data, null, 1), (err) => err && console.warn(`[存檔] ${file} 失敗：`, err.message)),
-    );
-  }, 1000);
-}
+storage.init(DATA_DIR);
+const asArray = (v) => (Array.isArray(v) ? v : []);
+const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats] = await Promise.all(
+  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json'].map((f) => storage.load(f)),
+);
+/** 存檔：統計更新很頻繁，等 10 秒合併成一次；其他 2 秒 */
+const saveJson = (file, data) => storage.save(file, data, file === 'stats.json' ? 10000 : 2000);
+
 // ---------- 每日統計（server/data/stats.json，只存數字，不存個人資料） ----------
 const STATS_TZ = process.env.STATS_TZ || 'Asia/Taipei';
 const STATS_DAYS = 90;
 const dayKey = (d = new Date()) => new Intl.DateTimeFormat('sv-SE', { timeZone: STATS_TZ }).format(d);
-let stats = {};
-try {
-  const v = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'stats.json'), 'utf8'));
-  if (v && typeof v === 'object' && !Array.isArray(v)) stats = v;
-} catch {
-  /* 第一次啟動還沒有檔案 */
-}
+let stats = savedStats && typeof savedStats === 'object' && !Array.isArray(savedStats) ? savedStats : {};
 const newDay = () => ({
   visits: 0, // 進來幾次
   vids: [], // 不重複的訪客（瀏覽器隨機產生的代號）
@@ -160,6 +144,7 @@ const newDay = () => ({
   notes: 0,
   fish: 0,
   chats: 0,
+  quests: {}, // 每種任務今天有幾人完成
 });
 function today() {
   const k = dayKey();
@@ -180,11 +165,11 @@ const todayPublic = () => {
   return { visitors: d.vids.length || d.visits, stones: d.stones, wishes: d.wishes };
 };
 
-shared.notes = readJson('notes.json', []).slice(-MAX_NOTES);
-shared.wishes = readJson('wishes.json', []).slice(-MAX_WISHES);
-shared.board = readJson('board.json', []).slice(0, 10);
+shared.notes = asArray(savedNotes).slice(-MAX_NOTES);
+shared.wishes = asArray(savedWishes).slice(-MAX_WISHES);
+shared.board = asArray(savedBoard).slice(0, 10);
 {
-  const saved = readJson('cairns.json', []);
+  const saved = asArray(savedCairns);
   shared.cairns = Array.from({ length: CAIRN_COUNT }, (_, i) => (Array.isArray(saved[i]) ? saved[i].slice(0, CAIRN_MAX) : []));
 }
 
@@ -247,16 +232,23 @@ app.get(['/stats', '/api/stats'], (req, res) => {
     const d = stats[k];
     const avg = d.sessions ? Math.round(d.totalSec / d.sessions) : 0;
     const pct = (n) => (d.sessions ? `${Math.round((n / d.sessions) * 100)}%` : '-');
-    return { day: k, visits: d.visits, visitors: d.vids.length, mobile: d.visits ? `${Math.round((d.touch / d.visits) * 100)}%` : '-', avg: `${Math.floor(avg / 60)}分${avg % 60}秒`, s30: pct(d.stay[0]), s120: pct(d.stay[1]), s600: pct(d.stay[2]), s600p: pct(d.stay[3]), ritual: d.ritual, stones: d.stones, wishes: d.wishes, notes: d.notes, fish: d.fish, chats: d.chats };
+    return { day: k, visits: d.visits, visitors: d.vids.length, mobile: d.visits ? `${Math.round((d.touch / d.visits) * 100)}%` : '-', avg: `${Math.floor(avg / 60)}分${avg % 60}秒`, s30: pct(d.stay[0]), s120: pct(d.stay[1]), s600: pct(d.stay[2]), s600p: pct(d.stay[3]), ritual: d.ritual, quests: d.ritual + Object.values(d.quests ?? {}).reduce((a, b) => a + b, 0), stones: d.stones, wishes: d.wishes, notes: d.notes, fish: d.fish, chats: d.chats };
   });
   if (req.path.startsWith('/api')) return res.json(rows);
-  const head = ['日期', '進來次數', '不重複旅人', '手機比例', '平均停留', '30秒內離開', '30秒～2分', '2～10分', '10分以上', '疊過石頭的人', '石頭', '繪馬', '留言', '釣魚', '聊天'];
-  const keys = ['day', 'visits', 'visitors', 'mobile', 'avg', 's30', 's120', 's600', 's600p', 'ritual', 'stones', 'wishes', 'notes', 'fish', 'chats'];
+  const head = ['日期', '進來次數', '不重複旅人', '手機比例', '平均停留', '30秒內離開', '30秒～2分', '2～10分', '10分以上', '疊過石頭的人', '完成任務', '石頭', '繪馬', '留言', '釣魚', '聊天'];
+  const keys = ['day', 'visits', 'visitors', 'mobile', 'avg', 's30', 's120', 's600', 's600p', 'ritual', 'quests', 'stones', 'wishes', 'notes', 'fish', 'chats'];
   const online = [...channels.values()].reduce((n, c) => n + chCount(c), 0);
   res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>營地統計</title>
 <style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px}table{border-collapse:collapse;font-size:13px}th,td{padding:6px 9px;border-bottom:1px solid #3a2e27;text-align:right;white-space:nowrap}th{color:#ffb46b;position:sticky;top:0;background:#1d1714}td:first-child,th:first-child{text-align:left}.wrap{overflow-x:auto}p{opacity:.75;font-size:13px}</style></head>
 <body><h2>🔥 營地統計</h2><p>現在在線：${online} 人 · 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好。</p>
-<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="15">還沒有資料</td></tr>'}</table></div></body></html>`);
+<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="16">還沒有資料</td></tr>'}</table></div></body></html>`);
+});
+
+// 備份：/api/backup（有設 STATS_KEY 時要帶 ?key=），下載所有留言、繪馬、石塔、排行、統計
+app.get('/api/backup', (req, res) => {
+  if (process.env.STATS_KEY && req.query.key !== process.env.STATS_KEY) return res.status(403).send('需要密碼：/api/backup?key=…');
+  res.setHeader('Content-Disposition', `attachment; filename="cozy-backup-${dayKey()}.json"`);
+  res.json({ notes: shared.notes, wishes: shared.wishes, cairns: shared.cairns, board: shared.board, stats });
 });
 
 app.get('/api/health', (_req, res) => {
@@ -528,6 +520,22 @@ io.on('connection', (socket) => {
     }
     emitAllChannels('forest_main', 'stone', { i, stone, count: cairn.length, by: socket.id, today: todayPublic() });
     ack?.({ ok: true, count: cairn.length, ritual });
+  });
+
+  // 每日任務完成：回傳「你是今天第幾位完成這個任務的旅人」（每次來訪每種任務只算一次）
+  const QUEST_IDS = new Set(['wood', 'roast', 'kuji', 'ema', 'note', 'fish', 'meteor']);
+  const questsDone = new Set();
+  socket.on('quest', (data = {}, ack) => {
+    const id = String(data.id ?? '');
+    if (!player || !QUEST_IDS.has(id)) return ack?.({ ok: false });
+    const d = today();
+    d.quests ??= {};
+    if (!questsDone.has(id)) {
+      questsDone.add(id);
+      d.quests[id] = (d.quests[id] ?? 0) + 1;
+      saveJson('stats.json', stats);
+    }
+    ack?.({ ok: true, n: d.quests[id] });
   });
 
   // 營火告示牌留言：大家都看得到（每 20 秒最多一則、最多 60 字）

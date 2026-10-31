@@ -122,8 +122,15 @@ async function init() {
   // ---------- 多人連線 ----------
   const net = new NetworkClient({ url: params.get('server') || undefined });
   const remotes = new RemotePlayers(scene, zzz);
+  /** 小任務引導（下面建立；先宣告，讓前面的事件也能通知它） */
+  let ritual = null;
   const names = new Map();
-  actions.onAddWood = () => net.addWood();
+  actions.onAddWood = () => {
+    net.addWood();
+    ritual?.event('wood');
+  };
+  actions.onRoastDone = (d) => ritual?.event('roast', d);
+  actions.onMeteor = () => ritual?.event('meteor');
 
   let roomMgr = null;
   const placeName = () => PLACE[roomMgr?.current.id] ?? '營火旁';
@@ -162,6 +169,7 @@ async function init() {
     audio,
     cameraRig,
     onCatch: (index, size) => {
+      ritual?.event('fish', { junk: !!FISH[index]?.junk });
       const rec = fishingUI.record(index, size);
       lastCatch = { index, size, rec };
       fishingUI.showCard(index, size, rec);
@@ -207,6 +215,7 @@ async function init() {
       if (!quiet) audio.sfx('bell');
     },
     onWish: (text) => {
+      ritual?.event('ema');
       if (net.online) net.wish(text);
       else {
         localWishes.push({ name: myName, text, at: Date.now() });
@@ -217,6 +226,7 @@ async function init() {
   });
   shrinePanel.onBlessing = (text) => hud.toast(`🙏 ${text}`, 4500);
   shrinePanel.onSfx = (name) => audio.sfx(name);
+  shrinePanel.onKuji = () => ritual?.event('kuji');
   actions.onShrine = () => shrinePanel.open();
 
   // ---------- 營火告示牌：留言板、贊助者名冊、（不顯眼的）熱可可 ----------
@@ -228,6 +238,7 @@ async function init() {
   const noticePanel = new NoticePanel({
     hud,
     onPost: (text, color) => {
+      ritual?.event('note');
       if (net.online) net.note(text, color);
       else {
         localNotes.push({ name: myName, text, color, at: Date.now() });
@@ -260,7 +271,13 @@ async function init() {
     audio.sfx('tap');
     hud.toast(carrying ? t('撿起一顆石頭，頂在頭上 🪨 走到石塔旁放上去吧') : t('把石頭放回去了'));
   };
-  const ritual = new RitualGuide({ scene, hud, touch: !!mobile });
+  ritual = new RitualGuide({
+    scene,
+    hud,
+    touch: !!mobile,
+    // 完成小任務：問伺服器「今天第幾位完成」（單人模式沒有數字）
+    onDone: async (id) => (net.online ? ((await net.quest(id))?.n ?? null) : null),
+  });
   const garden = forest.cairnGarden;
   const ritualState = {
     get inForest() {
@@ -279,6 +296,20 @@ async function init() {
       return garden.nearestCairn(player.position);
     },
     camera,
+    get roomId() {
+      return roomMgr?.current.id;
+    },
+    get outdoor() {
+      return !!roomMgr?.current.outdoor;
+    },
+    get state() {
+      return actions.state;
+    },
+    fire: { x: 0, z: 0 },
+    shrine: forest.shrineFront,
+    board: forest.boardFront,
+    lakeGate: forest.entrances.find((e) => e.to === 'lake_dock'),
+    dockEnd: rooms.lake_dock.dockEnd,
     pile: garden.pile,
     cairnTop: (i) => ({ x: garden.cairns[i].spot.x, y: 0, z: garden.cairns[i].spot.z }),
   };
@@ -292,7 +323,7 @@ async function init() {
       const res = await net.stack(i);
       if (res?.ok) {
         hud.toast(t('🪨 疊上去了！第 {n} 顆，許個願吧 🙏', { n: res.count }), 3500);
-        ritual.complete(res.ritual);
+        ritual.event('stone', res.ritual);
       }
       else if (res?.reason === 'tooFast') hud.toast(t('慢慢來，一顆一顆疊 🪨'));
       else if (res?.reason === 'full') hud.toast(t('這座石塔已經疊滿了，換旁邊那座吧 🗿'));
@@ -300,7 +331,7 @@ async function init() {
     } else {
       addStone(i, { n: myName, s: Math.floor(Math.random() * 100000), at: Date.now() });
       hud.toast(t('🪨 疊上去了！第 {n} 顆，許個願吧 🙏', { n: cairnData[i].length }), 3500);
-      ritual.complete(null);
+      ritual.event('stone', null);
     }
   };
   actions.onCairn = (i) => cairnPanel.open(i);
@@ -541,7 +572,7 @@ async function init() {
         return icon ? `<kbd class="key-icon">${icon}</kbd>` : '';
       }));
     } else hud.setPrompt(actions.prompt);
-    ritual.update(dt, elapsed, ritualState);
+    ritual?.update(dt, elapsed, ritualState);
     document.body.classList.toggle('in-action', actions.state !== 'free');
 
     renderer.render(scene, camera);
