@@ -16,18 +16,19 @@ function loadProfile() {
 }
 
 /**
- * 一進來就用的身分：自己改過的名字會留著；沒改過的話每次換一個隨機名字。
- * 動物與毛色：記住上次的，第一次來就隨機挑一隻。
+ * 一進來就用的身分：每次進來都是新的隨機名字、隨機動物和毛色。
+ * 只有自己按「✏️」改過的才會記住（例如贊助者要用固定暱稱開小花）。
  */
 export function autoProfile(allowSpecies = true) {
   const saved = loadProfile();
   const pick = (n) => Math.floor(Math.random() * n);
   return {
     name: saved.custom && saved.name ? saved.name : randomName(),
-    species: allowSpecies ? (Number.isInteger(saved.species) && SPECIES[saved.species] ? saved.species : pick(SPECIES.length)) : 0,
-    fur: Number.isInteger(saved.fur) ? saved.fur : pick(FUR_PALETTES.length),
+    species: allowSpecies ? (saved.customLook && SPECIES[saved.species] ? saved.species : pick(SPECIES.length)) : 0,
+    fur: saved.customLook && Number.isInteger(saved.fur) ? saved.fur : pick(FUR_PALETTES.length),
     code: saved.code || '',
     custom: !!saved.custom,
+    customLook: !!saved.customLook,
   };
 }
 
@@ -199,7 +200,9 @@ export class JoinScreen {
         e.preventDefault();
         const name = input.value.trim().slice(0, 12) || autoName || randomName();
         const code = el.querySelector('#join-code').value.trim();
-        saveProfile({ name, fur, species, custom: name !== autoName, code });
+        // 在「我的樣子」裡換了動物或毛色，才記住外型；沒動就維持每次隨機
+        const customLook = this.edit ? !!saved.customLook || fur !== startFur || species !== startSpecies : true;
+        saveProfile({ name, fur, species, custom: name !== autoName, customLook, code });
         input.blur();
         el.classList.add('leaving');
         clearInterval(chTimer);

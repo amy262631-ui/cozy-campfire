@@ -2757,3 +2757,14 @@ body.touch .ritual-text {
 body.touch .title-sub {
   display: none;
 }
+
+/* 視窗比較窄時（小筆電、平板），小儀式卡片移到左上資訊下面，不擋「名字 ✏️」 */
+@media (max-width: 1000px) {
+  .ritual {
+    top: 156px;
+    left: 12px;
+    transform: none;
+    width: min(300px, 70vw);
+    animation: none;
+  }
+}

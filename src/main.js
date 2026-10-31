@@ -10,7 +10,7 @@ import { ThirdPersonCamera } from './camera/ThirdPersonCamera.js';
 import { ZzzBubbles } from './fx/ZzzBubbles.js';
 import { HUD } from './ui/HUD.js';
 import { MobileControls, isTouchDevice } from './ui/MobileControls.js';
-import { JoinScreen, autoProfile, saveProfile } from './ui/JoinScreen.js';
+import { JoinScreen, autoProfile } from './ui/JoinScreen.js';
 import { MixerPanel } from './ui/MixerPanel.js';
 import { PomodoroPanel } from './ui/PomodoroPanel.js';
 import { JukeboxPanel } from './ui/JukeboxPanel.js';
@@ -593,8 +593,7 @@ async function init() {
     document.body.classList.remove('joining');
     input.enabled = true;
   } else {
-    profile = autoProfile(isProcedural);
-    saveProfile({ ...profile }); // 記住這次的動物，下次來還是牠
+    profile = autoProfile(isProcedural); // 每次進來都是新的隨機名字和樣子
   }
   joined = true;
   applyLook(profile);
@@ -612,7 +611,7 @@ async function init() {
     const next = await new JoinScreen({
       onPreview: applyLook,
       allowSpecies: isProcedural,
-      edit: { name: myName, fur: profile.fur, species: profile.species, code: profile.code, custom: profile.custom },
+      edit: { name: myName, fur: profile.fur, species: profile.species, code: profile.code, custom: profile.custom, customLook: profile.customLook },
     }).show();
     input.enabled = true;
     editing = false;
