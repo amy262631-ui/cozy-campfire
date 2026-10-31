@@ -15,7 +15,23 @@ function loadProfile() {
   }
 }
 
-function saveProfile(profile) {
+/**
+ * 一進來就用的身分：自己改過的名字會留著；沒改過的話每次換一個隨機名字。
+ * 動物與毛色：記住上次的，第一次來就隨機挑一隻。
+ */
+export function autoProfile(allowSpecies = true) {
+  const saved = loadProfile();
+  const pick = (n) => Math.floor(Math.random() * n);
+  return {
+    name: saved.custom && saved.name ? saved.name : randomName(),
+    species: allowSpecies ? (Number.isInteger(saved.species) && SPECIES[saved.species] ? saved.species : pick(SPECIES.length)) : 0,
+    fur: Number.isInteger(saved.fur) ? saved.fur : pick(FUR_PALETTES.length),
+    code: saved.code || '',
+    custom: !!saved.custom,
+  };
+}
+
+export function saveProfile(profile) {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(profile));
   } catch {
@@ -31,13 +47,18 @@ function saveProfile(profile) {
  * allowSpecies = false 時（使用 .glb 模型）不顯示動物選項。
  */
 export class JoinScreen {
-  constructor({ onPreview, allowSpecies = true } = {}) {
+  /**
+   * @param {{ onPreview?: Function, allowSpecies?: boolean, edit?: { name, fur, species, code } }} opts
+   *   edit：遊戲中「改名字／換動物」，不顯示分流，按鈕改成「好了」，可以取消
+   */
+  constructor({ onPreview, allowSpecies = true, edit = null } = {}) {
     this.onPreview = onPreview;
     this.allowSpecies = allowSpecies;
+    this.edit = edit;
   }
 
   show() {
-    const saved = loadProfile();
+    const saved = this.edit ? { ...loadProfile(), ...this.edit } : loadProfile();
     const startFur = Number.isInteger(saved.fur) ? saved.fur : 0;
     const startSpecies = Number.isInteger(saved.species) && SPECIES[saved.species] ? saved.species : 0;
 
@@ -45,9 +66,9 @@ export class JoinScreen {
     el.className = 'join';
     el.innerHTML = `
       <form class="join-card" autocomplete="off">
-        ${languageRowHtml()}
-        <div class="join-title">${t('🔥 迷霧森林露營地')}</div>
-        <div class="join-sub">${t('找個位置坐下，和大家一起烤火吧')}</div>
+        ${this.edit ? '' : languageRowHtml()}
+        <div class="join-title">${this.edit ? t('🦊 我的樣子') : t('🔥 迷霧森林露營地')}</div>
+        <div class="join-sub">${this.edit ? t('名字和動物隨時都能換') : t('找個位置坐下，和大家一起烤火吧')}</div>
 
         <label class="join-label" for="join-name">${t('你的暱稱')}</label>
         <div class="join-name-row">
@@ -90,17 +111,19 @@ export class JoinScreen {
           <input id="join-code" class="join-input" maxlength="32" autocomplete="off" placeholder="${t('有收到兌換碼的話填在這裡')}" />
         </details>
 
-        <button type="submit" class="join-go">${t('進入營地')}</button>
+        <button type="submit" class="join-go">${this.edit ? t('好了') : t('進入營地')}</button>
+        ${this.edit ? `<button type="button" class="join-cancel" id="join-cancel">${t('取消')}</button>` : ''}
       </form>
     `;
     document.body.appendChild(el);
 
-    bindLanguageRow(el);
+    if (!this.edit) bindLanguageRow(el);
     el.querySelector('#join-code').value = saved.code || '';
     const input = el.querySelector('#join-name');
     // 暱稱：自己打過的名字會留著；沒改過的話，每次都換一個新的隨機名字
     let autoName = randomName();
-    input.value = saved.custom && saved.name ? saved.name : autoName;
+    input.value = this.edit ? saved.name : saved.custom && saved.name ? saved.name : autoName;
+    if (this.edit) autoName = saved.custom ? null : saved.name; // 沒改名字就維持「隨機名字」的狀態
     el.querySelector('#join-dice').addEventListener('click', () => {
       autoName = randomName();
       input.value = autoName;
@@ -153,8 +176,10 @@ export class JoinScreen {
       if (ch && list.find((c) => c.ch === ch)?.count >= list[0].max) ch = 0;
       renderChannels(list);
     };
-    loadChannels();
-    chTimer = setInterval(loadChannels, 5000);
+    if (!this.edit) {
+      loadChannels();
+      chTimer = setInterval(loadChannels, 5000);
+    }
     chGrid.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-ch]');
       if (!btn || btn.disabled) return;
@@ -162,12 +187,17 @@ export class JoinScreen {
       chGrid.querySelectorAll('[data-ch]').forEach((b) => b.classList.toggle('selected', b === btn));
     });
 
-    setTimeout(() => input.focus(), 50);
+    if (!this.edit) setTimeout(() => input.focus(), 50);
 
     return new Promise((resolve) => {
+      el.querySelector('#join-cancel')?.addEventListener('click', () => {
+        el.classList.add('leaving');
+        setTimeout(() => el.remove(), 400);
+        resolve(null);
+      });
       el.querySelector('form').addEventListener('submit', (e) => {
         e.preventDefault();
-        const name = input.value.trim().slice(0, 12) || autoName;
+        const name = input.value.trim().slice(0, 12) || autoName || randomName();
         const code = el.querySelector('#join-code').value.trim();
         saveProfile({ name, fur, species, custom: name !== autoName, code });
         input.blur();

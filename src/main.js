@@ -10,7 +10,7 @@ import { ThirdPersonCamera } from './camera/ThirdPersonCamera.js';
 import { ZzzBubbles } from './fx/ZzzBubbles.js';
 import { HUD } from './ui/HUD.js';
 import { MobileControls, isTouchDevice } from './ui/MobileControls.js';
-import { JoinScreen } from './ui/JoinScreen.js';
+import { JoinScreen, autoProfile, saveProfile } from './ui/JoinScreen.js';
 import { MixerPanel } from './ui/MixerPanel.js';
 import { PomodoroPanel } from './ui/PomodoroPanel.js';
 import { JukeboxPanel } from './ui/JukeboxPanel.js';
@@ -31,6 +31,7 @@ import { LanguagePicker } from './ui/LanguagePicker.js';
 import { NoticePanel } from './ui/NoticePanel.js';
 import { ChannelPanel } from './ui/ChannelPanel.js';
 import { CairnPanel } from './ui/CairnPanel.js';
+import { RitualGuide } from './ui/RitualGuide.js';
 import { STONE_FLAG, CAIRN_MAX } from './rooms/cairns.js';
 import { FishingGame } from './fishing/FishingGame.js';
 import { FISH } from './fishing/fishData.js';
@@ -259,6 +260,28 @@ async function init() {
     audio.sfx('tap');
     hud.toast(carrying ? t('撿起一顆石頭，頂在頭上 🪨 走到石塔旁放上去吧') : t('把石頭放回去了'));
   };
+  const ritual = new RitualGuide({ scene, hud, touch: !!mobile });
+  const garden = forest.cairnGarden;
+  const ritualState = {
+    get inForest() {
+      return roomMgr?.current.id === 'forest_main';
+    },
+    get carrying() {
+      return forest.carrying;
+    },
+    get pos() {
+      return player.position;
+    },
+    get nearCairn() {
+      return garden.nearCairn(player.position);
+    },
+    get nearestCairn() {
+      return garden.nearestCairn(player.position);
+    },
+    camera,
+    pile: garden.pile,
+    cairnTop: (i) => ({ x: garden.cairns[i].spot.x, y: 0, z: garden.cairns[i].spot.z }),
+  };
   actions.onStack = async (i) => {
     if (cairnData[i].length >= CAIRN_MAX) {
       hud.toast(t('這座石塔已經疊滿了，換旁邊那座吧 🗿'));
@@ -267,18 +290,23 @@ async function init() {
     actions.emote('pray'); // 放上去之後雙手合十許個願
     if (net.online) {
       const res = await net.stack(i);
-      if (res?.ok) hud.toast(t('🪨 疊上去了！第 {n} 顆，許個願吧 🙏', { n: res.count }), 3500);
+      if (res?.ok) {
+        hud.toast(t('🪨 疊上去了！第 {n} 顆，許個願吧 🙏', { n: res.count }), 3500);
+        ritual.complete(res.ritual);
+      }
       else if (res?.reason === 'tooFast') hud.toast(t('慢慢來，一顆一顆疊 🪨'));
       else if (res?.reason === 'full') hud.toast(t('這座石塔已經疊滿了，換旁邊那座吧 🗿'));
       else hud.toast(t('石頭沒放穩，再試一次吧'));
     } else {
       addStone(i, { n: myName, s: Math.floor(Math.random() * 100000), at: Date.now() });
       hud.toast(t('🪨 疊上去了！第 {n} 顆，許個願吧 🙏', { n: cairnData[i].length }), 3500);
+      ritual.complete(null);
     }
   };
   actions.onCairn = (i) => cairnPanel.open(i);
-  net.on('stone', ({ i, stone, count, by }) => {
+  net.on('stone', ({ i, stone, count, by, today }) => {
     addStone(i, stone);
+    if (today) hud.setToday(today);
     // 其他人疊到整數的時候，大家一起慶祝一下
     if (by !== net.id && (count % 25 === 0 || count === CAIRN_MAX)) {
       hud.toast(t('🗿 第 {n} 座石塔疊到 {count} 顆了！', { n: i + 1, count }), 4000);
@@ -312,6 +340,7 @@ async function init() {
     if (res.wishes) applyWishes(res.wishes);
     if (res.notes) applyNotes(res.notes);
     if (res.cairns) applyCairns(res.cairns);
+    if (res.today) hud.setToday(res.today);
     refreshOnline();
   }
   const localWishes = [];
@@ -512,14 +541,34 @@ async function init() {
         return icon ? `<kbd class="key-icon">${icon}</kbd>` : '';
       }));
     } else hud.setPrompt(actions.prompt);
+    ritual.update(dt, elapsed, ritualState);
     document.body.classList.toggle('in-action', actions.state !== 'free');
 
     renderer.render(scene, camera);
   }
 
-  // ---------- 進場 ----------
-  input.enabled = false;
-  document.body.classList.add('joining');
+  /** 這個瀏覽器的隨機代號（只用來算「今天有幾位旅人」，不含個人資料） */
+  function visitorId() {
+    try {
+      let v = localStorage.getItem('cozy-campfire-vid');
+      if (!v) {
+        v = Math.random().toString(36).slice(2, 12);
+        localStorage.setItem('cozy-campfire-vid', v);
+      }
+      return v;
+    } catch {
+      return '';
+    }
+  }
+
+  // 下方操作說明：平常只顯示「移動、互動」，想看全部再展開
+  document.getElementById('hint-toggle')?.addEventListener('click', (e) => {
+    const hint = document.getElementById('hint');
+    hint.classList.toggle('collapsed');
+    e.currentTarget.textContent = hint.classList.contains('collapsed') ? t('⌨️ 更多操作') : t('收起');
+  });
+
+  // ---------- 進場：打開就直接在營火旁（不用先填資料） ----------
   let profile;
   // 內建角色才能選動物（用 .glb 模型時只有那一種）
   const isProcedural = character instanceof ProceduralFox;
@@ -536,22 +585,55 @@ async function init() {
       fur: Number(params.get('fur')) || 0,
       species: Number(params.get('species')) || 0,
     };
-  } else {
-    // 按「進入營地」那一下，上面的 unlockAudio 就會把聲音打開
+  } else if (params.has('join')) {
+    // 舊的進場畫面（網址加 ?join）
+    input.enabled = false;
+    document.body.classList.add('joining');
     profile = await new JoinScreen({ onPreview: applyLook, allowSpecies: isProcedural }).show();
+    document.body.classList.remove('joining');
+    input.enabled = true;
+  } else {
+    profile = autoProfile(isProcedural);
+    saveProfile({ ...profile }); // 記住這次的動物，下次來還是牠
   }
   joined = true;
   applyLook(profile);
   myName = profile.name;
-  document.body.classList.remove('joining');
-  input.enabled = true;
+  hud.setMe(myName);
   input.markActive();
   refreshOnline();
+
+  // 「🦊 名字 ✏️」：隨時改名字、換動物
+  let editing = false;
+  hud.onMeClick = async () => {
+    if (editing) return;
+    editing = true;
+    input.enabled = false;
+    const next = await new JoinScreen({
+      onPreview: applyLook,
+      allowSpecies: isProcedural,
+      edit: { name: myName, fur: profile.fur, species: profile.species, code: profile.code, custom: profile.custom },
+    }).show();
+    input.enabled = true;
+    editing = false;
+    if (!next) return applyLook(profile); // 取消：換回原本的樣子
+    profile = { ...profile, ...next };
+    applyLook(profile);
+    if (next.name !== myName || next.code !== undefined) {
+      myName = next.name;
+      hud.setMe(myName);
+    }
+    // 重新連線，讓大家看到新的名字和樣子（也重新判斷贊助頭飾）
+    net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
+    hud.toast(t('✨ 換好了，{name}', { name: myName }));
+  };
   net.connect({
     name: profile.name,
     fur: profile.fur,
     species: isProcedural ? profile.species : 0,
     code: profile.code || '',
+    vid: visitorId(),
+    touch: !!mobile,
     ch: Math.floor(Number(profile.ch ?? params.get('ch')) || 0),
     room: roomMgr.current.id,
     x: player.position.x,
@@ -561,7 +643,7 @@ async function init() {
 
   // 方便在瀏覽器 console 除錯（開發模式或網址加 ?debug）
   if (import.meta.env.DEV || params.has('debug')) {
-    window.__cozy = { scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel };
+    window.__cozy = { scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual };
   }
 }
 

@@ -5,6 +5,7 @@
  * - 客戶端以 20Hz 送出自己的狀態，伺服器每 50ms 把整個房間的狀態「打包」廣播一次
  * - 營火的生命值（fuel）由伺服器統一管理，所有人看到同一團火
  * - 分流：每個分流最多 100 人（可用環境變數 CHANNEL_MAX、CHANNELS 調整），全滿時自動開新分流
+ * - 每日統計：來訪人數、停留時間、疊石頭⋯（不存個人資料），網址 /stats 可以看
  * - 繪馬、告示牌留言、釣魚排行是所有分流共用的；營火、點唱機、玩家則各分流獨立
  * - 正式部署時同一個埠也負責提供 dist/ 的網頁檔案
  *
@@ -29,7 +30,7 @@ const ROOM_DEFS = {
 };
 /** 分流：每個分流最多幾人、平常開幾個、最多開到幾個 */
 const CHANNEL_MAX = Number(process.env.CHANNEL_MAX) || 100;
-const BASE_CHANNELS = Number(process.env.CHANNELS) || 3;
+const BASE_CHANNELS = Number(process.env.CHANNELS) || 1; // 人少時大家聚在一起，滿了才自動加開
 const MAX_CHANNELS = 30;
 /** 自動選分流時，人數低於這個比例的分流優先（熱鬧但不擠） */
 const COZY_RATIO = 0.8;
@@ -125,6 +126,7 @@ const readJson = (file, fallback) => {
   }
 };
 const saveTimers = {};
+// （saveJson 也拿來存 stats.json 這種物件）
 /** 延遲 1 秒寫檔，連續留言只寫一次 */
 function saveJson(file, data) {
   clearTimeout(saveTimers[file]);
@@ -134,6 +136,50 @@ function saveJson(file, data) {
     );
   }, 1000);
 }
+// ---------- 每日統計（server/data/stats.json，只存數字，不存個人資料） ----------
+const STATS_TZ = process.env.STATS_TZ || 'Asia/Taipei';
+const STATS_DAYS = 90;
+const dayKey = (d = new Date()) => new Intl.DateTimeFormat('sv-SE', { timeZone: STATS_TZ }).format(d);
+let stats = {};
+try {
+  const v = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'stats.json'), 'utf8'));
+  if (v && typeof v === 'object' && !Array.isArray(v)) stats = v;
+} catch {
+  /* 第一次啟動還沒有檔案 */
+}
+const newDay = () => ({
+  visits: 0, // 進來幾次
+  vids: [], // 不重複的訪客（瀏覽器隨機產生的代號）
+  touch: 0, // 其中用手機的
+  sessions: 0, // 已經離開、有算停留時間的
+  totalSec: 0,
+  stay: [0, 0, 0, 0], // 停留：30 秒內、30 秒～2 分、2～10 分、10 分以上
+  ritual: 0, // 疊過石頭（完成小儀式）的人
+  stones: 0,
+  wishes: 0,
+  notes: 0,
+  fish: 0,
+  chats: 0,
+});
+function today() {
+  const k = dayKey();
+  if (!stats[k]) {
+    stats[k] = newDay();
+    const keys = Object.keys(stats).sort();
+    for (const old of keys.slice(0, Math.max(0, keys.length - STATS_DAYS))) delete stats[old];
+  }
+  return stats[k];
+}
+const bump = (field, n = 1) => {
+  today()[field] += n;
+  saveJson('stats.json', stats);
+};
+/** 給玩家看的「今天」：幾位旅人來過、疊了幾顆石頭 */
+const todayPublic = () => {
+  const d = today();
+  return { visitors: d.vids.length || d.visits, stones: d.stones, wishes: d.wishes };
+};
+
 shared.notes = readJson('notes.json', []).slice(-MAX_NOTES);
 shared.wishes = readJson('wishes.json', []).slice(-MAX_WISHES);
 shared.board = readJson('board.json', []).slice(0, 10);
@@ -145,7 +191,17 @@ shared.board = readJson('board.json', []).slice(0, 10);
 // ---------- HTTP ----------
 const app = express();
 const distDir = path.resolve(__dirname, '../dist');
-if (fs.existsSync(distDir)) app.use(express.static(distDir));
+if (fs.existsSync(distDir)) {
+  // 首頁：把分享預覽圖換成完整網址（Threads、LINE、FB 的預覽卡片需要）
+  const indexFile = path.join(distDir, 'index.html');
+  app.get(['/', '/index.html'], (req, res) => {
+    const proto = req.headers['x-forwarded-proto']?.split(',')[0] || req.protocol;
+    const origin = `${proto}://${req.headers.host}`;
+    const html = fs.readFileSync(indexFile, 'utf8').replace('content="og.png"', `content="${origin}/og.png"`);
+    res.type('html').send(html);
+  });
+  app.use(express.static(distDir));
+}
 
 // ---------- 贊助名單（server/data/sponsors.json） ----------
 // 格式：[{ id, name, date, reward: 'flower' | 'clover', code?（選填兌換碼） }]
@@ -183,6 +239,26 @@ app.get('/api/channels', (_req, res) => {
   tidyChannels();
   res.json(channelList());
 });
+// 統計頁：/stats（有設環境變數 STATS_KEY 的話，要用 /stats?key=密碼 才看得到）
+app.get(['/stats', '/api/stats'], (req, res) => {
+  if (process.env.STATS_KEY && req.query.key !== process.env.STATS_KEY) return res.status(403).send('需要密碼：/stats?key=…');
+  const days = Object.keys(stats).sort().reverse().slice(0, 30);
+  const rows = days.map((k) => {
+    const d = stats[k];
+    const avg = d.sessions ? Math.round(d.totalSec / d.sessions) : 0;
+    const pct = (n) => (d.sessions ? `${Math.round((n / d.sessions) * 100)}%` : '-');
+    return { day: k, visits: d.visits, visitors: d.vids.length, mobile: d.visits ? `${Math.round((d.touch / d.visits) * 100)}%` : '-', avg: `${Math.floor(avg / 60)}分${avg % 60}秒`, s30: pct(d.stay[0]), s120: pct(d.stay[1]), s600: pct(d.stay[2]), s600p: pct(d.stay[3]), ritual: d.ritual, stones: d.stones, wishes: d.wishes, notes: d.notes, fish: d.fish, chats: d.chats };
+  });
+  if (req.path.startsWith('/api')) return res.json(rows);
+  const head = ['日期', '進來次數', '不重複旅人', '手機比例', '平均停留', '30秒內離開', '30秒～2分', '2～10分', '10分以上', '疊過石頭的人', '石頭', '繪馬', '留言', '釣魚', '聊天'];
+  const keys = ['day', 'visits', 'visitors', 'mobile', 'avg', 's30', 's120', 's600', 's600p', 'ritual', 'stones', 'wishes', 'notes', 'fish', 'chats'];
+  const online = [...channels.values()].reduce((n, c) => n + chCount(c), 0);
+  res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>營地統計</title>
+<style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px}table{border-collapse:collapse;font-size:13px}th,td{padding:6px 9px;border-bottom:1px solid #3a2e27;text-align:right;white-space:nowrap}th{color:#ffb46b;position:sticky;top:0;background:#1d1714}td:first-child,th:first-child{text-align:left}.wrap{overflow-x:auto}p{opacity:.75;font-size:13px}</style></head>
+<body><h2>🔥 營地統計</h2><p>現在在線：${online} 人 · 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好。</p>
+<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="15">還沒有資料</td></tr>'}</table></div></body></html>`);
+});
+
 app.get('/api/health', (_req, res) => {
   const summary = {};
   for (const c of channels.values()) {
@@ -238,6 +314,7 @@ function roomSnapshot(c, id, selfId) {
     wishes: id === 'forest_main' ? shared.wishes : undefined,
     notes: id === 'forest_main' ? shared.notes : undefined,
     cairns: id === 'forest_main' ? shared.cairns : undefined,
+    today: todayPublic(),
     players: [...r.players.values()].filter((p) => p.id !== selfId).map(publicInfo),
   };
 }
@@ -255,6 +332,8 @@ io.on('connection', (socket) => {
   let roomId = null;
   let rkey = null; // socket.io 的房間名稱：「分流:房間」
   let lastWood = 0;
+  let session = null; // 統計用：這次來訪從什麼時候開始
+  let stacked = false; // 這次來訪疊過石頭了嗎
 
   /** 離開目前的分流／房間 */
   const leave = () => {
@@ -303,6 +382,16 @@ io.on('connection', (socket) => {
       dirty: true,
     };
     player.rw = findReward(player.name, data.code);
+    // 統計：第一次進來才算一次來訪（斷線重連、改名字不重複算）
+    if (!data.rejoin) {
+      session = { at: Date.now() };
+      const d = today();
+      d.visits++;
+      const vid = String(data.vid ?? '').slice(0, 24);
+      if (vid && !d.vids.includes(vid) && d.vids.length < 50000) d.vids.push(vid);
+      if (data.touch) d.touch++;
+      saveJson('stats.json', stats);
+    }
     enter(c, wanted);
     tidyChannels();
 
@@ -385,6 +474,7 @@ io.on('connection', (socket) => {
     lastChat = now;
     const text = String(data.text ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40);
     if (!text) return;
+    bump('chats');
     io.to(rkey).emit('chat', { id: socket.id, name: player.name, text });
   });
 
@@ -410,6 +500,7 @@ io.on('connection', (socket) => {
     shared.wishes.push({ name: player.name, text, at: now });
     shared.wishes = shared.wishes.slice(-MAX_WISHES);
     saveJson('wishes.json', shared.wishes);
+    bump('wishes');
     emitAllChannels('forest_main', 'wishes', { wishes: shared.wishes, by: socket.id, name: player.name });
   });
 
@@ -427,8 +518,16 @@ io.on('connection', (socket) => {
     const stone = { n: player.name, s: Math.floor(Math.random() * 100000), at: now };
     cairn.push(stone);
     saveJson('cairns.json', shared.cairns);
-    emitAllChannels('forest_main', 'stone', { i, stone, count: cairn.length, by: socket.id });
-    ack?.({ ok: true, count: cairn.length });
+    bump('stones');
+    // 「你是今天第幾位許願的旅人」：每次來訪第一次疊石頭才算
+    let ritual = null;
+    if (!stacked) {
+      stacked = true;
+      bump('ritual');
+      ritual = today().ritual;
+    }
+    emitAllChannels('forest_main', 'stone', { i, stone, count: cairn.length, by: socket.id, today: todayPublic() });
+    ack?.({ ok: true, count: cairn.length, ritual });
   });
 
   // 營火告示牌留言：大家都看得到（每 20 秒最多一則、最多 60 字）
@@ -444,6 +543,7 @@ io.on('connection', (socket) => {
     shared.notes.push({ name: player.name, text, at: now, color, ch: chan.ch });
     shared.notes = shared.notes.slice(-MAX_NOTES);
     saveJson('notes.json', shared.notes);
+    bump('notes');
     emitAllChannels('forest_main', 'notes', { notes: shared.notes, by: socket.id, name: player.name });
   });
 
@@ -468,6 +568,7 @@ io.on('connection', (socket) => {
         emitAllChannels('lake_dock', 'board', { board: shared.board });
       }
     }
+    bump('fish');
     io.to(rkey).emit('caught', { id: socket.id, name: player.name, fish, size, rank });
   });
 
@@ -484,6 +585,15 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     if (!player) return;
     leave();
+    if (session) {
+      const sec = (Date.now() - session.at) / 1000;
+      const d = today();
+      d.sessions++;
+      d.totalSec += Math.round(sec);
+      d.stay[sec < 30 ? 0 : sec < 120 ? 1 : sec < 600 ? 2 : 3]++;
+      saveJson('stats.json', stats);
+      session = null;
+    }
     console.log(`[離開] ${player.name}（分流 ${chan.ch} 剩 ${chCount(chan)} 人）`);
     player = null;
     tidyChannels();

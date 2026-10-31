@@ -98,6 +98,14 @@ export class NetworkClient {
     }
   }
 
+  /** 換了名字或樣子：用新資料重新加入（留在同一個分流和地點） */
+  rejoin(patch) {
+    this.updateJoinData(patch);
+    if (!this.socket) return;
+    this.socket.disconnect();
+    this.socket.connect();
+  }
+
   /** 更新重連時要帶的資料（例如目前位置） */
   updateJoinData(patch) {
     if (this._joinData) Object.assign(this._joinData, patch);

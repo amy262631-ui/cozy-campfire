@@ -14,5 +14,5 @@ services:
         value: "22"
       - key: CHANNEL_MAX   # 每個分流最多幾人
         value: "100"
-      - key: CHANNELS      # 平常開幾個分流（全滿時會自動加開）
-        value: "3"
+      - key: CHANNELS      # 平常開幾個分流（全滿時會自動加開）；人少時 1 個最熱鬧
+        value: "1"

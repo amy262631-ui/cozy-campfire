@@ -194,6 +194,21 @@ export function buildCairnGarden(world) {
       return best;
     },
 
+    /** 最近一座還沒滿的石塔（新手指引用） */
+    nearestCairn(pos) {
+      let best = 0;
+      let bestD = Infinity;
+      cairns.forEach((c, i) => {
+        if (c.stones.length >= CAIRN_MAX) return;
+        const d = Math.hypot(pos.x - c.spot.x, pos.z - c.spot.z);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      });
+      return best;
+    },
+
     nearPile(pos) {
       return Math.hypot(pos.x - PILE.x, pos.z - PILE.z) < NEAR_PILE;
     },

@@ -2553,3 +2553,207 @@ body.touch .lang {
   font: inherit;
   cursor: pointer;
 }
+
+/* ---------- 一秒進場：自己的名字（點了改名字、換動物） ---------- */
+.me-chip {
+  margin-left: 6px;
+  padding: 2px 9px;
+  border: 1px solid rgba(255, 220, 180, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 245, 230, 0.1);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  pointer-events: auto;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today {
+  position: absolute;
+  top: 132px;
+  left: 24px;
+  font-size: 12px;
+  color: #ffd79a;
+  opacity: 0.85;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.today[hidden] {
+  display: none;
+}
+
+.join-cancel {
+  margin-top: -2px;
+  padding: 9px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+/* ---------- 操作說明：預設收合 ---------- */
+.hint.collapsed span:not(.always) {
+  display: none;
+}
+
+.hint:not(.collapsed) .short-only {
+  display: none;
+}
+
+.hint-toggle {
+  padding: 2px 10px;
+  border: 1px solid rgba(255, 220, 180, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 245, 230, 0.08);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* ---------- 今晚的小儀式 ---------- */
+.ritual {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(360px, 44vw);
+  padding: 12px 16px 12px;
+  border-radius: 18px;
+  background: rgba(40, 30, 24, 0.86);
+  border: 1px solid rgba(255, 200, 130, 0.45);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35), 0 0 24px rgba(255, 190, 110, 0.12);
+  text-align: center;
+  pointer-events: auto;
+  animation: ritual-in 0.6s ease;
+}
+
+.ritual[hidden] {
+  display: none;
+}
+
+@keyframes ritual-in {
+  from { opacity: 0; transform: translate(-50%, -10px); }
+}
+
+.ritual-x {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 18px;
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+.ritual-title {
+  font-size: 13px;
+  color: #ffb46b;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.ritual-text {
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.ritual-text b {
+  color: #ffd79a;
+}
+
+.ritual-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ritual-dots i {
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  transition: background 0.3s;
+}
+
+.ritual-dots i.on {
+  background: #ffb46b;
+}
+
+.ritual-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ritual-actions[hidden] {
+  display: none;
+}
+
+.ritual-actions button {
+  padding: 7px 14px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 245, 230, 0.12);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ritual-actions button:first-child {
+  background: linear-gradient(180deg, #ffb46b, #f08a3c);
+  color: #3a2214;
+  font-weight: 700;
+}
+
+.ritual.done {
+  border-color: rgba(255, 215, 154, 0.8);
+}
+
+/* 手機：放在左上資訊下面，不擋角色 */
+body.touch .ritual {
+  top: 156px;
+  left: 12px;
+  transform: none;
+  width: min(250px, 66vw);
+  padding: 10px 12px;
+  animation: none;
+}
+
+body.touch .ritual-text {
+  font-size: 13px;
+}
+
+.ritual-arrow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  font-size: 30px;
+  color: #ffd28a;
+  text-shadow: 0 0 12px rgba(255, 190, 110, 0.9), 0 2px 4px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.ritual-arrow[hidden] {
+  display: none;
+}
+
+/* 手機：副標題太長會擠到右上角的按鈕，先藏起來 */
+body.touch .title-sub {
+  display: none;
+}

@@ -27,7 +27,8 @@ export class HUD {
 
       <div class="prompt" id="prompt"></div>
 
-      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button></div>
+      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button></div>
+      <div class="today" id="today" hidden></div>
 
       <button type="button" class="sound-unlock" id="sound-unlock">${t('🔈 輕點這裡開啟聲音')}</button>
       `,
@@ -45,7 +46,12 @@ export class HUD {
       soundUnlock: root.querySelector('#sound-unlock'),
       onlineText: root.querySelector('#online-text'),
       chChip: root.querySelector('#ch-chip'),
+      meChip: root.querySelector('#me-chip'),
+      today: root.querySelector('#today'),
     };
+    this.onMeClick = null;
+    this.el.meChip.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.el.meChip.addEventListener('click', () => this.onMeClick?.());
     /** 點「分流 N」時呼叫（main.js 設定） */
     this.onChannelClick = null;
     this.el.chChip.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -89,6 +95,20 @@ export class HUD {
           : status === 'full'
             ? t('營地客滿，單人模式')
             : t('單人模式（未連上伺服器）');
+  }
+
+  /** 左上角自己的名字（點了可以改名字、換動物） */
+  setMe(name) {
+    this.el.meChip.textContent = `${name} ✏️`;
+    this.el.meChip.title = t('改名字・換動物');
+  }
+
+  /** 「今天有 N 位旅人來過 · 疊了 N 顆石頭」：就算現在只有你一個人，也知道有人來過 */
+  setToday({ visitors = 0, stones = 0 } = {}) {
+    this.el.today.hidden = !visitors;
+    this.el.today.textContent = stones
+      ? t('今天有 {n} 位旅人來過 · 疊了 {s} 顆石頭', { n: visitors, s: stones })
+      : t('今天有 {n} 位旅人來過', { n: visitors });
   }
 
   /** 顯示目前分流（0 ＝單人模式，不顯示） */
