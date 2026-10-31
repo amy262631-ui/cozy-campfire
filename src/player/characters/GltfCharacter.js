@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createCarriedStone } from '../../rooms/cairns.js';
 import { createRoastStick, createLogProp, createBlanket, createFishingRod } from '../props.js';
 import { createFishMesh, fishScale } from '../../fishing/fishModel.js';
 import { buildAccessory } from '../accessories.js';
@@ -87,6 +88,10 @@ export class GltfCharacter {
     this.headAnchor = new THREE.Object3D();
     this.headAnchor.position.set(0, TARGET_HEIGHT * 0.85, 0);
     this.root.add(this.headAnchor);
+    this.headStone = createCarriedStone();
+    this.headStone.position.set(0, 0.2, 0);
+    this.headStone.visible = false;
+    this.headAnchor.add(this.headStone);
 
     // 道具：掛在 root 上（不依賴骨架命名，任何模型都能用）
     const chestY = TARGET_HEIGHT * 0.42;
@@ -146,6 +151,7 @@ export class GltfCharacter {
     else if (name === 'rod') this.rod.group.visible = visible;
     else if (name === 'fish') this.heldFish.visible = visible;
     else if (name === 'log') this.log.visible = visible;
+    else if (name === 'stone') this.headStone.visible = visible;
     else if (name === 'blanket') this.blanket.body.visible = visible;
   }
 

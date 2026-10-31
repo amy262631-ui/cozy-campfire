@@ -2421,3 +2421,135 @@ body.touch .lang {
   font: inherit;
   cursor: pointer;
 }
+
+/* ---------- 石塔祈願 ---------- */
+.cairn {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 7, 13, 0.42);
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.cairn.show {
+  display: flex;
+}
+
+.cairn-card {
+  width: min(370px, 92vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 18px 16px 14px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(52, 50, 46, 0.97), rgba(34, 32, 30, 0.97));
+  border: 1px solid rgba(220, 210, 190, 0.28);
+  text-align: center;
+}
+
+.cairn-title {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.cairn-count {
+  margin: 8px 0 2px;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.cairn-count b {
+  font-size: 24px;
+  color: #ffd79a;
+}
+
+.cairn-bar {
+  display: block;
+  height: 6px;
+  margin: 6px auto 0;
+  width: 70%;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.cairn-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #a8a196, #ffd79a);
+}
+
+.cairn-sub {
+  font-size: 13px;
+  opacity: 0.8;
+  margin: 8px 0 4px;
+}
+
+.cairn-label {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  opacity: 0.6;
+  text-align: left;
+}
+
+.cairn-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.cairn-people span {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 245, 230, 0.09);
+  font-size: 13px;
+}
+
+.cairn-people span.me {
+  background: rgba(255, 200, 120, 0.25);
+  color: #ffd79a;
+}
+
+.cairn-people small {
+  opacity: 0.65;
+}
+
+.cairn-recent div {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 2px;
+  font-size: 13px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.cairn-recent small {
+  opacity: 0.55;
+}
+
+.cairn-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  opacity: 0.75;
+  line-height: 1.6;
+}
+
+.cairn-total {
+  margin: 8px 0 10px;
+  font-size: 12px;
+  color: #ffd79a;
+  opacity: 0.85;
+}
+
+.cairn-close {
+  padding: 7px 18px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 245, 230, 0.1);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}

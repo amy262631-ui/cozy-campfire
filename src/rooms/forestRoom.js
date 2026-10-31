@@ -3,6 +3,8 @@ import { createWorld } from '../scene/World.js';
 import { Campfire } from '../scene/Campfire.js';
 import { makeSign, lowpoly, shadowAll } from './shared.js';
 import { buildShrine } from './shrine.js';
+import { buildCairnGarden, CAIRN_GARDEN_CLEARING } from './cairns.js';
+import { EMOTE_IDS } from '../social/emotes.js';
 import { t } from '../i18n/i18n.js';
 
 /** 三個子房間入口在森林裡的方位（角度＝從營火看出去的方向） */
@@ -334,7 +336,7 @@ export function createForestRoom() {
   const defs = ENTRANCES.map((e) => ({ ...e, trigger: polar(e.angle, TRIGGER_R), build: polar(e.angle, BUILD_R) }));
   const shrinePos = polar(SHRINE_ANGLE, SHRINE_R);
   const world = createWorld(group, {
-    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }],
+    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING],
   });
 
   const campfire = new Campfire();
@@ -393,6 +395,16 @@ export function createForestRoom() {
   const nearShrine = (actions) =>
     Math.hypot(actions.player.position.x - shrineFront.x, actions.player.position.z - shrineFront.z) < 2.2;
 
+  // ---------- 石塔祈願（祈福處步道旁） ----------
+  const cairnGarden = buildCairnGarden(world);
+  group.add(cairnGarden.group);
+  /** 頭上是不是頂著一顆石頭 */
+  let carrying = false;
+  const setCarry = (character, v) => {
+    carrying = v;
+    character?.setProp('stone', v);
+  };
+
   return {
     id: 'forest_main',
     label: t('🔥 中央大營火'),
@@ -412,8 +424,43 @@ export function createForestRoom() {
     shrineFront,
     noticeBoard,
     boardFront,
+    cairnGarden,
+    get carrying() {
+      return carrying;
+    },
+    /** 離開森林、換角色時：頭上的石頭放下 */
+    dropStone(character) {
+      setCarry(character, false);
+    },
 
     onAction(name, actions) {
+      // 頂著石頭時去做別的事（烤棉花糖、裹毯⋯），石頭先放下
+      if (carrying && name !== 'interact') setCarry(actions.character, false);
+      // 正在打招呼、合十時按 E：先結束動作再互動
+      if (name === 'interact' && EMOTE_IDS.has(actions.state)) actions.stop();
+      if (name === 'interact' && actions.state === 'free') {
+        const pos = actions.player.position;
+        const ci = cairnGarden.nearCairn(pos);
+        if (carrying && ci >= 0) {
+          setCarry(actions.character, false);
+          actions.onStack?.(ci);
+          return true;
+        }
+        if (cairnGarden.nearPile(pos)) {
+          setCarry(actions.character, !carrying);
+          actions.onPickStone?.(carrying);
+          return true;
+        }
+        if (carrying) {
+          setCarry(actions.character, false);
+          actions.hud.toast(t('把石頭輕輕放下了'));
+          return true;
+        }
+        if (ci >= 0) {
+          actions.onCairn?.(ci);
+          return true;
+        }
+      }
       if (name === 'interact' && actions.state === 'free' && nearShrine(actions)) {
         actions.onShrine?.();
         return true;
@@ -430,17 +477,36 @@ export function createForestRoom() {
     interactHint(actions) {
       if (nearShrine(actions)) return ['⛩️', t('祈福')];
       if (nearBoard(actions)) return ['📌', t('告示牌')];
+      const pos = actions.player.position;
+      const ci = cairnGarden.nearCairn(pos);
+      if (carrying) {
+        if (ci >= 0) return ['🗿', t('疊上去')];
+        if (cairnGarden.nearPile(pos)) return ['🪨', t('放回去')];
+        return ['🪨', t('放下')];
+      }
+      if (cairnGarden.nearPile(pos)) return ['🪨', t('撿石頭')];
+      if (ci >= 0) return ['🗿', t('石塔')];
       return null;
     },
 
     prompt(actions) {
       if (nearShrine(actions)) return t('<kbd>E</kbd> 參拜・擲筊・抽籤・寫繪馬');
       if (nearBoard(actions)) return t('<kbd>E</kbd> 看告示牌・留言　<kbd>F</kbd> 烤棉花糖');
+      const pos = actions.player.position;
+      const ci = cairnGarden.nearCairn(pos);
+      if (carrying) {
+        if (ci >= 0) return t('<kbd>E</kbd> 把石頭疊上去・許個願');
+        if (cairnGarden.nearPile(pos)) return t('<kbd>E</kbd> 把石頭放回去');
+        return t('🪨 頭上頂著石頭，走到石塔旁按 <kbd>E</kbd> 疊上去');
+      }
+      if (cairnGarden.nearPile(pos)) return t('<kbd>E</kbd> 撿一顆石頭');
+      if (ci >= 0) return t('<kbd>E</kbd> 看石塔紀錄（{n} 顆）', { n: cairnGarden.cairns[ci].stones.length });
       return actions.nearFire ? t('<kbd>E</kbd> 添柴火　<kbd>F</kbd> 烤棉花糖') : null;
     },
 
     update(dt, t, camera) {
       shrine.update(dt, t);
+      cairnGarden.update(dt, t);
       // world / campfire 由 RoomManager 另外更新（星空與火勢要持續運作）
       // 招牌離鏡頭太近時淡出，避免擋住畫面
       for (const sgn of signs) {

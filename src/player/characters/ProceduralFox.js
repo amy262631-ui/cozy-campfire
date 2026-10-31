@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createCarriedStone } from '../../rooms/cairns.js';
 import { createRoastStick, createLogProp, createBlanket, createFishingRod } from '../props.js';
 import { FUR_PALETTES } from './furPalettes.js';
 import { SPECIES } from './species.js';
@@ -12,7 +13,7 @@ import { createFishMesh, fishScale } from '../../fishing/fishModel.js';
  * 角色共同介面（GltfCharacter 也實作同一套）：
  *   root                     THREE.Object3D
  *   setPose(name)            'idle' | 'walk' | 'run' | 'sit' | 'throw' | 'roast' | 'blanket' | 'lookUp'
- *   setProp(name, visible)   'log' | 'stick' | 'blanket'
+ *   setProp(name, visible)   'log' | 'stick' | 'blanket' | 'stone'
  *   stick.setDoneness(p)     棉花糖熟度 0 ~ 1+
  *   getHeadWorldPosition(v)
  *   getHandWorldPosition(v)
@@ -270,6 +271,12 @@ export class ProceduralFox {
     torso.add(this.heldFish);
     torso.add(this.rod.group);
 
+    // 石塔祈願：頂在頭上的小石頭
+    this.headStone = createCarriedStone();
+    this.headStone.position.set(0, 0.4, 0);
+    this.headStone.visible = false;
+    head.add(this.headStone);
+
     this.log = createLogProp();
     this.log.position.set(0, 0.52, 0.34);
     this.log.visible = false;
@@ -378,6 +385,7 @@ export class ProceduralFox {
     else if (name === 'rod') this.rod.group.visible = visible;
     else if (name === 'fish') this.heldFish.visible = visible;
     else if (name === 'log') this.log.visible = visible;
+    else if (name === 'stone') this.headStone.visible = visible;
     else if (name === 'blanket') this.blanket.body.visible = this.blanket.hood.visible = visible;
   }
 

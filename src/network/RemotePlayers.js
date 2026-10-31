@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { STONE_FLAG } from '../rooms/cairns.js';
 import { ProceduralFox } from '../player/characters/ProceduralFox.js';
 import { lerpAngle } from '../player/Player.js';
 import { unpackFish } from '../fishing/fishData.js';
@@ -106,6 +107,7 @@ class RemotePlayer {
       c.setHeldFish?.(index, size);
     }
     c.setProp('fish', t.a === 'showFish' && !!t.e);
+    c.setProp('stone', t.a !== 'showFish' && t.e === STONE_FLAG); // 頭上頂著石頭
     c.setProp('log', t.a === 'addWood' && this.stateTime < 0.95);
     if (t.a === 'roast') c.stick.setDoneness(t.d);
     c.update(dt, elapsed, this.speed);

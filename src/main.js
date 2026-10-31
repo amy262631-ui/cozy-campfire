@@ -30,6 +30,8 @@ import { ShrinePanel } from './ui/ShrinePanel.js';
 import { LanguagePicker } from './ui/LanguagePicker.js';
 import { NoticePanel } from './ui/NoticePanel.js';
 import { ChannelPanel } from './ui/ChannelPanel.js';
+import { CairnPanel } from './ui/CairnPanel.js';
+import { STONE_FLAG, CAIRN_MAX } from './rooms/cairns.js';
 import { FishingGame } from './fishing/FishingGame.js';
 import { FISH } from './fishing/fishData.js';
 import { FishingUI } from './ui/FishingUI.js';
@@ -237,6 +239,52 @@ async function init() {
   actions.onNoticeBoard = () => noticePanel.open();
   let myReward = 0;
 
+  // ---------- 石塔祈願 ----------
+  /** 全部石塔的石頭：[[{ n, s, at }]]（連線時由伺服器提供，單人模式存在這裡） */
+  let cairnData = forest.cairnGarden.cairns.map(() => []);
+  const cairnPanel = new CairnPanel({ getCairns: () => cairnData, getName: () => myName });
+  const applyCairns = (list) => {
+    cairnData = forest.cairnGarden.cairns.map((_, i) => (list?.[i] ?? []).slice());
+    forest.cairnGarden.setAll(cairnData);
+    cairnPanel.refresh();
+  };
+  const addStone = (i, stone) => {
+    if (!cairnData[i] || cairnData[i].length >= CAIRN_MAX) return;
+    cairnData[i].push(stone);
+    forest.cairnGarden.add(i, stone);
+    cairnPanel.refresh(i);
+    if (roomMgr?.current.id === 'forest_main') audio.sfx('stone');
+  };
+  actions.onPickStone = (carrying) => {
+    audio.sfx('tap');
+    hud.toast(carrying ? t('撿起一顆石頭，頂在頭上 🪨 走到石塔旁放上去吧') : t('把石頭放回去了'));
+  };
+  actions.onStack = async (i) => {
+    if (cairnData[i].length >= CAIRN_MAX) {
+      hud.toast(t('這座石塔已經疊滿了，換旁邊那座吧 🗿'));
+      return;
+    }
+    actions.emote('pray'); // 放上去之後雙手合十許個願
+    if (net.online) {
+      const res = await net.stack(i);
+      if (res?.ok) hud.toast(t('🪨 疊上去了！第 {n} 顆，許個願吧 🙏', { n: res.count }), 3500);
+      else if (res?.reason === 'tooFast') hud.toast(t('慢慢來，一顆一顆疊 🪨'));
+      else if (res?.reason === 'full') hud.toast(t('這座石塔已經疊滿了，換旁邊那座吧 🗿'));
+      else hud.toast(t('石頭沒放穩，再試一次吧'));
+    } else {
+      addStone(i, { n: myName, s: Math.floor(Math.random() * 100000), at: Date.now() });
+      hud.toast(t('🪨 疊上去了！第 {n} 顆，許個願吧 🙏', { n: cairnData[i].length }), 3500);
+    }
+  };
+  actions.onCairn = (i) => cairnPanel.open(i);
+  net.on('stone', ({ i, stone, count, by }) => {
+    addStone(i, stone);
+    // 其他人疊到整數的時候，大家一起慶祝一下
+    if (by !== net.id && (count % 25 === 0 || count === CAIRN_MAX)) {
+      hud.toast(t('🗿 第 {n} 座石塔疊到 {count} 顆了！', { n: i + 1, count }), 4000);
+    }
+  });
+
   // ---------- 分流 ----------
   const channelPanel = new ChannelPanel({
     onSwitch: async (ch) => {
@@ -263,6 +311,7 @@ async function init() {
     if (res.board) fishingUI.setBoard(res.board, true);
     if (res.wishes) applyWishes(res.wishes);
     if (res.notes) applyNotes(res.notes);
+    if (res.cairns) applyCairns(res.cairns);
     refreshOnline();
   }
   const localWishes = [];
@@ -358,6 +407,8 @@ async function init() {
     audio,
     onEnter: (room) => {
       remotes.reset([]); // 先清掉上一個房間的人，伺服器回應後再補上
+      if (room.id !== 'forest_main') forest.dropStone(player.character);
+      cairnPanel.close();
       pomodoro.show(!!room.focusMode);
       mobile?.setRoom(room.id);
       fishingUI.showTools(room.id === 'lake_dock');
@@ -377,6 +428,7 @@ async function init() {
       if (res.board) fishingUI.setBoard(res.board, true);
       if (res.wishes) applyWishes(res.wishes);
       if (res.notes) applyNotes(res.notes);
+      if (res.cairns) applyCairns(res.cairns);
     } else if (res && !res.ok && res.reason === 'full') {
       hud.toast(fullMsg(), 4000);
     }
@@ -434,7 +486,7 @@ async function init() {
       ...player.getNetworkState(),
       actionState: (actions.state === 'fish' && fishing.netAction) || player.actionState, // 拉竿、舉魚
       doneness: actions.state === 'roast' ? actions.doneness : 0,
-      extra: fishing.netExtra, // 舉起來的魚（魚種＋公分）
+      extra: fishing.netExtra || (forest.carrying ? STONE_FLAG : 0), // 舉起來的魚（魚種＋公分），或頭上頂著石頭
     });
     cameraRig.showOff = fishing.phase === 'show';
     cameraRig.update(dt);
@@ -476,6 +528,7 @@ async function init() {
       player.setCharacter(new ProceduralFox({ fur, species }));
     }
     player.character.setFur?.(fur);
+    player.character.setProp?.('stone', forest.carrying);
   };
   if (params.get('name')) {
     profile = {
@@ -508,7 +561,7 @@ async function init() {
 
   // 方便在瀏覽器 console 除錯（開發模式或網址加 ?debug）
   if (import.meta.env.DEV || params.has('debug')) {
-    window.__cozy = { scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel };
+    window.__cozy = { scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel };
   }
 }
 

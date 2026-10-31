@@ -689,6 +689,11 @@ export class AudioEngine {
           tone(2349, now + d, 0.9, { amp: 0.035 });
         });
         break;
+      case 'stone': // 石頭疊上去：兩聲輕輕的「喀、喀」
+        noise(now, 0.04, 2600, 0.3);
+        tone(310, now, 0.08, { type: 'triangle', amp: 0.1, to: 220 });
+        noise(now + 0.09, 0.03, 3200, 0.16);
+        break;
       case 'jiao': // 筊杯落地：兩聲木頭「喀、喀」
         for (const d of [1.0, 1.12, 1.25]) noise(now + d, 0.05, 900, 0.35);
         break;

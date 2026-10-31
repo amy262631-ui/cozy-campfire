@@ -50,6 +50,10 @@ const ACTION_STATES = new Set([
 const EMOJIS = new Set(['😊', '😂', '🥰', '👍', '❤️', '🎉', '😴', '🥺', '😮', '🔥', '✨', '🍡']);
 const MAX_WISHES = 40;
 const MAX_NOTES = 60;
+/** 石塔祈願：幾座石塔、每座最多幾顆（與前端 cairns.js 相同） */
+const CAIRN_COUNT = 6;
+const CAIRN_MAX = 99;
+const STACK_COOLDOWN_MS = 2000;
 // 魚：索引 0~9（8、9 是垃圾，不列入排行），尺寸上限
 const FISH_COUNT = 10;
 const JUNK = new Set([8, 9]);
@@ -57,7 +61,7 @@ const FISH_MAX_CM = 130;
 
 // ---------- 分流與房間資料 ----------
 /** 所有分流共用：繪馬、告示牌留言、釣魚排行 */
-const shared = { wishes: [], notes: [], board: [] };
+const shared = { wishes: [], notes: [], board: [], cairns: [] };
 /** @type {Map<number, { ch: number, fuel: number, rooms: Map<string, { players: Map<string, any>, song: number }> }>} */
 const channels = new Map();
 const key = (ch, roomId) => `${ch}:${roomId}`;
@@ -133,6 +137,10 @@ function saveJson(file, data) {
 shared.notes = readJson('notes.json', []).slice(-MAX_NOTES);
 shared.wishes = readJson('wishes.json', []).slice(-MAX_WISHES);
 shared.board = readJson('board.json', []).slice(0, 10);
+{
+  const saved = readJson('cairns.json', []);
+  shared.cairns = Array.from({ length: CAIRN_COUNT }, (_, i) => (Array.isArray(saved[i]) ? saved[i].slice(0, CAIRN_MAX) : []));
+}
 
 // ---------- HTTP ----------
 const app = express();
@@ -229,6 +237,7 @@ function roomSnapshot(c, id, selfId) {
     board: id === 'lake_dock' ? shared.board : undefined,
     wishes: id === 'forest_main' ? shared.wishes : undefined,
     notes: id === 'forest_main' ? shared.notes : undefined,
+    cairns: id === 'forest_main' ? shared.cairns : undefined,
     players: [...r.players.values()].filter((p) => p.id !== selfId).map(publicInfo),
   };
 }
@@ -402,6 +411,24 @@ io.on('connection', (socket) => {
     shared.wishes = shared.wishes.slice(-MAX_WISHES);
     saveJson('wishes.json', shared.wishes);
     emitAllChannels('forest_main', 'wishes', { wishes: shared.wishes, by: socket.id, name: player.name });
+  });
+
+  // 石塔祈願：在第 i 座石塔疊一顆石頭（所有分流共用、永久保存）
+  let lastStack = 0;
+  socket.on('stack', (data = {}, ack) => {
+    if (!player || roomId !== 'forest_main') return ack?.({ ok: false, reason: 'room' });
+    const i = Math.floor(num(data.i, -1, CAIRN_COUNT - 1, -1));
+    if (i < 0) return ack?.({ ok: false, reason: 'unknown' });
+    const now = Date.now();
+    if (now - lastStack < STACK_COOLDOWN_MS) return ack?.({ ok: false, reason: 'tooFast' });
+    const cairn = shared.cairns[i];
+    if (cairn.length >= CAIRN_MAX) return ack?.({ ok: false, reason: 'full' });
+    lastStack = now;
+    const stone = { n: player.name, s: Math.floor(Math.random() * 100000), at: now };
+    cairn.push(stone);
+    saveJson('cairns.json', shared.cairns);
+    emitAllChannels('forest_main', 'stone', { i, stone, count: cairn.length, by: socket.id });
+    ack?.({ ok: true, count: cairn.length });
   });
 
   // 營火告示牌留言：大家都看得到（每 20 秒最多一則、最多 60 字）
