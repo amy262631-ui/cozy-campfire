@@ -5,6 +5,7 @@ import { makeSign, lowpoly, shadowAll } from './shared.js';
 import { buildShrine } from './shrine.js';
 import { buildCairnGarden, CAIRN_GARDEN_CLEARING } from './cairns.js';
 import { buildMiniLayer } from './miniLayer.js';
+import { buildPond } from './pond.js';
 import { buildWishTree, WISH_TREE_CLEARING } from './wishTree.js';
 import { buildShop, nearShop, SHOP_FRONT, SHOP_CLEARING } from './shop.js';
 import { EMOTE_IDS } from '../social/emotes.js';
@@ -499,6 +500,10 @@ export function createForestRoom() {
   areaBoard.sprite.position.set(0, 3.7, 0);
   group.add(areaBoard.sprite);
 
+  // ---------- 營火河畔：在營火旁就能釣魚 ----------
+  const pond = buildPond(world, group);
+  group.add(pond.group);
+
   // ---------- 整點小活動的道具（燈籠賽跑、金松果） ----------
   const mini = buildMiniLayer();
   group.add(mini.group);
@@ -532,7 +537,15 @@ export function createForestRoom() {
     cairnGarden,
     wishTree,
     mini,
+    pond,
+    fishSpot: null, // 坐下釣魚時記錄（ActionStateMachine 用來固定位置與面向）
+    fishing: null, // 由 main.js 放入 FishingGame（和湖畔共用）
     setAreas: (a) => areaBoard.draw(a),
+    /** 手機的 F 按鈕：在水邊變成「釣魚」、釣魚中變成「拉竿」 */
+    roastHint(actions) {
+      if (actions.state === 'fish') return ['🎣', t('拉竿')];
+      return actions.state === 'free' && pond.spotAt(actions.player.position) ? ['🎣', t('釣魚')] : null;
+    },
     get carrying() {
       return carrying;
     },
@@ -542,6 +555,26 @@ export function createForestRoom() {
     },
 
     onAction(name, actions) {
+      // 營火河畔釣魚：F＝拉竿、E＝收竿；在水邊按 F 坐下
+      if (actions.state === 'fish') {
+        if (name === 'roast') {
+          this.fishing?.press();
+          return true;
+        }
+        if (name === 'interact') {
+          actions.stop();
+          return true;
+        }
+      }
+      if (name === 'roast' && actions.state === 'free' && !carrying) {
+        const spot = pond.spotAt(actions.player.position);
+        if (spot) {
+          this.fishSpot = { x: spot.x, z: spot.z, face: spot.face };
+          actions.start('fish');
+          this.fishing?.start(actions, spot);
+          return true;
+        }
+      }
       // 頂著石頭時去做別的事（烤棉花糖、裹毯⋯），石頭先放下
       if (carrying && name !== 'interact') setCarry(actions.character, false);
       // 正在打招呼、合十時按 E：先結束動作再互動
@@ -617,6 +650,7 @@ export function createForestRoom() {
         if (cairnGarden.nearPile(pos)) return t('<kbd>E</kbd> 把石頭放回去');
         return t('🪨 頭上頂著石頭，走到石塔旁按 <kbd>E</kbd> 疊上去');
       }
+      if (pond.spotAt(pos)) return t('<kbd>F</kbd> 坐下釣魚・盯著發光的浮標');
       if (cairnGarden.nearPile(pos)) return t('<kbd>E</kbd> 撿一顆石頭');
       if (ci >= 0) return t('<kbd>E</kbd> 看石塔紀錄（{n} 顆）', { n: cairnGarden.cairns[ci].stones.length });
       if (wishTree.near(pos)) return t('<kbd>E</kbd> 心願大樹・掛一個裝飾');
@@ -624,11 +658,17 @@ export function createForestRoom() {
       return actions.nearFire ? t('<kbd>E</kbd> 添柴火　<kbd>F</kbd> 烤棉花糖') : null;
     },
 
-    update(dt, t, camera) {
+    update(dt, t, camera, actions) {
       shrine.update(dt, t);
       cairnGarden.update(dt, t);
       wishTree.update(dt, t);
       mini.update(dt, t);
+      pond.update(dt, t);
+      // 營火河畔的釣魚：離開釣魚狀態（移動、換房間）就收竿
+      if (this.fishing?.group === pond.group) {
+        if (actions?.state !== 'fish' && this.fishing.active) this.fishing.stop();
+        this.fishing.update(dt, t);
+      }
       // 人數看板跑到畫面最上方（會跟左上的資訊疊在一起）時淡出
       areaNdc.copy(areaBoard.sprite.position).project(camera);
       areaBoard.sprite.material.opacity = Math.min(1, Math.max(0, (0.62 - areaNdc.y) / 0.2));

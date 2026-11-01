@@ -15,7 +15,7 @@ const PROMPTS = {
   roast: t('<kbd>F</kbd> 收回享用　·　移動＝收起'),
   blanket: t('<kbd>Z</kbd> 起身　·　或直接移動'),
   stargaze: t('<kbd>空白鍵</kbd> 回到營火旁　·　或直接移動'),
-  fish: t('<kbd>F</kbd> 收竿　·　或直接移動'),
+  fish: t('盯著浮標：整個沉下去時按 <kbd>F</kbd> 拉竿　·　<kbd>E</kbd> 或移動就收竿'),
 };
 
 /**

@@ -115,7 +115,7 @@ function buildTasks(touch) {
       on: 'fish',
       guide(s) {
         if (s.roomId === 'lake_dock') {
-          if (s.state === 'fish') return { step: 2, text: k(t('浮標往下沉的時候，快按 <b>F</b> 收竿！'), t('浮標往下沉、手機震動時，快點 <b>🎣</b> 收竿！')), target: null };
+          if (s.state === 'fish') return { step: 2, text: k(t('發光的浮標整個沉下去時，快按 <b>F</b> 拉竿！（只點一下是魚在試探，先別拉）'), t('發光的浮標整個沉下去時，快點 <b>🎣</b> 拉竿！（只點一下是魚在試探，先別拉）')), target: null };
           return { step: 1, text: k(t('走到<b>碼頭盡頭</b>或岸邊，按 <b>F</b> 坐下釣魚'), t('走到<b>碼頭盡頭</b>或岸邊，點 <b>🎣 釣魚</b>')), target: s.dockEnd };
         }
         if (!s.inForest) return back;

@@ -198,6 +198,7 @@ async function init() {
     },
   });
   rooms.lake_dock.fishing = fishing;
+  forest.fishing = fishing; // 營火河畔也用同一個釣魚遊戲
 
   // ---------- 表情、聊天 ----------
   let myName = '';
@@ -322,7 +323,7 @@ async function init() {
       : { ...miniState, startsIn: Math.max(0, miniState.startsIn - passed) };
   };
   const MINI_START = {
-    fish: () => t('🎣 釣魚大賽開始了！10 分鐘內到湖邊釣最大的魚，前三名送松果'),
+    fish: () => t('🎣 釣魚大賽開始了！10 分鐘內到營火河畔或湖邊釣最大的魚，前三名送松果'),
     stone: () => t('🪨 疊石接力開始了！10 分鐘內每疊一顆石頭多 1 顆松果'),
     race: () => t('🏃 燈籠賽跑開始了！依序跑過森林裡 1→5 號燈籠，最快的前三名送松果'),
     hunt: () => t('✨ 找金松果開始了！森林裡藏了 5 顆發光的金松果，找到一顆 +5 松果'),
@@ -1374,6 +1375,7 @@ async function init() {
     if (mobile) {
       // 手機：互動按鈕跟著位置換（祈福處、告示牌），提示裡的按鍵換成按鈕圖示
       mobile.setInteract(actions.state === 'free' ? (roomMgr.current.interactHint?.(actions) ?? null) : null);
+      mobile.setRoast(roomMgr.current.roastHint?.(actions) ?? null);
       const p = actions.prompt;
       hud.setPrompt(p && p.replace(/<kbd>([^<]*)<\/kbd>/g, (_, k) => {
         const icon = mobile.keyIcon(k);

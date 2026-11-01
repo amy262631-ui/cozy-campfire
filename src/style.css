@@ -4368,3 +4368,30 @@ body.building .guest-tools {
   background: rgba(255, 255, 255, 0.08);
   opacity: 0.55;
 }
+
+/* ---------- 夜釣：專注計時 ---------- */
+.fish-focus {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: rgba(10, 18, 30, 0.72);
+  border: 1px solid rgba(180, 255, 140, 0.35);
+  color: #e6ffd0;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.fish-focus[hidden] {
+  display: none;
+}
+
+body.touch .fish-focus {
+  top: auto;
+  bottom: 300px;
+  font-size: 13px;
+}

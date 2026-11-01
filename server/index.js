@@ -1200,7 +1200,7 @@ io.on('connection', (socket) => {
   // 釣到魚：全場公告＋湖畔排行（只收湖畔房間、每 3 秒最多一次）
   let lastCatch = 0;
   socket.on('catch', (data = {}) => {
-    if (!player || roomId !== 'lake_dock') return;
+    if (!player || (roomId !== 'lake_dock' && roomId !== 'forest_main')) return; // 湖畔或營火河畔
     const now = Date.now();
     if (now - lastCatch < 3000) return;
     lastCatch = now;

@@ -271,9 +271,12 @@ export function createLakeRoom() {
 
     onAction(name, actions) {
       const fishingNow = actions.state === 'fish';
-      if (fishingNow && (name === 'roast' || name === 'interact')) {
-        if (this.fishing?.press()) return true; // 咬鉤、拉竿時的按鍵
-        actions.stop(); // 等待中按 F＝收竿
+      if (fishingNow && name === 'roast') {
+        this.fishing?.press(); // F＝拉竿（浮標還沒沉就拉會嚇跑魚）
+        return true;
+      }
+      if (fishingNow && name === 'interact') {
+        actions.stop(); // E＝收竿
         return true;
       }
       if (actions.state !== 'free') return false;
@@ -286,7 +289,7 @@ export function createLakeRoom() {
         }
         this.fishSpot = { x: p.x, z: p.z, face: spot.face };
         actions.start('fish');
-        this.fishing?.start(actions, { x: p.x, z: p.z, dir: spot.dir });
+        this.fishing?.start(actions, { x: p.x, z: p.z, dir: spot.dir, group, waterY: WATER_Y });
         return true;
       }
       if (name === 'interact') {

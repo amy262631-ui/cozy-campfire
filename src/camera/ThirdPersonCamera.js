@@ -120,6 +120,8 @@ export class ThirdPersonCamera {
     this.distance += (this.target.distance - this.distance) * k;
 
     this._desiredFocus.copy(this.player.position);
+    // 釣魚時鏡頭的焦點移到浮標附近（focusTarget＋focusMix 由釣魚遊戲設定）
+    if (this.focusTarget) this._desiredFocus.lerp(this.focusTarget, this.focusMix ?? 0.6);
     // showOff：舉魚炫耀時鏡頭往上抬、拉遠，讓頭上的魚完整入鏡
     this._show = (this._show ?? 0) + ((this.showOff ? 1 : 0) - (this._show ?? 0)) * (1 - Math.exp(-4 * dt));
     this._desiredFocus.y += 1.0 + this._show * 0.55;

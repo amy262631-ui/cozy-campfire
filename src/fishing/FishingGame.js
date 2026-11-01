@@ -7,8 +7,8 @@ import { t } from '../i18n/i18n.js';
 /**
  * 釣魚小遊戲流程：
  *
- *   cast（坐下、甩竿）→ wait（浮標漂、偶爾試探性抖一下）
- *     → bite（浮標沉下去、頭上「！」、手機震動、畫面搖晃，限時拉竿）
+ *   cast（坐下、甩竿）→ wait（夜釣浮標立在水上，偶爾試探性點一下；這時拉竿會嚇跑魚）
+ *     → bite（浮標整個沉下去，沒有「！」提示，要自己看準時機拉竿；一沉就拉魚會大一點）
  *         ├ 沒拉到 → 魚跑掉了 → wait
  *         └ 拉到了 → reel（連點拉竿，魚會掙扎讓進度倒退，限時）
  *               ├ 時間到 → 線斷了 → wait
@@ -16,6 +16,10 @@ import { t } from '../i18n/i18n.js';
  *
  * 由湖畔房間每幀呼叫 update()；F 鍵／手機按鈕／畫面上的大按鈕都會呼叫 press()。
  */
+const FLOAT_SCALE = 1.7;
+const FLOAT_SINK = 0.18 * FLOAT_SCALE; // 浮標基準點在水面下多深（露出 3～4 段）
+const BITE_SINK = 0.24 * FLOAT_SCALE; // 咬鉤時再往下沉多少（色段全部沒入）
+
 export class FishingGame {
   constructor({ group, waterY, hud, ui, audio, cameraRig, onCatch }) {
     Object.assign(this, { group, waterY, hud, ui, audio, cameraRig, onCatch });
@@ -24,21 +28,62 @@ export class FishingGame {
     this.fish = null; // { index, size }
     this.actions = null;
 
-    // 浮標
+    // 夜釣浮標：細長的身子分成紅、黃、綠幾段，頂端一顆會發光的燈
+    // 浮標的「基準點」在水面下 FLOAT_SINK 公尺，水面上露出幾段色段；咬鉤時往下沉，色段一段段沒入水中
     this.bobber = new THREE.Group();
-    const top = new THREE.Mesh(
-      new THREE.SphereGeometry(0.065, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-      new THREE.MeshStandardMaterial({ color: 0xe8503c, emissive: 0x501008, roughness: 0.5 }),
-    );
-    const bottom = new THREE.Mesh(
-      new THREE.SphereGeometry(0.065, 14, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
-      new THREE.MeshStandardMaterial({ color: 0xf5f1e8, roughness: 0.5 }),
-    );
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.1, 5), new THREE.MeshStandardMaterial({ color: 0xe8503c }));
-    stem.position.y = 0.09;
-    this.bobber.add(top, bottom, stem);
+    // 顏色分得清楚：純紅、純黃、純綠，中間夾一條黑線
+    const segColors = [0xff2020, 0xffe020, 0x20ff40, 0xff2020, 0xffe020, 0x20ff40];
+    const sepMat = new THREE.MeshBasicMaterial({ color: 0x101010 });
+    segColors.forEach((c, i) => {
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.056, 8), new THREE.MeshBasicMaterial({ color: c }));
+      seg.position.y = 0.035 + i * 0.065;
+      this.bobber.add(seg);
+      const sep = new THREE.Mesh(new THREE.CylinderGeometry(0.0125, 0.0125, 0.009, 8), sepMat);
+      sep.position.y = 0.035 + i * 0.065 + 0.0325;
+      this.bobber.add(sep);
+    });
+    const tipY = 0.035 + segColors.length * 0.065;
+    const tipMesh = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 8), new THREE.MeshBasicMaterial({ color: 0xeaff9a }));
+    tipMesh.position.y = tipY;
+    this.bobber.add(tipMesh);
+    // 光暈（一直面向鏡頭）
+    const gc = document.createElement('canvas');
+    gc.width = gc.height = 64;
+    const gg = gc.getContext('2d');
+    const grad = gg.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(230,255,150,0.95)');
+    grad.addColorStop(0.35, 'rgba(160,255,90,0.35)');
+    grad.addColorStop(1, 'rgba(120,255,60,0)');
+    gg.fillStyle = grad;
+    gg.fillRect(0, 0, 64, 64);
+    const glowTex = new THREE.CanvasTexture(gc);
+    this.halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    this.halo.scale.set(0.22, 0.22, 1); // 光暈小一點，浮標才不會糊成一團
+    this.halo.position.y = tipY;
+    this.bobber.add(this.halo);
+    this.glowLight = new THREE.PointLight(0xb8ff7a, 0.9, 2.2, 1.6);
+    this.glowLight.position.y = tipY;
+    this.bobber.add(this.glowLight);
+    this.bobber.scale.setScalar(FLOAT_SCALE); // 放大，晚上看得清楚
     this.bobber.visible = false;
     group.add(this.bobber);
+    // 水面上的倒影光（平貼在水面）
+    this.reflect = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.1, 0.9),
+      new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55 }),
+    );
+    this.reflect.rotation.x = -Math.PI / 2;
+    this.reflect.visible = false;
+    group.add(this.reflect);
+
+    // 水花：大魚掙扎、拉上岸時噴出來的小水滴
+    const dropGeo = new THREE.SphereGeometry(0.025, 6, 4);
+    this.drops = Array.from({ length: 60 }, () => {
+      const m = new THREE.Mesh(dropGeo, new THREE.MeshBasicMaterial({ color: 0xe6f2ff, transparent: true, opacity: 0.9, depthWrite: false }));
+      m.visible = false;
+      group.add(m);
+      return { m, v: new THREE.Vector3(), life: 0 };
+    });
 
     // 漣漪（兩圈）
     this.rings = [0, 1].map(() => {
@@ -127,12 +172,58 @@ export class FishingGame {
   start(actions, spot) {
     this.actions = actions;
     this.spot = spot;
+    if (spot.group && spot.group !== this.group) this.#attach(spot.group, spot.waterY ?? this.waterY);
+    else if (spot.waterY != null) this.waterY = spot.waterY;
+    // 鏡頭繞到背後、壓低，看得清楚水面上的浮標
+    const rig = this.cameraRig;
+    if (rig && !this.savedCam) {
+      this.savedCam = { yaw: rig.target.yaw, pitch: rig.target.pitch, distance: rig.target.distance };
+      // 從斜後方看（越過肩膀），浮標才不會被自己的身體擋住
+      rig.target.yaw = Math.atan2(-spot.dir[0], -spot.dir[1]) + 0.32;
+      rig.target.pitch = 0.42;
+      rig.target.distance = 3.9;
+    }
+    // 專注計時：這次坐下來釣了多久、釣到幾條
+    this.session = { at: performance.now(), n: 0 };
+    this.#focusTick();
+    clearInterval(this.focusTimer);
+    this.focusTimer = setInterval(() => this.#focusTick(), 1000);
     this.#go('cast');
+  }
+
+  /** 換到另一個水域（湖畔／營火旁的河畔） */
+  #attach(group, waterY) {
+    for (const o of [this.bobber, this.reflect, this.line, this.bang, ...this.rings.map((r) => r.mesh), ...this.drops.map((d) => d.m)]) group.add(o);
+    this.group = group;
+    this.waterY = waterY;
+  }
+
+  #focusTick() {
+    if (!this.focusEl) {
+      this.focusEl = document.createElement('div');
+      this.focusEl.className = 'fish-focus';
+      document.getElementById('ui')?.appendChild(this.focusEl);
+    }
+    if (!this.session) {
+      this.focusEl.hidden = true;
+      return;
+    }
+    const sec = Math.floor((performance.now() - this.session.at) / 1000);
+    this.focusEl.hidden = false;
+    this.focusEl.textContent = t('🎣 靜靜釣了 {m} 分 {s} 秒・{n} 條', { m: Math.floor(sec / 60), s: sec % 60, n: this.session.n });
   }
 
   stop() {
     this.#go('idle');
-    this.bobber.visible = this.line.visible = this.bang.visible = false;
+    this.bobber.visible = this.line.visible = this.bang.visible = this.reflect.visible = false;
+    clearInterval(this.focusTimer);
+    this.session = null;
+    this.#focusTick();
+    if (this.savedCam && this.cameraRig) {
+      Object.assign(this.cameraRig.target, this.savedCam);
+      this.savedCam = null;
+    }
+    if (this.cameraRig) this.cameraRig.focusTarget = null;
     this.ui.showAlert(false);
     this.ui.showReel(false);
     this.#clearFlying();
@@ -153,9 +244,13 @@ export class FishingGame {
       case 'cast':
       case 'caught':
       case 'show':
+      case 'scared':
+        return true;
+      case 'wait':
+        this.#early(); // 浮標還沒沉就拉：魚被嚇跑
         return true;
       default:
-        return false; // 等待中按 F＝收竿
+        return false;
     }
   }
 
@@ -165,14 +260,34 @@ export class FishingGame {
     if (phase === 'cast') {
       this.fish = null;
       const [dx, dz] = this.spot.dir;
-      const dist = 2.6 + Math.random() * 1.3;
-      const side = (Math.random() - 0.5) * 1.2;
-      this.target.set(this.spot.x + dx * dist + dz * side, this.waterY, this.spot.z + dz * dist + dx * side);
+      const [r0, r1] = this.spot.reach ?? [2.6, 3.9];
+      const dist = r0 + Math.random() * (r1 - r0);
+      const side = (Math.random() - 0.5) * (this.spot.side ?? 1.2);
+      this.target.set(this.spot.x + dx * dist + dz * side, this.waterY - FLOAT_SINK, this.spot.z + dz * dist + dx * side);
       this.castStarted = false;
     }
     if (phase === 'wait') {
-      this.biteAt = 3.5 + Math.random() * 7;
-      this.nibbles = [Math.random() * this.biteAt * 0.8, Math.random() * this.biteAt * 0.9].sort();
+      this.biteAt = 4 + Math.random() * 9;
+      // 試探：浮標輕輕點一下（1～3 次），這時拉竿會把魚嚇跑
+      const n = 1 + Math.floor(Math.random() * 3);
+      this.nibbles = Array.from({ length: n }, () => 1 + Math.random() * (this.biteAt - 1.6)).sort((a, b) => a - b);
+    }
+  }
+
+  /** 噴水花：n 顆水滴，power 越大噴越高越遠 */
+  #splash(x, z, n, power = 1) {
+    let k = 0;
+    for (const d of this.drops) {
+      if (k >= n) break;
+      if (d.life > 0) continue;
+      k++;
+      const a = Math.random() * Math.PI * 2;
+      const sp = (0.6 + Math.random() * 1.4) * power;
+      d.v.set(Math.cos(a) * sp, (2 + Math.random() * 2.5) * power, Math.sin(a) * sp);
+      d.m.position.set(x, this.waterY + 0.05, z);
+      d.m.scale.setScalar(0.7 + Math.random() * 0.9);
+      d.life = 1;
+      d.m.visible = true;
     }
   }
 
@@ -188,20 +303,22 @@ export class FishingGame {
   #bite() {
     const index = rollFish();
     this.fish = { index, size: rollSize(index) };
-    this.window = FISH[index].window;
+    this.window = FISH[index].window * 1.35; // 不再跳「！」，只能看浮標沉下去，所以時間放寬一點
     this.#go('bite');
-    this.bang.visible = true;
-    this.ui.showAlert(true, 1);
     this.#ring(this.target.x, this.target.z, true);
-    haptic([70, 40, 70, 40, 140]);
-    this.#shake(0.09);
-    this.audio?.sfx?.('bite');
+    haptic(35); // 輕輕一下就好，主要靠眼睛看浮標
+    this.audio?.sfx?.('plop');
   }
 
   #hook() {
     this.bang.visible = false;
     this.ui.showAlert(false);
     const f = FISH[this.fish.index];
+    // 浮標一沉就拉（前 45% 的時間）：漂亮的時機，魚會大一點
+    if (this.t < this.window * 0.45 && !f.junk) {
+      this.fish.size = Math.min(f.max, Math.round(this.fish.size * 1.15) + 1);
+      this.hud.toast(t('🎯 時機抓得漂亮！'), 1600);
+    }
     this.need = f.pull;
     this.fight = f.fight;
     this.limit = 8 + f.pull * 0.25;
@@ -224,6 +341,15 @@ export class FishingGame {
     if (this.progress >= 1) this.#landed();
   }
 
+  /** 太早拉竿：魚被嚇跑，等一下重新甩竿 */
+  #early() {
+    this.earlyCount = (this.earlyCount ?? 0) + 1;
+    this.hud.toast(this.earlyCount <= 3 ? t('太早拉了，魚被嚇跑 🐟💨 等浮標整個沉下去再拉') : t('太早拉了，魚被嚇跑 🐟💨'), 2600);
+    this.audio?.sfx?.('escape');
+    this.#ring(this.target.x, this.target.z, true);
+    this.#go('scared');
+  }
+
   #escape(msg) {
     this.bang.visible = false;
     this.ui.showAlert(false);
@@ -244,6 +370,8 @@ export class FishingGame {
     this.flying = { mesh, from: this.bobber.position.clone() };
     this.bobber.visible = this.line.visible = false;
     this.#ring(this.bobber.position.x, this.bobber.position.z, true);
+    const fl = FISH[this.fish.index];
+    if (!fl.junk) this.#splash(this.bobber.position.x, this.bobber.position.z, 12 + fl.rarity * 8, 0.8 + fl.rarity * 0.2); // 拉出水面的大水花
     this.audio?.sfx?.('splash');
     haptic([30, 40, 30, 40, 60]);
   }
@@ -264,9 +392,28 @@ export class FishingGame {
       r.mesh.scale.setScalar(1 + r.t * (r.big ? 9 : 5));
       r.mesh.material.opacity = (1 - r.t) * (r.big ? 0.7 : 0.45);
     }
+    // 水滴：拋物線落回水面
+    for (const d of this.drops) {
+      if (d.life <= 0) continue;
+      d.v.y -= 9.8 * dt;
+      d.m.position.addScaledVector(d.v, dt);
+      d.life -= dt * 0.9;
+      d.m.material.opacity = Math.min(0.9, d.life * 1.5);
+      if (d.m.position.y < this.waterY || d.life <= 0) {
+        d.life = 0;
+        d.m.visible = false;
+      }
+    }
     if (this.phase === 'idle') return;
 
     this.t += dt;
+    // 主視角變成浮標：等魚的時候鏡頭焦點拉到浮標附近，拉竿、炫耀時回到人身上
+    if (this.cameraRig && this.session) {
+      const watch = ['wait', 'bite', 'scared'].includes(this.phase) || (this.phase === 'cast' && this.castStarted);
+      this.focusPt ??= new THREE.Vector3();
+      this.cameraRig.focusTarget = this.focusPt.copy(this.target).setY(this.waterY - 0.4);
+      this.cameraRig.focusMix = watch ? 0.7 : this.phase === 'reel' ? 0.45 : 0;
+    }
     const c = this.actions?.character;
     if (c?.rod) c.rod.tip.getWorldPosition(this.tip);
 
@@ -291,28 +438,35 @@ export class FishingGame {
         break;
       }
       case 'wait': {
-        // 試探性的小抖動
+        // 試探：浮標輕輕往下點一小下（大概半段）
         let dip = 0;
         for (const n of this.nibbles) {
           const d = this.t - n;
-          if (d > 0 && d < 0.35) {
-            dip = Math.sin(d * 30) * 0.025;
+          if (d > 0 && d < 0.45) {
+            dip = Math.sin((d / 0.45) * Math.PI) * 0.035 * FLOAT_SCALE;
             if (d < dt * 1.5) this.#ring(this.target.x, this.target.z);
           }
         }
-        this.bobber.position.set(this.target.x, this.waterY + 0.02 + Math.sin(time * 2.1) * 0.012 - Math.abs(dip), this.target.z);
+        this.bobber.position.set(this.target.x, this.waterY - FLOAT_SINK + Math.sin(time * 1.7) * 0.006 - dip, this.target.z);
         if (this.t > this.biteAt) this.#bite();
         break;
       }
       case 'bite': {
+        // 真的咬鉤：浮標一口氣往下沉，色段一段段沒入水裡，然後在水下微微抖
         const ratio = 1 - this.t / this.window;
+        const sink = Math.min(1, this.t / 0.25) * BITE_SINK;
         this.bobber.position.set(
-          this.target.x + Math.sin(time * 40) * 0.03,
-          this.waterY - 0.05 - Math.abs(Math.sin(time * 16)) * 0.06,
+          this.target.x + Math.sin(time * 26) * 0.006,
+          this.waterY - FLOAT_SINK - sink - Math.abs(Math.sin(time * 9)) * 0.02,
           this.target.z,
         );
-        this.ui.showAlert(true, ratio);
         if (ratio <= 0) this.#escape(FISH[this.fish.index].rarity >= 4 ? t('差一點！大魚溜走了⋯ 🐟💨') : t('太慢了，魚跑掉了⋯ 🐟💨'));
+        break;
+      }
+      case 'scared': {
+        // 被嚇跑：浮標晃一晃，一秒後收線重甩
+        this.bobber.position.set(this.target.x, this.waterY - FLOAT_SINK + Math.sin(this.t * 20) * 0.03 * (1 - this.t), this.target.z);
+        if (this.t > 1.1) this.#go('cast');
         break;
       }
       case 'reel': {
@@ -325,11 +479,18 @@ export class FishingGame {
         const pos = this.target.clone().lerp(near, this.progress);
         pos.x += Math.sin(time * 23) * 0.08;
         pos.z += Math.cos(time * 17) * 0.06;
-        pos.y = this.waterY - 0.03 + Math.sin(time * 30) * 0.02;
+        pos.y = this.waterY - FLOAT_SINK - 0.1 + Math.sin(time * 30) * 0.02;
         this.bobber.position.copy(pos);
         if (Math.random() < dt * 3) {
           this.#ring(pos.x, pos.z);
           this.#shake(0.015);
+        }
+        // 大魚掙扎：一直濺起水花（越稀有、越大條越激烈）
+        const fr = FISH[this.fish.index];
+        const big = fr.rarity >= 3 || this.fish.size >= fr.max * 0.8;
+        if (!fr.junk && Math.random() < dt * (big ? 6 + fr.rarity * 2 : 2)) {
+          this.#splash(pos.x, pos.z, big ? 6 + fr.rarity * 2 : 3, big ? 0.7 + fr.rarity * 0.15 : 0.5);
+          if (big) this.#ring(pos.x, pos.z, true);
         }
         if (timeRatio <= 0) this.#escape(t('線斷了⋯ 魚逃回湖裡了 🌊'));
         break;
@@ -350,6 +511,7 @@ export class FishingGame {
           c?.setProp?.('rod', false);
           c?.setProp?.('fish', true);
           this.#go('show');
+          if (this.session) this.session.n += 1;
           this.onCatch?.(this.fish.index, this.fish.size);
           const f = FISH[this.fish.index];
           this.audio?.sfx?.(f.junk ? 'junk' : f.rarity >= 4 ? 'legend' : 'catch');
@@ -365,6 +527,18 @@ export class FishingGame {
         }
         break;
       }
+    }
+
+    // 倒影光貼在水面、跟著浮標；浮標沉下去時變暗
+    this.reflect.visible = this.bobber.visible && this.phase !== 'cast';
+    if (this.reflect.visible) {
+      const depth = (this.waterY - FLOAT_SINK - this.bobber.position.y) / FLOAT_SCALE; // 往下沉了多少
+      const [dx, dz] = this.spot?.dir ?? [0, -1];
+      this.reflect.position.set(this.bobber.position.x - dx * 0.45, this.waterY + 0.004, this.bobber.position.z - dz * 0.45);
+      this.reflect.rotation.set(-Math.PI / 2, 0, Math.atan2(dx, dz)); // 倒影朝向釣魚的人
+      this.reflect.material.opacity = Math.max(0.08, 0.55 - depth * 2);
+      this.halo.material.opacity = Math.max(0.25, 1 - depth * 2.5);
+      this.glowLight.intensity = Math.max(0.2, 0.9 - depth * 3);
     }
 
     // 「！」跟著頭
@@ -385,7 +559,7 @@ export class FishingGame {
         pos.setXYZ(
           i,
           THREE.MathUtils.lerp(this.tip.x, b.x, u),
-          THREE.MathUtils.lerp(this.tip.y, b.y + 0.06, u) - Math.sin(u * Math.PI) * sag,
+          THREE.MathUtils.lerp(this.tip.y, b.y + 0.42 * FLOAT_SCALE, u) - Math.sin(u * Math.PI) * sag,
           THREE.MathUtils.lerp(this.tip.z, b.z, u),
         );
       }

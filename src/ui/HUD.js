@@ -184,7 +184,7 @@ export class HUD {
     if (m.active) {
       const left = Math.max(1, Math.ceil(m.endsIn / 60));
       const RULE = {
-        fish: t('🎣 釣魚大賽中！到湖邊比誰的魚最大，前三名送松果（還剩 {m} 分）', { m: left }),
+        fish: t('🎣 釣魚大賽中！到營火河畔或湖邊比誰的魚最大，前三名送松果（還剩 {m} 分）', { m: left }),
         stone: t('🪨 疊石接力中！每疊一顆石頭多 1 顆松果（還剩 {m} 分）', { m: left }),
         wood: t('🔥 添柴時光！每添一根柴多 1 顆松果（還剩 {m} 分）', { m: left }),
         race: t('🏃 燈籠賽跑中！依序跑過 1→5 號燈籠，最快前三名送松果（還剩 {m} 分）', { m: left }),

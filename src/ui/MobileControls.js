@@ -76,7 +76,17 @@ export class MobileControls {
     const k = conf ? conf.join('|') : '';
     if (k === this.override) return;
     this.override = k;
+    this.overrideConf = conf;
     this.#apply(conf);
+  }
+
+  /** 依所在位置換掉 F 按鈕（營火河畔變「🎣 釣魚」、釣魚中變「拉竿」）；null 表示回到房間預設 */
+  setRoast(conf) {
+    const k = conf ? conf.join('|') : '';
+    if (k === this.roastOverride) return;
+    this.roastOverride = k;
+    this.roastConf = conf;
+    this.#apply(this.override ? this.overrideConf : null);
   }
 
   /** 提示文字裡的按鍵 → 對應手機按鈕的圖示（E、F、Z、空白鍵） */
@@ -87,7 +97,8 @@ export class MobileControls {
   }
 
   #apply(override = null) {
-    const layout = override ? { ...this.layout, interact: override } : this.layout;
+    let layout = override ? { ...this.layout, interact: override } : this.layout;
+    if (this.roastConf) layout = { ...layout, roast: this.roastConf };
     document.querySelectorAll('.action-btn').forEach((btn) => {
       const a = btn.dataset.action;
       const def = BUTTONS.find((b) => b.action === a);
