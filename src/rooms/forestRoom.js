@@ -7,6 +7,7 @@ import { buildCairnGarden, CAIRN_GARDEN_CLEARING } from './cairns.js';
 import { buildMiniLayer } from './miniLayer.js';
 import { buildPond } from './pond.js';
 import { ENTRANCE_GEO } from '../game/entrances.js';
+import { POND_CLEARINGS } from '../game/pondShape.js';
 import { buildWishTree, WISH_TREE_CLEARING } from './wishTree.js';
 import { buildShop, nearShop, SHOP_FRONT, SHOP_CLEARING } from './shop.js';
 import { EMOTE_IDS } from '../social/emotes.js';
@@ -425,7 +426,7 @@ export function createForestRoom() {
   });
   const shrinePos = polar(SHRINE_ANGLE, SHRINE_R);
   const world = createWorld(group, {
-    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING, WISH_TREE_CLEARING, SHOP_CLEARING],
+    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING, WISH_TREE_CLEARING, SHOP_CLEARING, ...POND_CLEARINGS],
   });
 
   const campfire = new Campfire();
