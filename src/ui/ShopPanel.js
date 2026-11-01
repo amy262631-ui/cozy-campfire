@@ -13,8 +13,8 @@ import { TentPreview } from './TentPreview.js';
  *   onEdit(op, data) 換帳篷造型／花色（op：shape / style）→ Promise
  */
 export class ShopPanel {
-  constructor({ getCoins, getHome, onBuy, onGoHome, onEdit, root = document.getElementById('ui') }) {
-    Object.assign(this, { getCoins, getHome, onBuy, onGoHome, onEdit });
+  constructor({ getCoins, getHome, onBuy, onGoHome, onEdit, onGift, root = document.getElementById('ui') }) {
+    Object.assign(this, { getCoins, getHome, onBuy, onGoHome, onEdit, onGift });
     this.busy = false;
     this.tab = 'look';
     this.pick = null; // 預覽中的造型（還沒買的也能先看）
@@ -64,6 +64,10 @@ export class ShopPanel {
           this.busy = false;
         }
         return this.render();
+      }
+      if (e.target.closest('[data-gift]')) {
+        this.close();
+        return this.onGift?.();
       }
       const sty = e.target.closest('[data-style]');
       if (sty && !this.busy) {
@@ -160,7 +164,11 @@ export class ShopPanel {
         </div>
         ${action}
         ${has ? `<div class="shop-sub">${t('🎨 花色（免費換）')}</div>
-        <div class="shop-styles">${TENT_STYLES.map((x) => `<button type="button" class="build-style${x.id === style ? ' on' : ''}" data-style="${x.id}"><span>${x.icon}</span>${x.name}</button>`).join('')}</div>` : ''}`;
+        <div class="shop-styles">${TENT_STYLES.map((x) =>
+          x.gift && !(home.gifts ?? []).includes(x.id)
+            ? `<button type="button" class="build-style shop-style-locked" data-gift="${x.id}" title="${t('分享送禮才拿得到')}"><span>🔒</span>${x.name}</button>`
+            : `<button type="button" class="build-style${x.id === style ? ' on' : ''}" data-style="${x.id}"><span>${x.icon}</span>${x.name}</button>`,
+        ).join('')}</div>` : ''}`;
       return this.#mountPreview(pick, style);
     }
     this.preview.stop();

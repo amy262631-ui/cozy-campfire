@@ -1,5 +1,5 @@
 import { t } from '../i18n/i18n.js';
-import { FURNITURE, FURNITURE_BY_ID } from '../game/furniture.js';
+import { ALL_FURNITURE, FURNITURE_BY_ID } from '../game/furniture.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TENT_SHAPES } from '../game/tentShapes.js';
 
@@ -105,7 +105,7 @@ export class BuildPanel {
               .map((x) => `<button type="button" class="build-style${x.id === (home.shape ?? 'bell') ? ' on' : ''}" data-shape="${x.id}"><span>${x.icon}</span>${x.name}</button>`)
               .join('')}</div>`
           : '') +
-        `<div class="build-styles"><span class="build-styles-label">${t('🎨 帳篷風格')}</span>${TENT_STYLES.map(
+        `<div class="build-styles"><span class="build-styles-label">${t('🎨 帳篷風格')}</span>${TENT_STYLES.filter((st) => !st.gift || (home.gifts ?? []).includes(st.id)).map(
           (st) => `<button type="button" class="build-style${st.id === cur ? ' on' : ''}" data-style="${st.id}" title="${st.name}"><span>${st.icon}</span>${st.name}</button>`,
         ).join('')}</div>`;
       return;
@@ -120,7 +120,7 @@ export class BuildPanel {
       return;
     }
     this.title.textContent = t('要在這格放什麼？');
-    const avail = FURNITURE.map((f) => ({ f, n: (home.inv?.[f.id] ?? 0) - home.items.filter((x) => x.i === f.id).length })).filter((x) => x.n > 0);
+    const avail = ALL_FURNITURE.map((f) => ({ f, n: (home.inv?.[f.id] ?? 0) - home.items.filter((x) => x.i === f.id).length })).filter((x) => x.n > 0);
     this.body.innerHTML = avail.length
       ? avail.map(({ f, n }) => `<button type="button" class="build-item" data-op="place" data-i="${f.id}"><span>${f.icon}</span>${f.name}<small>×${n}</small></button>`).join('')
       : `<div class="build-tip">${t('背包裡的家具都擺出來了，到「🏪 營地小舖」買更多吧')}</div>`;

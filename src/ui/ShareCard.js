@@ -25,7 +25,9 @@ const FONT = '"Noto Sans TC", "PingFang TC", "Hiragino Sans", "Malgun Gothic", "
  *   snapshot() → 目前遊戲畫面的圖片網址（dataURL）
  */
 export class ShareCard {
-  constructor({ snapshot, hud, root = document.getElementById('ui') }) {
+  constructor({ snapshot, hud, getUrl, onShared, root = document.getElementById('ui') }) {
+    this.getUrl = getUrl; // 分享出去的網址（帶邀請代號）
+    this.onShared = onShared;
     this.snapshot = snapshot;
     this.hud = hud;
     root.insertAdjacentHTML(
@@ -124,20 +126,19 @@ export class ShareCard {
 
   async #share() {
     const text = this.info?.text ?? t('沒力氣出門的夜晚，一起來迷霧森林露營地的營火旁坐一下吧 🔥');
-    const url = location.origin + location.pathname;
+    const url = this.getUrl?.() ?? location.origin + location.pathname;
     try {
       const blob = await new Promise((r) => this.canvas.toBlob(r, 'image/png'));
       const file = new File([blob], 'campfire.png', { type: 'image/png' });
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], text: `${text}\n${url}` });
-        return;
-      }
-      if (navigator.share) {
+      } else if (navigator.share) {
         await navigator.share({ title: t('迷霧森林露營地'), text, url });
-        return;
+      } else {
+        await navigator.clipboard.writeText(`${text}\n${url}`);
+        this.hud.toast(t('已複製分享文字和網址，圖片可以按「存圖」下載 📋'));
       }
-      await navigator.clipboard.writeText(`${text}\n${url}`);
-      this.hud.toast(t('已複製分享文字和網址，圖片可以按「存圖」下載 📋'));
+      this.onShared?.(); // 分享成功：領分享禮物
     } catch {
       /* 使用者取消分享 */
     }

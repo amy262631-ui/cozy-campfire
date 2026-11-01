@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
-import { SHOP, MAX_ITEMS, hashPassword, checkPassword, validateCredentials, newHome, available, cellFree, validCell, TENT_STYLES, TENT_SHAPES, homeId } from './homes.js';
+import { SHOP, MAX_ITEMS, hashPassword, checkPassword, validateCredentials, newHome, available, cellFree, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE } from './homes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -160,8 +160,9 @@ const publicHome = (h) =>
         name: h.name ?? '',
         likes: h.likes?.length ?? 0,
         notes: h.notes ?? [],
+        gifts: h.gifts ?? [],
       }
-    : { tent: false, inv: {}, items: [], open: true, style: 'classic', shape: 'bell', shapes: ['bell'], name: '', likes: 0, notes: [] };
+    : { tent: false, inv: {}, items: [], open: true, style: 'classic', shape: 'bell', shapes: ['bell'], name: '', likes: 0, notes: [], gifts: [] };
 /** 公開代號 → vid（找不到回傳 null） */
 const hidCache = new Map();
 function vidOfHid(hid) {
@@ -287,6 +288,50 @@ function giveTo(vid, n, reason) {
   w.tot += n;
   saveJson('players.json', players);
   for (const s of io.sockets.sockets.values()) if (s.data.vid === vid) s.emit('wallet', { pc: w.pc, delta: n, reason });
+}
+
+// ---------- 🎁 分享禮物、朋友邀請 ----------
+/** 公開的邀請代號（不能直接放 vid：vid 等同登入憑證） */
+const codeCache = new Map();
+function vidOfCode(code) {
+  if (!code) return null;
+  if (codeCache.has(code)) return codeCache.get(code);
+  for (const vid of new Set([...Object.keys(players), ...Object.keys(homes)])) {
+    const k = homeId(vid);
+    codeCache.set(k, vid);
+    if (k === code) return vid;
+  }
+  return null;
+}
+/** 送一份禮物（家具放進背包、花色解鎖）；已經有了回傳 null */
+function grantGift(vid, id) {
+  const h = (homes[vid] ??= newHome());
+  h.gifts ??= [];
+  if (h.gifts.includes(id)) return null;
+  h.gifts.push(id);
+  if (GIFT_FURNITURE.has(id)) h.inv[id] = (h.inv[id] ?? 0) + 1;
+  saveJson('homes.json', homes);
+  for (const s of io.sockets.sockets.values()) if (s.data.vid === vid) s.emit('gift', { id, home: publicHome(h) });
+  return id;
+}
+const REF_TIERS = [
+  [1, 'foxlamp'],
+  [3, 'rainbow'],
+  [5, 'telescope'],
+];
+const REF_GAIN = 10; // 每位朋友 +10 松果
+const REF_STAY_MS = (Number(process.env.REF_STAY_SEC) || 180) * 1000; // 朋友要待滿 3 分鐘才算
+const lastIp = new Map(); // vid → 最近一次連線的 IP（自己開無痕視窗刷不算）
+/** 朋友待滿時間：幫邀請人記一筆 */
+function creditReferral(refVid, friendName) {
+  const rw = players[refVid];
+  if (!rw) return;
+  rw.refs = (rw.refs ?? 0) + 1;
+  giveTo(refVid, REF_GAIN, 'friend');
+  for (const [n, id] of REF_TIERS) if (rw.refs >= n) grantGift(refVid, id);
+  saveJson('players.json', players);
+  for (const s of io.sockets.sockets.values()) if (s.data.vid === refVid) s.emit('friendCredit', { name: friendName, refs: rw.refs });
+  console.log(`[邀請] ${friendName} 待滿了，邀請人累積 ${rw.refs} 位`);
 }
 
 function wallet(vid) {
@@ -564,6 +609,7 @@ io.on('connection', (socket) => {
     award(1, 'mini');
   };
   let stacked = false; // 這次來訪疊過石頭了嗎
+  let refTimer = null; // 朋友邀請：待滿時間才算
 
   /** 離開目前的分流／房間 */
   const leave = () => {
@@ -609,7 +655,9 @@ io.on('connection', (socket) => {
     // 朋友的邀請連結（?with=朋友的訪客代號）：到朋友所在的分流、地點，出現在他旁邊
     let friend = null;
     if (data.with && !data.rejoin) {
-      const fv = String(data.with).slice(0, 24);
+      // 新連結帶的是公開代號；舊連結帶的是 vid（已經分享出去的舊連結也照樣能用）
+      const raw = String(data.with).slice(0, 24);
+      const fv = vidOfCode(raw) ?? raw;
       for (const fc of channels.values()) {
         for (const [rid, fr] of fc.rooms) {
           for (const p of fr.players.values()) {
@@ -668,8 +716,22 @@ io.on('connection', (socket) => {
     tidyChannels();
 
     // 松果錢包：每天第一次來，依連續天數送松果（第 1 天 3 顆，之後每天多 1 顆，最多 9 顆）
-    wal = wallet(String(data.vid ?? '').slice(0, 24));
+    const myVid = String(data.vid ?? '').slice(0, 24);
+    const firstVisit = !!myVid && !players[myVid]; // 第一次來（瀏覽器裡還沒有任何紀錄）
+    wal = wallet(myVid);
     socket.data.vid = wal ? String(data.vid).slice(0, 24) : null;
+    const ip = String(socket.handshake.headers['x-forwarded-for'] ?? socket.handshake.address ?? '').split(',')[0].trim();
+    // 朋友透過邀請連結第一次來：待滿 3 分鐘，邀請人就拿到松果和禮物
+    if (firstVisit && data.with && !data.rejoin && wal) {
+      const raw = String(data.with).slice(0, 24);
+      const refVid = vidOfCode(raw) ?? (players[raw] ? raw : null);
+      if (refVid && refVid !== myVid && lastIp.get(refVid) !== ip) {
+        wal.by = homeId(refVid);
+        const name = player.name;
+        refTimer = setTimeout(() => creditReferral(refVid, name), REF_STAY_MS);
+      }
+    }
+    if (wal) lastIp.set(myVid, ip);
     let daily = null;
     if (wal) {
       const d = dayKey();
@@ -707,6 +769,7 @@ io.on('connection', (socket) => {
       reward: player.rw,
       wallet: wal ? { pc: wal.pc, streak: wal.streak, daily } : null,
       myHome: publicHome(homes[player.vid]),
+      code: player.vid ? homeId(player.vid) : null, // 邀請連結用的公開代號
       ...roomSnapshot(chan, roomId, socket.id),
     });
     socket.to(rkey).emit('playerJoined', publicInfo(player));
@@ -950,6 +1013,7 @@ io.on('connection', (socket) => {
       const v = String(data.s ?? '');
       if (data.op === 'style') {
         if (!TENT_STYLES.has(v)) return ack?.({ ok: false, reason: 'unknown' });
+        if (GIFTS[v] && !(h.gifts ?? []).includes(v)) return ack?.({ ok: false, reason: 'locked' });
         h.style = v;
       } else {
         if (!(h.shapes ?? ['bell']).includes(v)) return ack?.({ ok: false, reason: 'locked' });
@@ -968,7 +1032,7 @@ io.on('connection', (socket) => {
     const at = h.items.findIndex((it) => it.x === x && it.z === z);
     if (data.op === 'place') {
       const i = String(data.i ?? '');
-      if (!SHOP[i] || i === 'tent') return ack?.({ ok: false, reason: 'unknown' });
+      if ((!SHOP[i] && !GIFT_FURNITURE.has(i)) || i === 'tent') return ack?.({ ok: false, reason: 'unknown' });
       if (!cellFree(h, x, z)) return ack?.({ ok: false, reason: 'taken' });
       if (available(h, i) <= 0) return ack?.({ ok: false, reason: 'none' });
       if (h.items.length >= MAX_ITEMS) return ack?.({ ok: false, reason: 'tooMany' });
@@ -984,6 +1048,20 @@ io.on('connection', (socket) => {
     io.to(rkey).emit('homeUpdate', { owner: homeId(homeOwner), home: publicHome(h) });
     ack?.({ ok: true, home: publicHome(h) });
   });
+  // 🎁 分享一次就送「營火明信片牆」（每人一次）
+  socket.on('shared', (data, ack) => {
+    if (!wal || !player?.vid) return ack?.({ ok: false });
+    if (wal.shared) return ack?.({ ok: false, reason: 'done' });
+    wal.shared = true;
+    saveJson('players.json', players);
+    bump('shares');
+    ack?.({ ok: true, gift: grantGift(player.vid, 'postcard') });
+  });
+  socket.on('giftInfo', (data, ack) => {
+    if (!wal || !player?.vid) return ack?.({ ok: false });
+    ack?.({ ok: true, code: homeId(player.vid), shared: !!wal.shared, refs: wal.refs ?? 0, gifts: homes[player.vid]?.gifts ?? [], gain: REF_GAIN, stay: Math.round(REF_STAY_MS / 60000) });
+  });
+
   // 帳篷營地：列出大家的帳篷
   socket.on('campList', (data, ack) => ack?.({ ok: true, tents: campList(player?.vid) }));
   // 拜訪別人的帳篷：按讚（再按一次收回）
@@ -1218,6 +1296,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    clearTimeout(refTimer); // 還沒待滿就走了：不算
     if (!player) return;
     leave();
     clearInterval(sitTimer);

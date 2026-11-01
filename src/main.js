@@ -30,6 +30,9 @@ import { BuildPanel } from './ui/BuildPanel.js';
 import { createDemoHome } from './game/demoHome.js';
 import { WelcomeCard } from './ui/WelcomeCard.js';
 import { GuestPanel } from './ui/GuestPanel.js';
+import { GiftPanel } from './ui/GiftPanel.js';
+import { GIFT_FURNITURE } from './game/furniture.js';
+import { TENT_STYLE_BY_ID } from './game/tentStyles.js';
 import { createCampgroundRoom } from './rooms/campgroundRoom.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN } from './game/miniSpots.js';
 import { TENT_SHAPE_BY_ID } from './game/tentShapes.js';
@@ -270,6 +273,8 @@ async function init() {
   // ---------- 分享卡片 ----------
   const shareCard = new ShareCard({
     hud,
+    getUrl: () => inviteUrl(),
+    onShared: () => claimShareGift(),
     snapshot: () => {
       renderer.render(scene, camera); // 畫完馬上截圖（不然畫布會是空的）
       return renderer.domElement.toDataURL('image/jpeg', 0.9);
@@ -434,21 +439,64 @@ async function init() {
     }
   };
 
-  // ---------- 邀朋友一起烤火 ----------
-  hud.onInvite = async () => {
-    const url = `${location.origin}${location.pathname}?with=${visitorId()}`;
+  // ---------- 邀朋友一起烤火、🎁 分享送禮 ----------
+  /** 我的公開邀請代號（連上伺服器後才有；不是 vid） */
+  let myCode = null;
+  const inviteUrl = () => `${location.origin}${location.pathname}${myCode ? `?with=${myCode}` : ''}`;
+  /** 分享邀請連結；分享成功（或複製成功）回傳 true */
+  const shareInvite = async () => {
+    const url = inviteUrl();
     const text = t('來營火旁找我！點這個連結，就會出現在我旁邊 🔥');
     try {
       if (navigator.share) {
         await navigator.share({ title: t('迷霧森林露營地'), text, url });
-        return;
+      } else {
+        await navigator.clipboard.writeText(`${text}\n${url}`);
+        hud.toast(t('📋 已複製邀請連結，貼給朋友吧'));
       }
-      await navigator.clipboard.writeText(`${text}\n${url}`);
-      hud.toast(t('📋 已複製邀請連結，貼給朋友吧'));
     } catch {
-      /* 取消分享 */
+      return false; // 取消分享
     }
+    await claimShareGift();
+    return true;
   };
+  /** 分享過一次：領「營火明信片牆」（伺服器只會給一次） */
+  const claimShareGift = async () => {
+    if (net.online) await net.request('shared');
+  };
+  const giftPanel = new GiftPanel({
+    getInfo: async () => {
+      const res = await net.request('giftInfo');
+      return res?.ok ? res : null;
+    },
+    onShare: shareInvite,
+  });
+  hud.onInvite = () => giftPanel.open();
+  const giftName = (id) => {
+    const f = GIFT_FURNITURE.find((x) => x.id === id);
+    if (f) return { icon: f.icon, name: f.name, furniture: true };
+    const st = TENT_STYLE_BY_ID[id];
+    return { icon: st?.icon ?? '🎁', name: st?.name ?? '', furniture: false };
+  };
+  net.on('gift', ({ id, home }) => {
+    setMyHome(home);
+    const g = giftName(id);
+    audio.sfx('bell');
+    hud.toast(
+      t('🎁 收到禮物：{icon} {name}！', g) +
+        (g.furniture
+          ? home?.tent
+            ? t('回帳篷按「🛠️ 布置」擺出來')
+            : t('買了帳篷就能擺出來')
+          : t('到小舖「⛺ 帳篷外觀」換上')),
+      6000,
+    );
+    giftPanel.refresh();
+  });
+  net.on('friendCredit', ({ name, refs }) => {
+    hud.toast(t('👫 {name} 透過你的連結來玩了！+10 松果（已經邀請 {n} 位）', { name, n: refs }), 6000);
+    giftPanel.refresh();
+  });
   net.on('friendJoined', ({ name }) => hud.toast(t('👫 {name} 照著你的邀請來到營火旁了！', { name }), 5000));
 
   // ---------- 松果與心願大樹 ----------
@@ -693,6 +741,7 @@ async function init() {
       history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : ''));
     }
     hud.setInviteVisible(true);
+    myCode = res.code ?? null;
     if (res.myHome) setMyHome(res.myHome);
     setTimeout(() => welcome.maybeShow(), 1200);
     // 伺服器判斷是不是贊助者：是的話頭上開一朵小花
@@ -976,6 +1025,7 @@ async function init() {
     getCoins: () => (net.online || demo ? pinecones : null),
     getHome: () => myHome,
     onGoHome: goHome,
+    onGift: () => giftPanel.open(),
     onEdit: async (op, data) => {
       const res = await homeReq('homeEdit', { op, ...data });
       if (res?.ok) setMyHome({ ...res.home });

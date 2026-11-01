@@ -20,7 +20,18 @@ export const FURNITURE = [
   { id: 'fridge', icon: '🧊', name: t('小冰箱'), price: 25 },
   { id: 'bed', icon: '🛏️', name: t('睡鋪'), price: 30 },
 ];
-export const FURNITURE_BY_ID = Object.fromEntries(FURNITURE.map((f) => [f.id, f]));
+/**
+ * 🎁 分享禮物：小舖買不到，只能靠分享、邀朋友拿到（伺服器 server/homes.js 的 GIFTS 要一致）
+ *   how：拿到的方式（顯示用）
+ */
+export const GIFT_FURNITURE = [
+  { id: 'postcard', icon: '📮', name: t('營火明信片牆'), gift: true, how: 'share' },
+  { id: 'foxlamp', icon: '🏮', name: t('狐狸提燈'), gift: true, how: 'ref1' },
+  { id: 'telescope', icon: '🔭', name: t('星空望遠鏡'), gift: true, how: 'ref5' },
+];
+/** 布置時背包會列出的所有家具（買的＋送的） */
+export const ALL_FURNITURE = [...FURNITURE, ...GIFT_FURNITURE];
+export const FURNITURE_BY_ID = Object.fromEntries(ALL_FURNITURE.map((f) => [f.id, f]));
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...extra });
 const glow = (color) => new THREE.MeshBasicMaterial({ color });
@@ -138,6 +149,60 @@ export function buildFurniture(id) {
       box(0.7, 0.05, 0.42, mat(0x6a8ac8), 0, 0.21, 0.12);
       ball(0.13, mat(0xffffff), 0, 0.25, -0.22, 1.9, 0.6, 1.1);
       break;
+    case 'postcard': {
+      // 木框軟木板，上面釘滿營火明信片
+      const wood = mat(0x7a5236);
+      box(0.7, 0.62, 0.05, mat(0xc9a06a), 0, 0.55, -0.2);
+      for (const [x, y, w, h] of [[0, 0.88, 0.74, 0.04], [0, 0.22, 0.74, 0.04], [-0.37, 0.55, 0.04, 0.7], [0.37, 0.55, 0.04, 0.7]]) box(w, h, 0.07, wood, x, y, -0.2);
+      const cards = [0xffe9c8, 0xffd0d8, 0xd8ecff, 0xfff3a8, 0xd8f5d0, 0xffe0b8];
+      cards.forEach((c, i) => {
+        const card = box(0.17, 0.12, 0.012, mat(c), -0.2 + (i % 3) * 0.2, 0.68 - Math.floor(i / 3) * 0.24, -0.17);
+        card.rotation.z = ((i * 37) % 9 - 4) * 0.04;
+        box(0.06, 0.03, 0.014, glow(i % 2 ? 0xff9a3c : 0xffc86b), card.position.x, card.position.y - 0.02, -0.165); // 小小的營火圖
+        ball(0.012, mat(0xd84a4a), card.position.x, card.position.y + 0.05, -0.16); // 圖釘
+      });
+      box(0.05, 0.3, 0.05, wood, -0.3, 0.15, -0.2);
+      box(0.05, 0.3, 0.05, wood, 0.3, 0.15, -0.2);
+      break;
+    }
+    case 'foxlamp': {
+      // 小狐狸提著一盞燈籠
+      const fur = mat(0xe07a3a);
+      const white = mat(0xfff3e3);
+      ball(0.13, fur, 0, 0.14, 0, 1, 1.05, 0.9); // 身體
+      ball(0.11, fur, 0, 0.34, 0.03); // 頭
+      ball(0.05, white, 0, 0.31, 0.12, 1.2, 0.7, 0.8); // 嘴
+      ball(0.015, mat(0x2a1a14), 0, 0.33, 0.165);
+      for (const s of [-1, 1]) {
+        const ear = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.1, 4), fur);
+        ear.position.set(s * 0.06, 0.46, 0.02);
+        g.add(ear);
+        ball(0.014, mat(0x2a1a14), s * 0.04, 0.37, 0.1);
+      }
+      ball(0.08, fur, 0.13, 0.1, -0.12, 0.7, 0.7, 1.6); // 尾巴
+      ball(0.04, white, 0.16, 0.12, -0.24);
+      cyl(0.008, 0.008, 0.2, mat(0x5a3c26), 0.15, 0.28, 0.08, 4); // 提把
+      cyl(0.06, 0.06, 0.11, glow(0xffc46b), 0.15, 0.14, 0.08, 10); // 燈籠
+      const l = new THREE.PointLight(0xffb45a, 1.4, 2.4, 1.6);
+      l.position.set(0.15, 0.18, 0.1);
+      g.add(l);
+      break;
+    }
+    case 'telescope': {
+      const brass = mat(0xd8a84a, { metalness: 0.4, roughness: 0.4 });
+      for (const a of [0, 2.1, 4.2]) {
+        const leg = cyl(0.015, 0.015, 0.62, mat(0x6a4a30), Math.sin(a) * 0.12, 0.29, Math.cos(a) * 0.12, 5);
+        leg.rotation.set(Math.cos(a) * 0.35, 0, -Math.sin(a) * 0.35);
+      }
+      const tube = cyl(0.045, 0.06, 0.55, mat(0x2c3a6b), 0, 0.68, 0, 12);
+      tube.rotation.x = -0.9;
+      const lens = cyl(0.065, 0.065, 0.05, brass, 0, 0.88, -0.2, 12);
+      lens.rotation.x = -0.9;
+      ball(0.03, brass, 0, 0.6, 0.0);
+      // 鏡頭前一小撮星光
+      for (let i = 0; i < 5; i++) ball(0.012, glow(0xfff2b0), Math.sin(i * 1.9) * 0.12, 1.02 + (i % 3) * 0.05, -0.32 - (i % 2) * 0.05);
+      break;
+    }
     default:
       box(0.3, 0.3, 0.3, mat(0xffffff));
   }

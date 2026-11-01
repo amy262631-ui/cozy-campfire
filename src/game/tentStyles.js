@@ -12,6 +12,7 @@ export const TENT_STYLES = [
   { id: 'night', icon: '🌌', name: t('星空藍'), canvas: '#2e3d6b', accent: '#e8c76a', floor: 0x5e4632, pattern: 'stars', ink: '#ffe9a8' },
   { id: 'sakura', icon: '🌸', name: t('粉櫻'), canvas: '#f3c9d2', accent: '#d98aa0', floor: 0x9a7356, pattern: 'dots', ink: '#ffffff' },
   { id: 'redspot', icon: '🔴', name: t('紅點點'), canvas: '#d2453c', accent: '#f6efe2', floor: 0x8a6644, pattern: 'spots', ink: '#fbf4e6' },
+  { id: 'rainbow', icon: '🌈', name: t('彩虹'), canvas: '#f4ead8', accent: '#7a5ab8', floor: 0x8a6644, pattern: 'rainbow', gift: true },
   { id: 'patch', icon: '🧵', name: t('拼布'), canvas: '#d9b98c', accent: '#8a5a3a', floor: 0x7d5a3e, pattern: 'patch' },
 ];
 export const TENT_STYLE_BY_ID = Object.fromEntries(TENT_STYLES.map((s) => [s.id, s]));
@@ -51,6 +52,12 @@ export function tentTexture(style) {
         g.fill();
       }
     }
+  } else if (style.pattern === 'rainbow') {
+    const bands = ['#e8615a', '#f2a14a', '#f2d35a', '#7cc46a', '#5aa4d8', '#8a6ad0'];
+    bands.forEach((c, i) => {
+      g.fillStyle = c;
+      g.fillRect((i * 128) / bands.length, 0, 128 / bands.length + 1, 128);
+    });
   } else if (style.pattern === 'spots') {
     for (const [x, y, r] of [[30, 34, 15], [96, 22, 10], [70, 90, 17], [12, 108, 9], [118, 110, 8]]) {
       g.beginPath();
@@ -79,7 +86,7 @@ export function tentTexture(style) {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(style.pattern === 'stripe' ? 14 : style.pattern === 'spots' ? 18 : 22, style.pattern === 'stripe' ? 1 : style.pattern === 'spots' ? 2 : 2);
+  tex.repeat.set(style.pattern === 'stripe' ? 14 : style.pattern === 'rainbow' ? 4 : style.pattern === 'spots' ? 18 : 22, style.pattern === 'stripe' || style.pattern === 'rainbow' ? 1 : 2);
   cache.set(style.id, tex);
   return tex;
 }
