@@ -454,9 +454,25 @@ async function init() {
   // ---------- 松果與心願大樹 ----------
   /** 我的松果（null＝還沒連上伺服器） */
   let pinecones = null;
+  /** 「👤 存檔」：已經有帳篷或存了一些松果、卻還沒建立帳號時才出現 */
+  const hasAccount = () => {
+    try {
+      return !!localStorage.getItem('cozy-campfire-account');
+    } catch {
+      return false;
+    }
+  };
+  const refreshAcctChip = () => {
+    try {
+      hud.setAccountVisible(net.online && !hasAccount() && (!!myHome?.tent || (pinecones ?? 0) >= 15));
+    } catch {
+      /* 初始化還沒跑到 myHome 那裡 */
+    }
+  };
   const setCoins = (n, delta = 0) => {
     pinecones = n;
     hud.setPinecones(n, delta);
+    refreshAcctChip();
     treePanel.refresh();
   };
   const treePanel = new TreePanel({
@@ -664,6 +680,7 @@ async function init() {
 
   net.on('status', (st) => {
     if (st !== 'online') hud.setInviteVisible(false);
+    refreshAcctChip();
     refreshOnline();
     // 斷線時記下目前位置，重連時從這裡回來
     if (st !== 'online') net.updateJoinData({ x: player.position.x, z: player.position.z, ry: player.rotationY });
@@ -929,6 +946,7 @@ async function init() {
   const refreshHomeChip = () => hud.setHomeVisible(!!myHome?.tent && (net.online || !!demo) && !inHome());
   const setMyHome = (h) => {
     myHome = h;
+    refreshAcctChip();
     shopPanel.refresh();
     refreshHomeChip();
     if (inHome() && homeRoom.mine) {
@@ -962,7 +980,10 @@ async function init() {
         if (!net.online) setCoins(res.pc, res.delta ?? 0);
         setMyHome(res.home);
         audio.sfx('bell');
-        if (id === 'tent') hud.toast(t('⛺ 你有自己的帳篷了！按「🏠 回家」進去看看'), 5000);
+        if (id === 'tent') {
+          hud.toast(t('⛺ 你有自己的帳篷了！按「🏠 回家」進去看看'), 5000);
+          if (net.online && !hasAccount()) setTimeout(showSaveNudge, 1200);
+        }
         else if (id.startsWith('shape_')) {
           const sh = TENT_SHAPE_BY_ID[id.slice(6)];
           hud.toast(t('{icon} 解鎖了「{name}」，你的帳篷已經換上新造型！', { icon: sh?.icon ?? '', name: sh?.name ?? '' }), 4500);
@@ -1084,6 +1105,31 @@ async function init() {
     if (homeRoom.mine) myHome = home;
     buildPanel.render();
   });
+
+  // 買了帳篷還沒建帳號：提醒一次（換手機、清掉瀏覽器資料就找不回來）
+  const nudgeEl = document.createElement('div');
+  nudgeEl.className = 'welcome save-nudge';
+  nudgeEl.hidden = true;
+  nudgeEl.innerHTML = `
+    <div class="welcome-title">${t('⛺ 這是你的帳篷了！')}</div>
+    <p>${t('建議建立帳號：之後換手機、換瀏覽器或清掉資料，用帳號密碼登入就能找回帳篷和松果。')}</p>
+    <div class="welcome-btns">
+      <button type="button" data-n="go">${t('👤 建立帳號')}</button>
+      <button type="button" data-n="later" class="ghost">${t('之後再說')}</button>
+    </div>`;
+  document.getElementById('ui').appendChild(nudgeEl);
+  nudgeEl.addEventListener('pointerdown', (e) => e.stopPropagation());
+  nudgeEl.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-n]');
+    if (!b) return;
+    nudgeEl.hidden = true;
+    if (b.dataset.n === 'go') hud.onMeClick({ focusAccount: true });
+    else hud.toast(t('之後想存檔，按上方的「👤 存檔」就可以'), 4000);
+  });
+  function showSaveNudge() {
+    shopPanel.close();
+    nudgeEl.hidden = false;
+  }
 
   // ---------- 帳號（選填）：註冊、登入、登出 ----------
   const ACCOUNT_KEY = 'cozy-campfire-account';
@@ -1305,7 +1351,7 @@ async function init() {
 
   // 「🦊 名字 ✏️」：隨時改名字、換動物
   let editing = false;
-  hud.onMeClick = async () => {
+  hud.onMeClick = async ({ focusAccount = false } = {}) => {
     if (editing) return;
     editing = true;
     input.enabled = false;
@@ -1314,7 +1360,9 @@ async function init() {
       allowSpecies: isProcedural,
       edit: { name: myName, fur: profile.fur, species: profile.species, code: profile.code, custom: profile.custom, customLook: profile.customLook },
       account: account(),
+      focusAccount,
     }).show();
+    refreshAcctChip();
     input.enabled = true;
     editing = false;
     if (!next) return applyLook(profile); // 取消：換回原本的樣子

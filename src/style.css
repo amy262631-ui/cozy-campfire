@@ -1513,8 +1513,18 @@ body.touch .emote-menu {
 }
 
 body.touch .chat-input {
-  top: 90px;
+  top: 56px;
   bottom: auto;
+  z-index: 6;
+}
+
+/* 手機打字時：左上那一欄（人數、任務、湖畔動態）和小地圖類的提示先藏起來 */
+body.touch.chatting .m-stack,
+body.touch.chatting .prompt,
+body.touch.chatting .home-tools,
+body.touch.chatting .guest-tools,
+body.touch.chatting .welcome {
+  display: none;
 }
 
 /* 電腦：說明列在中間下方，社交區在左下，不會重疊；窄螢幕時說明列往右讓一點 */
@@ -4241,4 +4251,33 @@ body.building .guest-tools {
   color: inherit;
   font: inherit;
   cursor: pointer;
+}
+
+/* ---------- 「👤 存檔」與買帳篷後的提醒 ---------- */
+.acct-chip {
+  margin-left: 6px;
+  padding: 2px 9px;
+  border: 1px solid rgba(160, 220, 255, 0.55);
+  border-radius: 999px;
+  background: rgba(70, 130, 190, 0.35);
+  color: #dff2ff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: acctGlow 2.6s ease-in-out infinite;
+}
+
+.acct-chip[hidden] {
+  display: none;
+}
+
+@keyframes acctGlow {
+  50% {
+    box-shadow: 0 0 12px rgba(150, 210, 255, 0.7);
+  }
+}
+
+.save-nudge {
+  z-index: 6;
 }

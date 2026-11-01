@@ -56,8 +56,9 @@ export class JoinScreen {
    * account（選填，只在 edit 模式）：{ user, onRegister(u, p), onLogin(u, p), onLogout() }
    *   onRegister / onLogin 回傳錯誤訊息（成功回傳 null）
    */
-  constructor({ onPreview, allowSpecies = true, edit = null, account = null } = {}) {
+  constructor({ onPreview, allowSpecies = true, edit = null, account = null, focusAccount = false } = {}) {
     this.onPreview = onPreview;
+    this.focusAccount = focusAccount; // 打開時直接展開帳號欄位（從「👤 存檔」或買帳篷提醒進來）
     this.allowSpecies = allowSpecies;
     this.edit = edit;
     this.account = account;
@@ -215,6 +216,14 @@ export class JoinScreen {
     });
 
     if (!this.edit) setTimeout(() => input.focus(), 50);
+    if (this.edit && this.focusAccount) {
+      const box = el.querySelector('details.acct, .acct');
+      if (box?.tagName === 'DETAILS') box.open = true;
+      setTimeout(() => {
+        box?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        el.querySelector('#acct-user')?.focus();
+      }, 120);
+    }
 
     // 帳號：建立、登入、登出
     el.querySelectorAll('[data-acct]').forEach((btn) =>

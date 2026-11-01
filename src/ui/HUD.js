@@ -27,7 +27,7 @@ export class HUD {
 
       <div class="prompt" id="prompt"></div>
 
-      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="invite-chip" id="invite-chip" hidden>${t('👫 邀朋友')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button></div>
+      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="invite-chip" id="invite-chip" hidden>${t('👫 邀朋友')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button></div>
       <div class="today" id="today" hidden></div>
       <div class="event-line" id="event-line" hidden></div>
       <div class="mini-line" id="mini-line" hidden></div>
@@ -53,6 +53,7 @@ export class HUD {
       pcChip: root.querySelector('#pc-chip'),
       invite: root.querySelector('#invite-chip'),
       homeChip: root.querySelector('#home-chip'),
+      acctChip: root.querySelector('#acct-chip'),
       eventLine: root.querySelector('#event-line'),
       miniLine: root.querySelector('#mini-line'),
     };
@@ -61,6 +62,8 @@ export class HUD {
     this.onHome = null;
     this.el.homeChip.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.homeChip.addEventListener('click', () => this.onHome?.());
+    this.el.acctChip.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.el.acctChip.addEventListener('click', () => this.onMeClick?.({ focusAccount: true }));
     this.el.invite.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.invite.addEventListener('click', () => this.onInvite?.());
     this.el.meChip.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -135,6 +138,11 @@ export class HUD {
   }
 
   /** 有帳篷、而且不在帳篷裡時，顯示「🏠 回家」 */
+  /** 還沒建立帳號、但已經有東西值得保存時，顯示「👤 存檔」提醒 */
+  setAccountVisible(v) {
+    this.el.acctChip.hidden = !v;
+  }
+
   setHomeVisible(v) {
     this.el.homeChip.hidden = !v;
   }

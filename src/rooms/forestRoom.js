@@ -495,6 +495,7 @@ export function createForestRoom() {
   group.add(cairnGarden.group);
   // ---------- 營火上方的人數看板：各區現在有幾個人，一眼就知道哪裡熱鬧 ----------
   const areaBoard = buildAreaBoard();
+  const areaNdc = new THREE.Vector3();
   areaBoard.sprite.position.set(0, 3.7, 0);
   group.add(areaBoard.sprite);
 
@@ -628,6 +629,9 @@ export function createForestRoom() {
       cairnGarden.update(dt, t);
       wishTree.update(dt, t);
       mini.update(dt, t);
+      // 人數看板跑到畫面最上方（會跟左上的資訊疊在一起）時淡出
+      areaNdc.copy(areaBoard.sprite.position).project(camera);
+      areaBoard.sprite.material.opacity = Math.min(1, Math.max(0, (0.62 - areaNdc.y) / 0.2));
       // world / campfire 由 RoomManager 另外更新（星空與火勢要持續運作）
       // 招牌離鏡頭太近時淡出，避免擋住畫面
       for (const sgn of signs) {

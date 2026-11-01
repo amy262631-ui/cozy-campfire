@@ -110,11 +110,13 @@ export class SocialPanel {
     }
     this.el.menu.classList.remove('show');
     this.el.form.classList.add('show');
+    document.body.classList.add('chatting'); // 手機打字時先把左上的資訊收起來，免得重疊
     setTimeout(() => this.el.input.focus(), 30);
   }
 
   closeChat() {
     this.el.form.classList.remove('show');
+    document.body.classList.remove('chatting');
     this.el.input.blur();
   }
 
