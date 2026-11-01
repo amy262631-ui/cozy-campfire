@@ -28,6 +28,7 @@ export class BuildPanel {
       <div class="home-tools" id="home-tools" hidden>
         <button type="button" id="home-build">${t('🛠️ 布置')}</button>
         <button type="button" id="home-open"></button>
+        <button type="button" id="home-exit">${t('🚪 出去')}</button>
       </div>
       `,
     );
@@ -40,6 +41,7 @@ export class BuildPanel {
     for (const el of [this.el, this.tools]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
     $('#build-done').addEventListener('click', () => this.onExit?.());
     $('#home-build').addEventListener('click', () => this.onEnter?.());
+    $('#home-exit').addEventListener('click', () => this.onLeave?.());
     this.openBtn.addEventListener('click', () => this.onToggleOpen?.());
     this.body.addEventListener('click', async (e) => {
       const sb = e.target.closest('[data-style],[data-shape]');

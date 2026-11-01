@@ -8,8 +8,8 @@ import { t } from '../i18n/i18n.js';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 export class GuestPanel {
-  constructor({ onLike, onNote, root = document.getElementById('ui') }) {
-    Object.assign(this, { onLike, onNote });
+  constructor({ onLike, onNote, onLeave, root = document.getElementById('ui') }) {
+    Object.assign(this, { onLike, onNote, onLeave });
     this.home = null;
     this.mine = false;
     this.liked = false;
@@ -19,6 +19,7 @@ export class GuestPanel {
       <div class="guest-tools" id="guest-tools" hidden>
         <button type="button" id="guest-like"></button>
         <button type="button" id="guest-book"></button>
+        <button type="button" id="guest-exit">${t('🚪 出去')}</button>
       </div>
       <div class="guest-panel" id="guest-panel">
         <div class="guest-card">
@@ -56,6 +57,7 @@ export class GuestPanel {
       }
     });
     this.bookBtn.addEventListener('click', () => this.open());
+    root.querySelector('#guest-exit').addEventListener('click', () => this.onLeave?.());
     $('#guest-close').addEventListener('click', () => this.close());
     this.panel.addEventListener('click', (e) => e.target === this.panel && this.close());
     $('#guest-form').addEventListener('submit', async (e) => {
@@ -103,6 +105,7 @@ export class GuestPanel {
     this.likeBtn.textContent = this.mine ? t('❤️ {n} 個讚', { n: h.likes ?? 0 }) : this.liked ? t('❤️ 已按讚 {n}', { n: h.likes ?? 0 }) : t('🤍 按讚 {n}', { n: h.likes ?? 0 });
     this.likeBtn.classList.toggle('on', this.liked && !this.mine);
     this.bookBtn.textContent = t('📖 留言本 {n}', { n: notes.length });
+    this.tools.querySelector('#guest-exit').hidden = this.mine; // 主人用布置那排的「出去」
     if (!this.panel.classList.contains('show')) return;
     this.titleEl.textContent = this.mine ? t('📖 我的帳篷留言本') : t('📖 {name} 的留言本', { name: h.name || t('旅人') });
     this.list.innerHTML = notes.length

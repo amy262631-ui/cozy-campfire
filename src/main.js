@@ -889,7 +889,14 @@ async function init() {
     roomMgr.switchTo('home', () => net.switchRoom('home', { hid: tent.hid, x: 0, z: homeRoom.spawn.z, ry: Math.PI }));
   };
   const shopHint = () => hud.toast(t('到營火旁的「🏪 營地小舖」買一頂帳篷，就會出現在營地裡 ⛺'), 4000);
+  /** 離開帳篷：回到進來的地方（營地或營火旁） */
+  const leaveHome = () => {
+    if (!inHome()) return;
+    stopBuild();
+    roomMgr.switchTo(homeRoom.exitTo, switchOnServer);
+  };
   const guestPanel = new GuestPanel({
+    onLeave: () => leaveHome(),
     onLike: async () => {
       const res = await net.request('homeLike');
       if (res?.ok) {
@@ -1043,6 +1050,7 @@ async function init() {
     if (inHome() && homeRoom.mine) buildPanel.showTools(true, myHome?.open !== false);
   };
   buildPanel.onEnter = startBuild;
+  buildPanel.onLeave = () => leaveHome();
   actions.onBuild = () => (buildPanel.active ? stopBuild() : startBuild());
   // 布置模式：點地板選格子（拖曳轉鏡頭不算）
   {

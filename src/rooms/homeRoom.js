@@ -146,7 +146,9 @@ export function createHomeRoom() {
       m.position.set(c.x, 0, c.z);
       m.rotation.y = (it.r ?? 0) * (Math.PI / 2);
       furnitureGroup.add(m);
-      if (!WALKABLE.has(it.i)) colliders.push({ x: c.x, z: c.z, r: 0.34 });
+      // 門口那條走道（最前排中間兩格）的家具不擋路，免得把門堵住出不去
+      const doorLane = it.z === GRID - 1 && (it.x === GRID / 2 - 1 || it.x === GRID / 2);
+      if (!WALKABLE.has(it.i) && !doorLane) colliders.push({ x: c.x, z: c.z, r: 0.34 });
     }
   }
 
