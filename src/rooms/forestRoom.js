@@ -6,6 +6,7 @@ import { buildShrine } from './shrine.js';
 import { buildCairnGarden, CAIRN_GARDEN_CLEARING } from './cairns.js';
 import { buildMiniLayer } from './miniLayer.js';
 import { buildPond } from './pond.js';
+import { ENTRANCE_GEO } from '../game/entrances.js';
 import { buildWishTree, WISH_TREE_CLEARING } from './wishTree.js';
 import { buildShop, nearShop, SHOP_FRONT, SHOP_CLEARING } from './shop.js';
 import { EMOTE_IDS } from '../social/emotes.js';
@@ -418,7 +419,10 @@ export function createForestRoom() {
   const group = new THREE.Group();
   group.name = 'forest_main';
 
-  const defs = ENTRANCES.map((e) => ({ ...e, trigger: polar(e.angle, TRIGGER_R), build: polar(e.angle, BUILD_R) }));
+  const defs = ENTRANCES.map((e) => {
+    const g = ENTRANCE_GEO[e.to] ?? { trigger: TRIGGER_R, build: BUILD_R };
+    return { ...e, tr: g.trigger, trigger: polar(e.angle, g.trigger), build: polar(e.angle, g.build) };
+  });
   const shrinePos = polar(SHRINE_ANGLE, SHRINE_R);
   const world = createWorld(group, {
     clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING, WISH_TREE_CLEARING, SHOP_CLEARING],
@@ -448,7 +452,7 @@ export function createForestRoom() {
 
     entrances.push({ to: d.to, x: d.trigger.x, z: d.trigger.z, r: 0.9, label: d.label });
     // 從子房間回來時，站在入口前面一點、面向營火
-    const back = polar(d.angle, TRIGGER_R - 2.2);
+    const back = polar(d.angle, d.tr - 2.2);
     returnSpawn[d.to] = { x: back.x, z: back.z, ry: d.angle + Math.PI };
   }
 

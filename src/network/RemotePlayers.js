@@ -215,6 +215,7 @@ export class RemotePlayers {
   /** 讓本地玩家不會跟其他小動物重疊（輕微推開） */
   pushOut(pos, radius) {
     for (const p of this.players.values()) {
+      if (p.npc) continue; // 營地居民會自己讓路，不推人
       const dx = pos.x - p.pos.x;
       const dz = pos.z - p.pos.z;
       const min = radius + 0.3;

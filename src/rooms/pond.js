@@ -61,16 +61,6 @@ export function buildPond(world, forestGroup) {
     reed.rotation.z = Math.sin(i) * 0.12;
     group.add(reed);
   }
-  // 睡蓮葉
-  const padMat = lowpoly(0x2f5a3a);
-  for (const [p, q, ps] of [[2.2, 1.6, 0.26], [3.1, 0.6, 0.2], [-2.8, 1.9, 0.24], [-3.6, 0.9, 0.18], [0.6, 2.6, 0.22]]) {
-    const pad = new THREE.Mesh(new THREE.CircleGeometry(ps, 10, 0.3, Math.PI * 1.8), padMat);
-    pad.rotation.x = -Math.PI / 2;
-    const [x, z] = pondWorld(p, q);
-    pad.position.set(x, POND_WATER_Y + 0.004, z);
-    group.add(pad);
-  }
-
   // 🕯️ 湖邊的小蠟燭：火焰會微微晃動，晚上很溫馨
   const flameCanvas = document.createElement('canvas');
   flameCanvas.width = flameCanvas.height = 64;

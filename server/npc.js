@@ -10,6 +10,9 @@
  * 由伺服器統一模擬，所以同一個分流的每個人看到的居民都一樣。
  */
 
+import { POND, pondQ, pondLocal, pondWorld } from '../src/game/pondShape.js';
+import { ENTRANCE_POS } from '../src/game/entrances.js';
+
 const polar = (a, r) => ({ x: Math.sin(a) * r, z: Math.cos(a) * r });
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -26,8 +29,13 @@ const PLACES = {
     board: () => jitter(polar(2.1, 3.3), 0.3),
     tree: () => jitter(polar(0.5, 6.7), 0.6),
     cairns: () => jitter(polar(-0.66, 8.4), 0.6),
-    meadow: () => pick([polar(-1.8, 6.5), polar(2.9, 6.2), polar(0.9, 5.4), polar(-2.6, 5.6)]),
-    gate: { lake_dock: polar(1.15, 13.1), treehouse_music: polar(-2.2, 13.1), tent_social: polar(-1.25, 13.1) },
+    meadow: () => pick([polar(-0.7, 5.8), polar(2.9, 6.2), polar(0.9, 5.4), polar(-3.0, 6.4)]),
+    // 入口前 0.5 公尺（入口位置和前端共用 entrances.js）
+    gate: {
+      lake_dock: ENTRANCE_POS.lake_dock(-0.5),
+      treehouse_music: ENTRANCE_POS.treehouse_music(-0.5),
+      tent_social: ENTRANCE_POS.tent_social(-0.5),
+    },
   },
   lake_dock: {
     spawn: { x: 0, z: 6 },
@@ -53,9 +61,9 @@ const PLACES = {
 };
 /** 從森林走進子房間後，在子房間的出生點出現；回森林時在入口前出現 */
 const FOREST_RETURN = {
-  lake_dock: polar(1.15, 11.2),
-  treehouse_music: polar(-2.2, 11.2),
-  tent_social: polar(-1.25, 11.2),
+  lake_dock: ENTRANCE_POS.lake_dock(-2.4),
+  treehouse_music: ENTRANCE_POS.treehouse_music(-2.4),
+  tent_social: ENTRANCE_POS.tent_social(-2.4),
 };
 
 /** 居民名單：每個人有自己喜歡的地點和事情 */
@@ -124,6 +132,43 @@ export function createResidents(api) {
     }
     pts.push(to);
     return pts.map((p) => ({ type: 'go', to: p }));
+  }
+
+  /** 從 A 到 B 若會經過湖：回傳沿著湖岸外圈的轉折點 */
+  function aroundPond(a, b) {
+    let hits = false;
+    for (let i = 1; i < 20; i++) {
+      const u = i / 20;
+      if (pondQ(a.x + (b.x - a.x) * u, a.z + (b.z - a.z) * u, 0.7) < 1) {
+        hits = true;
+        break;
+      }
+    }
+    if (!hits) return [];
+    const ang = (p) => {
+      const [lp, lq] = pondLocal(p.x, p.z);
+      return Math.atan2(lq / POND.b, lp / POND.a);
+    };
+    const t0 = ang(a);
+    let t1 = ang(b);
+    // 兩個方向都算，避開靠營火那一側（湖和營火之間比較窄），除非另一邊遠很多
+    let d = t1 - t0;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    const other = d > 0 ? d - Math.PI * 2 : d + Math.PI * 2;
+    const passesFire = (span) => {
+      for (let i = 1; i < 10; i++) if (Math.sin(t0 + (span * i) / 10) < -0.8) return true;
+      return false;
+    };
+    const span = passesFire(d) && !passesFire(other) && Math.abs(other) < Math.abs(d) * 2.2 ? other : d;
+    const steps = Math.max(2, Math.ceil(Math.abs(span) / 0.45));
+    const out = [];
+    for (let i = 1; i < steps; i++) {
+      const th = t0 + (span * i) / steps;
+      const [x, z] = pondWorld(Math.cos(th) * (POND.a + 1.1), Math.sin(th) * (POND.b + 1.0));
+      out.push({ x, z });
+    }
+    return out;
   }
 
   const act = (a, min, max, extra = {}) => ({ type: 'act', a, t: rand(min, max), ...extra });
@@ -261,6 +306,14 @@ export function createResidents(api) {
         }
         n.step = n.plan.shift();
         n.step.left = n.step.t;
+        // 要走的直線會穿過營火河畔：改成沿著湖岸外圈繞過去（出發當下才算，位置才準）
+        if (n.step.type === 'go' && n.room === 'forest_main' && !n.step.direct) {
+          const via = aroundPond(n, n.step.to);
+          if (via.length) {
+            n.plan.unshift(...via.slice(1).map((p) => ({ type: 'go', to: p, direct: true })), { ...n.step, direct: true });
+            n.step = { type: 'go', to: via[0], direct: true };
+          }
+        }
       }
       const s = n.step;
       if (s.type === 'go') {
@@ -272,6 +325,28 @@ export function createResidents(api) {
           setAction(n, 'idle');
           continue;
         }
+        // 前面有真人：先停下來讓路；等太久就往旁邊繞一步
+        const ux = dx / d;
+        const uz = dz / d;
+        let blocked = false;
+        for (const p of api.room(n.room).players.values()) {
+          const px = p.x - n.x;
+          const pz = p.z - n.z;
+          const ahead = px * ux + pz * uz;
+          if (ahead > 0 && ahead < 1.1 && Math.abs(px * uz - pz * ux) < 0.7) blocked = true;
+        }
+        if (blocked) {
+          n.blocked = (n.blocked ?? 0) + dt;
+          setAction(n, 'idle');
+          if (n.blocked > 1.5) {
+            n.blocked = 0;
+            const side = Math.random() < 0.5 ? 1 : -1;
+            n.plan.unshift(s); // 繞完再繼續原本的目標
+            n.step = { type: 'go', to: { x: n.x + uz * side * 1.1 + ux * 0.3, z: n.z - ux * side * 1.1 + uz * 0.3 } };
+          }
+          continue;
+        }
+        n.blocked = 0;
         const k = Math.min(1, (WALK_SPEED * dt) / d);
         n.x += dx * k;
         n.z += dz * k;
