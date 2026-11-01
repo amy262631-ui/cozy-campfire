@@ -772,9 +772,24 @@ async function init() {
     if (!info.npc) hud.toast(t('{name} 來到了{place} 🦊', { name: info.name, place: t(placeName()) }));
     refreshOnline();
   });
-  net.on('playerLeft', ({ id }) => {
+  /** 去了哪一區（離開提示用） */
+  const AREA_NAME = {
+    forest_main: '中央大營火',
+    tent_focus: '專注帳篷',
+    treehouse_music: '森林樹屋',
+    lake_dock: '湖畔碼頭',
+    tent_social: '交流帳篷',
+    campground: '帳篷營地',
+    home: '帳篷裡',
+  };
+  net.on('playerLeft', ({ id, to }) => {
     const wasNpc = remotes.isNpc(id);
-    if (remotes.remove(id) && !wasNpc) hud.toast(t('{name} 離開了 🌙', { name: names.get(id) ?? t('有人') }));
+    const name = names.get(id) ?? t('有人');
+    if (remotes.remove(id) && !wasNpc) {
+      if (to === 'channel') hud.toast(t('{name} 換到別的分流了 👋', { name }));
+      else if (to && AREA_NAME[to]) hud.toast(t('{name} 去了{place} 👣', { name, place: t(AREA_NAME[to]) }));
+      else hud.toast(t('{name} 離開了 🌙', { name }));
+    }
     names.delete(id);
     refreshOnline();
   });

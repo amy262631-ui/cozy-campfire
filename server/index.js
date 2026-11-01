@@ -612,10 +612,11 @@ io.on('connection', (socket) => {
   let refTimer = null; // 朋友邀請：待滿時間才算
 
   /** 離開目前的分流／房間 */
-  const leave = () => {
+  /** 離開目前的房間；to：去了哪裡（沒有＝離開遊戲） */
+  const leave = (to) => {
     room.players.delete(socket.id);
     socket.leave(rkey);
-    io.to(rkey).emit('playerLeft', { id: socket.id });
+    io.to(rkey).emit('playerLeft', to ? { id: socket.id, to } : { id: socket.id });
     if (roomId === 'home' && room.players.size === 0) homeRooms.delete(homeOwner);
   };
   /** 進入某個分流的某個房間 */
@@ -789,7 +790,7 @@ io.on('connection', (socket) => {
     if (c.rooms.get(roomId).players.size >= ROOM_DEFS[roomId].capacity) {
       return ack?.({ ok: false, reason: 'full', message: fullMsg(ROOM_DEFS[roomId].label) });
     }
-    leave();
+    leave('channel'); // 換分流
     player.a = 'idle';
     player.d = 0;
     player.dirty = true;
@@ -823,7 +824,7 @@ io.on('connection', (socket) => {
       if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
       if (owner !== player.vid && h.open === false) return ack?.({ ok: false, reason: 'closed' });
       if (homeRoom(owner).players.size >= 12) return ack?.({ ok: false, reason: 'full', message: fullMsg('帳篷') });
-      leave();
+      leave('home');
       player.x = num(data.x, -20, 20, 0);
       player.z = num(data.z, -20, 20, 0);
       player.ry = num(data.ry, -1000, 1000, 0);
@@ -845,7 +846,7 @@ io.on('connection', (socket) => {
       return ack?.({ ok: false, reason: 'full', message: fullMsg(ROOM_DEFS[next].label) });
     }
 
-    leave();
+    leave(next);
     player.x = num(data.x, -20, 20, 0);
     player.z = num(data.z, -20, 20, 0);
     player.ry = num(data.ry, -1000, 1000, 0);
