@@ -35,6 +35,7 @@ export class SocialPanel {
 
       <form class="chat-input" id="chat-input" autocomplete="off">
         <input id="chat-text" maxlength="40" placeholder="${t('說點什麼⋯（最多 40 字）')}" enterkeyhint="send" />
+        <button type="button" class="chat-tr-toggle" id="chat-tr-toggle" title="${t('自動翻譯其他語言的聊天')}">🌐</button>
         <button type="submit">${t('送出')}</button>
       </form>
       `,
@@ -132,6 +133,16 @@ export class SocialPanel {
     this.el.log.appendChild(line);
     while (this.el.log.children.length > 6) this.el.log.firstChild.remove();
     setTimeout(() => line.classList.add('old'), 15000);
+    return line;
+  }
+
+  /** 在某一行聊天下面加上翻譯 */
+  addTranslation(line, text) {
+    if (!line?.isConnected) return;
+    const tr = document.createElement('div');
+    tr.className = 'chat-tr';
+    tr.textContent = `🌐 ${text}`;
+    line.appendChild(tr);
   }
 
   clearLog() {

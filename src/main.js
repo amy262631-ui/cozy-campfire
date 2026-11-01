@@ -30,6 +30,7 @@ import { BuildPanel } from './ui/BuildPanel.js';
 import { createDemoHome } from './game/demoHome.js';
 import { WelcomeCard } from './ui/WelcomeCard.js';
 import { GuestPanel } from './ui/GuestPanel.js';
+import { translateChat, translateEnabled, setTranslateEnabled } from './network/chatTranslate.js';
 import { GiftPanel } from './ui/GiftPanel.js';
 import { GIFT_FURNITURE } from './game/furniture.js';
 import { TENT_STYLE_BY_ID } from './game/tentStyles.js';
@@ -838,8 +839,26 @@ async function init() {
   net.on('chat', ({ id, name, text }) => {
     if (id === net.id) return;
     bubbles.show(id, text);
-    social.addLog(name, text);
+    const line = social.addLog(name, text);
+    // 別國語言：自動翻成自己的語言（聊天紀錄下面多一行，頭上的泡泡換成翻譯）
+    translateChat(text).then((tr) => {
+      if (!tr) return;
+      social.addTranslation(line, tr);
+      bubbles.show(id, `🌐 ${tr}`);
+    });
   });
+  // 聊天框的 🌐：開關自動翻譯
+  {
+    const btn = document.getElementById('chat-tr-toggle');
+    const paint = () => btn?.classList.toggle('off', !translateEnabled());
+    paint();
+    btn?.addEventListener('click', () => {
+      setTranslateEnabled(!translateEnabled());
+      paint();
+      hud.toast(translateEnabled() ? t('🌐 自動翻譯：開（別國語言的聊天會翻成你的語言）') : t('🌐 自動翻譯：關'));
+      document.getElementById('chat-text')?.focus();
+    });
+  }
   net.on('emoji', ({ id, e }) => id !== net.id && bubbles.show(id, e, { emoji: true }));
   net.on('notes', ({ notes, by, name }) => {
     applyNotes(notes);

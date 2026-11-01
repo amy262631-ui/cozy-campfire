@@ -4348,3 +4348,23 @@ body.building .guest-tools {
 .shop-style-locked {
   opacity: 0.5;
 }
+
+/* ---------- 聊天自動翻譯 ---------- */
+.chat-tr {
+  margin-top: 1px;
+  font-size: 0.88em;
+  color: #bfe3ff;
+  opacity: 0.9;
+}
+
+.chat-input .chat-tr-toggle {
+  padding: 0 10px;
+  background: rgba(140, 200, 255, 0.25);
+  color: #fff;
+  font-weight: 400;
+}
+
+.chat-input .chat-tr-toggle.off {
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 0.55;
+}
