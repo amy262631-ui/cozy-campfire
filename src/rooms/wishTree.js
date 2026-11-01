@@ -120,6 +120,10 @@ export function buildOrnamentGeometry(id) {
     case 'firefly':
       add(GEO.sphere, 0.06, 0.06, 0.06);
       break;
+    case 'meteor':
+      add(GEO.oct, 0.07, 0.07, 0.03);
+      add(GEO.cone, 0.035, 0.22, 0.02, 0.09, 0.08, 0, 0.9, 0xeaf6ff);
+      break;
   }
   add(GEO.cyl, 0.004, 0.14, 0.004, 0, 0.13, 0, 0, 0xf2e6cc); // 掛繩
   return mergeGeometries(parts);

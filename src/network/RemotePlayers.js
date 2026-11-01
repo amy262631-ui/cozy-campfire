@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { t } from '../i18n/i18n.js';
 import { STONE_FLAG } from '../rooms/cairns.js';
 import { ProceduralFox } from '../player/characters/ProceduralFox.js';
 import { lerpAngle } from '../player/Player.js';
@@ -14,7 +15,7 @@ const POSE_OF = {
   wave: 'wave', salute: 'salute', bye: 'bye', pray: 'pray', // 表情動作
 };
 
-function makeNameTag(name) {
+function makeNameTag(name, npc = false) {
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
   const font = '600 34px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
@@ -23,11 +24,11 @@ function makeNameTag(name) {
   c.width = w;
   c.height = 56;
   g.font = font;
-  g.fillStyle = 'rgba(15, 18, 30, 0.55)';
+  g.fillStyle = npc ? 'rgba(40, 70, 45, 0.7)' : 'rgba(15, 18, 30, 0.55)';
   g.beginPath();
   g.roundRect(0, 4, w, 48, 24);
   g.fill();
-  g.fillStyle = '#fff3e0';
+  g.fillStyle = npc ? '#d8f5c8' : '#fff3e0';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText(name, w / 2, 29);
@@ -43,16 +44,31 @@ function makeNameTag(name) {
   return sprite;
 }
 
+/** 營地居民的名字（伺服器傳中文，這裡換成玩家選的語言） */
+const NPC_NAMES = {
+  撿柴的小橡: t('撿柴的小橡'),
+  釣魚的阿樂: t('釣魚的阿樂'),
+  愛睡的布丁: t('愛睡的布丁'),
+  樹屋的咪咪: t('樹屋的咪咪'),
+  看星星的露露: t('看星星的露露'),
+  守林人阿松: t('守林人阿松'),
+};
+const npcName = (name) => {
+  const raw = String(name).replace(/^🏕️\s*/, '');
+  return `🏕️ ${NPC_NAMES[raw] ?? raw}`;
+};
+
 class RemotePlayer {
-  constructor({ id, name, fur, sp = 0, rw = 0, s }) {
+  constructor({ id, name, fur, sp = 0, rw = 0, s, npc = false }) {
     this.id = id;
+    this.npc = npc; // 營地居民（電腦角色）
     this.name = name;
     this.character = new ProceduralFox({ fur, species: sp });
     this.character.setAccessory(rw); // 贊助者的小花
     this.group = new THREE.Group();
     this.group.add(this.character.root);
 
-    this.tag = makeNameTag(name);
+    this.tag = makeNameTag(npc ? npcName(name) : name, npc);
     this.tag.position.y = 1.55;
     this.group.add(this.tag);
 
@@ -147,8 +163,15 @@ export class RemotePlayers {
     this.players = new Map();
   }
 
+  /** 真人玩家數（不含營地居民） */
   get count() {
-    return this.players.size;
+    let n = 0;
+    for (const p of this.players.values()) if (!p.npc) n++;
+    return n;
+  }
+
+  isNpc(id) {
+    return !!this.players.get(id)?.npc;
   }
 
   add(info) {

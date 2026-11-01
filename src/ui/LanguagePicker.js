@@ -10,7 +10,7 @@ export class LanguagePicker {
       'beforeend',
       `
       <div class="lang" id="lang">
-        <button type="button" class="lang-toggle" id="lang-toggle">🌐 ${LANGS.find((l) => l.id === lang)?.label ?? ''}</button>
+        <button type="button" class="lang-toggle" id="lang-toggle">🌐<span class="lang-label"> ${LANGS.find((l) => l.id === lang)?.label ?? ''}</span></button>
         <div class="lang-menu">
           ${LANGS.map((l) => `<button type="button" data-lang="${l.id}" class="${l.id === lang ? 'current' : ''}">${l.label}</button>`).join('')}
         </div>

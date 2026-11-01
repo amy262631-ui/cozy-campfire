@@ -17,9 +17,11 @@ function ago(at) {
  * getCairns() 回傳全部石塔的石頭陣列；getName() 回傳自己的暱稱。
  */
 export class CairnPanel {
-  constructor({ getCairns, getName, root = document.getElementById('ui') }) {
+  constructor({ getCairns, getName, getLog, root = document.getElementById('ui') }) {
     this.getCairns = getCairns;
     this.getName = getName;
+    /** { done: [疊滿時間], showMs, archive: [{ tower, at, stones, people, names }] } */
+    this.getLog = getLog ?? (() => null);
     this.index = -1;
     root.insertAdjacentHTML(
       'beforeend',
@@ -100,12 +102,40 @@ export class CairnPanel {
         </div>`
           : ''
       }
-      <div class="cairn-hint">${
-        stones.length >= CAIRN_MAX
-          ? t('這座石塔已經疊滿了 ✨ 謝謝每一位許願的人')
-          : t('到石頭堆撿一顆石頭，頂在頭上走過來，放上去許個願 🙏')
-      }</div>
+      <div class="cairn-hint">${this.#hint(stones.length)}</div>
       <div class="cairn-total">${t('整片石塔林：{stones} 顆石頭 · {people} 位旅人', { stones: total, people: everyone })}</div>
+      ${this.#archive()}
     `;
+  }
+
+  #hint(count) {
+    if (count < CAIRN_MAX) return t('到石頭堆撿一顆石頭，頂在頭上走過來，放上去許個願 🙏');
+    const log = this.getLog();
+    const done = log?.done?.[this.index];
+    if (!done || !log.showMs) return t('這座石塔已經疊滿了 ✨ 謝謝每一位許願的人');
+    const left = Math.max(0, done + log.showMs - Date.now());
+    const h = Math.floor(left / 3600000);
+    const m = Math.ceil((left % 3600000) / 60000);
+    return t('✨ 這座石塔完成了！會展示 {h} 小時 {m} 分，之後收進「石塔紀念冊」，原地再開始一座新的', { h, m });
+  }
+
+  /** 石塔紀念冊：已經完成、收起來的石塔 */
+  #archive() {
+    const list = [...(this.getLog()?.archive ?? [])].reverse();
+    if (!list.length) return '';
+    return `
+      <details class="cairn-archive">
+        <summary>${t('📜 石塔紀念冊（{n} 座）', { n: list.length })}</summary>
+        ${list
+          .slice(0, 20)
+          .map(
+            (r) => `
+          <div class="ca-item">
+            <div><b>${new Date(r.at).toLocaleDateString()}</b> · ${t('第 {n} 座', { n: r.tower })} · ${t('{s} 顆、{p} 位旅人', { s: r.stones, p: r.people })}</div>
+            <small>${r.names.slice(0, 12).map(esc).join('、')}${r.people > 12 ? ' ⋯' : ''}</small>
+          </div>`,
+          )
+          .join('')}
+      </details>`;
   }
 }

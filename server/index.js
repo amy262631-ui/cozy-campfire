@@ -18,6 +18,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as storage from './storage.js';
+import { createResidents, publicNpc } from './npc.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -70,8 +71,20 @@ const key = (ch, roomId) => `${ch}:${roomId}`;
 
 function makeChannel(ch) {
   const c = { ch, fuel: 55, rooms: new Map() };
-  for (const id of Object.keys(ROOM_DEFS)) c.rooms.set(id, { players: new Map(), song: 0 });
+  for (const id of Object.keys(ROOM_DEFS)) c.rooms.set(id, { players: new Map(), npcs: new Map(), song: 0 });
   channels.set(ch, c);
+  // 營地居民（電腦角色，名牌標示清楚，不算人數）
+  c.residents = createResidents({
+    ch,
+    room: (id) => c.rooms.get(id),
+    emit: (roomId, ev, data) => io.to(key(ch, roomId)).emit(ev, data),
+    addWood: (n) => {
+      if (c.fuel > 80) return;
+      c.fuel = Math.min(MAX_FUEL, c.fuel + WOOD_FUEL);
+      io.to(key(ch, 'forest_main')).emit('fire', { fuel: c.fuel, by: n.id, name: n.name, npc: true });
+    },
+    packFish: () => Math.floor(Math.random() * 4) * 1000 + Math.round(12 + Math.random() * 25),
+  });
   return c;
 }
 const chCount = (c) => {
@@ -90,6 +103,7 @@ function tidyChannels() {
   }
   for (const c of list) {
     if (c.ch > BASE_CHANNELS && chCount(c) === 0 && [...channels.values()].some((o) => o !== c && chCount(o) < CHANNEL_MAX)) {
+      c.residents?.remove();
       channels.delete(c.ch);
     }
   }
@@ -120,11 +134,27 @@ function pickChannel(wanted) {
 const DATA_DIR = path.resolve(__dirname, 'data');
 await storage.init(DATA_DIR);
 const asArray = (v) => (Array.isArray(v) ? v : []);
-const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree] = await Promise.all(
-  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json'].map((f) => storage.load(f)),
+const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog] = await Promise.all(
+  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json'].map((f) => storage.load(f)),
 );
 /** 存檔：統計和錢包更新很頻繁，等 10 秒合併成一次；其他 2 秒 */
 const saveJson = (file, data) => storage.save(file, data, file === 'stats.json' || file === 'players.json' ? 10000 : 2000);
+
+// ---------- 每晚的營火時間（台北時間 21:00～21:30）：流星雨、松果加倍、限定流星吊飾 ----------
+const EVENT_START = (Number(process.env.EVENT_HOUR) || 21) * 3600 + (Number(process.env.EVENT_MINUTE) || 0) * 60;
+const EVENT_LEN = (Number(process.env.EVENT_MINUTES) || 30) * 60;
+function eventInfo(now = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', { timeZone: process.env.STATS_TZ || 'Asia/Taipei', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  );
+  const sec = Number(parts.hour) * 3600 + Number(parts.minute) * 60 + Number(parts.second);
+  if (sec >= EVENT_START && sec < EVENT_START + EVENT_LEN) return { active: true, endsIn: EVENT_START + EVENT_LEN - sec };
+  let startsIn = EVENT_START - sec;
+  if (startsIn < 0) startsIn += 86400;
+  return { active: false, startsIn };
+}
 
 // ---------- 松果錢包（依瀏覽器的隨機代號記錄，不用帳號；名字和動物每次隨機也沒關係） ----------
 /** @type {Record<string, { pc: number, tot: number, last: string, streak: number, sd: string, sit: number }>} */
@@ -148,7 +178,8 @@ function wallet(vid) {
 
 // ---------- 心願大樹（所有分流共用的同一棵樹） ----------
 const TREE_SLOTS = 140;
-const ORNAMENT_PRICE = { ribbon: 3, heart: 4, lantern: 6, fish: 6, star: 8, bell: 10, moon: 12, firefly: 15 }; // 與前端 ornaments.js 相同
+const ORNAMENT_PRICE = { ribbon: 3, heart: 4, lantern: 6, fish: 6, star: 8, bell: 10, moon: 12, firefly: 15, meteor: 5 }; // 與前端 ornaments.js 相同
+const EVENT_ONLY = new Set(['meteor']); // 只有營火時間能掛
 let tree = Array.isArray(savedTree) ? savedTree.filter((x) => x && ORNAMENT_PRICE[x.o] && x.slot < TREE_SLOTS) : [];
 
 // ---------- 每日統計（server/data/stats.json，只存數字，不存個人資料） ----------
@@ -199,6 +230,17 @@ shared.board = asArray(savedBoard).slice(0, 10);
   const saved = asArray(savedCairns);
   shared.cairns = Array.from({ length: CAIRN_COUNT }, (_, i) => (Array.isArray(saved[i]) ? saved[i].slice(0, CAIRN_MAX) : []));
 }
+// 石塔疊滿後：展示 12 小時（頂端發光），之後收進「石塔紀念冊」，原地重新開始一座
+const CAIRN_SHOW_MS = (Number(process.env.CAIRN_SHOW_HOURS) || 12) * 3600 * 1000;
+const cairnLog = {
+  done: Array.from({ length: CAIRN_COUNT }, (_, i) => savedCairnLog?.done?.[i] ?? null), // 每座塔疊滿的時間
+  archive: Array.isArray(savedCairnLog?.archive) ? savedCairnLog.archive.slice(-50) : [],
+};
+// 之前就已經疊滿、還沒記錄時間的：從現在開始展示
+shared.cairns.forEach((c, i) => {
+  if (c.length >= CAIRN_MAX && !cairnLog.done[i]) cairnLog.done[i] = Date.now();
+});
+const publicCairnLog = () => ({ done: cairnLog.done, showMs: CAIRN_SHOW_MS, archive: cairnLog.archive.slice(-30) });
 
 // ---------- HTTP ----------
 const app = express();
@@ -275,7 +317,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
 app.get('/api/backup', (req, res) => {
   if (process.env.STATS_KEY && req.query.key !== process.env.STATS_KEY) return res.status(403).send('需要密碼：/api/backup?key=…');
   res.setHeader('Content-Disposition', `attachment; filename="cozy-backup-${dayKey()}.json"`);
-  res.json({ notes: shared.notes, wishes: shared.wishes, cairns: shared.cairns, board: shared.board, tree, players, stats });
+  res.json({ notes: shared.notes, wishes: shared.wishes, cairns: shared.cairns, cairnLog, board: shared.board, tree, players, stats });
 });
 
 app.get('/api/health', (_req, res) => {
@@ -333,10 +375,12 @@ function roomSnapshot(c, id, selfId) {
     wishes: id === 'forest_main' ? shared.wishes : undefined,
     notes: id === 'forest_main' ? shared.notes : undefined,
     cairns: id === 'forest_main' ? shared.cairns : undefined,
+    cairnLog: id === 'forest_main' ? publicCairnLog() : undefined,
     tree: id === 'forest_main' ? tree : undefined,
     lakeNews: shared.lakeNews,
     today: todayPublic(),
-    players: [...r.players.values()].filter((p) => p.id !== selfId).map(publicInfo),
+    players: [...[...r.players.values()].filter((p) => p.id !== selfId).map(publicInfo), ...[...r.npcs.values()].map(publicNpc)],
+    event: eventInfo(),
   };
 }
 /** 共用資料（繪馬、留言、排行）更新時，通知每個分流裡那個房間的人 */
@@ -359,6 +403,7 @@ io.on('connection', (socket) => {
   /** 給松果，並通知這位玩家 */
   const award = (n, reason) => {
     if (!wal || n <= 0) return;
+    if (eventInfo().active) n *= 2; // 營火時間：松果加倍
     wal.pc += n;
     wal.tot += n;
     saveJson('players.json', players);
@@ -384,8 +429,28 @@ io.on('connection', (socket) => {
 
   socket.on('join', (data = {}, ack) => {
     if (player) return;
-    const wanted = ROOM_DEFS[data.room] ? data.room : DEFAULT_ROOM;
-    const wantCh = Math.floor(num(data.ch, 0, 999, 0));
+    let wanted = ROOM_DEFS[data.room] ? data.room : DEFAULT_ROOM;
+    let wantCh = Math.floor(num(data.ch, 0, 999, 0));
+    // 朋友的邀請連結（?with=朋友的訪客代號）：到朋友所在的分流、地點，出現在他旁邊
+    let friend = null;
+    if (data.with && !data.rejoin) {
+      const fv = String(data.with).slice(0, 24);
+      for (const fc of channels.values()) {
+        for (const [rid, fr] of fc.rooms) {
+          for (const p of fr.players.values()) {
+            if (p.vid === fv && rid !== 'tent_focus') friend = { p, ch: fc.ch, room: rid };
+          }
+        }
+      }
+      if (friend) {
+        wantCh = friend.ch;
+        wanted = friend.room;
+        const a = Math.random() * Math.PI * 2;
+        data.x = friend.p.x + Math.sin(a) * 1.3;
+        data.z = friend.p.z + Math.cos(a) * 1.3;
+        data.ry = Math.atan2(friend.p.x - data.x, friend.p.z - data.z);
+      }
+    }
     let c = pickChannel(wantCh);
     // 斷線重連時原分流滿了，就自動換一個，不要把人擋在外面
     if (!c && data.rejoin) c = pickChannel(0);
@@ -411,6 +476,7 @@ io.on('connection', (socket) => {
       d: 0,
       e: 0,
       dirty: true,
+      vid: String(data.vid ?? '').slice(0, 24),
     };
     player.rw = findReward(player.name, data.code);
     // 統計：第一次進來才算一次來訪（斷線重連、改名字不重複算）
@@ -461,6 +527,7 @@ io.on('connection', (socket) => {
 
     ack?.({ ok: true, id: socket.id, reward: player.rw, wallet: wal ? { pc: wal.pc, streak: wal.streak, daily } : null, ...roomSnapshot(chan, roomId, socket.id) });
     socket.to(rkey).emit('playerJoined', publicInfo(player));
+    if (friend && friend.p.id) io.to(friend.p.id).emit('friendJoined', { name: player.name });
     console.log(`[加入] ${player.name}（分流 ${chan.ch}／${roomId}，分流共 ${chCount(chan)} 人）`);
   });
 
@@ -591,7 +658,11 @@ io.on('connection', (socket) => {
       ritual = today().ritual;
       award(QUEST_GAIN, 'quest');
     }
-    emitAllChannels('forest_main', 'stone', { i, stone, count: cairn.length, by: socket.id, today: todayPublic() });
+    if (cairn.length >= CAIRN_MAX) {
+      cairnLog.done[i] = now;
+      saveJson('cairnlog.json', cairnLog);
+    }
+    emitAllChannels('forest_main', 'stone', { i, stone, count: cairn.length, by: socket.id, today: todayPublic(), done: cairnLog.done[i] });
     ack?.({ ok: true, count: cairn.length, ritual });
   });
 
@@ -620,6 +691,7 @@ io.on('connection', (socket) => {
     const o = String(data.o ?? '');
     const price = ORNAMENT_PRICE[o];
     if (!price) return ack?.({ ok: false, reason: 'unknown' });
+    if (EVENT_ONLY.has(o) && !eventInfo().active) return ack?.({ ok: false, reason: 'eventOnly' });
     const now = Date.now();
     if (now - lastHang < 1500) return ack?.({ ok: false, reason: 'tooFast' });
     if (wal.pc < price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
@@ -732,13 +804,15 @@ setInterval(() => {
 
   for (const c of channels.values()) {
     c.fuel = Math.max(0, c.fuel - BURN_RATE * dt);
+    // 有真人在這個分流時，居民才活動（沒人時省電）
+    if (chCount(c) > 0) c.residents?.update(dt);
     for (const [id, room] of c.rooms) {
       if (room.players.size === 0) continue;
 
-      // 只送有變動的玩家
+      // 只送有變動的玩家（含營地居民）
       const batch = {};
       let any = false;
-      for (const p of room.players.values()) {
+      for (const p of [...room.players.values(), ...room.npcs.values()]) {
         if (!p.dirty) continue;
         batch[p.id] = packState(p);
         p.dirty = false;
@@ -768,6 +842,38 @@ for (const sig of ['SIGTERM', 'SIGINT']) {
     process.exit(0);
   });
 }
+
+// 疊滿的石塔展示夠久了：收進紀念冊，原地重新開始
+setInterval(() => {
+  const now = Date.now();
+  shared.cairns.forEach((c, i) => {
+    const done = cairnLog.done[i];
+    if (!done || now - done < CAIRN_SHOW_MS) return;
+    const counts = {};
+    for (const st of c) counts[st.n] = (counts[st.n] ?? 0) + 1;
+    const names = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([n]) => n);
+    const record = { tower: i + 1, at: done, stones: c.length, people: names.length, names: names.slice(0, 40) };
+    cairnLog.archive.push(record);
+    cairnLog.archive = cairnLog.archive.slice(-50);
+    cairnLog.done[i] = null;
+    shared.cairns[i] = [];
+    saveJson('cairns.json', shared.cairns);
+    saveJson('cairnlog.json', cairnLog);
+    emitAllChannels('forest_main', 'cairnReset', { i, record, log: publicCairnLog() });
+    console.log(`[石塔] 第 ${i + 1} 座收進紀念冊（${record.stones} 顆、${record.people} 位旅人），重新開始`);
+  });
+}, 60000);
+
+// 營火時間開始／結束時通知所有人
+let eventActive = eventInfo().active;
+setInterval(() => {
+  const ev = eventInfo();
+  if (ev.active !== eventActive) {
+    eventActive = ev.active;
+    io.emit('event', ev);
+    console.log(ev.active ? '[營火時間] 開始 🌠' : '[營火時間] 結束');
+  }
+}, 5000);
 
 httpServer.listen(PORT, () => {
   console.log(`🔥 營地伺服器已啟動：http://localhost:${PORT}`);

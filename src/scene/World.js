@@ -416,7 +416,7 @@ export function createWorld(scene, { clearings = [] } = {}) {
     meteors.push({ pts, pos, alpha, life: 0, dur: 1, start: new THREE.Vector3(), dir: new THREE.Vector3(), len: 0 });
   }
   let meteorTimer = 3;
-  const api = { meteorMode: 'rare', onMeteor: null, spawnMeteor: (camera) => spawnMeteor(camera) };
+  const api = { meteorMode: 'rare', eventShower: false, onMeteor: null, spawnMeteor: (camera) => spawnMeteor(camera) };
 
   const camDir = new THREE.Vector3();
   function spawnMeteor(camera) {
@@ -425,10 +425,10 @@ export function createWorld(scene, { clearings = [] } = {}) {
     // 流星雨時出現在玩家正在看的那片天空
     camera.getWorldDirection(camDir);
     const az =
-      api.meteorMode === 'shower'
+      (api.meteorMode === 'shower' || api.eventShower)
         ? Math.atan2(camDir.x, camDir.z) + (Math.random() - 0.5) * 1.2
         : Math.random() * Math.PI * 2;
-    const el = THREE.MathUtils.degToRad(api.meteorMode === 'shower' ? 28 + Math.random() * 22 : 40 + Math.random() * 35);
+    const el = THREE.MathUtils.degToRad((api.meteorMode === 'shower' || api.eventShower) ? 28 + Math.random() * 22 : 40 + Math.random() * 35);
     m.start.set(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)).multiplyScalar(120);
     // 方向：大致沿切線往下劃
     const tangent = new THREE.Vector3(Math.cos(az), 0, -Math.sin(az)).multiplyScalar(Math.random() < 0.5 ? 1 : -1);
@@ -444,10 +444,10 @@ export function createWorld(scene, { clearings = [] } = {}) {
     meteorTimer -= dt;
     if (meteorTimer <= 0) {
       spawnMeteor(camera);
-      meteorTimer = api.meteorMode === 'shower' ? 1.2 + Math.random() * 2.8 : 25 + Math.random() * 40;
+      meteorTimer = (api.meteorMode === 'shower' || api.eventShower) ? 1.2 + Math.random() * 2.8 : 25 + Math.random() * 40;
     }
     // 切換成流星雨時，縮短等待
-    if (api.meteorMode === 'shower' && meteorTimer > 5) meteorTimer = 1.5;
+    if ((api.meteorMode === 'shower' || api.eventShower) && meteorTimer > 5) meteorTimer = 1.5;
 
     for (const m of meteors) {
       if (!m.pts.visible) continue;

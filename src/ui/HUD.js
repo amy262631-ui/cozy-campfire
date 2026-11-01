@@ -27,8 +27,9 @@ export class HUD {
 
       <div class="prompt" id="prompt"></div>
 
-      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span></div>
+      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="invite-chip" id="invite-chip" hidden>${t('👫 邀朋友')}</button></div>
       <div class="today" id="today" hidden></div>
+      <div class="event-line" id="event-line" hidden></div>
 
       <button type="button" class="sound-unlock" id="sound-unlock">${t('🔈 輕點這裡開啟聲音')}</button>
       `,
@@ -49,8 +50,13 @@ export class HUD {
       meChip: root.querySelector('#me-chip'),
       today: root.querySelector('#today'),
       pcChip: root.querySelector('#pc-chip'),
+      invite: root.querySelector('#invite-chip'),
+      eventLine: root.querySelector('#event-line'),
     };
     this.onMeClick = null;
+    this.onInvite = null;
+    this.el.invite.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.el.invite.addEventListener('click', () => this.onInvite?.());
     this.el.meChip.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.meChip.addEventListener('click', () => this.onMeClick?.());
     /** 點「分流 N」時呼叫（main.js 設定） */
@@ -119,6 +125,33 @@ export class HUD {
       el.classList.remove('bump');
       void el.offsetWidth;
       el.classList.add('bump');
+    }
+  }
+
+  /** 連上伺服器才顯示「邀朋友」 */
+  setInviteVisible(v) {
+    this.el.invite.hidden = !v;
+  }
+
+  /**
+   * 每晚的營火時間：進行中顯示倒數；還沒開始顯示「今晚 9 點」
+   * @param {{ active: boolean, endsIn?: number, startsIn?: number } | null} ev 秒數
+   */
+  setEvent(ev) {
+    const el = this.el.eventLine;
+    el.hidden = !ev;
+    if (!ev) return;
+    el.classList.toggle('active', ev.active);
+    if (ev.active) {
+      el.textContent = t('🌠 營火時間・流星雨中！松果加倍・限定流星吊飾（還剩 {m} 分）', { m: Math.max(1, Math.ceil(ev.endsIn / 60)) });
+    } else if (ev.startsIn < 3 * 3600) {
+      const h = Math.floor(ev.startsIn / 3600);
+      const m = Math.ceil((ev.startsIn % 3600) / 60);
+      el.textContent = h
+        ? t('🌙 今晚 9 點營火時間・還有 {h} 小時 {m} 分', { h, m })
+        : t('🌙 今晚 9 點營火時間・還有 {m} 分鐘', { m: Math.max(1, m) });
+    } else {
+      el.textContent = t('🌙 每晚 9 點營火時間：流星雨、松果加倍');
     }
   }
 

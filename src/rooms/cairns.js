@@ -119,7 +119,13 @@ export function buildCairnGarden(world) {
     g.add(mesh);
     group.add(g);
     world.colliders.push({ x: spot.x, z: spot.z, r: 0.45 });
-    return { group: g, mesh, stones: [], heights: [], drop: null, spot };
+    // 疊滿之後：塔頂一顆發光的小星星
+    const crown = new THREE.Mesh(new THREE.OctahedronGeometry(0.13, 0), new THREE.MeshBasicMaterial({ color: 0xffd98a }));
+    crown.visible = false;
+    g.add(crown);
+    const halo = new THREE.PointLight(0xffc870, 0, 5, 1.6);
+    g.add(halo);
+    return { group: g, mesh, stones: [], heights: [], drop: null, spot, crown, halo, done: false };
   });
 
   /** 把第 k 顆石頭放到正確位置（落下動畫 lift ＞ 0） */
@@ -162,6 +168,15 @@ export function buildCairnGarden(world) {
         c.stones = (list?.[i] ?? []).slice(0, CAIRN_MAX);
         c.drop = null;
         rebuild(c);
+      });
+    },
+
+    /** 哪幾座已經疊滿（完成，展示中） */
+    setDone(flags) {
+      cairns.forEach((c, i) => {
+        c.done = !!flags?.[i];
+        c.crown.visible = c.done;
+        c.halo.intensity = c.done ? 1.4 : 0;
       });
     },
 
@@ -225,6 +240,12 @@ export function buildCairnGarden(world) {
         const sway = Math.min(1, (c.top ?? 0) / 4) * 0.012;
         c.group.rotation.x = Math.sin(time * 0.9 + c.spot.x) * sway;
         c.group.rotation.z = Math.cos(time * 0.7 + c.spot.z) * sway;
+        if (c.done) {
+          const y = 0.18 + (c.top ?? 0) + 0.3 + Math.sin(time * 1.6) * 0.06;
+          c.crown.position.y = y;
+          c.crown.rotation.y = time * 0.8;
+          c.halo.position.y = y;
+        }
         if (c.drop) {
           c.drop.t += dt;
           const u = Math.min(1, c.drop.t / 0.35);

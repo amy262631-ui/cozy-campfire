@@ -13,6 +13,8 @@ export const ORNAMENTS = [
   { id: 'bell', icon: '🎐', name: t('風鈴'), price: 10, color: 0xcfe8ff },
   { id: 'moon', icon: '🌙', name: t('月亮'), price: 12, color: 0xfff1b8, glow: true },
   { id: 'firefly', icon: '✨', name: t('螢火蟲燈'), price: 15, color: 0xb6ff7a, glow: true },
+  // 只有每晚營火時間（21:00～21:30）能掛
+  { id: 'meteor', icon: '🌠', name: t('流星吊飾'), price: 5, color: 0xbfe3ff, glow: true, eventOnly: true },
 ];
 
 export const ORNAMENT_BY_ID = Object.fromEntries(ORNAMENTS.map((o) => [o.id, o]));

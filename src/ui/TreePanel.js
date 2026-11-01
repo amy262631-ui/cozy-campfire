@@ -19,8 +19,8 @@ function ago(at) {
  *   onHang(id)   → Promise<boolean>
  */
 export class TreePanel {
-  constructor({ getItems, getCoins, onHang, root = document.getElementById('ui') }) {
-    Object.assign(this, { getItems, getCoins, onHang });
+  constructor({ getItems, getCoins, onHang, getEvent, root = document.getElementById('ui') }) {
+    Object.assign(this, { getItems, getCoins, onHang, getEvent });
     this.busy = false;
     root.insertAdjacentHTML(
       'beforeend',
@@ -95,14 +95,16 @@ export class TreePanel {
     const items = this.getItems();
     this.coinsEl.innerHTML =
       coins == null ? t('目前是單人模式，連上伺服器後才能掛裝飾') : t('你有 <b>🌰 {n}</b> 顆松果', { n: coins });
-    this.grid.innerHTML = ORNAMENTS.map(
-      (o) => `
-      <button type="button" class="tree-item" data-o="${o.id}" ${coins == null || coins < o.price ? 'disabled' : ''}>
+    const eventOn = !!this.getEvent?.()?.active;
+    this.grid.innerHTML = ORNAMENTS.map((o) => {
+      const locked = o.eventOnly && !eventOn;
+      return `
+      <button type="button" class="tree-item${o.eventOnly ? ' limited' : ''}" data-o="${o.id}" ${coins == null || coins < o.price || locked ? 'disabled' : ''}>
         <span class="ti-icon">${o.icon}</span>
         <span class="ti-name">${o.name}</span>
-        <span class="ti-price">🌰 ${o.price}</span>
-      </button>`,
-    ).join('');
+        <span class="ti-price">${locked ? t('每晚 9 點') : `🌰 ${o.price}`}</span>
+      </button>`;
+    }).join('');
     const people = new Set(items.map((x) => x.n)).size;
     this.statsEl.textContent = items.length
       ? t('樹上有 {n} 個裝飾 · {p} 位旅人一起裝飾', { n: items.length, p: people })

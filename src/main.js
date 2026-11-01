@@ -34,6 +34,7 @@ import { CairnPanel } from './ui/CairnPanel.js';
 import { RitualGuide } from './ui/RitualGuide.js';
 import { LakeNews } from './ui/LakeNews.js';
 import { TreePanel } from './ui/TreePanel.js';
+import { ShareCard } from './ui/ShareCard.js';
 import { ORNAMENT_BY_ID } from './game/ornaments.js';
 import { STONE_FLAG, CAIRN_MAX } from './rooms/cairns.js';
 import { FishingGame } from './fishing/FishingGame.js';
@@ -254,6 +255,62 @@ async function init() {
   actions.onNoticeBoard = () => noticePanel.open();
   let myReward = 0;
 
+  // ---------- 分享卡片 ----------
+  const shareCard = new ShareCard({
+    hud,
+    snapshot: () => {
+      renderer.render(scene, camera); // 畫完馬上截圖（不然畫布會是空的）
+      return renderer.domElement.toDataURL('image/jpeg', 0.9);
+    },
+  });
+  shrinePanel.onShareKuji = (level, line) => {
+    shrinePanel.close();
+    shareCard.open({
+      icon: '🎋',
+      big: level,
+      small: line,
+      text: t('我在迷霧森林露營地抽到「{level}」🎋 沒力氣出門的夜晚，一起來營火旁坐一下吧', { level }),
+    });
+  };
+
+  // ---------- 每晚的營火時間（21:00～21:30） ----------
+  let eventState = null; // { active, endsIn/startsIn, at }
+  const currentEvent = () => {
+    if (!eventState) return null;
+    const passed = (performance.now() - eventState.at) / 1000;
+    return eventState.active
+      ? { active: true, endsIn: Math.max(0, eventState.endsIn - passed) }
+      : { active: false, startsIn: Math.max(0, eventState.startsIn - passed) };
+  };
+  const applyEvent = (ev, announce = false) => {
+    const was = eventState?.active;
+    eventState = { ...ev, at: performance.now() };
+    world.eventShower = !!ev.active;
+    hud.setEvent(currentEvent());
+    if (announce && ev.active && !was) hud.toast(t('🌠 營火時間開始了！流星雨、松果加倍，限定「流星吊飾」只到 9:30'), 6000);
+    if (announce && !ev.active && was) hud.toast(t('🌙 今晚的營火時間結束了，明晚 9 點見'), 4000);
+    treePanel?.refresh();
+  };
+  net.on('event', (ev) => applyEvent(ev, true));
+  setInterval(() => eventState && hud.setEvent(currentEvent()), 20000);
+
+  // ---------- 邀朋友一起烤火 ----------
+  hud.onInvite = async () => {
+    const url = `${location.origin}${location.pathname}?with=${visitorId()}`;
+    const text = t('來營火旁找我！點這個連結，就會出現在我旁邊 🔥');
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: t('迷霧森林露營地'), text, url });
+        return;
+      }
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+      hud.toast(t('📋 已複製邀請連結，貼給朋友吧'));
+    } catch {
+      /* 取消分享 */
+    }
+  };
+  net.on('friendJoined', ({ name }) => hud.toast(t('👫 {name} 照著你的邀請來到營火旁了！', { name }), 5000));
+
   // ---------- 松果與心願大樹 ----------
   /** 我的松果（null＝還沒連上伺服器） */
   let pinecones = null;
@@ -263,6 +320,7 @@ async function init() {
     treePanel.refresh();
   };
   const treePanel = new TreePanel({
+    getEvent: () => currentEvent(),
     getItems: () => forest.wishTree.items,
     getCoins: () => (net.online ? pinecones : null),
     onHang: async (id) => {
@@ -274,7 +332,8 @@ async function init() {
         ritual?.event('hang');
         return true;
       }
-      if (res?.reason === 'poor') hud.toast(t('松果不夠喔，做小任務或釣魚可以撿到更多 🌰'));
+      if (res?.reason === 'eventOnly') hud.toast(t('🌠 流星吊飾只有每晚 9:00～9:30 的營火時間才能掛'));
+      else if (res?.reason === 'poor') hud.toast(t('松果不夠喔，做小任務或釣魚可以撿到更多 🌰'));
       else if (res?.reason === 'tooFast') hud.toast(t('慢慢來，一個一個掛 ✨'));
       else hud.toast(t('沒掛上去，再試一次吧'));
       return false;
@@ -300,7 +359,13 @@ async function init() {
   // ---------- 石塔祈願 ----------
   /** 全部石塔的石頭：[[{ n, s, at }]]（連線時由伺服器提供，單人模式存在這裡） */
   let cairnData = forest.cairnGarden.cairns.map(() => []);
-  const cairnPanel = new CairnPanel({ getCairns: () => cairnData, getName: () => myName });
+  let cairnLog = null; // 疊滿時間與紀念冊
+  const cairnPanel = new CairnPanel({ getCairns: () => cairnData, getName: () => myName, getLog: () => cairnLog });
+  const applyCairnLog = (log) => {
+    cairnLog = log;
+    forest.cairnGarden.setDone(log?.done?.map((d) => !!d));
+    cairnPanel.refresh();
+  };
   const applyCairns = (list) => {
     cairnData = forest.cairnGarden.cairns.map((_, i) => (list?.[i] ?? []).slice());
     forest.cairnGarden.setAll(cairnData);
@@ -322,6 +387,15 @@ async function init() {
     hud,
     touch: !!mobile,
     canPick: (id) => id !== 'hang' || (pinecones ?? 0) >= 3,
+    onShare: ({ icon, name, n }) =>
+      shareCard.open({
+        icon,
+        big: t('完成「{name}」', { name }),
+        small: n ? t('我是今天第 {n} 位完成的旅人', { n }) : t('沒力氣出門的夜晚，也想好好照顧自己'),
+        text: n
+          ? t('我是今天第 {n} 位在迷霧森林露營地完成「{name}」的旅人 {icon} 沒力氣出門的夜晚，一起來營火旁坐一下吧', { n, name, icon })
+          : undefined,
+      }),
     // 完成小任務：問伺服器「今天第幾位完成」（單人模式沒有數字）
     onDone: async (id) => (net.online ? ((await net.quest(id))?.n ?? null) : null),
   });
@@ -383,8 +457,19 @@ async function init() {
     }
   };
   actions.onCairn = (i) => cairnPanel.open(i);
-  net.on('stone', ({ i, stone, count, by, today }) => {
+  net.on('cairnReset', ({ i, log }) => {
+    cairnData[i] = [];
+    forest.cairnGarden.setAll(cairnData);
+    applyCairnLog(log);
+    if (roomMgr?.current.id === 'forest_main') hud.toast(t('📜 第 {n} 座石塔收進了紀念冊，新的石塔開始囉 🪨', { n: i + 1 }), 4500);
+  });
+  net.on('stone', ({ i, stone, count, by, today, done }) => {
     addStone(i, stone);
+    if (done && cairnLog) {
+      cairnLog.done[i] = done;
+      applyCairnLog(cairnLog);
+      hud.toast(t('✨ 第 {n} 座石塔疊滿 99 顆，完成了！謝謝每一位許願的旅人', { n: i + 1 }), 5000);
+    }
     if (today) hud.setToday(today);
     // 其他人疊到整數的時候，大家一起慶祝一下
     if (by !== net.id && (count % 25 === 0 || count === CAIRN_MAX)) {
@@ -419,8 +504,10 @@ async function init() {
     if (res.wishes) applyWishes(res.wishes);
     if (res.notes) applyNotes(res.notes);
     if (res.cairns) applyCairns(res.cairns);
+    if (res.cairnLog) applyCairnLog(res.cairnLog);
     if (res.today) hud.setToday(res.today);
     if (res.lakeNews) lakeNews.setAll(res.lakeNews);
+    if (res.event) applyEvent(res.event);
     if (res.tree) {
       forest.wishTree.setAll(res.tree);
       treePanel.refresh();
@@ -434,11 +521,19 @@ async function init() {
   };
 
   net.on('status', (st) => {
+    if (st !== 'online') hud.setInviteVisible(false);
     refreshOnline();
     // 斷線時記下目前位置，重連時從這裡回來
     if (st !== 'online') net.updateJoinData({ x: player.position.x, z: player.position.z, ry: player.rotationY });
   });
   net.on('joined', (res) => {
+    // 邀請連結只用一次（之後斷線重連不要又跑去朋友旁邊）
+    if (params.has('with')) {
+      net.updateJoinData({ with: undefined });
+      params.delete('with');
+      history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : ''));
+    }
+    hud.setInviteVisible(true);
     // 伺服器判斷是不是贊助者：是的話頭上開一朵小花
     if (res.reward && res.reward !== myReward) {
       hud.toast(res.reward === 2 ? t('🍀 謝謝你的支持！頭上長出了一片四葉草') : t('🌼 謝謝你的支持！頭上開了一朵小黃花'), 5000);
@@ -463,22 +558,24 @@ async function init() {
   net.on('playerJoined', (info) => {
     remotes.add(info);
     names.set(info.id, info.name);
-    hud.toast(t('{name} 來到了{place} 🦊', { name: info.name, place: t(placeName()) }));
+    // 營地居民走來走去不用提示
+    if (!info.npc) hud.toast(t('{name} 來到了{place} 🦊', { name: info.name, place: t(placeName()) }));
     refreshOnline();
   });
   net.on('playerLeft', ({ id }) => {
-    if (remotes.remove(id)) hud.toast(t('{name} 離開了 🌙', { name: names.get(id) ?? t('有人') }));
+    const wasNpc = remotes.isNpc(id);
+    if (remotes.remove(id) && !wasNpc) hud.toast(t('{name} 離開了 🌙', { name: names.get(id) ?? t('有人') }));
     names.delete(id);
     refreshOnline();
   });
   net.on('states', (batch) => remotes.applyStates(batch, net.id));
-  net.on('fire', ({ fuel, by, name }) => {
+  net.on('fire', ({ fuel, by, name, npc }) => {
     if (by === net.id) {
       campfire.fuel = fuel; // 自己丟的：特效已經播過，只校正數值
     } else {
       campfire.addFuel(0); // 播放火星特效與劈啪聲
       campfire.fuel = fuel;
-      if (roomMgr?.current === forest) hud.toast(t('{name} 添了一根柴 🔥', { name }));
+      if (roomMgr?.current === forest && !npc) hud.toast(t('{name} 添了一根柴 🔥', { name }));
     }
   });
   net.on('fireSync', ({ fuel }) => {
@@ -595,6 +692,17 @@ async function init() {
       doneness: actions.state === 'roast' ? actions.doneness : 0,
       extra: fishing.netExtra || (forest.carrying ? STONE_FLAG : 0), // 舉起來的魚（魚種＋公分），或頭上頂著石頭
     };
+  }
+
+  // ---------- 手機版面：左上角的資訊排成一欄，才不會互相重疊 ----------
+  if (mobile) {
+    const stack = document.createElement('div');
+    stack.className = 'm-stack';
+    document.getElementById('ui').appendChild(stack);
+    for (const id of ['sound-unlock', 'fire-meter', 'online', 'today', 'event-line', 'ritual', 'lake-news']) {
+      const el = document.getElementById(id);
+      if (el) stack.appendChild(el);
+    }
   }
 
   // ---------- 掛機自動打盹 ----------
@@ -777,6 +885,7 @@ async function init() {
     code: profile.code || '',
     vid: visitorId(),
     touch: !!mobile,
+    with: params.get('with') || undefined, // 朋友的邀請連結
     ch: Math.floor(Number(profile.ch ?? params.get('ch')) || 0),
     room: roomMgr.current.id,
     x: player.position.x,
@@ -786,7 +895,7 @@ async function init() {
 
   // 方便在瀏覽器 console 除錯（開發模式或網址加 ?debug）
   if (import.meta.env.DEV || params.has('debug')) {
-    window.__cozy = { scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel };
+    window.__cozy = { scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world };
   }
 }
 

@@ -3095,3 +3095,384 @@ body.touch .ritual {
   font: inherit;
   cursor: pointer;
 }
+
+/* ==========================================================
+   手機版面整理（body.touch）：
+   - 上方：標題（左）＋ 語言、聲音只留圖示（右）
+   - 左上一欄（.m-stack）：開聲音、營火、在線人數、今天、小任務、湖畔動態，由上往下排，不會重疊
+   - 下方：互動提示放在「表情／聊天」上面
+   ========================================================== */
+body.touch .title {
+  top: 12px;
+  left: 12px;
+}
+
+body.touch .title-main {
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+
+body.touch .lang {
+  top: 8px;
+  right: 58px;
+}
+
+body.touch .mixer {
+  top: 8px;
+  right: 10px;
+}
+
+body.touch .lang-toggle,
+body.touch .mixer-toggle {
+  padding: 6px 10px;
+  font-size: 15px;
+}
+
+body.touch .lang-label,
+body.touch .mixer-label {
+  display: none;
+}
+
+.m-stack {
+  position: absolute;
+  top: 46px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+
+body.touch .m-stack > * {
+  position: static;
+  transform: none;
+  margin: 0;
+}
+
+body.touch .m-stack .fire-meter {
+  font-size: 11px;
+}
+
+body.touch .m-stack .online {
+  flex-wrap: wrap;
+  row-gap: 4px;
+  max-width: 100%;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+body.touch .m-stack .ch-chip,
+body.touch .m-stack .me-chip,
+body.touch .m-stack .pc-chip {
+  font-size: 11px;
+  padding: 1px 7px;
+}
+
+body.touch .m-stack .me-chip {
+  max-width: 110px;
+}
+
+body.touch .m-stack .today {
+  max-width: 100%;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.touch .m-stack .sound-unlock {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+body.touch .m-stack .sound-unlock:not(.show) {
+  display: none;
+}
+
+/* 小任務：一欄寬，字小一點 */
+body.touch .m-stack .ritual {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 30px 8px 12px;
+  text-align: left;
+  border-radius: 14px;
+}
+
+body.touch .m-stack .ritual-title {
+  font-size: 12px;
+}
+
+body.touch .m-stack .ritual-text {
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+body.touch .m-stack .ritual-dots {
+  justify-content: flex-start;
+  margin-top: 5px;
+}
+
+body.touch .m-stack .ritual-dots i {
+  width: 16px;
+  height: 3px;
+}
+
+body.touch .m-stack .ritual-actions {
+  justify-content: flex-start;
+}
+
+/* 湖畔動態：一行就好 */
+body.touch .m-stack .lake-news {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 10px;
+  font-size: 11px;
+}
+
+body.touch .m-stack .lake-news[hidden] {
+  display: none;
+}
+
+body.touch .m-stack .ln-head {
+  margin: 0;
+  order: 2;
+  flex-shrink: 0;
+}
+
+body.touch .m-stack .ln-head > span {
+  display: none;
+}
+
+body.touch .m-stack .ln-list {
+  flex: 1;
+  min-width: 0;
+}
+
+body.touch .m-stack .ln-item {
+  padding: 0;
+  border: none;
+}
+
+body.touch .m-stack .ln-main {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.touch .m-stack .ln-main::before {
+  content: '🎣 ';
+}
+
+body.touch .m-stack .ln-meta {
+  display: none;
+}
+
+body.touch .m-stack .ln-go {
+  white-space: nowrap;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+/* 提示訊息放在畫面中間偏上，不擋左上那一欄 */
+body.touch .toasts {
+  top: 38%;
+  width: 90vw;
+}
+
+body.touch .toast {
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 互動提示、烤棉花糖條：放在「表情／聊天」上面 */
+body.touch .prompt,
+body.touch.in-action .prompt {
+  bottom: 232px;
+  max-width: 88vw;
+  font-size: 14px;
+}
+
+body.touch .roast {
+  bottom: 282px;
+}
+
+body.touch .m-stack .ritual {
+  position: relative;
+}
+
+/* 手機：提示訊息從下面往上疊，在互動提示上方，不擋左上那一欄 */
+body.touch .toasts {
+  top: auto;
+  bottom: 330px;
+  flex-direction: column-reverse;
+}
+
+body.touch .m-stack .ritual {
+  top: 0;
+  left: 0;
+  right: auto;
+}
+
+/* ---------- 邀朋友 ---------- */
+.invite-chip {
+  margin-left: 6px;
+  padding: 2px 9px;
+  border: 1px solid rgba(160, 230, 170, 0.4);
+  border-radius: 999px;
+  background: rgba(80, 140, 90, 0.3);
+  color: #d8f5c8;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.invite-chip[hidden] {
+  display: none;
+}
+
+/* ---------- 每晚營火時間 ---------- */
+.event-line {
+  position: absolute;
+  top: 152px;
+  left: 24px;
+  font-size: 12px;
+  color: #c9d8ff;
+  opacity: 0.9;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.event-line[hidden] {
+  display: none;
+}
+
+.event-line.active {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(70, 90, 180, 0.65), rgba(140, 90, 200, 0.55));
+  border: 1px solid rgba(190, 210, 255, 0.6);
+  color: #fff;
+  font-weight: 700;
+  opacity: 1;
+  animation: event-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes event-glow {
+  0%, 100% { box-shadow: 0 0 0 rgba(170, 190, 255, 0); }
+  50% { box-shadow: 0 0 16px rgba(170, 190, 255, 0.7); }
+}
+
+body.touch .m-stack .event-line {
+  font-size: 11px;
+  max-width: 100%;
+}
+
+/* 心願大樹：限定裝飾 */
+.tree-item.limited {
+  border-color: rgba(190, 210, 255, 0.5);
+  background: rgba(120, 140, 230, 0.15);
+}
+
+.tree-item.limited .ti-price {
+  color: #c9d8ff;
+}
+
+/* ---------- 分享卡片 ---------- */
+.share-card {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 7, 13, 0.7);
+  pointer-events: auto;
+  z-index: 8;
+}
+
+.share-card.show {
+  display: flex;
+}
+
+.share-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 92vw;
+}
+
+.share-inner img {
+  max-height: 68vh;
+  max-width: 88vw;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.share-hint {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+body:not(.touch) .share-hint {
+  display: none;
+}
+
+.share-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.share-actions button,
+.share-actions a {
+  padding: 9px 16px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 245, 230, 0.12);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.share-actions #share-go {
+  background: linear-gradient(180deg, #ffb46b, #f08a3c);
+  color: #3a2214;
+  font-weight: 700;
+}
+
+.kuji-share {
+  margin-top: 8px;
+  background: rgba(255, 245, 230, 0.12) !important;
+}
+
+/* 石塔紀念冊 */
+.cairn-archive {
+  margin: 4px 0 10px;
+  font-size: 12px;
+  text-align: left;
+}
+
+.cairn-archive summary {
+  cursor: pointer;
+  text-align: center;
+  color: #ffd79a;
+}
+
+.ca-item {
+  padding: 6px 2px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.ca-item small {
+  display: block;
+  margin-top: 2px;
+  opacity: 0.6;
+  line-height: 1.5;
+}

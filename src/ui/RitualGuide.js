@@ -154,8 +154,10 @@ export class RitualGuide {
    * @param {{ scene, hud, touch?: boolean, onDone?: (id) => Promise<number|null> }} opts
    *   onDone：任務完成時呼叫，回傳「今天第幾位完成」（單人模式回傳 null）
    */
-  constructor({ scene, hud, touch = false, onDone, canPick, root = document.getElementById('ui') }) {
+  constructor({ scene, hud, touch = false, onDone, canPick, onShare, root = document.getElementById('ui') }) {
     this.hud = hud;
+    /** 分享（做成圖片卡）；沒有的話就只分享文字 */
+    this.onShare = onShare;
     /** 某個任務現在能不能出（例如松果不夠就不出「裝飾心願大樹」） */
     this.canPick = canPick ?? (() => true);
     this.touch = touch;
@@ -352,6 +354,10 @@ export class RitualGuide {
   }
 
   async #share() {
+    if (this.onShare) {
+      this.onShare({ icon: this.task.icon, name: this.task.name, n: this.n });
+      return;
+    }
     const url = location.origin + location.pathname;
     const text = this.n
       ? t('我是今天第 {n} 位在迷霧森林露營地完成「{name}」的旅人 {icon} 沒力氣出門的夜晚，一起來營火旁坐一下吧', { n: this.n, name: this.task.name, icon: this.task.icon })

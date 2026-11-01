@@ -12,7 +12,7 @@ export class MixerPanel {
       `
       <div class="mixer" id="mixer">
         <button class="mixer-toggle" id="mixer-toggle" type="button" title="${t('聲音設定')}">
-          <span id="mixer-icon">🎧</span><span>${t('聲音')}</span>
+          <span id="mixer-icon">🎧</span><span class="mixer-label">${t('聲音')}</span>
         </button>
         <div class="mixer-panel">
           <div class="mixer-note" id="mixer-note"></div>

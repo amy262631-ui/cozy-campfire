@@ -173,6 +173,17 @@ export class ShrinePanel {
         go.textContent = t('🎋 再抽一支');
         if (o.level === t('大吉')) this.onSfx?.('daikichi');
         this.onKuji?.(o.level); // 每日任務「抽籤問運勢」
+        // 分享這支籤（做成圖片卡）
+        let share = this.body.querySelector('#kuji-share');
+        if (!share && this.onShareKuji) {
+          share = document.createElement('button');
+          share.type = 'button';
+          share.id = 'kuji-share';
+          share.className = 'shrine-go kuji-share';
+          share.textContent = t('📤 分享這支籤');
+          go.after(share);
+        }
+        if (share) share.onclick = () => this.onShareKuji(o.level, paper.querySelector('span')?.textContent ?? '');
       }, 1100);
     });
   }
