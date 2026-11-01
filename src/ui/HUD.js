@@ -27,9 +27,10 @@ export class HUD {
 
       <div class="prompt" id="prompt"></div>
 
-      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="invite-chip" id="invite-chip" hidden>${t('👫 邀朋友')}</button></div>
+      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="invite-chip" id="invite-chip" hidden>${t('👫 邀朋友')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button></div>
       <div class="today" id="today" hidden></div>
       <div class="event-line" id="event-line" hidden></div>
+      <div class="mini-line" id="mini-line" hidden></div>
 
       <button type="button" class="sound-unlock" id="sound-unlock">${t('🔈 輕點這裡開啟聲音')}</button>
       `,
@@ -51,10 +52,15 @@ export class HUD {
       today: root.querySelector('#today'),
       pcChip: root.querySelector('#pc-chip'),
       invite: root.querySelector('#invite-chip'),
+      homeChip: root.querySelector('#home-chip'),
       eventLine: root.querySelector('#event-line'),
+      miniLine: root.querySelector('#mini-line'),
     };
     this.onMeClick = null;
     this.onInvite = null;
+    this.onHome = null;
+    this.el.homeChip.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.el.homeChip.addEventListener('click', () => this.onHome?.());
     this.el.invite.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.invite.addEventListener('click', () => this.onInvite?.());
     this.el.meChip.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -128,6 +134,11 @@ export class HUD {
     }
   }
 
+  /** 有帳篷、而且不在帳篷裡時，顯示「🏠 回家」 */
+  setHomeVisible(v) {
+    this.el.homeChip.hidden = !v;
+  }
+
   /** 連上伺服器才顯示「邀朋友」 */
   setInviteVisible(v) {
     this.el.invite.hidden = !v;
@@ -152,6 +163,36 @@ export class HUD {
         : t('🌙 今晚 9 點營火時間・還有 {m} 分鐘', { m: Math.max(1, m) });
     } else {
       el.textContent = t('🌙 每晚 9 點營火時間：流星雨、松果加倍');
+    }
+  }
+
+  /** 每小時小活動：進行中顯示倒數（釣魚大賽加上目前第一名），沒有的話顯示下一場 */
+  setMini(m) {
+    const el = this.el.miniLine;
+    el.hidden = !m;
+    if (!m) return;
+    el.classList.toggle('active', !!m.active);
+    const NAME = { fish: t('🎣 釣魚大賽'), stone: t('🪨 疊石接力'), wood: t('🔥 添柴時光'), race: t('🏃 燈籠賽跑'), hunt: t('✨ 找金松果') };
+    if (m.active) {
+      const left = Math.max(1, Math.ceil(m.endsIn / 60));
+      const RULE = {
+        fish: t('🎣 釣魚大賽中！到湖邊比誰的魚最大，前三名送松果（還剩 {m} 分）', { m: left }),
+        stone: t('🪨 疊石接力中！每疊一顆石頭多 1 顆松果（還剩 {m} 分）', { m: left }),
+        wood: t('🔥 添柴時光！每添一根柴多 1 顆松果（還剩 {m} 分）', { m: left }),
+        race: t('🏃 燈籠賽跑中！依序跑過 1→5 號燈籠，最快前三名送松果（還剩 {m} 分）', { m: left }),
+        hunt: t('✨ 找金松果！森林裡還藏著 {n} 顆，找到一顆 +5 松果（還剩 {m} 分）', { n: m.left ?? 0, m: left }),
+      };
+      const top = m.top?.[0];
+      const lead =
+        m.kind === 'fish' && top
+          ? ` · ${t('目前第一：{name} {size} 公分', { name: top.name, size: top.size })}`
+          : m.kind === 'race' && top
+            ? ` · ${t('目前最快：{name} {s} 秒', { name: top.name, s: top.time })}`
+            : '';
+      el.textContent = (RULE[m.kind] ?? '') + lead;
+    } else {
+      const mins = Math.max(1, Math.ceil(m.startsIn / 60));
+      el.textContent = t('下一場 {name}：{h}:00（{m} 分鐘後）', { name: NAME[m.kind] ?? '', h: m.hour, m: mins });
     }
   }
 

@@ -93,7 +93,7 @@ export class NetworkClient {
     socket.on('disconnect', () => this.#setStatus('offline'));
     socket.on('connect_error', () => this.#setStatus('offline'));
 
-    for (const ev of ['playerJoined', 'playerLeft', 'states', 'fire', 'fireSync', 'song', 'caught', 'board', 'chat', 'emoji', 'wishes', 'notes', 'stone', 'lakeNews', 'wallet', 'ornament', 'event', 'friendJoined', 'cairnReset']) {
+    for (const ev of ['playerJoined', 'playerLeft', 'states', 'fire', 'fireSync', 'song', 'caught', 'board', 'chat', 'emoji', 'wishes', 'notes', 'stone', 'lakeNews', 'wallet', 'ornament', 'event', 'friendJoined', 'cairnReset', 'homeUpdate', 'mini', 'miniBoard', 'miniHunt', 'areas']) {
       socket.on(ev, (data) => this.#emit(ev, data));
     }
   }
@@ -187,6 +187,18 @@ export class NetworkClient {
   /** 在營火告示牌留言 */
   note(text, color = 0) {
     if (this.online) this.socket.emit('note', { text, color });
+  }
+
+  /** 送一個請求並等伺服器回覆（買東西、布置、帳號⋯）；離線回傳 null */
+  request(ev, data = {}) {
+    if (!this.online) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), 8000);
+      this.socket.emit(ev, data, (res) => {
+        clearTimeout(timer);
+        resolve(res);
+      });
+    });
   }
 
   /** 在心願大樹掛一個裝飾；回傳 { ok, pc, item, reason } */

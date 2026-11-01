@@ -59,6 +59,8 @@ export class MobileControls {
       lake_dock: { interact: null, roast: ['🎣', t('釣魚')] },
       tent_focus: { interact: null, roast: null, stargaze: null },
       tent_social: { interact: ['☕', t('喝茶')], roast: null, stargaze: null },
+      home: { interact: ['🛠️', t('布置')], roast: null, stargaze: null },
+      campground: { interact: ['🚪', t('拜訪')], roast: null, stargaze: null },
     };
     this.layout = LAYOUT[roomId] ?? LAYOUT.forest_main;
     this.override = undefined;

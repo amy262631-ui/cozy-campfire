@@ -24,6 +24,16 @@ import { createTentRoom } from './rooms/tentRoom.js';
 import { createTreehouseRoom } from './rooms/treehouseRoom.js';
 import { createLakeRoom, LAKE_WATER_Y } from './rooms/lakeRoom.js';
 import { createSocialTentRoom } from './rooms/socialTentRoom.js';
+import { createHomeRoom } from './rooms/homeRoom.js';
+import { ShopPanel } from './ui/ShopPanel.js';
+import { BuildPanel } from './ui/BuildPanel.js';
+import { createDemoHome } from './game/demoHome.js';
+import { WelcomeCard } from './ui/WelcomeCard.js';
+import { GuestPanel } from './ui/GuestPanel.js';
+import { createCampgroundRoom } from './rooms/campgroundRoom.js';
+import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN } from './game/miniSpots.js';
+import { TENT_SHAPE_BY_ID } from './game/tentShapes.js';
+import { FURNITURE_BY_ID } from './game/furniture.js';
 import { SpeechBubbles } from './fx/SpeechBubbles.js';
 import { SocialPanel } from './ui/SocialPanel.js';
 import { ShrinePanel } from './ui/ShrinePanel.js';
@@ -53,7 +63,7 @@ const IDLE_AFTER = Number(params.get('idle')) || 60;
 const MODEL_URL = params.get('model') || DEFAULT_MODEL_URL;
 
 /** 線上人數顯示用的地點名稱 */
-const PLACE = { forest_main: '營火旁', tent_focus: '帳篷裡', treehouse_music: '樹屋上', lake_dock: '湖畔', tent_social: '交流帳篷裡' };
+const PLACE = { forest_main: '營火旁', tent_focus: '帳篷裡', treehouse_music: '樹屋上', lake_dock: '湖畔', tent_social: '交流帳篷裡', campground: '帳篷營地', home: '帳篷裡' };
 
 async function init() {
   translateStatic(); // index.html 裡的固定文字
@@ -82,6 +92,8 @@ async function init() {
     treehouse_music: createTreehouseRoom(),
     lake_dock: createLakeRoom(),
     tent_social: createSocialTentRoom(),
+    campground: createCampgroundRoom(), // 帳篷營地：大家的帳篷排在一起
+    home: createHomeRoom(), // 我的帳篷（每個人的帳篷共用這個房間，進來時換上主人的擺設）
   };
   const { world, campfire } = forest;
   world.setPixelRatio(pixelRatio);
@@ -293,6 +305,134 @@ async function init() {
   };
   net.on('event', (ev) => applyEvent(ev, true));
   setInterval(() => eventState && hud.setEvent(currentEvent()), 20000);
+
+  // ---------- 每小時小活動（釣魚大賽、疊石接力、添柴時光） ----------
+  let miniState = null;
+  const currentMini = () => {
+    if (!miniState) return null;
+    const passed = (performance.now() - miniState.at) / 1000;
+    return miniState.active
+      ? { ...miniState, endsIn: Math.max(0, miniState.endsIn - passed) }
+      : { ...miniState, startsIn: Math.max(0, miniState.startsIn - passed) };
+  };
+  const MINI_START = {
+    fish: () => t('🎣 釣魚大賽開始了！10 分鐘內到湖邊釣最大的魚，前三名送松果'),
+    stone: () => t('🪨 疊石接力開始了！10 分鐘內每疊一顆石頭多 1 顆松果'),
+    race: () => t('🏃 燈籠賽跑開始了！依序跑過森林裡 1→5 號燈籠，最快的前三名送松果'),
+    hunt: () => t('✨ 找金松果開始了！森林裡藏了 5 顆發光的金松果，找到一顆 +5 松果'),
+    wood: () => t('🔥 添柴時光開始了！10 分鐘內每添一根柴多 1 顆松果'),
+  };
+  const applyMini = (m, announce = false) => {
+    const sameRace = miniState?.active && miniState.kind === 'race' && m.active && m.kind === 'race';
+    miniState = { ...m, top: m.top ?? [], spots: m.spots ?? [], at: performance.now() };
+    // 森林裡的道具
+    forest.mini.setRace(m.active && m.kind === 'race', sameRace ? forest.mini.next : 0);
+    forest.mini.setHunt(m.active && m.kind === 'hunt' ? m.spots ?? [] : []);
+    miniState.left = forest.mini.huntLeft;
+    hud.setMini(currentMini());
+    if (!announce) return;
+    if (m.active) {
+      hud.toast(MINI_START[m.kind]?.() ?? '', 6500);
+      audio.sfx('bell');
+    } else if (m.ended === 'fish') {
+      const medal = ['🥇', '🥈', '🥉'];
+      hud.toast(
+        m.winners?.length
+          ? t('🏆 釣魚大賽結果：{list}', { list: m.winners.map((w, i) => `${medal[i]} ${w.name} ${w.size}cm (+${w.prize}🌰)`).join('　') })
+          : t('🎣 這場釣魚大賽沒有人參加，下次一起來吧'),
+        8000,
+      );
+    } else if (m.ended === 'race') {
+      const medal = ['🥇', '🥈', '🥉'];
+      hud.toast(
+        m.winners?.length
+          ? t('🏆 燈籠賽跑結果：{list}', { list: m.winners.map((w, i) => t('{medal} {name} {s} 秒 (+{p}🌰)', { medal: medal[i], name: w.name, s: w.time, p: w.prize })).join('　') })
+          : t('🏃 這場燈籠賽跑沒有人跑完，下次一起來吧'),
+        8000,
+      );
+    } else if (m.ended === 'hunt') {
+      hud.toast(m.winners?.length ? t('✨ 找金松果結束：這次找到 {n} 顆，謝謝大家', { n: m.winners.length }) : t('✨ 金松果這次都沒人找到，下次再來找找看'), 6000);
+    }
+  };
+  net.on('mini', (m) => applyMini(m, true));
+  net.on('areas', (a) => forest.setAreas(a));
+  net.on('miniBoard', ({ top }) => {
+    if (!miniState?.active) return;
+    const before = miniState.top?.[0];
+    miniState.top = top;
+    hud.setMini(currentMini());
+    const now = top[0];
+    if (!now || (before && before.name === now.name && before.size === now.size && before.time === now.time)) return;
+    hud.toast(
+      miniState.kind === 'race'
+        ? t('🏃 {name} 跑出 {s} 秒，目前最快！', { name: now.name, s: now.time })
+        : t('🎣 {name} 釣到 {size} 公分的魚，暫居第一！', { name: now.name, size: now.size }),
+      3500,
+    );
+  });
+  setInterval(() => miniState && hud.setMini(currentMini()), 20000);
+  net.on('miniHunt', ({ i, by, left }) => {
+    forest.mini.take(i);
+    if (miniState) miniState.left = left;
+    hud.setMini(currentMini());
+    if (by !== myName) hud.toast(t('✨ {name} 找到一顆金松果（還剩 {n} 顆）', { name: by, n: left }), 3500);
+  });
+
+  // 試玩版（沒有伺服器）：網址加 ?mini=race 或 ?mini=hunt 可以在瀏覽器裡模擬活動
+  let localMini = null;
+  const miniReq = (ev, data) => (!net.online && localMini ? Promise.resolve(localMini(ev, data)) : net.request(ev, data));
+  /** 走到燈籠、金松果旁邊時通知伺服器（同一時間只送一個） */
+  let miniBusy = false;
+  let raceStart = 0;
+  const checkMini = () => {
+    const m = miniState;
+    if (miniBusy || !m?.active || roomMgr?.current !== forest) return;
+    const pos = player.position;
+    if (m.kind === 'race') {
+      const i = forest.mini.touchingLantern(pos);
+      if (i < 0) return;
+      miniBusy = true;
+      miniReq('race', { i }).then((res) => {
+        miniBusy = false;
+        if (!res) return;
+        forest.mini.setRace(true, res.next ?? 0);
+        if (!res.ok) {
+          if (res.reason === 'tooFast') hud.toast(t('太快了，好像跳過了燈籠，從 1 號重新開始吧'));
+          return;
+        }
+        audio.sfx('bell');
+        if (i === 0) {
+          raceStart = performance.now();
+          hud.toast(t('🏃 開跑！下一個：{n} 號燈籠', { n: 2 }), 2500);
+        } else if (res.time != null) {
+          hud.toast(
+            res.best
+              ? t('🏁 跑完了！{s} 秒，目前第 {r} 名', { s: res.time, r: res.rank })
+              : t('🏁 跑完了！{s} 秒（沒有破自己的紀錄，再跑一次？）', { s: res.time }),
+            5000,
+          );
+        } else {
+          const sec = ((performance.now() - raceStart) / 1000).toFixed(1);
+          hud.toast(t('🏮 {i}/5・{s} 秒，下一個：{n} 號燈籠', { i: i + 1, s: sec, n: i + 2 }), 2500);
+        }
+      });
+    } else if (m.kind === 'hunt') {
+      const i = forest.mini.huntAt(pos);
+      if (i < 0) return;
+      miniBusy = true;
+      miniReq('grab', { i }).then((res) => {
+        miniBusy = false;
+        if (res?.ok) {
+          forest.mini.take(i);
+          miniState.left = res.left;
+          hud.setMini(currentMini());
+          audio.sfx('bell');
+          hud.toast(t('✨ 找到一顆金松果！+{n} 松果（還剩 {left} 顆）', { n: HUNT_GAIN, left: res.left }), 4000);
+          if (!net.online) setCoins((pinecones ?? 0) + HUNT_GAIN, HUNT_GAIN);
+        } else if (res?.reason === 'taken') forest.mini.take(i);
+      });
+    }
+  };
 
   // ---------- 邀朋友一起烤火 ----------
   hud.onInvite = async () => {
@@ -508,6 +648,8 @@ async function init() {
     if (res.today) hud.setToday(res.today);
     if (res.lakeNews) lakeNews.setAll(res.lakeNews);
     if (res.event) applyEvent(res.event);
+    if (res.mini) applyMini(res.mini);
+    if (res.areas) forest.setAreas(res.areas);
     if (res.tree) {
       forest.wishTree.setAll(res.tree);
       treePanel.refresh();
@@ -534,6 +676,8 @@ async function init() {
       history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : ''));
     }
     hud.setInviteVisible(true);
+    if (res.myHome) setMyHome(res.myHome);
+    setTimeout(() => welcome.maybeShow(), 1200);
     // 伺服器判斷是不是贊助者：是的話頭上開一朵小花
     if (res.reward && res.reward !== myReward) {
       hud.toast(res.reward === 2 ? t('🍀 謝謝你的支持！頭上長出了一片四葉草') : t('🌼 謝謝你的支持！頭上開了一朵小黃花'), 5000);
@@ -653,6 +797,26 @@ async function init() {
     },
   });
   roomMgr.onSwitched = (room, res) => {
+    // 想進別人的帳篷但沒成功（剛好關了、客滿）：回到營地
+    if (room.id === 'home' && res && !res.ok) {
+      hud.toast(res.reason === 'closed' ? t('🔒 這頂帳篷剛好休息中') : res.reason === 'full' ? t('帳篷裡人太多了，等一下再來') : t('進不去，等一下再試'));
+      setTimeout(() => roomMgr.switchTo(homeRoom.exitTo, switchOnServer), 400);
+      return;
+    }
+    // 帳篷營地：拿大家的帳篷清單
+    if (room.id === 'campground') refreshCamp();
+    // 進到帳篷：換上主人的擺設
+    guestPanel.set(room.id === 'home' ? (res?.home ?? myHome) : null, { mine: res ? !!res.mine : true, liked: !!res?.liked });
+    if (room.id === 'home') {
+      homeRoom.setHome(res?.home ?? myHome, res ? !!res.mine : true);
+      if (player.position.z > homeRoom.doorZ - 0.95) player.position.z = homeRoom.doorZ - 1.15;
+      buildPanel.showTools(homeRoom.mine, (res?.home ?? myHome)?.open !== false);
+    } else {
+      buildPanel.showTools(false);
+      stopBuild();
+    }
+    document.body.classList.toggle('in-home', room.id === 'home');
+    refreshHomeChip();
     if (res?.ok) {
       remotes.reset(res.players);
       for (const p of res.players) names.set(p.id, p.name);
@@ -669,6 +833,66 @@ async function init() {
     }
     refreshOnline();
   };
+  const welcome = new WelcomeCard({
+    onSound: () => audio.start(),
+    onFocus: () => {
+      audio.start();
+      if (roomMgr?.current.id !== 'tent_focus') roomMgr.switchTo('tent_focus', switchOnServer);
+    },
+  });
+  // ---------- 帳篷營地、拜訪別人的帳篷 ----------
+  const camp = rooms.campground;
+  /** 試玩版沒有其他玩家：放幾頂標明「示範」的帳篷，看看營地排起來的樣子 */
+  const DEMO_TENTS = [
+    ['circus', 'stripe'],
+    ['mushroom', 'redspot'],
+    ['yurt', 'classic'],
+    ['dome', 'night'],
+    ['aframe', 'forest'],
+    ['bell', 'sakura'],
+  ].map(([shape, style], i) => ({ hid: `demo${i}`, demo: true, name: t('示範帳篷'), shape, style, open: true, likes: 0, n: 0 }));
+  async function refreshCamp() {
+    if (roomMgr?.current.id !== 'campground') return;
+    if (!net.online) {
+      const mine = myHome?.tent ? [{ hid: 'me', mine: true, shape: myHome.shape, style: myHome.style, open: myHome.open !== false, likes: 0, n: 0 }] : [];
+      return camp.setTents([...mine, ...(demo ? DEMO_TENTS : [])]);
+    }
+    const res = await net.request('campList');
+    if (res?.ok && roomMgr.current.id === 'campground') camp.setTents(res.tents);
+  }
+  setInterval(refreshCamp, 20000);
+  actions.onVisit = (plot) => {
+    const tent = plot.tent;
+    if (!tent) return shopHint();
+    camp.setReturnFrom(plot);
+    if (tent.mine) return goHome();
+    if (tent.demo) return hud.toast(t('這是試玩版的示範帳篷，正式網站上就能進別人的帳篷逛逛'));
+    if (!tent.open) return hud.toast(t('🔒 這頂帳篷休息中'));
+    homeRoom.setExit('campground');
+    roomMgr.switchTo('home', () => net.switchRoom('home', { hid: tent.hid, x: 0, z: homeRoom.spawn.z, ry: Math.PI }));
+  };
+  const shopHint = () => hud.toast(t('到營火旁的「🏪 營地小舖」買一頂帳篷，就會出現在營地裡 ⛺'), 4000);
+  const guestPanel = new GuestPanel({
+    onLike: async () => {
+      const res = await net.request('homeLike');
+      if (res?.ok) {
+        audio.sfx('bell');
+        if (res.liked) hud.toast(t('❤️ 幫這頂帳篷按了讚'));
+        return res;
+      }
+      return null;
+    },
+    onNote: async (text) => {
+      const res = await net.request('homeNote', { text });
+      if (res?.ok) {
+        audio.sfx('tap');
+        return null;
+      }
+      if (!res) return t('還沒連上伺服器，等一下再試');
+      return res.reason === 'tooFast' ? t('慢慢來，15 秒後再留言 🙂') : t('沒留成，再試一次吧');
+    },
+  });
+
   const switchOnServer = (id) =>
     net.switchRoom(id, { x: player.position.x, z: player.position.z, ry: player.rotationY });
 
@@ -694,12 +918,236 @@ async function init() {
     };
   }
 
+  // ---------- 營地小舖、我的帳篷、布置 ----------
+  /** 我的帳篷資料 { tent, inv, items, open }（連上伺服器後才有） */
+  let myHome = null;
+  /** 試玩版（VITE_DEMO=1 建置，沒有伺服器）：小舖和帳篷在瀏覽器裡模擬 */
+  const demo = import.meta.env.VITE_DEMO === '1' ? createDemoHome() : null;
+  const homeReq = (ev, data) => (!net.online && demo ? Promise.resolve(demo.request(ev, data)) : net.request(ev, data));
+  const homeRoom = rooms.home;
+  const inHome = () => roomMgr?.current.id === 'home';
+  const refreshHomeChip = () => hud.setHomeVisible(!!myHome?.tent && (net.online || !!demo) && !inHome());
+  const setMyHome = (h) => {
+    myHome = h;
+    shopPanel.refresh();
+    refreshHomeChip();
+    if (inHome() && homeRoom.mine) {
+      homeRoom.setHome(h, true);
+      // 換了造型，門口位置可能變了：站太靠門就往裡面挪，免得被送回營火
+      if (player.position.z > homeRoom.doorZ - 0.95) player.position.z = homeRoom.doorZ - 1.15;
+      buildPanel.render();
+      if (!buildPanel.active) buildPanel.showTools(true, h.open);
+    }
+  };
+  const goHome = () => {
+    if (!myHome?.tent) return hud.toast(t('還沒有帳篷，先到「🏪 營地小舖」買一頂吧 ⛺'));
+    shopPanel.close();
+    homeRoom.setExit(roomMgr.current.id === 'campground' ? 'campground' : 'forest_main');
+    roomMgr.switchTo('home', () => net.switchRoom('home', { x: 0, z: homeRoom.spawn.z, ry: Math.PI }));
+  };
+  hud.onHome = goHome;
+
+  const shopPanel = new ShopPanel({
+    getCoins: () => (net.online || demo ? pinecones : null),
+    getHome: () => myHome,
+    onGoHome: goHome,
+    onEdit: async (op, data) => {
+      const res = await homeReq('homeEdit', { op, ...data });
+      if (res?.ok) setMyHome({ ...res.home });
+      else if (res) hud.toast(t('沒換成，再試一次吧'));
+    },
+    onBuy: async (id) => {
+      const res = await homeReq('buy', { id });
+      if (res?.ok) {
+        if (!net.online) setCoins(res.pc, res.delta ?? 0);
+        setMyHome(res.home);
+        audio.sfx('bell');
+        if (id === 'tent') hud.toast(t('⛺ 你有自己的帳篷了！按「🏠 回家」進去看看'), 5000);
+        else if (id.startsWith('shape_')) {
+          const sh = TENT_SHAPE_BY_ID[id.slice(6)];
+          hud.toast(t('{icon} 解鎖了「{name}」，你的帳篷已經換上新造型！', { icon: sh?.icon ?? '', name: sh?.name ?? '' }), 4500);
+        }
+        else hud.toast(t('{icon} 買了{name}，回帳篷按「🛠️ 布置」擺出來', { icon: FURNITURE_BY_ID[id]?.icon ?? '', name: FURNITURE_BY_ID[id]?.name ?? '' }));
+        return true;
+      }
+      const why = { poor: t('松果不夠喔 🌰'), owned: t('你已經有帳篷了'), noTent: t('先買帳篷，才能放家具 ⛺'), tooMany: t('這個已經買很多了'), tooFast: t('慢慢來 🙂') };
+      hud.toast(why[res?.reason] ?? t('沒買成，再試一次吧'));
+      return false;
+    },
+  });
+  actions.onShop = () => shopPanel.open();
+
+  const buildPanel = new BuildPanel({
+    getHome: () => homeRoom.home,
+    onEdit: async (op, data) => {
+      const res = await homeReq('homeEdit', { op, ...data });
+      if (res?.ok) {
+        setMyHome({ ...res.home });
+        audio.sfx(op === 'remove' ? 'tap' : 'stone');
+      } else if (res?.reason === 'taken') hud.toast(t('這格已經有東西了'));
+      else if (res?.reason === 'tooMany') hud.toast(t('帳篷放滿了，收起一些再擺吧'));
+      else if (res) hud.toast(t('沒放成，再試一次吧'));
+    },
+    onExit: () => stopBuild(),
+    onToggleOpen: async () => {
+      const res = await homeReq('homeOpen', { open: !(myHome?.open !== false) });
+      if (res?.ok) {
+        myHome.open = res.open;
+        buildPanel.showTools(true, res.open);
+        hud.toast(res.open ? t('🚪 開放參觀：其他旅人可以來你的帳篷逛逛') : t('🔒 休息中：暫時不開放參觀'));
+      }
+    },
+  });
+  let buildCam = null;
+  const startBuild = () => {
+    if (!inHome() || !homeRoom.mine) return;
+    homeRoom.setBuild(true);
+    buildPanel.start();
+    document.body.classList.add('building');
+    // 布置時鏡頭拉高往下看，整個帳篷一目了然
+    buildCam = { pitch: cameraRig.target.pitch, distance: cameraRig.target.distance };
+    cameraRig.target.pitch = 1.05;
+    cameraRig.target.distance = 8.5;
+  };
+  const stopBuild = () => {
+    document.body.classList.remove('building');
+    if (buildCam) {
+      cameraRig.target.pitch = buildCam.pitch;
+      cameraRig.target.distance = buildCam.distance;
+      buildCam = null;
+    }
+    homeRoom.setBuild(false);
+    homeRoom.select(null);
+    buildPanel.stop();
+    if (inHome() && homeRoom.mine) buildPanel.showTools(true, myHome?.open !== false);
+  };
+  buildPanel.onEnter = startBuild;
+  actions.onBuild = () => (buildPanel.active ? stopBuild() : startBuild());
+  // 布置模式：點地板選格子（拖曳轉鏡頭不算）
+  {
+    let down = null;
+    renderer.domElement.addEventListener('pointerdown', (e) => (down = { x: e.clientX, y: e.clientY }));
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      if (!down || !buildPanel.active || !inHome()) return;
+      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+      down = null;
+      if (moved > 8) return;
+      const cell = homeRoom.cellAtScreen(e.clientX, e.clientY, camera, renderer.domElement);
+      if (!cell) return;
+      homeRoom.select(cell);
+      buildPanel.select(cell);
+    });
+  }
+  // 試玩版：模擬整點小活動（?mini=fish / stone / wood / race / hunt）
+  const demoMini = demo && ['fish', 'stone', 'wood', 'race', 'hunt'].includes(params.get('mini')) ? params.get('mini') : null;
+  if (demoMini) {
+    const spots = [...HUNT_SPOTS].sort(() => Math.random() - 0.5).slice(0, HUNT_COUNT).map((p) => ({ ...p, by: null }));
+    let race = { next: 0, t0: 0 };
+    let best = null;
+    localMini = (ev, data) => {
+      const pos = player.position;
+      if (ev === 'race') {
+        const i = data.i;
+        if (i === 0) race = { next: 1, t0: performance.now() };
+        else if (i !== race.next) return { ok: false, reason: 'order', next: race.next };
+        if (i === 0) return { ok: true, next: 1 };
+        if (i < RACE_LANTERNS.length - 1) return { ok: true, next: (race.next = i + 1) };
+        const time = Math.round((performance.now() - race.t0) / 100) / 10;
+        race = { next: 0, t0: 0 };
+        const isBest = best == null || time < best;
+        if (isBest) best = time;
+        miniState.top = [{ name: myName, time: best }];
+        hud.setMini(currentMini());
+        return { ok: true, next: 0, time, best: isBest, rank: 1 };
+      }
+      if (ev === 'grab') {
+        const sp = spots[data.i];
+        if (!sp || sp.by || Math.hypot(pos.x - sp.x, pos.z - sp.z) > 3) return { ok: false };
+        sp.by = myName;
+        return { ok: true, left: spots.filter((p) => !p.by).length };
+      }
+      return null;
+    };
+    setTimeout(() => applyMini({ kind: demoMini, active: true, endsIn: 600, spots, top: [] }, true), 3500);
+  }
+  if (demo) {
+    setTimeout(() => welcome.maybeShow(), 2500); // 試玩版沒有伺服器，也打個招呼
+    setCoins(demo.pc);
+    setMyHome(demo.home);
+    document.getElementById('ui').insertAdjacentHTML('beforeend', `<div class="demo-badge">${t('🧪 試玩版：松果和帳篷只存在這台裝置')}</div>`);
+  }
+  net.on('homeUpdate', ({ home }) => {
+    if (inHome()) {
+      homeRoom.setHome(home, homeRoom.mine);
+      guestPanel.update(home);
+    }
+    if (homeRoom.mine) myHome = home;
+    buildPanel.render();
+  });
+
+  // ---------- 帳號（選填）：註冊、登入、登出 ----------
+  const ACCOUNT_KEY = 'cozy-campfire-account';
+  const accountName = () => {
+    try {
+      return localStorage.getItem(ACCOUNT_KEY);
+    } catch {
+      return null;
+    }
+  };
+  const accountErr = {
+    badName: t('帳號要 3～16 個字（中英文、數字、底線）'),
+    badPass: t('密碼至少要 6 個字'),
+    taken: t('這個帳號已經有人用了，換一個吧'),
+    already: t('這個瀏覽器已經建立過帳號了，請直接登入'),
+    wrong: t('帳號或密碼不對'),
+    locked: t('錯太多次了，請 10 分鐘後再試'),
+    tooFast: t('太快了，等一下再試'),
+    noVid: t('還沒連上伺服器，等一下再試'),
+  };
+  const account = () => ({
+    user: accountName(),
+    onRegister: async (user, pass) => {
+      const res = await net.request('register', { user, pass });
+      if (!res) return t('還沒連上伺服器，等一下再試');
+      if (!res.ok) return accountErr[res.reason] ?? t('建立失敗，再試一次吧');
+      try {
+        localStorage.setItem(ACCOUNT_KEY, res.user);
+      } catch {
+        /* 存不了也沒關係 */
+      }
+      hud.toast(t('👤 帳號建立好了！換手機時用「{user}」登入就能找回松果和帳篷', { user: res.user }), 5000);
+      return null;
+    },
+    onLogin: async (user, pass) => {
+      const res = await net.request('login', { user, pass });
+      if (!res) return t('還沒連上伺服器，等一下再試');
+      if (!res.ok) return accountErr[res.reason] ?? t('登入失敗，再試一次吧');
+      try {
+        localStorage.setItem('cozy-campfire-vid', res.vid);
+        localStorage.setItem(ACCOUNT_KEY, res.user);
+      } catch {
+        /* 無痕模式 */
+      }
+      location.reload(); // 用帳號的資料重新進來
+      return null;
+    },
+    onLogout: () => {
+      try {
+        localStorage.removeItem(ACCOUNT_KEY);
+        localStorage.removeItem('cozy-campfire-vid'); // 登出後變回新的訪客
+      } catch {
+        /* 無痕模式 */
+      }
+      location.reload();
+    },
+  });
+
   // ---------- 手機版面：左上角的資訊排成一欄，才不會互相重疊 ----------
   if (mobile) {
     const stack = document.createElement('div');
     stack.className = 'm-stack';
     document.getElementById('ui').appendChild(stack);
-    for (const id of ['sound-unlock', 'fire-meter', 'online', 'today', 'event-line', 'ritual', 'lake-news']) {
+    for (const id of ['sound-unlock', 'fire-meter', 'online', 'today', 'event-line', 'mini-line', 'ritual', 'lake-news']) {
       const el = document.getElementById(id);
       if (el) stack.appendChild(el);
     }
@@ -773,6 +1221,7 @@ async function init() {
     cameraRig.update(dt);
 
     const goTo = roomMgr.update(dt, elapsed, camera);
+    checkMini();
     if (goTo) roomMgr.switchTo(goTo, switchOnServer);
 
     zzz.update(dt);
@@ -864,6 +1313,7 @@ async function init() {
       onPreview: applyLook,
       allowSpecies: isProcedural,
       edit: { name: myName, fur: profile.fur, species: profile.species, code: profile.code, custom: profile.custom, customLook: profile.customLook },
+      account: account(),
     }).show();
     input.enabled = true;
     editing = false;
@@ -895,7 +1345,7 @@ async function init() {
 
   // 方便在瀏覽器 console 除錯（開發模式或網址加 ?debug）
   if (import.meta.env.DEV || params.has('debug')) {
-    window.__cozy = { scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world };
+    window.__cozy = { scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world, shopPanel, buildPanel, homeRoom: rooms.home, goHome };
   }
 }
 

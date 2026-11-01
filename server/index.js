@@ -19,6 +19,8 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
+import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
+import { SHOP, MAX_ITEMS, hashPassword, checkPassword, validateCredentials, newHome, available, cellFree, validCell, TENT_STYLES, TENT_SHAPES, homeId } from './homes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -29,6 +31,7 @@ const ROOM_DEFS = {
   treehouse_music: { label: '森林樹屋', capacity: 30 },
   lake_dock: { label: '湖畔碼頭', capacity: 30 },
   tent_social: { label: '交流帳篷', capacity: 40 },
+  campground: { label: '帳篷營地', capacity: 60 },
 };
 /** 分流：每個分流最多幾人、平常開幾個、最多開到幾個 */
 const CHANNEL_MAX = Number(process.env.CHANNEL_MAX) || 100;
@@ -134,9 +137,67 @@ function pickChannel(wanted) {
 const DATA_DIR = path.resolve(__dirname, 'data');
 await storage.init(DATA_DIR);
 const asArray = (v) => (Array.isArray(v) ? v : []);
-const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog] = await Promise.all(
-  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json'].map((f) => storage.load(f)),
+const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog, savedAccounts, savedHomes] = await Promise.all(
+  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json'].map((f) =>
+    storage.load(f),
+  ),
 );
+const asObject = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+/** 帳號：{ 小寫帳號: { u, salt, hash, vid, at } }（只存加鹽雜湊，不存密碼） */
+const accounts = asObject(savedAccounts);
+/** 每個人的帳篷：{ vid: { tent, inv: { 家具: 數量 }, items: [{ i, x, z, r }], open } } */
+const homes = asObject(savedHomes);
+const publicHome = (h) =>
+  h
+    ? {
+        tent: !!h.tent,
+        inv: h.inv,
+        items: h.items,
+        open: h.open !== false,
+        style: h.style ?? 'classic',
+        shape: h.shape ?? 'bell',
+        shapes: h.shapes ?? ['bell'],
+        name: h.name ?? '',
+        likes: h.likes?.length ?? 0,
+        notes: h.notes ?? [],
+      }
+    : { tent: false, inv: {}, items: [], open: true, style: 'classic', shape: 'bell', shapes: ['bell'], name: '', likes: 0, notes: [] };
+/** 公開代號 → vid（找不到回傳 null） */
+const hidCache = new Map();
+function vidOfHid(hid) {
+  if (hidCache.has(hid)) return hidCache.get(hid);
+  for (const vid of Object.keys(homes)) {
+    const k = homeId(vid);
+    hidCache.set(k, vid);
+    if (k === hid) return vid;
+  }
+  return null;
+}
+/** 帳篷營地要顯示的帳篷：自己的一定在，其他依最近有動靜排序，最多 16 頂 */
+const CAMP_PLOTS = 16;
+function campList(selfVid) {
+  const list = Object.entries(homes)
+    .filter(([vid, h]) => h?.tent && vid !== selfVid)
+    .sort((a, b) => (b[1].open !== false) - (a[1].open !== false) || (b[1].at ?? 0) - (a[1].at ?? 0))
+    .slice(0, selfVid && homes[selfVid]?.tent ? CAMP_PLOTS - 1 : CAMP_PLOTS);
+  if (selfVid && homes[selfVid]?.tent) list.unshift([selfVid, homes[selfVid]]);
+  return list.map(([vid, h]) => ({
+    hid: homeId(vid),
+    mine: vid === selfVid,
+    name: h.name ?? '',
+    shape: h.shape ?? 'bell',
+    style: h.style ?? 'classic',
+    open: h.open !== false,
+    likes: h.likes?.length ?? 0,
+    n: homeRooms.get(vid)?.players.size ?? 0,
+  }));
+}
+/** 帳篷的房間（每個帳篷一間，所有分流共用）：主人 vid → { players, npcs } */
+const homeRooms = new Map();
+const homeRoom = (owner) => {
+  if (!homeRooms.has(owner)) homeRooms.set(owner, { players: new Map(), npcs: new Map(), song: 0 });
+  return homeRooms.get(owner);
+};
 /** 存檔：統計和錢包更新很頻繁，等 10 秒合併成一次；其他 2 秒 */
 const saveJson = (file, data) => storage.save(file, data, file === 'stats.json' || file === 'players.json' ? 10000 : 2000);
 
@@ -156,6 +217,34 @@ function eventInfo(now = new Date()) {
   return { active: false, startsIn };
 }
 
+// ---------- 每小時小活動（整點開始 10 分鐘；晚上 9 點是營火時間，不另外辦） ----------
+const MINI_LEN = (Number(process.env.MINI_MINUTES) || 10) * 60;
+const MINI_CAP = 10; // 疊石、添柴：每人每場最多多拿幾顆松果
+const MINI_PRIZES = [15, 10, 6]; // 釣魚大賽前三名
+// 偶數點固定釣魚大賽；奇數點輪流：疊石接力、添柴時光、燈籠賽跑、找金松果
+const ODD_KINDS = ['stone', 'wood', 'race', 'hunt'];
+const miniKind = (h) => process.env.MINI_KIND || (h % 2 === 0 ? 'fish' : ODD_KINDS[((h - 1) / 2) % ODD_KINDS.length]);
+function taipeiClock(now = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', { timeZone: process.env.STATS_TZ || 'Asia/Taipei', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  );
+  return { h: Number(parts.hour), sec: Number(parts.minute) * 60 + Number(parts.second) };
+}
+const EVENT_HOUR = Math.floor(EVENT_START / 3600);
+function miniInfo(now = new Date()) {
+  const { h, sec } = taipeiClock(now);
+  if (h !== EVENT_HOUR && sec < MINI_LEN) return { kind: miniKind(h), active: true, endsIn: MINI_LEN - sec, id: `${dayKey(now)}-${h}` };
+  let next = (h + 1) % 24;
+  let startsIn = 3600 - sec;
+  if (next === EVENT_HOUR) {
+    next = (next + 1) % 24;
+    startsIn += 3600;
+  }
+  return { kind: miniKind(next), active: false, startsIn, hour: next };
+}
+
 // ---------- 松果錢包（依瀏覽器的隨機代號記錄，不用帳號；名字和動物每次隨機也沒關係） ----------
 /** @type {Record<string, { pc: number, tot: number, last: string, streak: number, sd: string, sit: number }>} */
 const players = savedPlayers && typeof savedPlayers === 'object' && !Array.isArray(savedPlayers) ? savedPlayers : {};
@@ -166,6 +255,40 @@ const SIT_DAILY_CAP = 30; // 每天靠「待著」最多撿幾顆
 const QUEST_GAIN = 5;
 const FISH_RARITY = [1, 1, 2, 2, 3, 4, 4, 5, 0, 0]; // 與前端 fishData.js 相同
 const FISH_GAIN = { 1: 1, 2: 2, 3: 3, 4: 6, 5: 15 };
+/** 這一場小活動的紀錄：釣魚大賽每人最大的一條；疊石、添柴每人多拿了幾顆 */
+let miniRun = { id: null, best: new Map(), got: new Map() };
+const miniNow = () => {
+  const m = miniInfo();
+  if (!m.active) return null;
+  if (miniRun.id !== m.id) {
+    miniRun = { id: m.id, kind: m.kind, best: new Map(), got: new Map(), spots: [] };
+    if (m.kind === 'hunt') {
+      // 從候選地點隨機挑幾個藏金松果
+      const pool = HUNT_SPOTS.map((p, i) => ({ ...p, i })).sort(() => Math.random() - 0.5);
+      miniRun.spots = pool.slice(0, HUNT_COUNT).map((p) => ({ x: p.x, z: p.z, by: null }));
+    }
+  }
+  return m;
+};
+/** 排行榜：釣魚比大（size），賽跑比快（time） */
+const miniRanked = () =>
+  [...miniRun.best.entries()].sort((a, b) => (miniRun.kind === 'race' ? a[1].time - b[1].time : b[1].size - a[1].size));
+const miniTop = () => miniRanked().slice(0, 5).map(([, r]) => ({ ...r }));
+const miniPublic = () => {
+  const m = miniInfo();
+  const same = m.active && miniNow() && miniRun.id === m.id;
+  return { ...m, top: same ? miniTop() : [], spots: same && m.kind === 'hunt' ? miniRun.spots.map((p) => ({ x: p.x, z: p.z, by: p.by })) : [] };
+};
+/** 發松果給某人（不一定在線上；在線上的話通知他） */
+function giveTo(vid, n, reason) {
+  const w = players[vid];
+  if (!w || n <= 0) return;
+  w.pc += n;
+  w.tot += n;
+  saveJson('players.json', players);
+  for (const s of io.sockets.sockets.values()) if (s.data.vid === vid) s.emit('wallet', { pc: w.pc, delta: n, reason });
+}
+
 function wallet(vid) {
   if (!vid) return null;
   if (!players[vid]) {
@@ -175,6 +298,9 @@ function wallet(vid) {
   }
   return players[vid];
 }
+
+/** 登入失敗次數（防止一直猜密碼） */
+const loginFails = new Map();
 
 // ---------- 心願大樹（所有分流共用的同一棵樹） ----------
 const TREE_SLOTS = 140;
@@ -377,12 +503,31 @@ function roomSnapshot(c, id, selfId) {
     cairns: id === 'forest_main' ? shared.cairns : undefined,
     cairnLog: id === 'forest_main' ? publicCairnLog() : undefined,
     tree: id === 'forest_main' ? tree : undefined,
+    areas: id === 'forest_main' ? areaCounts(c) : undefined,
     lakeNews: shared.lakeNews,
     today: todayPublic(),
     players: [...[...r.players.values()].filter((p) => p.id !== selfId).map(publicInfo), ...[...r.npcs.values()].map(publicNpc)],
     event: eventInfo(),
+    mini: miniPublic(),
   };
 }
+/** 各區人數（不含營地居民）：中央營火的看板用。帳篷裡的人算在露營區 */
+function areaCounts(c) {
+  const n = (id) => c.rooms.get(id)?.players.size ?? 0;
+  let inTents = 0;
+  for (const r of homeRooms.values()) inTents += r.players.size;
+  return { forest_main: n('forest_main'), lake_dock: n('lake_dock'), tent_focus: n('tent_focus'), treehouse_music: n('treehouse_music'), tent_social: n('tent_social'), campground: n('campground') + inTents };
+}
+const lastAreas = new Map();
+setInterval(() => {
+  for (const c of channels.values()) {
+    const a = areaCounts(c);
+    const k = JSON.stringify(a);
+    if (lastAreas.get(c.ch) === k) continue;
+    lastAreas.set(c.ch, k);
+    io.to(key(c.ch, 'forest_main')).emit('areas', a);
+  }
+}, 4000);
 /** 共用資料（繪馬、留言、排行）更新時，通知每個分流裡那個房間的人 */
 const emitAllChannels = (roomId, ev, data) => {
   for (const c of channels.values()) io.to(key(c.ch, roomId)).emit(ev, data);
@@ -409,6 +554,15 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     socket.emit('wallet', { pc: wal.pc, delta: n, reason });
   };
+  /** 疊石接力／添柴時光：每做一次多一顆松果（每場有上限） */
+  const miniBonus = (kind) => {
+    const m = miniNow();
+    if (m?.kind !== kind || !socket.data.vid) return;
+    const n = miniRun.got.get(socket.data.vid) ?? 0;
+    if (n >= MINI_CAP) return;
+    miniRun.got.set(socket.data.vid, n + 1);
+    award(1, 'mini');
+  };
   let stacked = false; // 這次來訪疊過石頭了嗎
 
   /** 離開目前的分流／房間 */
@@ -416,6 +570,7 @@ io.on('connection', (socket) => {
     room.players.delete(socket.id);
     socket.leave(rkey);
     io.to(rkey).emit('playerLeft', { id: socket.id });
+    if (roomId === 'home' && room.players.size === 0) homeRooms.delete(homeOwner);
   };
   /** 進入某個分流的某個房間 */
   const enter = (c, id) => {
@@ -425,7 +580,27 @@ io.on('connection', (socket) => {
     rkey = key(c.ch, id);
     room.players.set(socket.id, player);
     socket.join(rkey);
+    homeOwner = null;
   };
+  /** 進到某個人的帳篷（帳篷不分分流） */
+  let homeOwner = null;
+  const enterHome = (owner) => {
+    roomId = 'home';
+    homeOwner = owner;
+    room = homeRoom(owner);
+    rkey = `home:${owner}`;
+    room.players.set(socket.id, player);
+    socket.join(rkey);
+  };
+  const homeSnapshot = () => ({
+    room: 'home',
+    owner: homeId(homeOwner),
+    mine: homeOwner === player.vid,
+    liked: !!homes[homeOwner]?.likes?.includes(homeId(player.vid)),
+    home: publicHome(homes[homeOwner]),
+    fuel: chan.fuel,
+    players: [...room.players.values()].filter((p) => p.id !== socket.id).map(publicInfo),
+  });
 
   socket.on('join', (data = {}, ack) => {
     if (player) return;
@@ -494,6 +669,7 @@ io.on('connection', (socket) => {
 
     // 松果錢包：每天第一次來，依連續天數送松果（第 1 天 3 顆，之後每天多 1 顆，最多 9 顆）
     wal = wallet(String(data.vid ?? '').slice(0, 24));
+    socket.data.vid = wal ? String(data.vid).slice(0, 24) : null;
     let daily = null;
     if (wal) {
       const d = dayKey();
@@ -525,7 +701,14 @@ io.on('connection', (socket) => {
       }, 60000);
     }
 
-    ack?.({ ok: true, id: socket.id, reward: player.rw, wallet: wal ? { pc: wal.pc, streak: wal.streak, daily } : null, ...roomSnapshot(chan, roomId, socket.id) });
+    ack?.({
+      ok: true,
+      id: socket.id,
+      reward: player.rw,
+      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily } : null,
+      myHome: publicHome(homes[player.vid]),
+      ...roomSnapshot(chan, roomId, socket.id),
+    });
     socket.to(rkey).emit('playerJoined', publicInfo(player));
     if (friend && friend.p.id) io.to(friend.p.id).emit('friendJoined', { name: player.name });
     console.log(`[加入] ${player.name}（分流 ${chan.ch}／${roomId}，分流共 ${chCount(chan)} 人）`);
@@ -535,6 +718,7 @@ io.on('connection', (socket) => {
   socket.on('switchChannel', (data = {}, ack) => {
     if (!player) return ack?.({ ok: false, reason: 'notJoined' });
     const next = Math.floor(num(data.ch, 1, 999, 1));
+    if (roomId === 'home') return ack?.({ ok: false, reason: 'home' });
     if (next === chan.ch) return ack?.({ ok: true, ...roomSnapshot(chan, roomId, socket.id) });
     tidyChannels();
     const c = channels.get(next);
@@ -569,6 +753,29 @@ io.on('connection', (socket) => {
   socket.on('switchRoom', (data = {}, ack) => {
     if (!player) return ack?.({ ok: false, reason: 'notJoined' });
     const next = data.room;
+    // 進帳篷：自己的，或主人開放參觀的
+    if (next === 'home') {
+      const owner = data.hid ? vidOfHid(String(data.hid)) : player.vid;
+      const h = homes[owner];
+      if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
+      if (owner !== player.vid && h.open === false) return ack?.({ ok: false, reason: 'closed' });
+      if (homeRoom(owner).players.size >= 12) return ack?.({ ok: false, reason: 'full', message: fullMsg('帳篷') });
+      leave();
+      player.x = num(data.x, -20, 20, 0);
+      player.z = num(data.z, -20, 20, 0);
+      player.ry = num(data.ry, -1000, 1000, 0);
+      player.a = 'idle';
+      player.d = 0;
+      player.dirty = true;
+      enterHome(owner);
+      if (owner === player.vid) {
+        h.name = player.name; // 帳篷門口的名牌：主人最近一次用的名字
+        h.at = Date.now();
+        saveJson('homes.json', homes);
+      }
+      socket.to(rkey).emit('playerJoined', publicInfo(player));
+      return ack?.({ ok: true, ...homeSnapshot() });
+    }
     if (!ROOM_DEFS[next]) return ack?.({ ok: false, reason: 'unknown' });
     if (next === roomId) return ack?.({ ok: true, ...roomSnapshot(chan, roomId, socket.id) });
     if (chan.rooms.get(next).players.size >= ROOM_DEFS[next].capacity) {
@@ -662,6 +869,7 @@ io.on('connection', (socket) => {
       cairnLog.done[i] = now;
       saveJson('cairnlog.json', cairnLog);
     }
+    miniBonus('stone');
     emitAllChannels('forest_main', 'stone', { i, stone, count: cairn.length, by: socket.id, today: todayPublic(), done: cairnLog.done[i] });
     ack?.({ ok: true, count: cairn.length, ritual });
   });
@@ -681,6 +889,185 @@ io.on('connection', (socket) => {
       saveJson('stats.json', stats);
     }
     ack?.({ ok: true, n: d.quests[id] });
+  });
+
+  // ---------- 小超商：用松果買帳篷、家具 ----------
+  socket.on('myHome', (_data, ack) => ack?.({ ok: true, home: publicHome(homes[player?.vid]) }));
+  let lastBuy = 0;
+  socket.on('buy', (data = {}, ack) => {
+    if (!player || !wal || !player.vid) return ack?.({ ok: false, reason: 'noWallet' });
+    const id = String(data.id ?? '');
+    const shapeId = id.startsWith('shape_') ? id.slice(6) : null;
+    const shape = shapeId && Object.hasOwn(TENT_SHAPES, shapeId) ? TENT_SHAPES[shapeId] : null;
+    const price = shapeId ? shape?.price : SHOP[id];
+    if (!price) return ack?.({ ok: false, reason: 'unknown' });
+    const now = Date.now();
+    if (now - lastBuy < 800) return ack?.({ ok: false, reason: 'tooFast' });
+    const h = (homes[player.vid] ??= newHome());
+    if (shapeId) {
+      // 帳篷造型：買一次就一直有，買下後直接換上
+      if (!h.tent) return ack?.({ ok: false, reason: 'noTent' });
+      h.shapes ??= ['bell'];
+      if (h.shapes.includes(shapeId)) return ack?.({ ok: false, reason: 'owned' });
+      if (wal.pc < price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
+      lastBuy = now;
+      wal.pc -= price;
+      h.shapes.push(shapeId);
+      h.shape = shapeId;
+      if (shape.style) h.style = shape.style;
+      saveJson('players.json', players);
+      saveJson('homes.json', homes);
+      bump('buys');
+      socket.emit('wallet', { pc: wal.pc, delta: -price, reason: 'buy' });
+      io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) });
+      return ack?.({ ok: true, pc: wal.pc, home: publicHome(h) });
+    }
+    if (id === 'tent' && h.tent) return ack?.({ ok: false, reason: 'owned' });
+    if (id !== 'tent' && !h.tent) return ack?.({ ok: false, reason: 'noTent' });
+    if (id !== 'tent' && (h.inv[id] ?? 0) >= 20) return ack?.({ ok: false, reason: 'tooMany' });
+    if (wal.pc < price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
+    lastBuy = now;
+    wal.pc -= price;
+    if (id === 'tent') {
+      h.tent = true;
+      h.name = player.name;
+      h.at = now;
+    }
+    else h.inv[id] = (h.inv[id] ?? 0) + 1;
+    saveJson('players.json', players);
+    saveJson('homes.json', homes);
+    bump('buys');
+    socket.emit('wallet', { pc: wal.pc, delta: -price, reason: 'buy' });
+    ack?.({ ok: true, pc: wal.pc, home: publicHome(h) });
+  });
+
+  // ---------- 布置自己的帳篷：放、轉、收起 ----------
+  socket.on('homeEdit', (data = {}, ack) => {
+    // 花色、造型在小舖也能換；擺家具要在自己的帳篷裡
+    if (data.op === 'style' || data.op === 'shape') {
+      const h = homes[player?.vid];
+      if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
+      const v = String(data.s ?? '');
+      if (data.op === 'style') {
+        if (!TENT_STYLES.has(v)) return ack?.({ ok: false, reason: 'unknown' });
+        h.style = v;
+      } else {
+        if (!(h.shapes ?? ['bell']).includes(v)) return ack?.({ ok: false, reason: 'locked' });
+        h.shape = v;
+      }
+      saveJson('homes.json', homes);
+      io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) });
+      return ack?.({ ok: true, home: publicHome(h) });
+    }
+    if (!player || roomId !== 'home' || homeOwner !== player.vid) return ack?.({ ok: false, reason: 'notHome' });
+    const h = homes[player.vid];
+    if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
+    const x = Number(data.x);
+    const z = Number(data.z);
+    if (!validCell(x, z)) return ack?.({ ok: false, reason: 'cell' });
+    const at = h.items.findIndex((it) => it.x === x && it.z === z);
+    if (data.op === 'place') {
+      const i = String(data.i ?? '');
+      if (!SHOP[i] || i === 'tent') return ack?.({ ok: false, reason: 'unknown' });
+      if (!cellFree(h, x, z)) return ack?.({ ok: false, reason: 'taken' });
+      if (available(h, i) <= 0) return ack?.({ ok: false, reason: 'none' });
+      if (h.items.length >= MAX_ITEMS) return ack?.({ ok: false, reason: 'tooMany' });
+      h.items.push({ i, x, z, r: Math.floor(num(data.r, 0, 3, 0)) });
+    } else if (data.op === 'rotate') {
+      if (at < 0) return ack?.({ ok: false, reason: 'empty' });
+      h.items[at].r = (h.items[at].r + 1) % 4;
+    } else if (data.op === 'remove') {
+      if (at < 0) return ack?.({ ok: false, reason: 'empty' });
+      h.items.splice(at, 1);
+    } else return ack?.({ ok: false, reason: 'op' });
+    saveJson('homes.json', homes);
+    io.to(rkey).emit('homeUpdate', { owner: homeId(homeOwner), home: publicHome(h) });
+    ack?.({ ok: true, home: publicHome(h) });
+  });
+  // 帳篷營地：列出大家的帳篷
+  socket.on('campList', (data, ack) => ack?.({ ok: true, tents: campList(player?.vid) }));
+  // 拜訪別人的帳篷：按讚（再按一次收回）
+  socket.on('homeLike', (data, ack) => {
+    if (!player?.vid || roomId !== 'home' || !homeOwner || homeOwner === player.vid) return ack?.({ ok: false });
+    const h = homes[homeOwner];
+    if (!h?.tent) return ack?.({ ok: false });
+    const me = homeId(player.vid);
+    h.likes ??= [];
+    const i = h.likes.indexOf(me);
+    if (i >= 0) h.likes.splice(i, 1);
+    else if (h.likes.length < 5000) h.likes.push(me);
+    saveJson('homes.json', homes);
+    io.to(rkey).emit('homeUpdate', { owner: homeId(homeOwner), home: publicHome(h) });
+    ack?.({ ok: true, liked: i < 0, likes: h.likes.length });
+  });
+  // 帳篷留言本
+  let lastHomeNote = 0;
+  socket.on('homeNote', (data = {}, ack) => {
+    if (!player || roomId !== 'home' || !homeOwner) return ack?.({ ok: false });
+    const h = homes[homeOwner];
+    if (!h?.tent) return ack?.({ ok: false });
+    const text = String(data.text ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 60);
+    if (!text) return ack?.({ ok: false, reason: 'empty' });
+    const now = Date.now();
+    if (now - lastHomeNote < 15000) return ack?.({ ok: false, reason: 'tooFast' });
+    lastHomeNote = now;
+    h.notes ??= [];
+    h.notes.push({ n: player.name, t: text, at: now });
+    h.notes = h.notes.slice(-30);
+    saveJson('homes.json', homes);
+    io.to(rkey).emit('homeUpdate', { owner: homeId(homeOwner), home: publicHome(h) });
+    ack?.({ ok: true });
+  });
+
+  socket.on('homeOpen', (data = {}, ack) => {
+    const h = homes[player?.vid];
+    if (!h?.tent) return ack?.({ ok: false });
+    h.open = !!data.open;
+    saveJson('homes.json', homes);
+    ack?.({ ok: true, open: h.open });
+  });
+
+  // ---------- 帳號（選填）：註冊、登入 ----------
+  let authTries = [];
+  const authLimited = () => {
+    const now = Date.now();
+    authTries = authTries.filter((t0) => now - t0 < 60000);
+    authTries.push(now);
+    return authTries.length > 6;
+  };
+  socket.on('register', (data = {}, ack) => {
+    if (!player?.vid) return ack?.({ ok: false, reason: 'noVid' });
+    if (authLimited()) return ack?.({ ok: false, reason: 'tooFast' });
+    const user = String(data.user ?? '').trim();
+    const bad = validateCredentials(user, data.pass);
+    if (bad) return ack?.({ ok: false, reason: bad });
+    const lower = user.toLowerCase();
+    if (accounts[lower]) return ack?.({ ok: false, reason: 'taken' });
+    if (Object.values(accounts).some((a) => a.vid === player.vid)) return ack?.({ ok: false, reason: 'already' });
+    const { salt, hash } = hashPassword(data.pass);
+    accounts[lower] = { u: user, salt, hash, vid: player.vid, at: Date.now() };
+    saveJson('accounts.json', accounts);
+    console.log(`[帳號] 新帳號：${user}`);
+    ack?.({ ok: true, user });
+  });
+  socket.on('login', (data = {}, ack) => {
+    if (authLimited()) return ack?.({ ok: false, reason: 'tooFast' });
+    const lower = String(data.user ?? '').trim().toLowerCase();
+    const rec = accounts[lower];
+    const lock = loginFails.get(lower);
+    if (lock && lock.until > Date.now()) return ack?.({ ok: false, reason: 'locked' });
+    if (!rec || !checkPassword(String(data.pass ?? ''), rec)) {
+      const f = loginFails.get(lower) ?? { n: 0, until: 0 };
+      f.n++;
+      if (f.n >= 8) {
+        f.until = Date.now() + 10 * 60000; // 連續錯 8 次，鎖 10 分鐘
+        f.n = 0;
+      }
+      loginFails.set(lower, f);
+      return ack?.({ ok: false, reason: 'wrong' });
+    }
+    loginFails.delete(lower);
+    ack?.({ ok: true, user: rec.u, vid: rec.vid });
   });
 
   // 心願大樹：花松果買一個裝飾掛上去（樹滿了就換掉最舊的那個）
@@ -754,6 +1141,15 @@ io.on('connection', (socket) => {
     }
     bump('fish');
     award(FISH_GAIN[FISH_RARITY[fish]] ?? 0, 'fish');
+    // 釣魚大賽：記下每人最大的一條，名次有變就廣播
+    const mini = miniNow();
+    if (mini?.kind === 'fish' && !JUNK.has(fish) && socket.data.vid) {
+      const prev = miniRun.best.get(socket.data.vid);
+      if (!prev || size > prev.size) {
+        miniRun.best.set(socket.data.vid, { name: player.name, fish, size });
+        io.emit('miniBoard', { top: miniTop() });
+      }
+    }
     // 湖畔即時動態：所有分流、所有地點都看得到（垃圾不算）
     if (!JUNK.has(fish)) {
       const item = { name: player.name, fish, size, rank, ch: chan.ch, at: now };
@@ -765,6 +1161,52 @@ io.on('connection', (socket) => {
   });
 
   // 添柴火：伺服器加 fuel，通知其他人播放火星特效
+  // 🏃 燈籠賽跑：依序碰到 1 → 5 號燈籠，伺服器用自己記的位置確認
+  let race = { next: 0, t0: 0 };
+  const nearSpot = (p) => player && Math.hypot(player.x - p.x, player.z - p.z) < TOUCH_R + 1.2;
+  socket.on('race', (data = {}, ack) => {
+    const m = miniNow();
+    if (m?.kind !== 'race' || roomId !== 'forest_main' || !socket.data.vid) return ack?.({ ok: false, reason: 'off' });
+    const i = Math.floor(num(data.i, -1, RACE_LANTERNS.length - 1, -1));
+    if (i < 0 || (i !== 0 && i !== race.next)) return ack?.({ ok: false, reason: 'order', next: race.next });
+    if (!nearSpot(RACE_LANTERNS[i])) return ack?.({ ok: false, reason: 'far', next: race.next });
+    if (i === 0) {
+      race = { next: 1, t0: Date.now() }; // 隨時可以從 1 號重新開始
+      return ack?.({ ok: true, next: 1 });
+    }
+    if (i < RACE_LANTERNS.length - 1) {
+      race.next = i + 1;
+      return ack?.({ ok: true, next: race.next });
+    }
+    const time = Math.round((Date.now() - race.t0) / 100) / 10;
+    race = { next: 0, t0: 0 };
+    if (time < 6) return ack?.({ ok: false, reason: 'tooFast', next: 0 }); // 不可能這麼快
+    const prev = miniRun.best.get(socket.data.vid);
+    const best = !prev || time < prev.time;
+    if (best) {
+      miniRun.best.set(socket.data.vid, { name: player.name, time });
+      io.emit('miniBoard', { top: miniTop() });
+    }
+    const rank = miniRanked().findIndex(([v]) => v === socket.data.vid) + 1;
+    ack?.({ ok: true, next: 0, time, best, rank });
+  });
+
+  // ✨ 找金松果：走到藏的地方就撿起來，先到先得
+  socket.on('grab', (data = {}, ack) => {
+    const m = miniNow();
+    if (m?.kind !== 'hunt' || roomId !== 'forest_main' || !socket.data.vid) return ack?.({ ok: false, reason: 'off' });
+    const i = Math.floor(num(data.i, -1, miniRun.spots.length - 1, -1));
+    const spot = miniRun.spots[i];
+    if (!spot) return ack?.({ ok: false, reason: 'unknown' });
+    if (spot.by) return ack?.({ ok: false, reason: 'taken', by: spot.by });
+    if (!nearSpot(spot)) return ack?.({ ok: false, reason: 'far' });
+    spot.by = player.name;
+    award(HUNT_GAIN, 'hunt');
+    const left = miniRun.spots.filter((p) => !p.by).length;
+    io.emit('miniHunt', { i, by: player.name, left });
+    ack?.({ ok: true, left });
+  });
+
   socket.on('addWood', () => {
     if (!player || roomId !== 'forest_main') return;
     const now = Date.now();
@@ -772,6 +1214,7 @@ io.on('connection', (socket) => {
     lastWood = now;
     chan.fuel = Math.min(MAX_FUEL, chan.fuel + WOOD_FUEL);
     io.to(rkey).emit('fire', { fuel: chan.fuel, by: player.id, name: player.name });
+    miniBonus('wood');
   });
 
   socket.on('disconnect', () => {
@@ -823,6 +1266,19 @@ setInterval(() => {
       if (fireSync >= 2) io.to(key(c.ch, id)).emit('fireSync', { fuel: c.fuel });
     }
   }
+  // 帳篷裡的玩家
+  for (const [owner, hr] of homeRooms) {
+    if (!hr.players.size) continue;
+    const batch = {};
+    let any = false;
+    for (const p of hr.players.values()) {
+      if (!p.dirty) continue;
+      batch[p.id] = packState(p);
+      p.dirty = false;
+      any = true;
+    }
+    if (any) io.to(`home:${owner}`).volatile.emit('states', batch);
+  }
   if (fireSync >= 2) fireSync = 0;
 }, TICK_MS);
 
@@ -863,6 +1319,34 @@ setInterval(() => {
     console.log(`[石塔] 第 ${i + 1} 座收進紀念冊（${record.stones} 顆、${record.people} 位旅人），重新開始`);
   });
 }, 60000);
+
+// 每小時小活動：開始、結束時通知所有人；釣魚大賽結束時發獎
+let miniActive = miniInfo().active;
+setInterval(() => {
+  const m = miniInfo();
+  if (m.active === miniActive) return;
+  miniActive = m.active;
+  if (m.active) {
+    miniNow();
+    io.emit('mini', miniPublic());
+    console.log(`[小活動] ${m.kind} 開始`);
+    return;
+  }
+  // 結束
+  let winners = [];
+  if (miniRun.kind === 'fish' || miniRun.kind === 'race') {
+    winners = miniRanked()
+      .slice(0, MINI_PRIZES.length)
+      .map(([vid, r], i) => {
+        giveTo(vid, MINI_PRIZES[i], 'contest');
+        return { ...r, prize: MINI_PRIZES[i] };
+      });
+  } else if (miniRun.kind === 'hunt') {
+    winners = miniRun.spots.filter((p) => p.by).map((p) => ({ name: p.by }));
+  }
+  io.emit('mini', { ...m, ended: miniRun.kind, winners });
+  console.log(`[小活動] ${miniRun.kind} 結束`, winners.map((w) => w.name + (w.size ? ` ${w.size}cm` : w.time ? ` ${w.time}s` : '')).join('、'));
+}, 5000);
 
 // 營火時間開始／結束時通知所有人
 let eventActive = eventInfo().active;

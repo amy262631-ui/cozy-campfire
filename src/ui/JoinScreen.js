@@ -52,10 +52,40 @@ export class JoinScreen {
    * @param {{ onPreview?: Function, allowSpecies?: boolean, edit?: { name, fur, species, code } }} opts
    *   edit：遊戲中「改名字／換動物」，不顯示分流，按鈕改成「好了」，可以取消
    */
-  constructor({ onPreview, allowSpecies = true, edit = null } = {}) {
+  /**
+   * account（選填，只在 edit 模式）：{ user, onRegister(u, p), onLogin(u, p), onLogout() }
+   *   onRegister / onLogin 回傳錯誤訊息（成功回傳 null）
+   */
+  constructor({ onPreview, allowSpecies = true, edit = null, account = null } = {}) {
     this.onPreview = onPreview;
     this.allowSpecies = allowSpecies;
     this.edit = edit;
+    this.account = account;
+  }
+
+  #accountHtml() {
+    const a = this.account;
+    if (!a) return '';
+    if (a.user) {
+      return `
+        <div class="acct">
+          <div class="acct-title">${t('👤 已登入：{user}', { user: a.user.replace(/[<>&"]/g, '') })}</div>
+          <div class="acct-note">${t('松果和帳篷都存在帳號裡，換手機登入也會回來')}</div>
+          <button type="button" class="acct-btn ghost" data-acct="logout">${t('登出')}</button>
+        </div>`;
+    }
+    return `
+      <details class="acct">
+        <summary>${t('👤 帳號（選填）：換手機也能找回松果和帳篷')}</summary>
+        <input class="join-input" id="acct-user" maxlength="16" autocomplete="username" placeholder="${t('帳號（3～16 個字）')}" />
+        <input class="join-input" id="acct-pass" type="password" maxlength="64" autocomplete="current-password" placeholder="${t('密碼（至少 6 個字）')}" />
+        <div class="acct-btns">
+          <button type="button" class="acct-btn" data-acct="register">${t('建立帳號')}</button>
+          <button type="button" class="acct-btn ghost" data-acct="login">${t('登入')}</button>
+        </div>
+        <div class="acct-note">${t('⚠️ 沒有綁 email，忘記密碼就找不回來，請記好')}</div>
+        <div class="acct-msg" id="acct-msg"></div>
+      </details>`;
   }
 
   show() {
@@ -106,6 +136,8 @@ export class JoinScreen {
           <div class="join-label">${t('選擇分流')}</div>
           <div class="ch-grid" id="join-ch-grid"></div>
         </div>
+
+        ${this.edit ? this.#accountHtml() : ''}
 
         <button type="submit" class="join-go">${this.edit ? t('好了') : t('進入營地')}</button>
         ${this.edit ? `<button type="button" class="join-cancel" id="join-cancel">${t('取消')}</button>` : ''}
@@ -183,6 +215,23 @@ export class JoinScreen {
     });
 
     if (!this.edit) setTimeout(() => input.focus(), 50);
+
+    // 帳號：建立、登入、登出
+    el.querySelectorAll('[data-acct]').forEach((btn) =>
+      btn.addEventListener('click', async () => {
+        const op = btn.dataset.acct;
+        const msg = el.querySelector('#acct-msg');
+        if (op === 'logout') return this.account.onLogout?.();
+        const u = el.querySelector('#acct-user').value.trim();
+        const p = el.querySelector('#acct-pass').value;
+        btn.disabled = true;
+        msg.textContent = t('處理中⋯');
+        const err = await (op === 'register' ? this.account.onRegister(u, p) : this.account.onLogin(u, p));
+        btn.disabled = false;
+        msg.textContent = err ?? (op === 'register' ? t('✅ 帳號建立好了！') : '');
+        msg.classList.toggle('ok', !err);
+      }),
+    );
 
     return new Promise((resolve) => {
       el.querySelector('#join-cancel')?.addEventListener('click', () => {

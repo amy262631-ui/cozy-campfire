@@ -4,7 +4,9 @@ import { Campfire } from '../scene/Campfire.js';
 import { makeSign, lowpoly, shadowAll } from './shared.js';
 import { buildShrine } from './shrine.js';
 import { buildCairnGarden, CAIRN_GARDEN_CLEARING } from './cairns.js';
+import { buildMiniLayer } from './miniLayer.js';
 import { buildWishTree, WISH_TREE_CLEARING } from './wishTree.js';
+import { buildShop, nearShop, SHOP_FRONT, SHOP_CLEARING } from './shop.js';
 import { EMOTE_IDS } from '../social/emotes.js';
 import { t } from '../i18n/i18n.js';
 
@@ -14,6 +16,7 @@ const ENTRANCES = [
   { to: 'treehouse_music', angle: -2.2, label: t('🎵 森林樹屋') },
   { to: 'lake_dock', angle: 1.15, label: t('🎣 湖畔碼頭') },
   { to: 'tent_social', angle: -1.25, label: t('☕ 交流帳篷') },
+  { to: 'campground', angle: -2.95, label: t('🏕️ 帳篷營地') },
 ];
 /** 地藏祈福處的方位（不用換房間，就在森林裡） */
 const SHRINE_ANGLE = -0.15;
@@ -326,7 +329,87 @@ function buildBellTent() {
   return { group: g, colliderR: 1.9 };
 }
 
-const BUILDERS = { tent_focus: buildTent, treehouse_music: buildTreehouse, lake_dock: buildLakePath, tent_social: buildBellTent };
+/** 營火上方的人數看板（一直面向鏡頭） */
+function buildAreaBoard() {
+  const c = document.createElement('canvas');
+  c.width = 720;
+  c.height = 150;
+  const g = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+  sprite.scale.set(5.4, 1.12, 1);
+  sprite.renderOrder = 6;
+  sprite.visible = false;
+  const AREAS = [
+    ['lake_dock', '🎣', t('湖畔')],
+    ['tent_focus', '📚', t('專注')],
+    ['campground', '🏕️', t('營地')],
+    ['treehouse_music', '🎵', t('樹屋')],
+    ['tent_social', '☕', t('交流')],
+  ];
+  function draw(a) {
+    if (!a) return;
+    sprite.visible = true;
+    g.clearRect(0, 0, c.width, c.height);
+    g.fillStyle = 'rgba(28, 20, 14, 0.62)';
+    g.beginPath();
+    g.roundRect(4, 4, c.width - 8, c.height - 8, 36);
+    g.fill();
+    g.strokeStyle = 'rgba(255, 200, 140, 0.4)';
+    g.lineWidth = 3;
+    g.stroke();
+    const font = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    const w = (c.width - 40) / AREAS.length;
+    AREAS.forEach(([id, icon, name], i) => {
+      const x = 20 + w * i + w / 2;
+      const n = a[id] ?? 0;
+      g.font = `700 34px ${font}`;
+      g.fillStyle = '#ffe9c8';
+      g.fillText(`${icon} ${n}`, x, 56);
+      g.font = `500 24px ${font}`;
+      g.fillStyle = n ? '#ffd28a' : 'rgba(255, 233, 200, 0.55)';
+      g.fillText(name, x, 104);
+    });
+    tex.needsUpdate = true;
+  }
+  return { sprite, draw };
+}
+
+/** 帳篷營地的入口：木頭拱門＋兩頂迷你帳篷 */
+function buildCampGate() {
+  const g = new THREE.Group();
+  const wood = lowpoly(0x6d4a2e);
+  for (const sx of [-1.3, 1.3]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 2.6, 6), wood);
+    post.position.set(sx, 1.3, 0);
+    g.add(post);
+  }
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.22, 0.22), wood);
+  beam.position.set(0, 2.55, 0);
+  g.add(beam);
+  // 拱門上的小彩旗
+  const flagColors = [0xd2453c, 0xf2c14e, 0x7d9a68, 0x6f86a8, 0xf3c9d2];
+  for (let i = 0; i < 7; i++) {
+    const f = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.26, 3), lowpoly(flagColors[i % flagColors.length]));
+    f.rotation.x = Math.PI;
+    f.position.set(-1.05 + i * 0.35, 2.3, 0.08);
+    g.add(f);
+  }
+  for (const [x, z, c] of [[-2.1, -1.4, 0xe6d2ac], [2.2, -1.6, 0xd2453c]]) {
+    const tent = new THREE.Mesh(new THREE.ConeGeometry(0.75, 1.1, 6), lowpoly(c));
+    tent.position.set(x, 0.55, z);
+    g.add(tent);
+  }
+  const light = new THREE.PointLight(0xffc073, 3, 7, 1.6);
+  light.position.set(0, 2.2, 0.6);
+  g.add(light);
+  return { group: g, colliderR: 0.6 };
+}
+
+const BUILDERS = { tent_focus: buildTent, treehouse_music: buildTreehouse, lake_dock: buildLakePath, tent_social: buildBellTent, campground: buildCampGate };
 
 // ---------- 森林房間 ----------
 
@@ -337,7 +420,7 @@ export function createForestRoom() {
   const defs = ENTRANCES.map((e) => ({ ...e, trigger: polar(e.angle, TRIGGER_R), build: polar(e.angle, BUILD_R) }));
   const shrinePos = polar(SHRINE_ANGLE, SHRINE_R);
   const world = createWorld(group, {
-    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING, WISH_TREE_CLEARING],
+    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING, WISH_TREE_CLEARING, SHOP_CLEARING],
   });
 
   const campfire = new Campfire();
@@ -396,6 +479,13 @@ export function createForestRoom() {
   const nearShrine = (actions) =>
     Math.hypot(actions.player.position.x - shrineFront.x, actions.player.position.z - shrineFront.z) < 2.2;
 
+  // ---------- 營地小舖（用松果買帳篷、家具） ----------
+  const shop = buildShop(world);
+  group.add(shop.group);
+  group.add(shop.sign);
+  // 從自己的帳篷出來時，站在小舖前面
+  returnSpawn.home = { x: SHOP_FRONT.x * 0.92, z: SHOP_FRONT.z * 0.92, ry: Math.atan2(-SHOP_FRONT.x, -SHOP_FRONT.z) + Math.PI };
+
   // ---------- 心願大樹（大家用松果換裝飾掛上去） ----------
   const wishTree = buildWishTree(world);
   group.add(wishTree.group);
@@ -403,6 +493,15 @@ export function createForestRoom() {
   // ---------- 石塔祈願（祈福處步道旁） ----------
   const cairnGarden = buildCairnGarden(world);
   group.add(cairnGarden.group);
+  // ---------- 營火上方的人數看板：各區現在有幾個人，一眼就知道哪裡熱鬧 ----------
+  const areaBoard = buildAreaBoard();
+  areaBoard.sprite.position.set(0, 3.7, 0);
+  group.add(areaBoard.sprite);
+
+  // ---------- 整點小活動的道具（燈籠賽跑、金松果） ----------
+  const mini = buildMiniLayer();
+  group.add(mini.group);
+
   /** 頭上是不是頂著一顆石頭 */
   let carrying = false;
   const setCarry = (character, v) => {
@@ -431,6 +530,8 @@ export function createForestRoom() {
     boardFront,
     cairnGarden,
     wishTree,
+    mini,
+    setAreas: (a) => areaBoard.draw(a),
     get carrying() {
       return carrying;
     },
@@ -444,6 +545,10 @@ export function createForestRoom() {
       if (carrying && name !== 'interact') setCarry(actions.character, false);
       // 正在打招呼、合十時按 E：先結束動作再互動
       if (name === 'interact' && EMOTE_IDS.has(actions.state)) actions.stop();
+      if (name === 'interact' && actions.state === 'free' && !carrying && nearShop(actions.player.position)) {
+        actions.onShop?.();
+        return true;
+      }
       if (name === 'interact' && actions.state === 'free' && !carrying && wishTree.near(actions.player.position)) {
         actions.onTree?.();
         return true;
@@ -497,6 +602,7 @@ export function createForestRoom() {
       if (cairnGarden.nearPile(pos)) return ['🪨', t('撿石頭')];
       if (ci >= 0) return ['🗿', t('石塔')];
       if (wishTree.near(pos)) return ['🌳', t('大樹')];
+      if (nearShop(pos)) return ['🏪', t('小舖')];
       return null;
     },
 
@@ -513,6 +619,7 @@ export function createForestRoom() {
       if (cairnGarden.nearPile(pos)) return t('<kbd>E</kbd> 撿一顆石頭');
       if (ci >= 0) return t('<kbd>E</kbd> 看石塔紀錄（{n} 顆）', { n: cairnGarden.cairns[ci].stones.length });
       if (wishTree.near(pos)) return t('<kbd>E</kbd> 心願大樹・掛一個裝飾');
+      if (nearShop(pos)) return t('<kbd>E</kbd> 營地小舖・買帳篷和家具');
       return actions.nearFire ? t('<kbd>E</kbd> 添柴火　<kbd>F</kbd> 烤棉花糖') : null;
     },
 
@@ -520,6 +627,7 @@ export function createForestRoom() {
       shrine.update(dt, t);
       cairnGarden.update(dt, t);
       wishTree.update(dt, t);
+      mini.update(dt, t);
       // world / campfire 由 RoomManager 另外更新（星空與火勢要持續運作）
       // 招牌離鏡頭太近時淡出，避免擋住畫面
       for (const sgn of signs) {

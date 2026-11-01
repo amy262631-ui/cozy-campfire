@@ -1,0 +1,182 @@
+import { t } from '../i18n/i18n.js';
+import { FURNITURE, TENT_PRICE } from '../game/furniture.js';
+import { TENT_SHAPES, TENT_SHAPE_BY_ID } from '../game/tentShapes.js';
+import { TENT_STYLES } from '../game/tentStyles.js';
+import { TentPreview } from './TentPreview.js';
+
+/**
+ * 營地小舖：用松果買帳篷、家具。
+ *   getCoins()  松果（單人模式 null）
+ *   getHome()   { tent, inv, items }
+ *   onBuy(id)   → Promise<boolean>
+ *   onGoHome()  回到我的帳篷
+ *   onEdit(op, data) 換帳篷造型／花色（op：shape / style）→ Promise
+ */
+export class ShopPanel {
+  constructor({ getCoins, getHome, onBuy, onGoHome, onEdit, root = document.getElementById('ui') }) {
+    Object.assign(this, { getCoins, getHome, onBuy, onGoHome, onEdit });
+    this.busy = false;
+    this.tab = 'look';
+    this.pick = null; // 預覽中的造型（還沒買的也能先看）
+    this.preview = new TentPreview(360, 190);
+    root.insertAdjacentHTML(
+      'beforeend',
+      `
+      <div class="shop-panel" id="shop-panel">
+        <div class="shop-card">
+          <div class="shop-title">${t('🏪 營地小舖')}</div>
+          <div class="shop-coins" id="shop-coins"></div>
+          <div class="shop-body" id="shop-body"></div>
+          <div class="shop-foot">
+            <button type="button" class="shop-home" id="shop-home" hidden>${t('⛺ 回到我的帳篷')}</button>
+            <button type="button" class="shop-close" id="shop-close">${t('關閉')}</button>
+          </div>
+        </div>
+      </div>
+      `,
+    );
+    const $ = (s) => root.querySelector(s);
+    this.el = $('#shop-panel');
+    this.body = $('#shop-body');
+    this.coinsEl = $('#shop-coins');
+    this.homeBtn = $('#shop-home');
+    this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.el.addEventListener('click', (e) => e.target === this.el && this.close());
+    $('#shop-close').addEventListener('click', () => this.close());
+    this.homeBtn.addEventListener('click', () => {
+      this.close();
+      this.onGoHome?.();
+    });
+    this.body.addEventListener('click', async (e) => {
+      const tab = e.target.closest('[data-tab]');
+      if (tab) {
+        this.tab = tab.dataset.tab;
+        return this.render();
+      }
+      const home = this.getHome() ?? {};
+      const sh = e.target.closest('[data-shape]');
+      if (sh) {
+        this.pick = sh.dataset.shape;
+        // 已經有的造型：直接換上
+        if ((home.shapes ?? ['bell']).includes(this.pick) && this.pick !== (home.shape ?? 'bell') && !this.busy) {
+          this.busy = true;
+          await this.onEdit?.('shape', { s: this.pick });
+          this.busy = false;
+        }
+        return this.render();
+      }
+      const sty = e.target.closest('[data-style]');
+      if (sty && !this.busy) {
+        this.busy = true;
+        await this.onEdit?.('style', { s: sty.dataset.style });
+        this.busy = false;
+        return this.render();
+      }
+      const btn = e.target.closest('[data-buy]');
+      if (!btn || btn.disabled || this.busy) return;
+      this.busy = true;
+      this.body.classList.add('busy');
+      await this.onBuy?.(btn.dataset.buy);
+      this.busy = false;
+      this.body.classList.remove('busy');
+      this.render();
+    });
+    window.addEventListener('keydown', (e) => {
+      if (this.isOpen && e.code === 'Escape') this.close();
+    });
+  }
+
+  get isOpen() {
+    return this.el.classList.contains('show');
+  }
+
+  open() {
+    this.el.classList.add('show');
+    this.pick = null;
+    this.render();
+  }
+
+  close() {
+    this.el.classList.remove('show');
+    this.preview.stop();
+  }
+
+  /** 把預覽畫面放進目前畫面上的位置 */
+  #mountPreview(shape, style) {
+    const slot = this.body.querySelector('.shop-pv');
+    if (!slot) return this.preview.stop();
+    slot.appendChild(this.preview.canvas);
+    this.preview.set(shape, style);
+    this.preview.start();
+  }
+
+  refresh() {
+    if (this.isOpen) this.render();
+  }
+
+  render() {
+    const coins = this.getCoins();
+    const home = this.getHome() ?? { tent: false, inv: {}, items: [] };
+    this.coinsEl.innerHTML = coins == null ? t('目前是單人模式，連上伺服器後才能買東西') : t('你有 <b>🌰 {n}</b> 顆松果', { n: coins });
+    this.homeBtn.hidden = !home.tent;
+    if (!home.tent) {
+      this.body.innerHTML = `
+        <div class="shop-tent">
+          <div class="shop-pv"></div>
+          <div class="shop-tent-name">${t('我的小帳篷')}</div>
+          <p>${t('買下之後，你就有一個自己的家：可以買家具慢慢布置，關掉網頁再回來也都還在。')}</p>
+          <button type="button" class="shop-buy-tent" data-buy="tent" ${coins == null || coins < TENT_PRICE ? 'disabled' : ''}>${t('買下帳篷 🌰 {n}', { n: TENT_PRICE })}</button>
+          ${coins != null && coins < TENT_PRICE ? `<div class="shop-hint">${t('還差 {n} 顆松果：做小任務、釣魚、每天來營火旁都能撿到 🌰', { n: TENT_PRICE - coins })}</div>` : ''}
+          <div class="shop-hint">${t('買下後還能用松果解鎖馬戲團大帳、蘑菇小屋等造型 🎪🍄')}</div>
+        </div>`;
+      return this.#mountPreview('bell', 'classic');
+    }
+    const tabs = `
+      <div class="shop-tabs">
+        <button type="button" data-tab="look" class="${this.tab === 'look' ? 'on' : ''}">${t('⛺ 帳篷外觀')}</button>
+        <button type="button" data-tab="furn" class="${this.tab === 'furn' ? 'on' : ''}">${t('🪑 家具')}</button>
+      </div>`;
+    if (this.tab === 'look') {
+      const owned = home.shapes ?? ['bell'];
+      const cur = home.shape ?? 'bell';
+      const pick = TENT_SHAPE_BY_ID[this.pick] ? this.pick : cur;
+      const sh = TENT_SHAPE_BY_ID[pick];
+      const has = owned.includes(pick);
+      // 還沒買的造型，預覽用它的招牌花色
+      const style = has ? home.style ?? 'classic' : sh.style ?? home.style ?? 'classic';
+      const action = has
+        ? `<div class="shop-using">${pick === cur ? t('✅ 使用中') : ''}</div>`
+        : `<button type="button" class="shop-buy-tent" data-buy="shape_${pick}" ${coins == null || coins < sh.price ? 'disabled' : ''}>${t('解鎖「{name}」🌰 {n}', { name: sh.name, n: sh.price })}</button>
+           ${coins != null && coins < sh.price ? `<div class="shop-hint">${t('還差 {n} 顆松果', { n: sh.price - coins })}</div>` : ''}`;
+      this.body.innerHTML = `${tabs}
+        <div class="shop-pv"></div>
+        <div class="shop-pv-name">${sh.icon} ${sh.name}</div>
+        <div class="shop-shapes">
+          ${TENT_SHAPES.map(
+            (x) => `<button type="button" class="shop-shape${x.id === pick ? ' on' : ''}${x.id === cur ? ' cur' : ''}" data-shape="${x.id}">
+              <span class="ss-icon">${x.icon}</span><span class="ss-name">${x.name}</span>
+              <span class="ss-price">${owned.includes(x.id) ? '✓' : `🌰 ${x.price}`}</span></button>`,
+          ).join('')}
+        </div>
+        ${action}
+        ${has ? `<div class="shop-sub">${t('🎨 花色（免費換）')}</div>
+        <div class="shop-styles">${TENT_STYLES.map((x) => `<button type="button" class="build-style${x.id === style ? ' on' : ''}" data-style="${x.id}"><span>${x.icon}</span>${x.name}</button>`).join('')}</div>` : ''}`;
+      return this.#mountPreview(pick, style);
+    }
+    this.preview.stop();
+    this.body.innerHTML = `${tabs}
+      <div class="shop-sub">${t('買了會放進背包，回帳篷按「🛠️ 布置」擺出來')}</div>
+      <div class="shop-grid">
+        ${FURNITURE.map((f) => {
+          const owned = home.inv?.[f.id] ?? 0;
+          return `
+          <button type="button" class="shop-item" data-buy="${f.id}" ${coins == null || coins < f.price || owned >= 20 ? 'disabled' : ''}>
+            <span class="si-icon">${f.icon}</span>
+            <span class="si-name">${f.name}</span>
+            <span class="si-price">🌰 ${f.price}</span>
+            ${owned ? `<span class="si-owned">${t('有 {n} 個', { n: owned })}</span>` : ''}
+          </button>`;
+        }).join('')}
+      </div>`;
+  }
+}
