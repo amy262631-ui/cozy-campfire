@@ -16,6 +16,7 @@ export const LANGS = [
 const STORE_KEY = 'cozy-campfire-lang';
 
 function detect() {
+  if (typeof location === 'undefined') return 'zh-Hant'; // 伺服器端（只用到中文原文）
   const fromUrl = new URLSearchParams(location.search).get('lang');
   if (LANGS.some((l) => l.id === fromUrl)) return fromUrl;
   try {
@@ -33,7 +34,7 @@ function detect() {
 }
 
 export const lang = detect();
-document.documentElement.lang = lang;
+if (typeof document !== 'undefined') document.documentElement.lang = lang;
 
 const missing = new Set();
 
@@ -42,7 +43,7 @@ export function t(zh, vars) {
   if (lang !== 'zh-Hant') {
     const tr = DICT[lang]?.[zh];
     if (tr != null) s = tr;
-    else if (import.meta.env.DEV && !missing.has(zh)) {
+    else if (import.meta.env?.DEV && !missing.has(zh)) {
       missing.add(zh);
       console.warn(`[翻譯缺漏] ${lang}: ${zh}`);
     }

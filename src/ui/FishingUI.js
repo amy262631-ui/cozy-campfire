@@ -1,4 +1,4 @@
-import { FISH, stars, DEX_GAIN, DEX_BONUS } from '../fishing/fishData.js';
+import { FISH, stars, dexGain, DEX_BONUS } from '../fishing/fishData.js';
 import { t } from '../i18n/i18n.js';
 
 const CREEL_KEY = 'cozy-campfire-creel';
@@ -137,7 +137,7 @@ export class FishingUI {
     if (firstTime && !f.junk) badges.push('<b class="badge new">' + t('第一次釣到') + '</b>');
     else if (newRecord && !f.junk) badges.push('<b class="badge record">' + t('個人新紀錄') + '</b>');
     if (rank) badges.push(`<b class="badge rank">${t('湖畔排行第 {rank} 名', { rank })}</b>`);
-    const title = f.junk ? t('撈到了垃圾⋯') : f.rarity >= 4 ? t('🎉 大豐收！') : t('🎣 釣到了！');
+    const title = f.junk ? t('撈到了垃圾⋯') : f.legend ? t('🐉 傳說之魚現身！') : f.rarity >= 4 ? t('🎉 大豐收！') : t('🎣 釣到了！');
     this.el.card.className = `fish-card show rarity-${f.rarity}`;
     this.el.card.innerHTML = `
       <div class="fish-card-row">
@@ -188,15 +188,16 @@ export class FishingUI {
     const found = this.dexCount;
     this.el.modalTitle.textContent = t('📖 魚類圖鑑 {found}／{total}', { found, total: FISH.length });
     const hex = (c) => `#${(c ?? 0x888888).toString(16).padStart(6, '0')}`;
+    const rank = (f) => (f.legend ? t('🐉 傳說') + ' ' + stars(f.rarity) : f.rarity ? stars(f.rarity) : t('雜物'));
     const cards = FISH.map((f, i) => {
       const e = this.creel[i];
-      const gain = DEX_GAIN[f.rarity] ?? 1;
+      const gain = dexGain(f);
       if (!e?.count) {
-        return `<div class="dex-card unknown"><i class="dex-fish" style="background:#2a3140"></i><b>${t('？？？')}</b><small>${f.rarity ? stars(f.rarity) : t('雜物')}</small><em>${f.note && (f.where || f.when) ? f.note : t('第一次釣到 +{n} 🌰', { n: gain })}</em></div>`;
+        return `<div class="dex-card unknown${f.legend ? ' legend' : ''}"><i class="dex-fish" style="background:#2a3140"></i><b>${t('？？？')}</b><small>${rank(f)}</small><em>${f.note && (f.where || f.when) ? f.note : t('第一次釣到 +{n} 🌰', { n: gain })}</em></div>`;
       }
       const glow = f.glow ? `box-shadow:0 0 10px ${hex(f.glow)};` : '';
       const patch = f.patch ? `background:linear-gradient(135deg, ${hex(f.color)} 55%, ${hex(f.patch)} 55%);` : `background:${hex(f.color)};`;
-      return `<div class="dex-card rarity-${f.rarity}"><i class="dex-fish" style="${patch}${glow}"></i><b>${f.name}</b><small>${f.rarity ? stars(f.rarity) : t('雜物')}</small><em>${f.junk ? `×${e.count}` : t('最大 {size} 公分・×{n}', { size: e.best, n: e.count })}</em></div>`;
+      return `<div class="dex-card rarity-${f.rarity}${f.legend ? ' legend' : ''}"><i class="dex-fish" style="${patch}${glow}"></i><b>${f.name}</b><small>${rank(f)}</small><em>${f.junk ? `×${e.count}` : t('最大 {size} 公分・×{n}', { size: e.best, n: e.count })}</em></div>`;
     }).join('');
     this.el.modalBody.innerHTML = `
       <div class="dex-tabs"><button type="button" class="on">${t('🐟 魚')}</button><button type="button" disabled>${t('🌸 花（下次更新）')}</button></div>

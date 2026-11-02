@@ -4561,3 +4561,71 @@ body.touch .fish-focus {
 .dex-tabs button:disabled {
   opacity: 0.45;
 }
+
+/* 📣 全伺服器大魚公告 */
+.big-catch {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(92vw, 520px);
+  padding: 10px 22px;
+  border: 1px solid rgba(255, 215, 120, 0.7);
+  border-radius: 16px;
+  background: rgba(40, 26, 10, 0.88);
+  color: #fff3d6;
+  font-size: 14px;
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  box-shadow: 0 0 24px rgba(255, 190, 80, 0.45);
+  animation: bigCatchIn 0.5s ease-out;
+  transition: opacity 1s;
+}
+
+.big-catch b {
+  color: #ffd27a;
+  font-size: 16px;
+}
+
+.big-catch.legend {
+  padding: 14px 26px;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(rgba(22, 14, 40, 0.92), rgba(22, 14, 40, 0.92)) padding-box,
+    linear-gradient(90deg, #ff6a3a, #ffd060, #7affd0, #7ab0ff, #c8a0ff) border-box;
+  font-size: 15px;
+  box-shadow: 0 0 40px rgba(200, 160, 255, 0.6);
+}
+
+.big-catch.legend b {
+  font-size: 20px;
+  background: linear-gradient(90deg, #ffd060, #ff9a6a, #c8a0ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.big-catch.out {
+  opacity: 0;
+}
+
+@keyframes bigCatchIn {
+  from { opacity: 0; transform: translate(-50%, -16px) scale(0.9); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+.dex-card.legend {
+  border-color: rgba(200, 160, 255, 0.6);
+  box-shadow: 0 0 12px rgba(200, 160, 255, 0.35);
+}
+
+.dex-card.legend small {
+  color: #e2c8ff;
+}

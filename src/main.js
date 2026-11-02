@@ -860,6 +860,19 @@ async function init() {
     else hud.toast(t('🎣 {name} 釣到了 {size} 公分的{fish}', { name, size, fish: f.name }));
   });
   net.on('board', ({ board }) => fishingUI.setBoard(board, true));
+  // 📣 五星魚、傳說之魚：全伺服器大公告
+  net.on('bigCatch', ({ name, fish, size, place }) => {
+    const f = FISH[fish];
+    if (!f) return;
+    const where = place === 'lake_dock' ? t('湖畔碼頭') : t('營火河畔');
+    const el = document.createElement('div');
+    el.className = 'big-catch' + (f.legend ? ' legend' : '');
+    el.innerHTML = `<b>${f.legend ? t('🐉 傳說之魚現身！') : t('📣 五星大魚！')}</b><span></span>`;
+    el.querySelector('span').textContent = t('{name} 在{where}釣到了 {size} 公分的{fish}', { name, where, size, fish: f.name });
+    document.getElementById('ui').appendChild(el);
+    setTimeout(() => el.classList.add('out'), f.legend ? 8000 : 5500);
+    setTimeout(() => el.remove(), f.legend ? 9000 : 6500);
+  });
 
   // 湖畔即時動態：在營火旁也看得到湖邊誰釣到什麼
   const lakeNews = new LakeNews({

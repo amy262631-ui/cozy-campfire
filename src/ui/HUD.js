@@ -208,11 +208,14 @@ export class HUD {
   }
 
   /** 「今天有 N 位旅人來過 · 疊了 N 顆石頭」：就算現在只有你一個人，也知道有人來過 */
-  setToday({ visitors = 0, stones = 0 } = {}) {
-    this.el.today.hidden = !visitors;
-    this.el.today.textContent = stones
-      ? t('今天有 {n} 位旅人來過 · 疊了 {s} 顆石頭', { n: visitors, s: stones })
-      : t('今天有 {n} 位旅人來過', { n: visitors });
+  setToday({ visitors = 0, stones = 0, allVisitors = 0, allStones = 0 } = {}) {
+    const all = Math.max(allVisitors, visitors);
+    const st = Math.max(allStones, stones);
+    this.el.today.hidden = !all;
+    const fmt = (n) => n.toLocaleString();
+    this.el.today.textContent = st
+      ? t('累計 {n} 位旅人來過 · 疊了 {s} 顆石頭（今天 {d} 位）', { n: fmt(all), s: fmt(st), d: visitors })
+      : t('累計 {n} 位旅人來過（今天 {d} 位）', { n: fmt(all), d: visitors });
   }
 
   /** 顯示目前分流（0 ＝單人模式，不顯示） */

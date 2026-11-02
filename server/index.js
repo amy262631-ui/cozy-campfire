@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
+import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM } from '../src/fishing/fishData.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
 import { SHOP, MAX_ITEMS, hashPassword, checkPassword, validateCredentials, newHome, available, cellFree, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE } from './homes.js';
 
@@ -61,9 +62,8 @@ const CAIRN_COUNT = 6;
 const CAIRN_MAX = 99;
 const STACK_COOLDOWN_MS = 2000;
 // 魚：索引 0~9（8、9 是垃圾，不列入排行），尺寸上限
-const FISH_COUNT = 17;
-const JUNK = new Set([8, 9]);
-const FISH_MAX_CM = 130;
+const FISH_COUNT = FISH.length;
+const JUNK = new Set(FISH.flatMap((f, i) => (f.junk ? [i] : [])));
 
 // ---------- 分流與房間資料 ----------
 /** 所有分流共用：繪馬、告示牌留言、釣魚排行 */
@@ -137,8 +137,8 @@ function pickChannel(wanted) {
 const DATA_DIR = path.resolve(__dirname, 'data');
 await storage.init(DATA_DIR);
 const asArray = (v) => (Array.isArray(v) ? v : []);
-const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog, savedAccounts, savedHomes, savedIdeas] = await Promise.all(
-  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json', 'ideas.json'].map((f) =>
+const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog, savedAccounts, savedHomes, savedIdeas, savedTotals] = await Promise.all(
+  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json', 'ideas.json', 'totals.json'].map((f) =>
     storage.load(f),
   ),
 );
@@ -256,16 +256,13 @@ const SIT_EVERY_MIN = 5; // 在營地待滿幾分鐘撿一次松果
 const SIT_GAIN = 2;
 const SIT_DAILY_CAP = 30; // 每天靠「待著」最多撿幾顆
 const QUEST_GAIN = 5;
-const FISH_RARITY = [1, 1, 2, 2, 3, 4, 4, 5, 0, 0, 2, 3, 3, 3, 4, 4, 5]; // 與前端 fishData.js 相同
-const DEX_GAIN = [1, 2, 3, 5, 10, 20]; // 第一次釣到某種魚（收進圖鑑）送的松果
-const DEX_BONUS = 50; // 圖鑑全部收集完
+const FISH_RARITY = FISH.map((f) => f.rarity);
 /** 給玩家看的圖鑑：伺服器紀錄＋以前存在瀏覽器裡的舊紀錄（舊紀錄只顯示，不送松果） */
 const dexView = (w) => {
   const out = { ...(w?.dexOld ?? {}) };
   for (const [k, v] of Object.entries(w?.dex ?? {})) out[k] = Math.max(out[k] ?? 0, v);
   return out;
 };
-const FISH_GAIN = { 1: 1, 2: 2, 3: 3, 4: 6, 5: 15 };
 /** 這一場小活動的紀錄：釣魚大賽每人最大的一條；疊石、添柴每人多拿了幾顆 */
 let miniRun = { id: null, best: new Map(), got: new Map() };
 const miniNow = () => {
@@ -398,10 +395,13 @@ const bump = (field, n = 1) => {
   d[field] = (d[field] ?? 0) + n;
   saveJson('stats.json', stats);
 };
-/** 給玩家看的「今天」：幾位旅人來過、疊了幾顆石頭 */
+/** 一直累計的數字（不會每天歸零）：疊了幾顆石頭。第一次啟用時用還留著的每日統計當起點 */
+const totals = asObject(savedTotals);
+if (typeof totals.stones !== 'number') totals.stones = Object.values(stats).reduce((a, d) => a + (Number(d?.stones) || 0), 0);
+/** 給玩家看的：累計幾位旅人來過（每個瀏覽器／帳號算一位）、累計疊了幾顆石頭，以及今天的人數 */
 const todayPublic = () => {
   const d = today();
-  return { visitors: d.vids.length || d.visits, stones: d.stones, wishes: d.wishes };
+  return { visitors: d.vids.length || d.visits, stones: d.stones, wishes: d.wishes, allVisitors: Object.keys(players).length, allStones: totals.stones };
 };
 
 shared.notes = asArray(savedNotes).slice(-MAX_NOTES);
@@ -949,6 +949,8 @@ io.on('connection', (socket) => {
     cairn.push(stone);
     saveJson('cairns.json', shared.cairns);
     bump('stones');
+    totals.stones++;
+    saveJson('totals.json', totals);
     // 「你是今天第幾位許願的旅人」：每次來訪第一次疊石頭才算
     let ritual = null;
     if (!stacked) {
@@ -1273,7 +1275,7 @@ io.on('connection', (socket) => {
     if (now - lastCatch < 3000) return;
     lastCatch = now;
     const fish = Math.floor(num(data.fish, 0, FISH_COUNT - 1));
-    const size = Math.round(num(data.size, 1, FISH_MAX_CM));
+    const size = Math.round(num(data.size, 1, FISH[fish].max)); // 每種魚有自己的最大尺寸
     let rank = null;
     if (!JUNK.has(fish)) {
       shared.board.push({ name: player.name, fish, size, at: now });
@@ -1287,14 +1289,14 @@ io.on('connection', (socket) => {
       }
     }
     bump('fish');
-    award(FISH_GAIN[FISH_RARITY[fish]] ?? 0, 'fish');
+    award(catchGain(FISH[fish]), 'fish');
     // 📖 魚類圖鑑：第一次釣到這種魚就收錄、送松果；全部收集完再送一份大禮
     if (wal) {
       wal.dex ??= {};
       const first = !(fish in wal.dex);
       wal.dex[fish] = Math.max(wal.dex[fish] ?? 0, size);
       if (first) {
-        const gain = DEX_GAIN[FISH_RARITY[fish]] ?? 1;
+        const gain = dexGain(FISH[fish]);
         award(gain, 'dex');
         const count = Object.keys(wal.dex).length;
         let bonus = 0;
@@ -1323,6 +1325,8 @@ io.on('connection', (socket) => {
       shared.lakeNews = shared.lakeNews.slice(-6);
       io.emit('lakeNews', item);
     }
+    // 📣 五星魚與傳說之魚：整個伺服器（所有分流、所有地點）跳出大公告
+    if (FISH_RARITY[fish] >= 5) io.emit('bigCatch', { name: player.name, fish, size, ch: chan.ch, place: roomId });
     io.to(rkey).emit('caught', { id: socket.id, name: player.name, fish, size, rank });
   });
 

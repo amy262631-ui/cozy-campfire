@@ -47,6 +47,18 @@ export function createFishMesh(index) {
     return g;
   }
 
+  if (f.junk === 'can') {
+    const tin = mat(f.color, { metalness: 0.6, roughness: 0.5 });
+    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.42, 14), tin);
+    can.rotation.z = Math.PI / 2;
+    g.add(can);
+    const rust = new THREE.Mesh(new THREE.CylinderGeometry(0.205, 0.205, 0.16, 14, 1, true), mat(0xa0522d, { side: THREE.DoubleSide }));
+    rust.rotation.z = Math.PI / 2;
+    rust.position.x = -0.06;
+    g.add(rust);
+    return g;
+  }
+
   // 身體（圓圓的橢球）
   const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 20, 14), mat(f.color, glow));
   body.scale.set(1, 0.48, 0.3);
@@ -89,9 +101,26 @@ export function createFishMesh(index) {
     shine.position.set(0.35, 0.07, 0.17 * side);
     g.add(shine);
   }
+  // 🐉 傳說之魚：長鬍鬚＋頭上一對小角，發光更強
+  if (f.legend) {
+    const gold = mat(f.glow ?? 0xffd060, { emissive: f.glow ?? 0xffd060, emissiveIntensity: 0.9 });
+    for (const side of [-1, 1]) {
+      const whisker = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.006, 0.55, 5), gold);
+      whisker.rotation.z = Math.PI / 2 + 0.35;
+      whisker.rotation.y = 0.5 * side;
+      whisker.position.set(0.55, -0.05, 0.15 * side);
+      g.add(whisker);
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.18, 6), gold);
+      horn.rotation.z = -0.5;
+      horn.position.set(0.28, 0.27, 0.06 * side);
+      g.add(horn);
+    }
+    body.material.emissiveIntensity = 0.9;
+  }
   g.userData.tail = tail;
   return g;
 }
 
 /** 依公分數算出模型縮放（比真實略大一點，比較看得清楚） */
-export const fishScale = (cm) => Math.max(0.18, (cm / 100) * 1.3);
+// 超過 130 公分的傳說之魚放大得慢一點，不然會把整個畫面擋住
+export const fishScale = (cm) => (cm <= 130 ? Math.max(0.18, (cm / 100) * 1.3) : 1.69 + ((cm - 130) / 100) * 0.55);
