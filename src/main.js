@@ -1071,7 +1071,7 @@ async function init() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
-    campfire.setPixelScale(h * pixelRatio, camera.fov);
+    campfire.setPixelScale(h * renderer.getPixelRatio(), camera.fov);
   }
   window.addEventListener('resize', onResize);
   onResize();
@@ -1423,8 +1423,51 @@ async function init() {
   window.addEventListener('error', (e) => reportError(e.error || e.message));
   window.addEventListener('unhandledrejection', (e) => reportError(e.reason));
 
+  // 🖥️ 電腦版自動調整畫質：連續幾秒畫面太卡（每秒不到約 40 張），就一步步降低負擔，不會再調回去
+  //   第 1 步：營火的影子不畫（點光源影子每張要多畫 6 次整個場景，最吃效能）
+  //   第 2 步：解析度降到 1.25 倍；第 3 步：降到 1 倍
+  //   網址加 ?hq 可以關掉這個功能
+  const autoQuality = { level: 0, sum: 0, n: 0, last: 0, wait: 6000 };
+  const tuneQuality = (now) => {
+    if (lowPower || params.has('hq') || autoQuality.level >= 3) return;
+    const gap = now - autoQuality.last;
+    autoQuality.last = now;
+    // 剛載入、換房間、切回分頁的那幾張本來就會卡，不算
+    if (gap > 250 || document.hidden) {
+      autoQuality.wait = Math.max(autoQuality.wait, 2000);
+      autoQuality.sum = autoQuality.n = 0;
+      return;
+    }
+    if (autoQuality.wait > 0) {
+      autoQuality.wait -= gap;
+      return;
+    }
+    autoQuality.sum += gap;
+    autoQuality.n++;
+    if (autoQuality.sum < 3000) return;
+    const avg = autoQuality.sum / autoQuality.n;
+    autoQuality.sum = autoQuality.n = 0;
+    if (avg < 25) return;
+    autoQuality.level++;
+    autoQuality.wait = 2000; // 降完先等一下再量
+    if (autoQuality.level === 1) {
+      campfire.light.castShadow = false;
+      renderer.shadowMap.enabled = false;
+      scene.traverse((o) => o.material && [].concat(o.material).forEach((m) => (m.needsUpdate = true)));
+    } else {
+      const pr = Math.min(window.devicePixelRatio, autoQuality.level === 2 ? 1.25 : 1);
+      if (pr >= renderer.getPixelRatio()) return;
+      renderer.setPixelRatio(pr);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      world.setPixelRatio(pr);
+      campfire.setPixelScale(window.innerHeight * pr, camera.fov);
+    }
+    console.info(`[Cozy] 畫面有點卡，自動降低畫質（第 ${autoQuality.level} 步，平均 ${avg.toFixed(0)}ms／張）`);
+  };
+
   let lastFrame = 0;
   renderer.setAnimationLoop((now) => {
+    tuneQuality(now);
     if (lowPower) {
       const idle = document.body.classList.contains('is-idle');
       const minGap = idle ? 1000 / 12 : 1000 / 30;
