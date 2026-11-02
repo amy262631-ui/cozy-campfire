@@ -1,4 +1,5 @@
 import { t } from '../i18n/i18n.js';
+import { trButton, bindTranslate } from '../network/chatTranslate.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -211,12 +212,13 @@ export class ShrinePanel {
   }
 
   #read() {
+    bindTranslate(this.body);
     const list = [...this.wishes].reverse();
     this.body.innerHTML = `
       <div class="ema-list">
         ${
           list.length
-            ? list.map((w) => `<div class="ema-item"><span>${esc(w.text)}</span><small>— ${esc(w.name)}</small></div>`).join('')
+            ? list.map((w) => `<div class="ema-item"><span>${esc(w.text)}</span><small>— ${esc(w.name)}</small>${trButton(w.text)}</div>`).join('')
             : '<div class="shrine-sub">' + t('還沒有人掛繪馬，寫下第一個願望吧！') + '</div>'
         }
       </div>

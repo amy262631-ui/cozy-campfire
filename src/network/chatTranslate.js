@@ -33,8 +33,8 @@ export function detectLang(text) {
 }
 
 /** 翻成自己的語言；不用翻或翻不了回傳 null */
-export async function translateChat(text) {
-  if (!translateEnabled()) return null;
+export async function translateChat(text, force = false) {
+  if (!force && !translateEnabled()) return null;
   const src = detectLang(text);
   if (!src || src === TARGET) return null;
   const k = `${src}|${TARGET}|${text}`;
@@ -56,4 +56,33 @@ export async function translateChat(text) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+// ---------- 留言板、繪馬：點 🌐 才翻譯那一則（不自動翻，免得一次送出太多請求） ----------
+const attr = (x) => String(x).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+/** 這則留言不是你的語言 → 回傳一顆 🌐 按鈕的 HTML；是你的語言就回傳空字串 */
+export function trButton(text) {
+  const src = detectLang(text);
+  if (!src || src === TARGET) return '';
+  return `<button type="button" class="tr-btn" title="翻譯" data-tr="${attr(text)}">🌐</button>`;
+}
+
+/** 在列表容器上掛一次：點 🌐 就翻譯，譯文顯示在那一則下面 */
+export function bindTranslate(root) {
+  if (!root || root.dataset.trBound) return;
+  root.dataset.trBound = '1';
+  root.addEventListener('click', async (e) => {
+    const btn = e.target.closest?.('.tr-btn');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = '⋯';
+    const out = await translateChat(btn.dataset.tr, true);
+    const box = btn.closest('.notice-note, .ema-item') ?? btn.parentElement;
+    const line = document.createElement('div');
+    line.className = 'tr-out';
+    line.textContent = out ?? '翻譯失敗，稍後再試';
+    box.appendChild(line);
+    btn.remove();
+  });
 }

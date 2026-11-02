@@ -4684,3 +4684,25 @@ body.touch .m-stack .pomo-buttons {
 .ln-go[hidden] {
   display: none;
 }
+
+/* 留言板、繪馬：點一下翻譯 */
+.tr-btn {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.tr-out {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed currentColor;
+  font-size: 12px;
+  opacity: 0.85;
+}

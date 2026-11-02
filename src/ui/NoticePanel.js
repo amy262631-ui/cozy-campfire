@@ -1,5 +1,6 @@
 import { t } from '../i18n/i18n.js';
 import { SPONSOR_URL } from '../config.js';
+import { trButton, bindTranslate } from '../network/chatTranslate.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 /** 便條紙的顏色（與木牌上畫的一致） */
@@ -192,6 +193,7 @@ export class NoticePanel {
   }
 
   #renderNotes() {
+    bindTranslate(this.listEl);
     const list = [...this.notes].reverse();
     this.listEl.innerHTML = list.length
       ? list
@@ -199,7 +201,7 @@ export class NoticePanel {
             (n, i) => `
           <div class="notice-note" style="background:${NOTE_COLORS[n.color | 0] ?? NOTE_COLORS[0]};--tilt:${((i * 37) % 5) - 2}deg">
             <div class="notice-note-text">${esc(n.text)}</div>
-            <div class="notice-note-by">— ${esc(n.name)} · ${ago(n.at)}</div>
+            <div class="notice-note-by">— ${esc(n.name)} · ${ago(n.at)}${trButton(n.text)}</div>
           </div>`,
           )
           .join('')
