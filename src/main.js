@@ -1330,9 +1330,18 @@ async function init() {
     const stack = document.createElement('div');
     stack.className = 'm-stack';
     document.getElementById('ui').appendChild(stack);
-    for (const id of ['sound-unlock', 'fire-meter', 'online', 'today', 'event-line', 'mini-line', 'ritual', 'lake-news']) {
+    for (const id of ['sound-unlock', 'fire-meter', 'online', 'today', 'event-line', 'mini-line', 'ritual', 'pomodoro', 'lake-news']) {
       const el = document.getElementById(id);
       if (el) stack.appendChild(el);
+    }
+  } else {
+    // 電腦版：右上角一欄（專注計時器在上、湖畔動態在下），才不會和左上那排按鈕疊在一起
+    const rstack = document.createElement('div');
+    rstack.className = 'r-stack';
+    document.getElementById('ui').appendChild(rstack);
+    for (const id of ['pomodoro', 'lake-news']) {
+      const el = document.getElementById(id);
+      if (el) rstack.appendChild(el);
     }
   }
 

@@ -932,6 +932,7 @@ io.on('connection', (socket) => {
     saveJson('wishes.json', shared.wishes);
     bump('wishes');
     emitAllChannels('forest_main', 'wishes', { wishes: shared.wishes, by: socket.id, name: player.name });
+    pushNews('wish');
   });
 
   // 石塔祈願：在第 i 座石塔疊一顆石頭（所有分流共用、永久保存）
@@ -964,6 +965,7 @@ io.on('connection', (socket) => {
       saveJson('cairnlog.json', cairnLog);
     }
     miniBonus('stone');
+    pushNews('stone');
     emitAllChannels('forest_main', 'stone', { i, stone, count: cairn.length, by: socket.id, today: todayPublic(), done: cairnLog.done[i] });
     ack?.({ ok: true, count: cairn.length, ritual });
   });
@@ -1246,6 +1248,7 @@ io.on('connection', (socket) => {
     saveJson('tree.json', tree);
     bump('hangs');
     emitAllChannels('forest_main', 'ornament', { item, by: socket.id });
+    pushNews('hang');
     socket.emit('wallet', { pc: wal.pc, delta: -price, reason: 'hang' });
     ack?.({ ok: true, pc: wal.pc, item });
   });
@@ -1266,6 +1269,20 @@ io.on('connection', (socket) => {
     bump('notes');
     emitAllChannels('forest_main', 'notes', { notes: shared.notes, by: socket.id, name: player.name });
   });
+
+  // 📣 即時動態：釣魚、添柴、疊石、繪馬、掛裝飾，所有分流、所有地點都看得到
+  // 同一個人同一種動作 1 分鐘內只播一次（釣魚除外），免得洗版
+  const newsAt = {};
+  const pushNews = (kind, extra = {}) => {
+    if (!player) return;
+    const now = Date.now();
+    if (kind !== 'fish' && now - (newsAt[kind] ?? 0) < 60000) return;
+    newsAt[kind] = now;
+    const item = { kind, name: player.name, ch: chan.ch, at: now, ...extra };
+    shared.lakeNews.push(item);
+    shared.lakeNews = shared.lakeNews.slice(-8);
+    io.emit('lakeNews', item);
+  };
 
   // 釣到魚：全場公告＋湖畔排行（只收湖畔房間、每 3 秒最多一次）
   let lastCatch = 0;
@@ -1319,12 +1336,7 @@ io.on('connection', (socket) => {
       }
     }
     // 湖畔即時動態：所有分流、所有地點都看得到（垃圾不算）
-    if (!JUNK.has(fish)) {
-      const item = { name: player.name, fish, size, rank, ch: chan.ch, at: now };
-      shared.lakeNews.push(item);
-      shared.lakeNews = shared.lakeNews.slice(-6);
-      io.emit('lakeNews', item);
-    }
+    if (!JUNK.has(fish)) pushNews('fish', { fish, size, rank });
     // 📣 五星魚與傳說之魚：整個伺服器（所有分流、所有地點）跳出大公告
     if (FISH_RARITY[fish] >= 5) io.emit('bigCatch', { name: player.name, fish, size, ch: chan.ch, place: roomId });
     io.to(rkey).emit('caught', { id: socket.id, name: player.name, fish, size, rank });
@@ -1385,6 +1397,7 @@ io.on('connection', (socket) => {
     chan.fuel = Math.min(MAX_FUEL, chan.fuel + WOOD_FUEL);
     io.to(rkey).emit('fire', { fuel: chan.fuel, by: player.id, name: player.name });
     miniBonus('wood');
+    pushNews('fire');
   });
 
   socket.on('disconnect', () => {

@@ -29,7 +29,7 @@ export class LakeNews {
       `
       <div class="lake-news" id="lake-news" hidden>
         <div class="ln-head">
-          <span>${t('🎣 湖畔即時動態')}</span>
+          <span>${t('📣 即時動態')}</span>
           <button type="button" class="ln-go" id="ln-go">${t('去湖邊 ›')}</button>
         </div>
         <div class="ln-list" id="ln-list"></div>
@@ -49,38 +49,53 @@ export class LakeNews {
   }
 
   setAll(list) {
-    this.items = (list ?? []).slice(-6);
+    this.items = (list ?? []).slice(-8);
     this.#render(false);
   }
 
   push(item) {
     this.items.push(item);
-    this.items = this.items.slice(-6);
+    this.items = this.items.slice(-8);
     this.#render(true);
+    if (item.kind && item.kind !== 'fish') return;
     const f = FISH[item.fish];
     // 稀有魚（4 星以上）：不在湖邊的人也跳出提示，吸引大家過去看
-    if (f && f.rarity >= 4 && this.room !== 'lake_dock') {
-      this.hud.toast(
-        f.rarity >= 5
-          ? t('👑 {name} 在湖邊釣到了傳說中的{fish}（{size} 公分）！快去看看', { name: item.name, fish: f.name, size: item.size })
-          : t('🎉 {name} 在湖邊釣到了稀有的{fish}（{size} 公分）！', { name: item.name, fish: f.name, size: item.size }),
-        5000,
-      );
+    // 五星以上另有全伺服器大公告（main.js 的 bigCatch），這裡只提示四星
+    if (f && f.rarity === 4) {
+      this.hud.toast(t('🎉 {name} 釣到了稀有的{fish}（{size} 公分）！', { name: item.name, fish: f.name, size: item.size }), 5000);
     }
   }
 
   #render(fresh) {
-    const hidden = !this.items.length || this.room === 'lake_dock' || this.room === 'tent_focus';
+    // 在哪裡都看得到（湖畔、專注帳篷、自己家都一樣）
+    const hidden = !this.items.length;
     this.el.hidden = hidden;
     if (hidden) return;
+    this.el.querySelector('#ln-go').hidden = this.room === 'lake_dock'; // 已經在湖邊就不用「去湖邊」
     const shown = this.items.slice(-this.max).reverse();
     this.list.innerHTML = shown
       .map((it, i) => {
+        const fresh1 = fresh && i === 0 ? ' fresh' : '';
+        if (it.kind && it.kind !== 'fish') {
+          const TEXT = {
+            fire: t('🔥 {name} 幫營火添了柴'),
+            stone: t('🪨 {name} 在石塔放了一顆石頭'),
+            wish: t('🎋 {name} 掛上了繪馬'),
+            hang: t('🎄 {name} 在心願大樹掛了裝飾'),
+          };
+          const text = (TEXT[it.kind] ?? '').replace('{name}', esc(it.name));
+          if (!text) return '';
+          return `
+          <div class="ln-item${fresh1}">
+            <div class="ln-main">${text}</div>
+            <div class="ln-meta">${ago(it.at)}</div>
+          </div>`;
+        }
         const f = FISH[it.fish] ?? FISH[0];
         const stars = '★'.repeat(f.rarity);
         const rare = f.rarity >= 4 ? (f.rarity >= 5 ? ' legend' : ' rare') : '';
         return `
-          <div class="ln-item${rare}${fresh && i === 0 ? ' fresh' : ''}">
+          <div class="ln-item${rare}${fresh1}">
             <div class="ln-main">${t('{name} 釣到 <b>{size}cm {fish}</b>', { name: esc(it.name), size: it.size, fish: f.name })}</div>
             <div class="ln-meta"><span class="ln-stars">${stars}</span>${it.rank ? ` · ${t('排行第 {n} 名', { n: it.rank })}` : ''} · ${ago(it.at)}</div>
           </div>`;
