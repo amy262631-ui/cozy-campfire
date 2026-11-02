@@ -1,6 +1,7 @@
 import { FURNITURE_BY_ID, TENT_PRICE } from './furniture.js';
 import { TENT_STYLE_BY_ID } from './tentStyles.js';
 import { TENT_SHAPE_BY_ID } from './tentShapes.js';
+import { canStackOn, stackAt, gridOf, expandPrice, maxItems, MAX_STACK } from './furnitureCatalog.js';
 
 /**
  * 試玩版（沒有伺服器，例如放在 Claude 的預覽頁）：
@@ -8,8 +9,6 @@ import { TENT_SHAPE_BY_ID } from './tentShapes.js';
  * 只有用 VITE_DEMO=1 建置時才會啟用，正式網站不受影響。
  */
 const KEY = 'cozy-campfire-demo';
-const GRID = 6;
-const MAX_ITEMS = 36;
 
 export function createDemoHome() {
   let st = null;
@@ -47,6 +46,23 @@ export function createDemoHome() {
         save();
         return { ok: true, pc: st.pc, delta: -sh.price, home: copy() };
       }
+      if (id === 'expand') {
+        if (!home.tent) return { ok: false, reason: 'noTent' };
+        const price = expandPrice(home);
+        if (!price) return { ok: false, reason: 'maxed' };
+        if (st.pc < price) return { ok: false, reason: 'poor' };
+        st.pc -= price;
+        // 跟伺服器 server/homes.js 的 expandHome 一樣：家具跟著挪到新地板中間
+        const g = gridOf(home);
+        const shift = g % 2 === 0 ? 1 : 0;
+        for (const it of home.items) {
+          it.x += shift;
+          it.z += shift;
+        }
+        home.grid = g + 1;
+        save();
+        return { ok: true, pc: st.pc, delta: -price, home: copy() };
+      }
       const price = id === 'tent' ? TENT_PRICE : FURNITURE_BY_ID[id]?.price;
       if (!price) return { ok: false, reason: 'unknown' };
       if (id === 'tent' && home.tent) return { ok: false, reason: 'owned' };
@@ -80,21 +96,27 @@ export function createDemoHome() {
       }
       const x = Number(data.x);
       const z = Number(data.z);
-      if (!(Number.isInteger(x) && Number.isInteger(z) && x >= 0 && z >= 0 && x < GRID && z < GRID)) return { ok: false, reason: 'cell' };
-      const at = home.items.findIndex((it) => it.x === x && it.z === z);
+      const grid = gridOf(home);
+      if (!(Number.isInteger(x) && Number.isInteger(z) && x >= 0 && z >= 0 && x < grid && z < grid)) return { ok: false, reason: 'cell' };
+      const stack = stackAt(home.items, x, z);
+      const lv = data.l == null ? stack.length - 1 : Number(data.l);
+      const target = stack[lv] ?? null;
       if (data.op === 'place') {
         const i = data.i;
         const left = (home.inv[i] ?? 0) - home.items.filter((it) => it.i === i).length;
-        if (at >= 0) return { ok: false, reason: 'taken' };
+        const below = stack[stack.length - 1]?.i ?? null;
+        if (stack.length >= MAX_STACK) return { ok: false, reason: 'stackFull' };
+        if (!canStackOn(below, i)) return { ok: false, reason: below ? 'noStack' : 'taken' };
         if (left <= 0) return { ok: false, reason: 'none' };
-        if (home.items.length >= MAX_ITEMS) return { ok: false, reason: 'tooMany' };
-        home.items.push({ i, x, z, r: 0 });
+        if (home.items.length >= maxItems(grid)) return { ok: false, reason: 'tooMany' };
+        home.items.push({ i, x, z, r: 0, l: stack.length });
       } else if (data.op === 'rotate') {
-        if (at < 0) return { ok: false, reason: 'empty' };
-        home.items[at].r = (home.items[at].r + 1) % 4;
+        if (!target) return { ok: false, reason: 'empty' };
+        target.r = ((target.r ?? 0) + 1) % 4;
       } else if (data.op === 'remove') {
-        if (at < 0) return { ok: false, reason: 'empty' };
-        home.items.splice(at, 1);
+        if (!target) return { ok: false, reason: 'empty' };
+        const drop = new Set(stack.slice(lv));
+        home.items = home.items.filter((it) => !drop.has(it));
       } else return { ok: false, reason: 'op' };
       save();
       return { ok: true, home: copy() };

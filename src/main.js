@@ -1102,6 +1102,7 @@ async function init() {
     refreshHomeChip();
     if (inHome() && homeRoom.mine) {
       homeRoom.setHome(h, true);
+      if (buildPanel.active) cameraRig.target.distance = buildDistance();
       // 換了造型，門口位置可能變了：站太靠門就往裡面挪，免得被送回營火
       if (player.position.z > homeRoom.doorZ - 0.95) player.position.z = homeRoom.doorZ - 1.15;
       buildPanel.render();
@@ -1116,6 +1117,32 @@ async function init() {
   };
   hud.onHome = goHome;
 
+  /** 在小舖買東西（布置面板的「擴建」也走這裡） */
+  const buyItem = async (id) => {
+    const res = await homeReq('buy', { id });
+    if (res?.ok) {
+      if (!net.online) setCoins(res.pc, res.delta ?? 0);
+      setMyHome(res.home);
+      audio.sfx('bell');
+      if (id === 'tent') {
+        hud.toast(t('⛺ 你有自己的帳篷了！按「🏠 回家」進去看看'), 5000);
+        if (net.online && !hasAccount()) setTimeout(showSaveNudge, 1200);
+      }
+      else if (id.startsWith('shape_')) {
+        const sh = TENT_SHAPE_BY_ID[id.slice(6)];
+        hud.toast(t('{icon} 解鎖了「{name}」，你的帳篷已經換上新造型！', { icon: sh?.icon ?? '', name: sh?.name ?? '' }), 4500);
+      }
+      else if (id === 'expand') {
+        const g = res.home?.grid ?? 0;
+        hud.toast(t('📐 帳篷擴建成 {n}×{n} 了！多了 {m} 格可以擺', { n: g, m: g * g - (g - 1) * (g - 1) }), 4500);
+      }
+      else hud.toast(t('{icon} 買了{name}，回帳篷按「🛠️ 布置」擺出來', { icon: FURNITURE_BY_ID[id]?.icon ?? '', name: FURNITURE_BY_ID[id]?.name ?? '' }));
+      return true;
+    }
+    const why = { poor: t('松果不夠喔 🌰'), owned: t('你已經有帳篷了'), noTent: t('先買帳篷，才能放家具 ⛺'), tooMany: t('這個已經買很多了'), tooFast: t('慢慢來 🙂'), maxed: t('已經是最大的帳篷了 🎉') };
+    hud.toast(why[res?.reason] ?? t('沒買成，再試一次吧'));
+    return false;
+  };
   const shopPanel = new ShopPanel({
     getCoins: () => (net.online || demo ? pinecones : null),
     getHome: () => myHome,
@@ -1126,27 +1153,7 @@ async function init() {
       if (res?.ok) setMyHome({ ...res.home });
       else if (res) hud.toast(t('沒換成，再試一次吧'));
     },
-    onBuy: async (id) => {
-      const res = await homeReq('buy', { id });
-      if (res?.ok) {
-        if (!net.online) setCoins(res.pc, res.delta ?? 0);
-        setMyHome(res.home);
-        audio.sfx('bell');
-        if (id === 'tent') {
-          hud.toast(t('⛺ 你有自己的帳篷了！按「🏠 回家」進去看看'), 5000);
-          if (net.online && !hasAccount()) setTimeout(showSaveNudge, 1200);
-        }
-        else if (id.startsWith('shape_')) {
-          const sh = TENT_SHAPE_BY_ID[id.slice(6)];
-          hud.toast(t('{icon} 解鎖了「{name}」，你的帳篷已經換上新造型！', { icon: sh?.icon ?? '', name: sh?.name ?? '' }), 4500);
-        }
-        else hud.toast(t('{icon} 買了{name}，回帳篷按「🛠️ 布置」擺出來', { icon: FURNITURE_BY_ID[id]?.icon ?? '', name: FURNITURE_BY_ID[id]?.name ?? '' }));
-        return true;
-      }
-      const why = { poor: t('松果不夠喔 🌰'), owned: t('你已經有帳篷了'), noTent: t('先買帳篷，才能放家具 ⛺'), tooMany: t('這個已經買很多了'), tooFast: t('慢慢來 🙂') };
-      hud.toast(why[res?.reason] ?? t('沒買成，再試一次吧'));
-      return false;
-    },
+    onBuy: (id) => buyItem(id),
   });
   actions.onShop = () => shopPanel.open();
 
@@ -1158,10 +1165,13 @@ async function init() {
         setMyHome({ ...res.home });
         audio.sfx(op === 'remove' ? 'tap' : 'stone');
       } else if (res?.reason === 'taken') hud.toast(t('這格已經有東西了'));
+      else if (res?.reason === 'noStack') hud.toast(t('這件不能疊在上面喔'));
+      else if (res?.reason === 'stackFull') hud.toast(t('這一格已經疊滿了'));
       else if (res?.reason === 'tooMany') hud.toast(t('帳篷放滿了，收起一些再擺吧'));
       else if (res) hud.toast(t('沒放成，再試一次吧'));
     },
     onExit: () => stopBuild(),
+    onExpand: () => buyItem('expand'),
     onToggleOpen: async () => {
       const res = await homeReq('homeOpen', { open: !(myHome?.open !== false) });
       if (res?.ok) {
@@ -1172,6 +1182,8 @@ async function init() {
     },
   });
   let buildCam = null;
+  // 布置時的鏡頭距離：帳篷擴建得越大，拉得越遠
+  const buildDistance = () => Math.min(13.5, 8.5 * homeRoom.scale ** 0.9);
   const startBuild = () => {
     if (!inHome() || !homeRoom.mine) return;
     homeRoom.setBuild(true);
@@ -1180,7 +1192,7 @@ async function init() {
     // 布置時鏡頭拉高往下看，整個帳篷一目了然
     buildCam = { pitch: cameraRig.target.pitch, distance: cameraRig.target.distance };
     cameraRig.target.pitch = 1.05;
-    cameraRig.target.distance = 8.5;
+    cameraRig.target.distance = buildDistance();
   };
   const stopBuild = () => {
     document.body.classList.remove('building');

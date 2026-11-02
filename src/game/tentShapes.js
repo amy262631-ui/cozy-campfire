@@ -24,8 +24,9 @@ const GAP = 0.3; // 門口開口（弧度的一半）
  * 蓋出帳篷本體（不含地板）。門口一律朝 +z。
  *   mats.canvas 帆布、mats.accent 收邊／門簾、mats.wood 木頭、mats.trim 第二配色（菇柄、內裡）
  *   outside：true＝從外面看的版本（多了旗子、彩旗、窗戶、營釘這些外部裝飾）
+ *   noPole：不要中柱
  */
-export function buildTentShell(shapeId, mats, { outside = false } = {}) {
+export function buildTentShell(shapeId, mats, { outside = false, noPole = false } = {}) {
   const sh = shapeOf(shapeId);
   const g = new THREE.Group();
   const add = (geo, mat, x = 0, y = 0, z = 0) => {
@@ -39,7 +40,8 @@ export function buildTentShell(shapeId, mats, { outside = false } = {}) {
   const flaps = (x, h, z, mat = mats.accent) => {
     for (const s of [-1, 1]) add(new THREE.CylinderGeometry(0.08, 0.08, h, 8), mat, s * x, h / 2, z);
   };
-  const pole = (h) => add(new THREE.CylinderGeometry(0.06, 0.07, h, 8), mats.wood, 0, h / 2, 0);
+  // noPole：擴建成奇數格時中間那格要能擺家具，就不放中柱
+  const pole = (h) => !noPole && add(new THREE.CylinderGeometry(0.06, 0.07, h, 8), mats.wood, 0, h / 2, 0);
 
   if (sh.id === 'bell') {
     const R = sh.R;

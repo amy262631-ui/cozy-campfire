@@ -6,24 +6,14 @@
  */
 import crypto from 'node:crypto';
 
-/** 家具價格（與前端 src/game/furniture.js 相同） */
+import { FURNITURE_CATALOG, CATALOG_BY_ID, canStackOn, stackAt, gridOf, expandPrice, maxItems, MAX_STACK, GRID_BASE } from '../src/game/furnitureCatalog.js';
+
+/** 家具價格（資料在 src/game/furnitureCatalog.js，前後端共用） */
 export const SHOP = {
   tent: 30,
-  rug: 5,
-  cushion: 6,
-  plant: 8,
-  table: 10,
-  lamp: 12,
-  teddy: 14,
-  frame: 15,
-  jar: 18,
-  bookshelf: 20,
-  stove: 22,
-  fridge: 25,
-  bed: 30,
+  ...Object.fromEntries(FURNITURE_CATALOG.filter((f) => !f.gift).map((f) => [f.id, f.price])),
 };
-export const GRID = 6; // 帳篷地板 6×6 格
-export const MAX_ITEMS = 36;
+export { gridOf, expandPrice, maxItems, canStackOn, stackAt, MAX_STACK, CATALOG_BY_ID };
 
 // ---------- 帳號 ----------
 const NAME_RE = /^[\p{L}\p{N}_]{3,16}$/u;
@@ -50,7 +40,7 @@ export function validateCredentials(user, pass) {
 export const TENT_STYLES = new Set(['classic', 'forest', 'stripe', 'night', 'sakura', 'redspot', 'rainbow', 'patch']);
 /** 🎁 分享禮物（小舖買不到）：id → 怎麼拿到（share＝分享一次；refN＝N 位朋友透過連結來玩） */
 export const GIFTS = { postcard: 'share', foxlamp: 'ref1', rainbow: 'ref3', telescope: 'ref5' };
-export const GIFT_FURNITURE = new Set(['postcard', 'foxlamp', 'telescope']);
+export const GIFT_FURNITURE = new Set(FURNITURE_CATALOG.filter((f) => f.gift).map((f) => f.id));
 /** 帳篷造型：價格（鐘形帳買帳篷就有）、剛買下時換上的花色（跟 src/game/tentShapes.js 一致） */
 export const TENT_SHAPES = {
   bell: { price: 0 },
@@ -78,4 +68,32 @@ export function cellFree(home, x, z) {
   return !home.items.some((it) => it.x === x && it.z === z);
 }
 
-export const validCell = (x, z) => Number.isInteger(x) && Number.isInteger(z) && x >= 0 && z >= 0 && x < GRID && z < GRID;
+/** 格子在不在這頂帳篷的地板上（擴建過的帳篷格子比較多） */
+export const validCell = (x, z, grid = GRID_BASE) => Number.isInteger(x) && Number.isInteger(z) && x >= 0 && z >= 0 && x < grid && z < grid;
+
+/**
+ * 在 (x, z) 這一格最上面再放一件 id，可以的話回傳新的層數，不行回傳原因代碼。
+ */
+export function stackCheck(home, x, z, id) {
+  const stack = stackAt(home.items, x, z);
+  if (stack.length >= MAX_STACK) return { reason: 'stackFull' };
+  const below = stack[stack.length - 1]?.i ?? null;
+  if (!canStackOn(below, id)) return { reason: below ? 'noStack' : 'taken' };
+  return { l: stack.length };
+}
+
+/**
+ * 擴建帳篷：地板往外多一圈。原本的家具跟著平移到新地板的中間（左、前各多一格就往右下挪一格），
+ * 外圍只多一格的那一邊交替（偶數→奇數往右下、奇數→偶數不動），讓家具一直留在帳篷中央附近。
+ */
+export function expandHome(home) {
+  const g = gridOf(home);
+  const next = g + 1;
+  const shift = g % 2 === 0 ? 1 : 0;
+  for (const it of home.items) {
+    it.x += shift;
+    it.z += shift;
+  }
+  home.grid = next;
+  return next;
+}

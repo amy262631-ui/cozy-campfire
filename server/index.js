@@ -21,7 +21,7 @@ import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
 import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM } from '../src/fishing/fishData.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
-import { SHOP, MAX_ITEMS, hashPassword, checkPassword, validateCredentials, newHome, available, cellFree, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE } from './homes.js';
+import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck } from './homes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -155,6 +155,7 @@ const publicHome = (h) =>
         tent: !!h.tent,
         inv: h.inv,
         items: h.items,
+        grid: gridOf(h),
         open: h.open !== false,
         style: h.style ?? 'classic',
         shape: h.shape ?? 'bell',
@@ -164,7 +165,7 @@ const publicHome = (h) =>
         notes: h.notes ?? [],
         gifts: h.gifts ?? [],
       }
-    : { tent: false, inv: {}, items: [], open: true, style: 'classic', shape: 'bell', shapes: ['bell'], name: '', likes: 0, notes: [], gifts: [] };
+    : { tent: false, inv: {}, items: [], grid: gridOf(null), open: true, style: 'classic', shape: 'bell', shapes: ['bell'], name: '', likes: 0, notes: [], gifts: [] };
 /** 公開代號 → vid（找不到回傳 null） */
 const hidCache = new Map();
 function vidOfHid(hid) {
@@ -995,11 +996,26 @@ io.on('connection', (socket) => {
     const id = String(data.id ?? '');
     const shapeId = id.startsWith('shape_') ? id.slice(6) : null;
     const shape = shapeId && Object.hasOwn(TENT_SHAPES, shapeId) ? TENT_SHAPES[shapeId] : null;
-    const price = shapeId ? shape?.price : SHOP[id];
+    const h = (homes[player.vid] ??= newHome());
+    const price = shapeId ? shape?.price : id === 'expand' ? expandPrice(h) : SHOP[id];
+    if (id === 'expand' && h.tent && !price) return ack?.({ ok: false, reason: 'maxed' });
     if (!price) return ack?.({ ok: false, reason: 'unknown' });
     const now = Date.now();
     if (now - lastBuy < 800) return ack?.({ ok: false, reason: 'tooFast' });
-    const h = (homes[player.vid] ??= newHome());
+    if (id === 'expand') {
+      // 📐 擴建帳篷：地板多一圈格子，一次比一次貴
+      if (!h.tent) return ack?.({ ok: false, reason: 'noTent' });
+      if (wal.pc < price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
+      lastBuy = now;
+      wal.pc -= price;
+      expandHome(h);
+      saveJson('players.json', players);
+      saveJson('homes.json', homes);
+      bump('buys');
+      socket.emit('wallet', { pc: wal.pc, delta: -price, reason: 'buy' });
+      io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) });
+      return ack?.({ ok: true, pc: wal.pc, home: publicHome(h) });
+    }
     if (shapeId) {
       // 帳篷造型：買一次就一直有，買下後直接換上
       if (!h.tent) return ack?.({ ok: false, reason: 'noTent' });
@@ -1061,21 +1077,27 @@ io.on('connection', (socket) => {
     if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
     const x = Number(data.x);
     const z = Number(data.z);
-    if (!validCell(x, z)) return ack?.({ ok: false, reason: 'cell' });
-    const at = h.items.findIndex((it) => it.x === x && it.z === z);
+    if (!validCell(x, z, gridOf(h))) return ack?.({ ok: false, reason: 'cell' });
+    // 一格可以疊好幾層（地墊→家具→小東西）；轉向、收起要指定第幾層，沒指定就是最上面那件
+    const stack = stackAt(h.items, x, z);
+    const lv = data.l == null ? stack.length - 1 : Math.floor(num(data.l, 0, 9, 0));
+    const target = stack[lv] ?? null;
     if (data.op === 'place') {
       const i = String(data.i ?? '');
       if ((!SHOP[i] && !GIFT_FURNITURE.has(i)) || i === 'tent') return ack?.({ ok: false, reason: 'unknown' });
-      if (!cellFree(h, x, z)) return ack?.({ ok: false, reason: 'taken' });
+      const chk = stackCheck(h, x, z, i);
+      if (chk.reason) return ack?.({ ok: false, reason: chk.reason });
       if (available(h, i) <= 0) return ack?.({ ok: false, reason: 'none' });
-      if (h.items.length >= MAX_ITEMS) return ack?.({ ok: false, reason: 'tooMany' });
-      h.items.push({ i, x, z, r: Math.floor(num(data.r, 0, 3, 0)) });
+      if (h.items.length >= maxItems(gridOf(h))) return ack?.({ ok: false, reason: 'tooMany' });
+      h.items.push({ i, x, z, r: Math.floor(num(data.r, 0, 3, 0)), l: chk.l });
     } else if (data.op === 'rotate') {
-      if (at < 0) return ack?.({ ok: false, reason: 'empty' });
-      h.items[at].r = (h.items[at].r + 1) % 4;
+      if (!target) return ack?.({ ok: false, reason: 'empty' });
+      target.r = ((target.r ?? 0) + 1) % 4;
     } else if (data.op === 'remove') {
-      if (at < 0) return ack?.({ ok: false, reason: 'empty' });
-      h.items.splice(at, 1);
+      if (!target) return ack?.({ ok: false, reason: 'empty' });
+      // 收起某一層：疊在它上面的也一起收回背包
+      const drop = new Set(stack.slice(lv));
+      h.items = h.items.filter((it) => !drop.has(it));
     } else return ack?.({ ok: false, reason: 'op' });
     saveJson('homes.json', homes);
     io.to(rkey).emit('homeUpdate', { owner: homeId(homeOwner), home: publicHome(h) });

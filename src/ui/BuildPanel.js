@@ -2,18 +2,20 @@ import { t } from '../i18n/i18n.js';
 import { ALL_FURNITURE, FURNITURE_BY_ID } from '../game/furniture.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TENT_SHAPES } from '../game/tentShapes.js';
+import { CATALOG_BY_ID, canStackOn, stackAt, gridOf, expandPrice, MAX_STACK } from '../game/furnitureCatalog.js';
 
 /**
  * 布置帳篷：畫面下方的一條面板。
- *   點地板的格子 → 空格：選背包裡的家具放上去；有東西：轉向或收起
- *   getHome()        { inv, items }
- *   onEdit(op, data) → Promise（op：place / rotate / remove）
+ *   點地板的格子 → 空格：選背包裡的家具放上去；有東西：每一層都能轉向或收起，上面還能再疊
+ *   getHome()        { inv, items, grid }
+ *   onEdit(op, data) → Promise（op：place / rotate / remove；rotate、remove 帶 l＝第幾層）
+ *   onExpand()       📐 擴建帳篷（用松果買）
  *   onExit()         結束布置
  *   onToggleOpen()   開放／關閉參觀
  */
 export class BuildPanel {
-  constructor({ getHome, onEdit, onExit, onToggleOpen, root = document.getElementById('ui') }) {
-    Object.assign(this, { getHome, onEdit, onExit, onToggleOpen });
+  constructor({ getHome, onEdit, onExit, onToggleOpen, onExpand, root = document.getElementById('ui') }) {
+    Object.assign(this, { getHome, onEdit, onExit, onToggleOpen, onExpand });
     this.cell = null;
     root.insertAdjacentHTML(
       'beforeend',
@@ -44,6 +46,13 @@ export class BuildPanel {
     $('#home-exit').addEventListener('click', () => this.onLeave?.());
     this.openBtn.addEventListener('click', () => this.onToggleOpen?.());
     this.body.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-expand]') && !this.busy) {
+        this.busy = true;
+        await this.onExpand?.();
+        this.busy = false;
+        this.render();
+        return;
+      }
       const sb = e.target.closest('[data-style],[data-shape]');
       if (sb && !this.busy) {
         this.busy = true;
@@ -55,7 +64,7 @@ export class BuildPanel {
       const b = e.target.closest('[data-op]');
       if (!b || !this.cell || this.busy) return;
       this.busy = true;
-      await this.onEdit?.(b.dataset.op, { ...this.cell, i: b.dataset.i });
+      await this.onEdit?.(b.dataset.op, { ...this.cell, i: b.dataset.i, l: b.dataset.l != null ? Number(b.dataset.l) : undefined });
       this.busy = false;
       this.render();
     });
@@ -96,10 +105,17 @@ export class BuildPanel {
       const total = Object.values(home.inv ?? {}).reduce((a, b) => a + b, 0);
       this.title.textContent = t('🛠️ 布置模式：點地板上的格子');
       const cur = home.style ?? 'classic';
+      const g = gridOf(home);
+      const price = expandPrice(home);
       this.body.innerHTML =
         (total
-          ? `<div class="build-tip">${t('點一個空格放家具，點家具可以轉向或收起')}</div>`
+          ? `<div class="build-tip">${t('點一格放家具；桌子、櫃子上還能再疊小東西')}</div>`
           : `<div class="build-tip">${t('背包是空的，先到營火旁的「🏪 營地小舖」買家具吧')}</div>`) +
+        `<div class="build-styles"><span class="build-styles-label">${t('📐 地板 {n}×{n}', { n: g })}</span>${
+          price
+            ? `<button type="button" class="build-style build-expand" data-expand="1">${t('擴建成 {n}×{n}', { n: g + 1 })} 🌰 ${price}</button>`
+            : `<span class="build-styles-label">${t('已經是最大的帳篷了 🎉')}</span>`
+        }</div>` +
         ((home.shapes ?? ['bell']).length > 1
           ? `<div class="build-styles"><span class="build-styles-label">${t('⛺ 造型')}</span>${TENT_SHAPES.filter((x) => (home.shapes ?? ['bell']).includes(x.id))
               .map((x) => `<button type="button" class="build-style${x.id === (home.shape ?? 'bell') ? ' on' : ''}" data-shape="${x.id}"><span>${x.icon}</span>${x.name}</button>`)
@@ -110,19 +126,38 @@ export class BuildPanel {
         ).join('')}</div>`;
       return;
     }
-    const item = home.items.find((it) => it.x === this.cell.x && it.z === this.cell.z);
-    if (item) {
-      const f = FURNITURE_BY_ID[item.i];
-      this.title.textContent = `${f?.icon ?? ''} ${f?.name ?? ''}`;
-      this.body.innerHTML = `
-        <button type="button" class="build-act" data-op="rotate">${t('🔄 轉個方向')}</button>
-        <button type="button" class="build-act" data-op="remove">${t('📦 收回背包')}</button>`;
+    const stack = stackAt(home.items, this.cell.x, this.cell.z).filter((it) => FURNITURE_BY_ID[it.i]);
+    const top = stack.at(-1) ?? null;
+    const avail = ALL_FURNITURE.map((f) => ({ f, n: (home.inv?.[f.id] ?? 0) - home.items.filter((x) => x.i === f.id).length })).filter((x) => x.n > 0);
+    const fits = stack.length < MAX_STACK ? avail.filter(({ f }) => canStackOn(top?.i ?? null, f.id)) : [];
+    const list = fits.map(({ f, n }) => `<button type="button" class="build-item" data-op="place" data-i="${f.id}"><span>${f.icon}</span>${f.name}<small>×${n}</small></button>`).join('');
+    if (!stack.length) {
+      this.title.textContent = t('要在這格放什麼？');
+      this.body.innerHTML = list || `<div class="build-tip">${t('背包裡的家具都擺出來了，到「🏪 營地小舖」買更多吧')}</div>`;
       return;
     }
-    this.title.textContent = t('要在這格放什麼？');
-    const avail = ALL_FURNITURE.map((f) => ({ f, n: (home.inv?.[f.id] ?? 0) - home.items.filter((x) => x.i === f.id).length })).filter((x) => x.n > 0);
-    this.body.innerHTML = avail.length
-      ? avail.map(({ f, n }) => `<button type="button" class="build-item" data-op="place" data-i="${f.id}"><span>${f.icon}</span>${f.name}<small>×${n}</small></button>`).join('')
-      : `<div class="build-tip">${t('背包裡的家具都擺出來了，到「🏪 營地小舖」買更多吧')}</div>`;
+    const f0 = FURNITURE_BY_ID[top.i];
+    this.title.textContent = stack.length > 1 ? t('這一格疊了 {n} 層', { n: stack.length }) : `${f0?.icon ?? ''} ${f0?.name ?? ''}`;
+    // 每一層（上面的排前面）：轉向、收起
+    const layers = stack
+      .map((it, lv) => {
+        const f = FURNITURE_BY_ID[it.i];
+        const above = stack.length - 1 - lv;
+        return `<div class="build-layer">
+          <span class="bl-name">${f.icon} ${f.name}</span>
+          <button type="button" class="build-act" data-op="rotate" data-l="${lv}">${t('🔄 轉個方向')}</button>
+          <button type="button" class="build-act" data-op="remove" data-l="${lv}" ${above ? `title="${t('上面的東西也會一起收回')}"` : ''}>${t('📦 收回背包')}${above ? ' ⤴' : ''}</button>
+        </div>`;
+      })
+      .reverse()
+      .join('');
+    const c = CATALOG_BY_ID[top.i];
+    let more = '';
+    if (list) more = `<div class="build-tip build-sub">${t('⬆️ 可以疊在上面：')}</div>${list}`;
+    else if (stack.length >= MAX_STACK) more = `<div class="build-tip build-sub">${t('這一格已經疊滿了')}</div>`;
+    else if (c?.kind === 'mat') more = `<div class="build-tip build-sub">${t('地墊上可以放任何家具，背包裡沒有可以放的了')}</div>`;
+    else if (c?.top) more = `<div class="build-tip build-sub">${t('上面可以放小東西（燈、盆栽、玩偶⋯），到小舖買一些吧')}</div>`;
+    else more = `<div class="build-tip build-sub">${t('這件上面不能再疊東西了')}</div>`;
+    this.body.innerHTML = layers + more;
   }
 }

@@ -4719,3 +4719,109 @@ body.touch .m-stack .pomo-buttons {
 .r-stack {
   z-index: 3;
 }
+
+/* ---------- 家具分類、疊放、帳篷擴建 ---------- */
+.shop-cats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.shop-cats button {
+  padding: 4px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.shop-cats button.on {
+  border-color: #ffd27a;
+  background: rgba(255, 210, 122, 0.2);
+}
+
+.si-tag {
+  margin-top: 1px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(184, 240, 192, 0.14);
+  color: #c8f0cf;
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.shop-expand {
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 245, 230, 0.06);
+}
+
+.se-grid {
+  display: grid;
+  gap: 3px;
+  width: min(220px, 70%);
+  aspect-ratio: 1;
+  margin: 4px auto 6px;
+  padding: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201, 168, 116, 0.35), rgba(201, 168, 116, 0.08) 70%);
+}
+
+.se-grid i {
+  border-radius: 3px;
+  background: rgba(255, 226, 184, 0.5);
+}
+
+.se-grid i.new {
+  background: rgba(255, 180, 107, 0.95);
+  box-shadow: 0 0 6px rgba(255, 180, 107, 0.7);
+  animation: se-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes se-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.build-body {
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+.build-layer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.build-layer .bl-name {
+  flex: 1;
+  min-width: 90px;
+  font-size: 14px;
+}
+
+.build-layer .build-act {
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.build-sub {
+  width: 100%;
+  margin-top: 2px;
+}
+
+.build-expand {
+  border-color: rgba(255, 180, 107, 0.6);
+  background: rgba(255, 180, 107, 0.18);
+}
