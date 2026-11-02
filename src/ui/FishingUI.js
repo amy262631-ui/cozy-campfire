@@ -199,6 +199,7 @@ export class FishingUI {
       return `<div class="dex-card rarity-${f.rarity}"><i class="dex-fish" style="${patch}${glow}"></i><b>${f.name}</b><small>${f.rarity ? stars(f.rarity) : t('雜物')}</small><em>${f.junk ? `×${e.count}` : t('最大 {size} 公分・×{n}', { size: e.best, n: e.count })}</em></div>`;
     }).join('');
     this.el.modalBody.innerHTML = `
+      <div class="dex-tabs"><button type="button" class="on">${t('🐟 魚')}</button><button type="button" disabled>${t('🌸 花（下次更新）')}</button></div>
       <div class="dex-note">${t('第一次釣到新的魚會收進圖鑑，送松果（★ 越多送越多）；全部 {n} 種收集完再送 {b} 顆 🌰', { n: FISH.length, b: DEX_BONUS })}</div>
       <div class="dex-grid">${cards}</div>
       <div class="creel-total">${t('總共釣了 {n} 次（每條魚都放回湖裡了）', { n: total })}</div>`;

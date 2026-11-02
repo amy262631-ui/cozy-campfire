@@ -560,6 +560,10 @@ async function init() {
     else if (reason === 'fish') hud.toast(t('🌰 釣到魚，撿到 {n} 顆松果', { n: delta }));
     // dex（圖鑑收錄）的提示由 'dex' 事件負責
   });
+  // 上方的「📖 圖鑑」：在哪裡都能打開（之後花、其他收集也放在這裡）
+  hud.onDex = () => fishingUI.openCreel();
+  // 湖畔排行按鈕併進上方那一排（不再另外浮一層，免得和上方文字疊在一起）
+  hud.el.online.insertBefore(fishingUI.el.tools, hud.el.acctChip);
   // 📖 圖鑑收錄新魚
   net.on('dex', ({ fish, gain, bonus, count, total, dex }) => {
     fishingUI.mergeDex(dex);

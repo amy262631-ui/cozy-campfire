@@ -27,7 +27,7 @@ export class HUD {
 
       <div class="prompt" id="prompt"></div>
 
-      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button></div>
+      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button></div>
       <div class="today" id="today" hidden></div>
       <div class="event-line" id="event-line" hidden></div>
       <div class="mini-line" id="mini-line" hidden></div>
@@ -54,6 +54,7 @@ export class HUD {
       invite: root.querySelector('#invite-chip'),
       homeChip: root.querySelector('#home-chip'),
       acctChip: root.querySelector('#acct-chip'),
+      dexChip: root.querySelector('#dex-chip'),
       eventLine: root.querySelector('#event-line'),
       miniLine: root.querySelector('#mini-line'),
     };
@@ -62,6 +63,8 @@ export class HUD {
     this.onHome = null;
     this.el.homeChip.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.homeChip.addEventListener('click', () => this.onHome?.());
+    this.el.dexChip.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.el.dexChip.addEventListener('click', () => this.onDex?.());
     this.el.acctChip.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.acctChip.addEventListener('click', () => this.onMeClick?.({ focusAccount: true }));
     this.el.invite.addEventListener('pointerdown', (e) => e.stopPropagation());
