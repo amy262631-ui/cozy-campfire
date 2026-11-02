@@ -10,7 +10,7 @@ import { ThirdPersonCamera } from './camera/ThirdPersonCamera.js';
 import { ZzzBubbles } from './fx/ZzzBubbles.js';
 import { HUD } from './ui/HUD.js';
 import { MobileControls, isTouchDevice } from './ui/MobileControls.js';
-import { JoinScreen, autoProfile } from './ui/JoinScreen.js';
+import { JoinScreen, autoProfile, saveProfile } from './ui/JoinScreen.js';
 import { MixerPanel } from './ui/MixerPanel.js';
 import { PomodoroPanel } from './ui/PomodoroPanel.js';
 import { JukeboxPanel } from './ui/JukeboxPanel.js';
@@ -781,6 +781,22 @@ async function init() {
     // 松果：每天第一次來會送松果（連續越多天越多）
     if (res.wallet) {
       const w = res.wallet;
+      // 👤 自己取過的名字和外型：伺服器記得，換裝置登入也會跟著回來
+      if (profile.custom || profile.customLook) {
+        net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0 });
+      } else if (!w.look?.name && accountName()) {
+        // 有帳號但還沒存過名字：就算沒按過 ✏️，也把現在的名字固定下來
+        profile = { ...profile, custom: true, customLook: true };
+        saveProfile(profile);
+        net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0 });
+      } else if (w.look?.name) {
+        profile = { ...profile, ...w.look, custom: true, customLook: true };
+        saveProfile(profile);
+        myName = profile.name;
+        applyLook(profile);
+        hud.setMe(myName);
+        net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
+      }
       fishingUI.mergeDex(w.dex);
       // 以前存在這個瀏覽器裡的魚簍，也一起存進帳號（換手機登入就看得到）
       const local = Object.fromEntries(Object.entries(fishingUI.creel).filter(([, e]) => e?.count).map(([i, e]) => [i, e.best || 1]));
@@ -1298,6 +1314,10 @@ async function init() {
       } catch {
         /* 存不了也沒關係 */
       }
+      // 有帳號了：把目前的名字和外型固定下來，之後重新整理不會再變
+      profile = { ...profile, custom: true, customLook: true };
+      saveProfile(profile);
+      net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0 });
       hud.toast(t('👤 帳號建立好了！換手機時用「{user}」登入就能找回松果和帳篷', { user: res.user }), 5000);
       return null;
     },
@@ -1527,6 +1547,11 @@ async function init() {
       hud.setMe(myName);
     }
     // 重新連線，讓大家看到新的名字和樣子（也重新判斷贊助頭飾）
+    // 自己改過名字或外型：一定記住（有帳號的話，換裝置登入也會跟著回來）
+    profile.custom = true;
+    profile.customLook = true;
+    saveProfile(profile);
+    net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0 });
     net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
     hud.toast(t('✨ 換好了，{name}', { name: myName }));
   };

@@ -795,7 +795,7 @@ io.on('connection', (socket) => {
       ok: true,
       id: socket.id,
       reward: player.rw,
-      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, dex: dexView(wal) } : null,
+      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, dex: dexView(wal), look: wal.look ?? null } : null,
       myHome: publicHome(homes[player.vid]),
       code: player.vid ? homeId(player.vid) : null, // 邀請連結用的公開代號
       ver: webVersion,
@@ -1081,6 +1081,15 @@ io.on('connection', (socket) => {
     io.to(rkey).emit('homeUpdate', { owner: homeId(homeOwner), home: publicHome(h) });
     ack?.({ ok: true, home: publicHome(h) });
   });
+  // 👤 記住自己取的名字和外型（換裝置用帳號登入就會跟著回來）
+  socket.on('saveLook', (data = {}) => {
+    if (!wal) return;
+    const name = String(data.name ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 12);
+    if (!name) return;
+    wal.look = { name, fur: Math.floor(num(data.fur, 0, 50, 0)), species: Math.floor(num(data.species, 0, 50, 0)) };
+    saveJson('players.json', players);
+  });
+
   // 📖 把以前存在瀏覽器裡的魚簍紀錄存進帳號（只顯示，不送松果；換手機登入也看得到）
   socket.on('dexSync', (data = {}, ack) => {
     if (!wal) return ack?.({ ok: false });
