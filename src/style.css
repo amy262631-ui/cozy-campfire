@@ -4706,3 +4706,16 @@ body.touch .m-stack .pomo-buttons {
   font-size: 12px;
   opacity: 0.85;
 }
+
+/* 語言、聲音選單要蓋在即時動態上面，才點得到 */
+.lang {
+  z-index: 12;
+}
+
+.mixer {
+  z-index: 12;
+}
+
+.r-stack {
+  z-index: 3;
+}
