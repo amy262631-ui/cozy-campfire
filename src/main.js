@@ -73,14 +73,16 @@ async function init() {
   translateStatic(); // index.html 裡的固定文字
   // ---------- Renderer ----------
   const container = document.getElementById('app');
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  const pixelRatio = Math.min(window.devicePixelRatio, 2);
+  // 🔋 省電模式（手機自動開）：解析度低一點、不畫影子、每秒最多 30 張；掛機時再降到 12 張
+  const lowPower = (isTouchDevice() || params.has('lowpower')) && !params.has('hq');
+  const renderer = new THREE.WebGLRenderer({ antialias: !lowPower, powerPreference: lowPower ? 'low-power' : 'high-performance' });
+  const pixelRatio = Math.min(window.devicePixelRatio, lowPower ? 1.25 : 2);
   renderer.setPixelRatio(pixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !lowPower; // 營火的點光源影子要畫 6 次，手機最吃電
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
@@ -100,6 +102,7 @@ async function init() {
     home: createHomeRoom(), // 我的帳篷（每個人的帳篷共用這個房間，進來時換上主人的擺設）
   };
   const { world, campfire } = forest;
+  if (lowPower) campfire.light.castShadow = false; // 省電模式不算影子
   world.setPixelRatio(pixelRatio);
 
   // ---------- Player ----------
@@ -199,6 +202,8 @@ async function init() {
   });
   rooms.lake_dock.fishing = fishing;
   forest.fishing = fishing; // 營火河畔也用同一個釣魚遊戲
+  // 特殊魚的出現條件：營火時間、整點釣魚大賽
+  fishing.context = () => ({ event: !!currentEvent()?.active, contest: !!(miniState?.active && miniState.kind === 'fish') });
 
   // ---------- 表情、聊天 ----------
   let myName = '';
@@ -258,6 +263,7 @@ async function init() {
   };
   const noticePanel = new NoticePanel({
     hud,
+    onIdea: async (text) => (net.online ? ((await net.request('idea', { text })) ?? { ok: false }) : { ok: false, reason: 'offline' }),
     onPost: (text, color) => {
       ritual?.event('note');
       if (net.online) net.note(text, color);
@@ -552,6 +558,17 @@ async function init() {
     if (reason === 'sit') hud.toast(t('🌰 在營地待了一會兒，撿到 {n} 顆松果', { n: delta }));
     else if (reason === 'quest') hud.toast(t('🌰 完成任務，拿到 {n} 顆松果！可以去心願大樹換裝飾', { n: delta }), 3500);
     else if (reason === 'fish') hud.toast(t('🌰 釣到魚，撿到 {n} 顆松果', { n: delta }));
+    // dex（圖鑑收錄）的提示由 'dex' 事件負責
+  });
+  // 📖 圖鑑收錄新魚
+  net.on('dex', ({ fish, gain, bonus, count, total, dex }) => {
+    fishingUI.mergeDex(dex);
+    const f = FISH[fish];
+    setTimeout(() => {
+      hud.toast(t('📖 圖鑑新收錄：{name}！+{n} 🌰（{c}／{t}）', { name: f?.name ?? '', n: gain, c: count, t: total }), 5000);
+      if (bonus) setTimeout(() => hud.toast(t('🏆 魚類圖鑑全部收集完成！再送你 {n} 顆松果', { n: bonus }), 6000), 2500);
+      audio.sfx('bell');
+    }, 2600); // 等釣到魚的卡片先秀完
   });
   net.on('ornament', ({ item, by }) => {
     forest.wishTree.add(item);
@@ -744,6 +761,12 @@ async function init() {
     }
     hud.setInviteVisible(true);
     myCode = res.code ?? null;
+    // 伺服器更新過、自己的畫面還是舊版：提醒重新整理
+    const mine = document.querySelector('script[src*="assets/index-"]')?.getAttribute('src')?.match(/index-([\w-]+)\.js/)?.[1];
+    if (res.ver && mine && res.ver !== mine && !document.getElementById('new-ver')) {
+      document.getElementById('ui').insertAdjacentHTML('beforeend', `<button type="button" class="new-ver" id="new-ver">${t('🔥 營地有新東西了，點這裡重新整理')}</button>`);
+      document.getElementById('new-ver').addEventListener('click', () => location.reload());
+    }
     if (res.myHome) setMyHome(res.myHome);
     setTimeout(() => welcome.maybeShow(), 1200);
     // 伺服器判斷是不是贊助者：是的話頭上開一朵小花
@@ -754,6 +777,10 @@ async function init() {
     // 松果：每天第一次來會送松果（連續越多天越多）
     if (res.wallet) {
       const w = res.wallet;
+      fishingUI.mergeDex(w.dex);
+      // 以前存在這個瀏覽器裡的魚簍，也一起存進帳號（換手機登入就看得到）
+      const local = Object.fromEntries(Object.entries(fishingUI.creel).filter(([, e]) => e?.count).map(([i, e]) => [i, e.best || 1]));
+      if (Object.keys(local).length) net.request('dexSync', { dex: local }).then((r) => r?.dex && fishingUI.mergeDex(r.dex));
       setCoins(w.pc, w.daily?.gain ?? 0);
       if (w.daily) {
         hud.toast(
@@ -1338,7 +1365,14 @@ async function init() {
   window.addEventListener('error', (e) => reportError(e.error || e.message));
   window.addEventListener('unhandledrejection', (e) => reportError(e.reason));
 
-  renderer.setAnimationLoop(() => {
+  let lastFrame = 0;
+  renderer.setAnimationLoop((now) => {
+    if (lowPower) {
+      const idle = document.body.classList.contains('is-idle');
+      const minGap = idle ? 1000 / 12 : 1000 / 30;
+      if (now - lastFrame < minGap - 2) return; // 跳過這一張，省電
+      lastFrame = now;
+    }
     try {
       frame();
     } catch (err) {

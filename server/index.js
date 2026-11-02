@@ -61,7 +61,7 @@ const CAIRN_COUNT = 6;
 const CAIRN_MAX = 99;
 const STACK_COOLDOWN_MS = 2000;
 // 魚：索引 0~9（8、9 是垃圾，不列入排行），尺寸上限
-const FISH_COUNT = 10;
+const FISH_COUNT = 17;
 const JUNK = new Set([8, 9]);
 const FISH_MAX_CM = 130;
 
@@ -137,8 +137,8 @@ function pickChannel(wanted) {
 const DATA_DIR = path.resolve(__dirname, 'data');
 await storage.init(DATA_DIR);
 const asArray = (v) => (Array.isArray(v) ? v : []);
-const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog, savedAccounts, savedHomes] = await Promise.all(
-  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json'].map((f) =>
+const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog, savedAccounts, savedHomes, savedIdeas] = await Promise.all(
+  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json', 'ideas.json'].map((f) =>
     storage.load(f),
   ),
 );
@@ -147,6 +147,8 @@ const asObject = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {
 const accounts = asObject(savedAccounts);
 /** 每個人的帳篷：{ vid: { tent, inv: { 家具: 數量 }, items: [{ i, x, z, r }], open } } */
 const homes = asObject(savedHomes);
+/** 💡 玩家建議（只有作者在 /ideas 看得到）：[{ n, t, at }] */
+let ideas = asArray(savedIdeas);
 const publicHome = (h) =>
   h
     ? {
@@ -254,7 +256,15 @@ const SIT_EVERY_MIN = 5; // 在營地待滿幾分鐘撿一次松果
 const SIT_GAIN = 2;
 const SIT_DAILY_CAP = 30; // 每天靠「待著」最多撿幾顆
 const QUEST_GAIN = 5;
-const FISH_RARITY = [1, 1, 2, 2, 3, 4, 4, 5, 0, 0]; // 與前端 fishData.js 相同
+const FISH_RARITY = [1, 1, 2, 2, 3, 4, 4, 5, 0, 0, 2, 3, 3, 3, 4, 4, 5]; // 與前端 fishData.js 相同
+const DEX_GAIN = [1, 2, 3, 5, 10, 20]; // 第一次釣到某種魚（收進圖鑑）送的松果
+const DEX_BONUS = 50; // 圖鑑全部收集完
+/** 給玩家看的圖鑑：伺服器紀錄＋以前存在瀏覽器裡的舊紀錄（舊紀錄只顯示，不送松果） */
+const dexView = (w) => {
+  const out = { ...(w?.dexOld ?? {}) };
+  for (const [k, v] of Object.entries(w?.dex ?? {})) out[k] = Math.max(out[k] ?? 0, v);
+  return out;
+};
 const FISH_GAIN = { 1: 1, 2: 2, 3: 3, 4: 6, 5: 15 };
 /** 這一場小活動的紀錄：釣魚大賽每人最大的一條；疊石、添柴每人多拿了幾顆 */
 let miniRun = { id: null, best: new Map(), got: new Map() };
@@ -416,6 +426,13 @@ const publicCairnLog = () => ({ done: cairnLog.done, showMs: CAIRN_SHOW_MS, arch
 // ---------- HTTP ----------
 const app = express();
 const distDir = path.resolve(__dirname, '../dist');
+/** 目前網頁的版本（打包後 JS 檔名裡的雜湊）：玩家的畫面版本不一樣，就提醒他重新整理 */
+let webVersion = null;
+try {
+  webVersion = fs.readFileSync(path.join(distDir, 'index.html'), 'utf8').match(/assets\/index-([\w-]+)\.js/)?.[1] ?? null;
+} catch {
+  /* 開發模式沒有 dist */
+}
 if (fs.existsSync(distDir)) {
   // 首頁：把分享預覽圖換成完整網址（Threads、LINE、FB 的預覽卡片需要）
   const indexFile = path.join(distDir, 'index.html');
@@ -484,11 +501,21 @@ app.get(['/stats', '/api/stats'], (req, res) => {
 <div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="17">還沒有資料</td></tr>'}</table></div></body></html>`);
 });
 
+// 💡 玩家建議：/ideas（有設 STATS_KEY 時要帶 ?key=）
+app.get('/ideas', (req, res) => {
+  if (process.env.STATS_KEY && req.query.key !== process.env.STATS_KEY) return res.status(403).send('需要密碼：/ideas?key=…');
+  const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const rows = [...ideas].reverse().map((i) => `<div class="i"><b>${esc(i.n)}</b><small>${new Date(i.at).toLocaleString('zh-TW', { timeZone: STATS_TZ })}</small><p>${esc(i.t)}</p></div>`).join('');
+  res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>玩家建議</title>
+<style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px;max-width:720px;margin:auto}.i{padding:10px 12px;margin:8px 0;border-radius:10px;background:#2a211c}.i b{color:#ffb46b}.i small{opacity:.6;margin-left:8px}.i p{margin:6px 0 0;white-space:pre-wrap}</style></head>
+<body><h2>💡 玩家建議（${ideas.length} 則）</h2>${rows || '<p>還沒有建議</p>'}</body></html>`);
+});
+
 // 備份：/api/backup（有設 STATS_KEY 時要帶 ?key=），下載所有留言、繪馬、石塔、排行、統計
 app.get('/api/backup', (req, res) => {
   if (process.env.STATS_KEY && req.query.key !== process.env.STATS_KEY) return res.status(403).send('需要密碼：/api/backup?key=…');
   res.setHeader('Content-Disposition', `attachment; filename="cozy-backup-${dayKey()}.json"`);
-  res.json({ notes: shared.notes, wishes: shared.wishes, cairns: shared.cairns, cairnLog, board: shared.board, tree, players, stats });
+  res.json({ notes: shared.notes, wishes: shared.wishes, cairns: shared.cairns, cairnLog, board: shared.board, tree, players, stats, ideas });
 });
 
 app.get('/api/health', (_req, res) => {
@@ -768,9 +795,10 @@ io.on('connection', (socket) => {
       ok: true,
       id: socket.id,
       reward: player.rw,
-      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily } : null,
+      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, dex: dexView(wal) } : null,
       myHome: publicHome(homes[player.vid]),
       code: player.vid ? homeId(player.vid) : null, // 邀請連結用的公開代號
+      ver: webVersion,
       ...roomSnapshot(chan, roomId, socket.id),
     });
     socket.to(rkey).emit('playerJoined', publicInfo(player));
@@ -1049,6 +1077,46 @@ io.on('connection', (socket) => {
     io.to(rkey).emit('homeUpdate', { owner: homeId(homeOwner), home: publicHome(h) });
     ack?.({ ok: true, home: publicHome(h) });
   });
+  // 📖 把以前存在瀏覽器裡的魚簍紀錄存進帳號（只顯示，不送松果；換手機登入也看得到）
+  socket.on('dexSync', (data = {}, ack) => {
+    if (!wal) return ack?.({ ok: false });
+    wal.dexOld ??= {};
+    let changed = false;
+    for (const [k, v] of Object.entries(data.dex ?? {}).slice(0, FISH_COUNT)) {
+      const i = Number(k);
+      const size = Math.round(num(v, 0, FISH_MAX_CM, 0));
+      if (!Number.isInteger(i) || i < 0 || i >= FISH_COUNT || size <= 0) continue;
+      if (size > (wal.dexOld[i] ?? 0)) {
+        wal.dexOld[i] = size;
+        changed = true;
+      }
+    }
+    if (changed) saveJson('players.json', players);
+    ack?.({ ok: true, dex: dexView(wal) });
+  });
+
+  // 💡 給建議：每天第一則送 3 顆松果
+  let lastIdea = 0;
+  socket.on('idea', (data = {}, ack) => {
+    if (!player) return ack?.({ ok: false });
+    const text = String(data.text ?? '').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').trim().slice(0, 200);
+    if (text.length < 4) return ack?.({ ok: false, reason: 'short' });
+    const now = Date.now();
+    if (now - lastIdea < 60000) return ack?.({ ok: false, reason: 'tooFast' });
+    lastIdea = now;
+    ideas.push({ n: player.name, t: text, at: now });
+    ideas = ideas.slice(-2000);
+    saveJson('ideas.json', ideas);
+    let gain = 0;
+    if (wal && wal.ideaDay !== dayKey()) {
+      wal.ideaDay = dayKey();
+      gain = 3;
+      award(gain, 'idea');
+    }
+    console.log(`[建議] ${player.name}：${text.slice(0, 60)}`);
+    ack?.({ ok: true, gain });
+  });
+
   // 🎁 分享一次就送「營火明信片牆」（每人一次）
   socket.on('shared', (data, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
@@ -1220,6 +1288,25 @@ io.on('connection', (socket) => {
     }
     bump('fish');
     award(FISH_GAIN[FISH_RARITY[fish]] ?? 0, 'fish');
+    // 📖 魚類圖鑑：第一次釣到這種魚就收錄、送松果；全部收集完再送一份大禮
+    if (wal) {
+      wal.dex ??= {};
+      const first = !(fish in wal.dex);
+      wal.dex[fish] = Math.max(wal.dex[fish] ?? 0, size);
+      if (first) {
+        const gain = DEX_GAIN[FISH_RARITY[fish]] ?? 1;
+        award(gain, 'dex');
+        const count = Object.keys(wal.dex).length;
+        let bonus = 0;
+        if (count >= FISH_COUNT && !wal.dexDone) {
+          wal.dexDone = true;
+          bonus = DEX_BONUS;
+          award(bonus, 'dex');
+        }
+        socket.emit('dex', { fish, gain, bonus, count, total: FISH_COUNT, dex: dexView(wal) });
+      }
+      saveJson('players.json', players);
+    }
     // 釣魚大賽：記下每人最大的一條，名次有變就廣播
     const mini = miniNow();
     if (mini?.kind === 'fish' && !JUNK.has(fish) && socket.data.vid) {

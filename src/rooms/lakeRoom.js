@@ -289,7 +289,7 @@ export function createLakeRoom() {
         }
         this.fishSpot = { x: p.x, z: p.z, face: spot.face };
         actions.start('fish');
-        this.fishing?.start(actions, { x: p.x, z: p.z, dir: spot.dir, group, waterY: WATER_Y });
+        this.fishing?.start(actions, { x: p.x, z: p.z, dir: spot.dir, group, waterY: WATER_Y, place: 'lake' });
         return true;
       }
       if (name === 'interact') {

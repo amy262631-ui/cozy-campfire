@@ -1,4 +1,4 @@
-import { FISH, stars } from '../fishing/fishData.js';
+import { FISH, stars, DEX_GAIN, DEX_BONUS } from '../fishing/fishData.js';
 import { t } from '../i18n/i18n.js';
 
 const CREEL_KEY = 'cozy-campfire-creel';
@@ -46,7 +46,7 @@ export class FishingUI {
       <div class="fish-card" id="fish-card"></div>
 
       <div class="fish-tools" id="fish-tools">
-        <button type="button" id="fish-creel-btn">${t('🐟 我的魚簍')}</button>
+        <button type="button" id="fish-creel-btn">${t('📖 魚類圖鑑')}</button>
         <button type="button" id="fish-board-btn">${t('🏆 湖畔排行')}</button>
       </div>
 
@@ -158,18 +158,50 @@ export class FishingUI {
     if (this.el.modal.classList.contains('show') && this._modal === 'board') this.openBoard();
   }
 
+  /** 伺服器的圖鑑紀錄（換手機登入也會回來）合併進魚簍：{ 魚種: 最大公分 } */
+  mergeDex(dex) {
+    let changed = false;
+    for (const [i, best] of Object.entries(dex ?? {})) {
+      const e = (this.creel[i] ??= { count: 0, best: 0 });
+      if (!e.count) e.count = 1;
+      if (best > e.best) e.best = best;
+      changed = true;
+    }
+    if (changed) {
+      try {
+        localStorage.setItem(CREEL_KEY, JSON.stringify(this.creel));
+      } catch {
+        /* 存不了就算了 */
+      }
+      if (this.el.modal.classList.contains('show') && this._modal === 'creel') this.openCreel();
+    }
+  }
+
+  get dexCount() {
+    return FISH.filter((f, i) => this.creel[i]?.count).length;
+  }
+
+  /** 📖 魚類圖鑑：釣過的顯示名字與最大紀錄；沒釣過的是剪影，附上出現提示 */
   openCreel() {
     this._modal = 'creel';
     const total = Object.values(this.creel).reduce((s, e) => s + e.count, 0);
-    const found = FISH.filter((f, i) => !f.junk && this.creel[i]).length;
-    const realFish = FISH.filter((f) => !f.junk).length;
-    this.el.modalTitle.textContent = t('🐟 我的魚簍（圖鑑 {found}／{total}）', { found, total: realFish });
-    this.el.modalBody.innerHTML =
-      FISH.map((f, i) => {
-        const e = this.creel[i];
-        if (!e) return `<div class="creel-row unknown"><span>${t('？？？')}</span><small>${f.rarity ? stars(f.rarity) : t('雜物')}</small></div>`;
-        return `<div class="creel-row"><span>${f.name}</span><small>${f.rarity ? stars(f.rarity) : t('雜物')}</small><em>×${e.count}${f.junk ? '' : t('・最大 {size} 公分', { size: e.best })}</em></div>`;
-      }).join('') + `<div class="creel-total">${t('總共釣了 {n} 次（每條魚都放回湖裡了）', { n: total })}</div>`;
+    const found = this.dexCount;
+    this.el.modalTitle.textContent = t('📖 魚類圖鑑 {found}／{total}', { found, total: FISH.length });
+    const hex = (c) => `#${(c ?? 0x888888).toString(16).padStart(6, '0')}`;
+    const cards = FISH.map((f, i) => {
+      const e = this.creel[i];
+      const gain = DEX_GAIN[f.rarity] ?? 1;
+      if (!e?.count) {
+        return `<div class="dex-card unknown"><i class="dex-fish" style="background:#2a3140"></i><b>${t('？？？')}</b><small>${f.rarity ? stars(f.rarity) : t('雜物')}</small><em>${f.note && (f.where || f.when) ? f.note : t('第一次釣到 +{n} 🌰', { n: gain })}</em></div>`;
+      }
+      const glow = f.glow ? `box-shadow:0 0 10px ${hex(f.glow)};` : '';
+      const patch = f.patch ? `background:linear-gradient(135deg, ${hex(f.color)} 55%, ${hex(f.patch)} 55%);` : `background:${hex(f.color)};`;
+      return `<div class="dex-card rarity-${f.rarity}"><i class="dex-fish" style="${patch}${glow}"></i><b>${f.name}</b><small>${f.rarity ? stars(f.rarity) : t('雜物')}</small><em>${f.junk ? `×${e.count}` : t('最大 {size} 公分・×{n}', { size: e.best, n: e.count })}</em></div>`;
+    }).join('');
+    this.el.modalBody.innerHTML = `
+      <div class="dex-note">${t('第一次釣到新的魚會收進圖鑑，送松果（★ 越多送越多）；全部 {n} 種收集完再送 {b} 顆 🌰', { n: FISH.length, b: DEX_BONUS })}</div>
+      <div class="dex-grid">${cards}</div>
+      <div class="creel-total">${t('總共釣了 {n} 次（每條魚都放回湖裡了）', { n: total })}</div>`;
     this.el.modal.classList.add('show');
   }
 

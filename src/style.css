@@ -4395,3 +4395,111 @@ body.touch .fish-focus {
   bottom: 300px;
   font-size: 13px;
 }
+
+/* ---------- 📖 魚類圖鑑 ---------- */
+.dex-note {
+  margin-bottom: 8px;
+  font-size: 12px;
+  opacity: 0.8;
+  line-height: 1.6;
+}
+
+.dex-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.dex-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+  font-size: 12px;
+}
+
+.dex-card.unknown {
+  opacity: 0.6;
+}
+
+.dex-card.rarity-4,
+.dex-card.rarity-5 {
+  border-color: rgba(255, 210, 122, 0.6);
+}
+
+.dex-fish {
+  width: 42px;
+  height: 18px;
+  border-radius: 50% 40% 40% 50% / 60% 50% 50% 60%;
+  margin: 2px 0 4px;
+}
+
+.dex-card small {
+  color: #ffd27a;
+  font-size: 10px;
+}
+
+.dex-card em {
+  font-style: normal;
+  font-size: 10.5px;
+  opacity: 0.8;
+}
+
+/* ---------- 💡 給建議 ---------- */
+.notice-idea {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.notice-idea textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 220, 180, 0.25);
+  background: rgba(255, 245, 230, 0.08);
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+
+/* 圖鑑、排行視窗蓋在所有東西上面 */
+.fish-modal {
+  z-index: 8;
+  background: rgba(5, 7, 13, 0.6);
+}
+
+.fish-modal-card {
+  width: min(420px, 94vw);
+  max-height: 84vh;
+  background: rgba(36, 26, 22, 0.98);
+}
+
+/* 有新版本：提醒重新整理 */
+.new-ver {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  z-index: 9;
+  padding: 9px 18px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffb46b, #f08a3c);
+  color: #3a2214;
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  pointer-events: auto;
+  animation: miniPulse 2s ease-in-out infinite;
+}

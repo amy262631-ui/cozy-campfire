@@ -183,6 +183,7 @@ export class FishingGame {
       rig.target.pitch = 0.42;
       rig.target.distance = 3.9;
     }
+    this.ui.showTools?.(true); // 「📖 魚類圖鑑」「🏆 排行」按鈕（營火河畔也看得到）
     // 專注計時：這次坐下來釣了多久、釣到幾條
     this.session = { at: performance.now(), n: 0 };
     this.#focusTick();
@@ -217,6 +218,7 @@ export class FishingGame {
     this.#go('idle');
     this.bobber.visible = this.line.visible = this.bang.visible = this.reflect.visible = false;
     clearInterval(this.focusTimer);
+    if (this.spot?.place === 'pond') this.ui.showTools?.(false);
     this.session = null;
     this.#focusTick();
     if (this.savedCam && this.cameraRig) {
@@ -301,7 +303,7 @@ export class FishingGame {
   }
 
   #bite() {
-    const index = rollFish();
+    const index = rollFish({ place: this.spot?.place, ...(this.context?.() ?? {}) });
     this.fish = { index, size: rollSize(index) };
     this.window = FISH[index].window * 1.35; // 不再跳「！」，只能看浮標沉下去，所以時間放寬一點
     this.#go('bite');

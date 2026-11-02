@@ -144,6 +144,7 @@ export function buildPond(world, forestGroup) {
       side: 1.2,
       group,
       waterY: POND_WATER_Y,
+      place: 'pond',
     };
   }
 
