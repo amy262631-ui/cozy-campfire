@@ -901,6 +901,7 @@ export const DICT = {
     "植物": "Plants",
     "玩偶": "Plushies",
     "小物": "Little things",
+    "第一次來？先試試：{name}": "First time here? Try this: {name}",
   },
   ja: {
     "營火聲": "焚き火",
@@ -1800,6 +1801,7 @@ export const DICT = {
     "植物": "植物",
     "玩偶": "ぬいぐるみ",
     "小物": "小物",
+    "第一次來？先試試：{name}": "はじめまして！まずはこれ：{name}",
   },
   ko: {
     "營火聲": "모닥불",
@@ -2699,5 +2701,6 @@ export const DICT = {
     "植物": "식물",
     "玩偶": "인형",
     "小物": "소품",
+    "第一次來？先試試：{name}": "처음 오셨나요? 먼저 해 봐요: {name}",
   },
 };

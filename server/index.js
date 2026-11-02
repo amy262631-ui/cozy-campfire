@@ -16,6 +16,7 @@ import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import path from 'node:path';
 import fs from 'node:fs';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
@@ -426,6 +427,14 @@ const publicCairnLog = () => ({ done: cairnLog.done, showMs: CAIRN_SHOW_MS, arch
 
 // ---------- HTTP ----------
 const app = express();
+/** 伺服器這次醒來的時間：Render 免費方案沒人叫醒會睡著，醒來就重新算（看定時叫醒有沒有效） */
+const BOOT_AT = Date.now();
+const awakeText = () => {
+  const m = Math.floor((Date.now() - BOOT_AT) / 60000);
+  const d = Math.floor(m / 1440);
+  const h = Math.floor((m % 1440) / 60);
+  return `${d ? `${d} 天 ` : ''}${h} 小時 ${m % 60} 分`;
+};
 const distDir = path.resolve(__dirname, '../dist');
 /** 目前網頁的版本（打包後 JS 檔名裡的雜湊）：玩家的畫面版本不一樣，就提醒他重新整理 */
 let webVersion = null;
@@ -441,8 +450,41 @@ if (fs.existsSync(distDir)) {
     const proto = req.headers['x-forwarded-proto']?.split(',')[0] || req.protocol;
     const origin = `${proto}://${req.headers.host}`;
     const html = fs.readFileSync(indexFile, 'utf8').replace('content="og.png"', `content="${origin}/og.png"`);
-    res.type('html').send(html);
+    // 首頁不快取（改版後馬上拿到新版），但壓縮後再送
+    res.set('Cache-Control', 'no-cache');
+    res.type('html');
+    if (/\bgzip\b/.test(req.headers['accept-encoding'] ?? '')) {
+      res.set({ 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' });
+      return res.send(zlib.gzipSync(html));
+    }
+    res.send(html);
   });
+
+  // 🚀 手機進場加速：遊戲程式（JS、CSS）先壓縮好（1.2MB → 約 0.28MB），
+  // 檔名有版本雜湊，所以讓瀏覽器快取一年，第二次進來幾乎不用再下載
+  const assetsDir = path.join(distDir, 'assets');
+  /** /檔名 → { type, gz, br }（br 在背景壓縮，好了才有） */
+  const packed = new Map();
+  for (const f of fs.existsSync(assetsDir) ? fs.readdirSync(assetsDir) : []) {
+    if (!/\.(js|css|svg|json)$/.test(f)) continue;
+    const buf = fs.readFileSync(path.join(assetsDir, f));
+    const entry = { type: path.extname(f), gz: zlib.gzipSync(buf, { level: 9 }), br: null };
+    packed.set(`/${f}`, entry);
+    zlib.brotliCompress(buf, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: buf.length } }, (err, out) => {
+      if (!err) entry.br = out;
+    });
+  }
+  app.use('/assets', (req, res, next) => {
+    const p = packed.get(req.path);
+    if (!p) return next();
+    const ae = req.headers['accept-encoding'] ?? '';
+    const enc = p.br && /\bbr\b/.test(ae) ? 'br' : /\bgzip\b/.test(ae) ? 'gzip' : null;
+    if (!enc) return next();
+    res.set({ 'Cache-Control': 'public, max-age=31536000, immutable', 'Content-Encoding': enc, Vary: 'Accept-Encoding' });
+    res.type(p.type);
+    res.send(enc === 'br' ? p.br : p.gz);
+  });
+  app.use('/assets', express.static(assetsDir, { immutable: true, maxAge: '1y' }));
   app.use(express.static(distDir));
 }
 
@@ -490,16 +532,17 @@ app.get(['/stats', '/api/stats'], (req, res) => {
     const d = stats[k];
     const avg = d.sessions ? Math.round(d.totalSec / d.sessions) : 0;
     const pct = (n) => (d.sessions ? `${Math.round((n / d.sessions) * 100)}%` : '-');
-    return { day: k, visits: d.visits, visitors: d.vids.length, mobile: d.visits ? `${Math.round((d.touch / d.visits) * 100)}%` : '-', avg: `${Math.floor(avg / 60)}分${avg % 60}秒`, s30: pct(d.stay[0]), s120: pct(d.stay[1]), s600: pct(d.stay[2]), s600p: pct(d.stay[3]), ritual: d.ritual, quests: d.ritual + Object.values(d.quests ?? {}).reduce((a, b) => a + b, 0), hangs: d.hangs ?? 0, stones: d.stones, wishes: d.wishes, notes: d.notes, fish: d.fish, chats: d.chats };
+    const nbPct = (n) => (d.nb ? `${Math.round(((n ?? 0) / d.nb) * 100)}%` : '-');
+    return { day: k, visits: d.visits, visitors: d.vids.length, mobile: d.visits ? `${Math.round((d.touch / d.visits) * 100)}%` : '-', avg: `${Math.floor(avg / 60)}分${avg % 60}秒`, s30: pct(d.stay[0]), s120: pct(d.stay[1]), s600: pct(d.stay[2]), s600p: pct(d.stay[3]), nb: d.nb ?? '-', nb30: nbPct(d.nb30), nbDid: nbPct(d.nbDid), ritual: d.ritual, quests: d.ritual + Object.values(d.quests ?? {}).reduce((a, b) => a + b, 0), hangs: d.hangs ?? 0, stones: d.stones, wishes: d.wishes, notes: d.notes, fish: d.fish, chats: d.chats };
   });
   if (req.path.startsWith('/api')) return res.json(rows);
-  const head = ['日期', '進來次數', '不重複旅人', '手機比例', '平均停留', '30秒內離開', '30秒～2分', '2～10分', '10分以上', '疊過石頭的人', '完成任務', '掛裝飾', '石頭', '繪馬', '留言', '釣魚', '聊天'];
-  const keys = ['day', 'visits', 'visitors', 'mobile', 'avg', 's30', 's120', 's600', 's600p', 'ritual', 'quests', 'hangs', 'stones', 'wishes', 'notes', 'fish', 'chats'];
+  const head = ['日期', '進來次數', '不重複旅人', '手機比例', '平均停留', '30秒內離開', '30秒～2分', '2～10分', '10分以上', '新旅人', '新旅人30秒內離開', '新旅人完成任務', '疊過石頭的人', '完成任務', '掛裝飾', '石頭', '繪馬', '留言', '釣魚', '聊天'];
+  const keys = ['day', 'visits', 'visitors', 'mobile', 'avg', 's30', 's120', 's600', 's600p', 'nb', 'nb30', 'nbDid', 'ritual', 'quests', 'hangs', 'stones', 'wishes', 'notes', 'fish', 'chats'];
   const online = [...channels.values()].reduce((n, c) => n + chCount(c), 0);
   res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>營地統計</title>
 <style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px}table{border-collapse:collapse;font-size:13px}th,td{padding:6px 9px;border-bottom:1px solid #3a2e27;text-align:right;white-space:nowrap}th{color:#ffb46b;position:sticky;top:0;background:#1d1714}td:first-child,th:first-child{text-align:left}.wrap{overflow-x:auto}p{opacity:.75;font-size:13px}</style></head>
-<body><h2>🔥 營地統計</h2><p>現在在線：${online} 人 · 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好。</p>
-<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="17">還沒有資料</td></tr>'}</table></div></body></html>`);
+<body><h2>🔥 營地統計</h2><p>伺服器已經連續醒著 <b>${awakeText()}</b>（從 ${new Date(BOOT_AT).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })} 起；正常只有重新部署時才會歸零，如果常常歸零，代表定時叫醒沒有生效、伺服器睡著過）</p><p>現在在線：${online} 人 · 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好；「新旅人」是第一次來的人（從 11/3 開始統計）。</p>
+<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="${head.length}">還沒有資料</td></tr>'}</table></div></body></html>`);
 });
 
 // 💡 玩家建議：/ideas（有設 STATS_KEY 時要帶 ?key=）
@@ -525,7 +568,7 @@ app.get('/api/health', (_req, res) => {
     summary[c.ch] = { players: chCount(c), fuel: Math.round(c.fuel) };
     for (const [id, r] of c.rooms) summary[c.ch][id] = r.players.size;
   }
-  res.json({ ok: true, storage: storage.status, channels: summary });
+  res.json({ ok: true, awake: awakeText(), since: new Date(BOOT_AT).toISOString(), storage: storage.status, channels: summary });
 });
 
 const httpServer = createServer(app);
@@ -747,6 +790,7 @@ io.on('connection', (socket) => {
     // 松果錢包：每天第一次來，依連續天數送松果（第 1 天 3 顆，之後每天多 1 顆，最多 9 顆）
     const myVid = String(data.vid ?? '').slice(0, 24);
     const firstVisit = !!myVid && !players[myVid]; // 第一次來（瀏覽器裡還沒有任何紀錄）
+    if (session && firstVisit) session.newbie = true; // 統計：新旅人留不留得住
     wal = wallet(myVid);
     socket.data.vid = wal ? String(data.vid).slice(0, 24) : null;
     const ip = String(socket.handshake.headers['x-forwarded-for'] ?? socket.handshake.address ?? '').split(',')[0].trim();
@@ -957,6 +1001,7 @@ io.on('connection', (socket) => {
     let ritual = null;
     if (!stacked) {
       stacked = true;
+      if (session) session.did = true;
       bump('ritual');
       ritual = today().ritual;
       award(QUEST_GAIN, 'quest');
@@ -979,6 +1024,7 @@ io.on('connection', (socket) => {
     if (!player || !QUEST_IDS.has(id)) return ack?.({ ok: false });
     const d = today();
     d.quests ??= {};
+    if (session) session.did = true;
     if (!questsDone.has(id)) {
       questsDone.add(id);
       award(QUEST_GAIN, 'quest');
@@ -1442,6 +1488,12 @@ io.on('connection', (socket) => {
       d.sessions++;
       d.totalSec += Math.round(sec);
       d.stay[sec < 30 ? 0 : sec < 120 ? 1 : sec < 600 ? 2 : 3]++;
+      // 新旅人：第一次來的人有幾個、30 秒內就走的、有完成小任務的
+      if (session.newbie) {
+        d.nb = (d.nb ?? 0) + 1;
+        if (sec < 30) d.nb30 = (d.nb30 ?? 0) + 1;
+        if (session.did) d.nbDid = (d.nbDid ?? 0) + 1;
+      }
       saveJson('stats.json', stats);
       session = null;
     }

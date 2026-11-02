@@ -150,12 +150,25 @@ function buildTasks(touch) {
 }
 
 export class RitualGuide {
+  /** 這台裝置還沒完成過任何小任務（新來的旅人） */
+  static isNewbie() {
+    try {
+      return !localStorage.getItem(FIRST_KEY);
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * @param {{ scene, hud, touch?: boolean, onDone?: (id) => Promise<number|null> }} opts
    *   onDone：任務完成時呼叫，回傳「今天第幾位完成」（單人模式回傳 null）
    */
-  constructor({ scene, hud, touch = false, onDone, canPick, onShare, root = document.getElementById('ui') }) {
+  constructor({ scene, hud, touch = false, onDone, canPick, onShare, onComplete, root = document.getElementById('ui') }) {
     this.hud = hud;
+    /** 任務完成時通知 main.js（第一次來的人完成第一個任務後，才跳出歡迎卡） */
+    this.onComplete = onComplete;
+    /** 第一次來（還沒完成過任何小任務）：一進來就直接開始任務，不先擋一張歡迎卡 */
+    this.newbie = RitualGuide.isNewbie();
     /** 分享（做成圖片卡）；沒有的話就只分享文字 */
     this.onShare = onShare;
     /** 某個任務現在能不能出（例如松果不夠就不出「裝飾心願大樹」） */
@@ -245,7 +258,12 @@ export class RitualGuide {
     this.active = true;
     this.done = false;
     this._key = null;
-    this.titleEl.textContent = `${this.task.icon} ${t('小任務：{name}', { name: this.task.name })}`;
+    // 新來的旅人：第一個任務用比較親切的標題，卡片也亮一點
+    const first = this.newbie && !this.completed;
+    this.titleEl.textContent = first
+      ? `👋 ${t('第一次來？先試試：{name}', { name: this.task.name })}`
+      : `${this.task.icon} ${t('小任務：{name}', { name: this.task.name })}`;
+    this.el.classList.toggle('first', first);
     this.dotsEl.innerHTML = '<i></i>'.repeat(this.task.steps);
     this.actionsEl.hidden = true;
     this.el.classList.remove('done');
@@ -311,6 +329,10 @@ export class RitualGuide {
       : t('完成了！「{name}」✨', { name: this.task.name });
     this.actionsEl.hidden = false;
     this.el.classList.add('done');
+    this.el.classList.remove('first');
+    const firstTime = this.newbie && !this.completed;
+    this.completed = true;
+    this.onComplete?.(this.task, firstTime);
     try {
       localStorage.setItem(FIRST_KEY, '1');
     } catch {

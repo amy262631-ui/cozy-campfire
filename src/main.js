@@ -71,6 +71,8 @@ const PLACE = { forest_main: '營火旁', tent_focus: '帳篷裡', treehouse_mus
 
 async function init() {
   translateStatic(); // index.html 裡的固定文字
+  // 角色模型先開始找（要問伺服器一次），同時去蓋場景，不用乾等
+  const characterReady = loadCharacter(MODEL_URL);
   // ---------- Renderer ----------
   const container = document.getElementById('app');
   // 🔋 省電模式（手機自動開）：解析度低一點、不畫影子、每秒最多 30 張；掛機時再降到 12 張
@@ -107,7 +109,7 @@ async function init() {
 
   // ---------- Player ----------
   const input = new InputController();
-  const character = await loadCharacter(MODEL_URL);
+  const character = await characterReady;
   const player = new Player(character);
   // 出生在營火周圍隨機一點，避免大家疊在一起
   const spawnAngle = Math.random() * Math.PI * 2;
@@ -625,6 +627,10 @@ async function init() {
       }),
     // 完成小任務：問伺服器「今天第幾位完成」（單人模式沒有數字）
     onDone: async (id) => (net.online ? ((await net.quest(id))?.n ?? null) : null),
+    // 第一次來的人做完第一個任務，才跳出歡迎卡（一進來先讓人直接玩，不用先讀一大段字）
+    onComplete: (_task, firstTime) => {
+      if (firstTime) setTimeout(() => !welcome.visible && welcome.maybeShow(), 6000);
+    },
   });
   const garden = forest.cairnGarden;
   const ritualState = {
@@ -772,7 +778,9 @@ async function init() {
       document.getElementById('new-ver').addEventListener('click', () => location.reload());
     }
     if (res.myHome) setMyHome(res.myHome);
-    setTimeout(() => welcome.maybeShow(), 1200);
+    // 歡迎卡：老朋友一進來就打招呼；第一次來的人先直接玩小任務，完成後（或待滿 90 秒）才出現
+    if (!ritual?.newbie) setTimeout(() => welcome.maybeShow(), 1200);
+    else setTimeout(() => !welcome.visible && welcome.maybeShow(), 90000);
     // 伺服器判斷是不是贊助者：是的話頭上開一朵小花
     if (res.reward && res.reward !== myReward) {
       hud.toast(res.reward === 2 ? t('🍀 謝謝你的支持！頭上長出了一片四葉草') : t('🌼 謝謝你的支持！頭上開了一朵小黃花'), 5000);
@@ -1466,6 +1474,7 @@ async function init() {
   };
 
   let lastFrame = 0;
+  let booted = false;
   renderer.setAnimationLoop((now) => {
     tuneQuality(now);
     if (lowPower) {
@@ -1476,6 +1485,10 @@ async function init() {
     }
     try {
       frame();
+      if (!booted) {
+        booted = true;
+        window.__bootDone?.(); // 第一張畫面畫好了，收起載入畫面
+      }
     } catch (err) {
       reportError(err);
     }
@@ -1631,4 +1644,7 @@ async function init() {
   }
 }
 
-init();
+init().catch((err) => {
+  console.error(err);
+  window.__bootFail?.(); // 打不開 3D 畫面：在載入畫面上說明
+});

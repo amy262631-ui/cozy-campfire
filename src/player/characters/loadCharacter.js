@@ -1,4 +1,3 @@
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { GltfCharacter } from './GltfCharacter.js';
 import { ProceduralFox } from './ProceduralFox.js';
 
@@ -16,6 +15,8 @@ export async function loadCharacter(url = DEFAULT_MODEL_URL) {
     if (!res.ok || type.includes('text/html')) throw new Error(`找不到 ${url}`);
 
     const buffer = await res.arrayBuffer();
+    // 只有真的有模型檔才下載讀檔工具（平常用內建小狐狸，不用多載這一包）
+    const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
     const gltf = await new GLTFLoader().parseAsync(buffer, url.replace(/[^/]*$/, ''));
     console.info(
       `[Cozy] 載入角色模型 ${url}，動畫：${gltf.animations.map((a) => a.name).join(', ') || '（無）'}`,

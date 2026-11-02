@@ -28,8 +28,64 @@
     <meta property="og:image" content="og.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="theme-color" content="#1d1714" />
+    <!-- 載入畫面：遊戲程式下載完、畫出第一張畫面前顯示（這段要寫在 HTML 裡，才會最先出現） -->
+    <style>
+      #boot { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: radial-gradient(ellipse at 50% 60%, #2a1c12, #0b0907 70%); color: #ffe2b8; font-family: system-ui, -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif; transition: opacity 0.6s ease; }
+      #boot.done { opacity: 0; pointer-events: none; }
+      #boot .fire { position: relative; width: 90px; height: 96px; }
+      #boot .flame { position: absolute; left: 50%; bottom: 18px; border-radius: 50% 0 50% 50%; transform: translateX(-50%) rotate(-45deg); animation: boot-flick 0.9s ease-in-out infinite alternate; }
+      #boot .f1 { width: 46px; height: 46px; margin-left: -23px; background: #f08a3c; transform: rotate(-45deg); }
+      #boot .f2 { width: 30px; height: 30px; margin-left: -15px; background: #ffb46b; transform: rotate(-45deg); animation-delay: 0.2s; }
+      #boot .f3 { width: 16px; height: 16px; margin-left: -8px; background: #fff0b0; transform: rotate(-45deg); animation-delay: 0.35s; }
+      #boot .log { position: absolute; left: 50%; bottom: 6px; width: 76px; height: 14px; margin-left: -38px; border-radius: 7px; background: #7a5236; }
+      #boot .log.b { transform: rotate(18deg); background: #6b4a2e; }
+      #boot .log.a { transform: rotate(-18deg); }
+      #boot .glow { position: absolute; left: 50%; bottom: 0; width: 160px; height: 60px; margin-left: -80px; border-radius: 50%; background: radial-gradient(#ff9a3c55, transparent 70%); animation: boot-glow 1.8s ease-in-out infinite alternate; }
+      #boot .msg { font-size: 15px; letter-spacing: 2px; }
+      #boot .sub { min-height: 1.4em; font-size: 12px; opacity: 0.7; text-align: center; padding: 0 24px; }
+      @keyframes boot-flick { from { transform: rotate(-45deg) scale(1); } to { transform: rotate(-41deg) scale(1.12) translate(-2px, -3px); } }
+      @keyframes boot-glow { from { opacity: 0.6; } to { opacity: 1; } }
+    </style>
   </head>
   <body>
+    <div id="boot">
+      <div class="fire"><div class="glow"></div><div class="log a"></div><div class="log b"></div><div class="flame f1"></div><div class="flame f2"></div><div class="flame f3"></div></div>
+      <div class="msg" id="boot-msg">正在生火⋯</div>
+      <div class="sub" id="boot-sub"></div>
+    </div>
+    <script>
+      // 載入畫面的文字（這時翻譯檔還沒下載，所以直接寫在這裡；選語言的規則跟 src/i18n/i18n.js 一樣）
+      (function () {
+        var T = {
+          'zh-Hant': ['正在生火⋯', '網路有點慢，再等一下下 🔥', '這個瀏覽器打不開 3D 畫面，換成 Chrome 或 Safari 試試看'],
+          en: ['Lighting the campfire…', 'Slow connection — almost there 🔥', "This browser can't show 3D — try Chrome or Safari"],
+          ja: ['たき火をおこしています…', '回線が少し遅いみたい。もう少しだけ 🔥', 'このブラウザでは3D画面が開けません。Chrome か Safari で試してね'],
+          ko: ['모닥불을 피우는 중⋯', '인터넷이 조금 느려요. 조금만 기다려요 🔥', '이 브라우저에서는 3D 화면을 열 수 없어요. Chrome이나 Safari로 해 보세요'],
+        };
+        var l = new URLSearchParams(location.search).get('lang');
+        try { l = T[l] ? l : localStorage.getItem('cozy-campfire-lang'); } catch (e) {}
+        if (!T[l]) {
+          var n = (navigator.language || '').toLowerCase();
+          l = n.indexOf('ja') === 0 ? 'ja' : n.indexOf('ko') === 0 ? 'ko' : n.indexOf('en') === 0 ? 'en' : 'zh-Hant';
+        }
+        var t = T[l];
+        document.getElementById('boot-msg').textContent = t[0];
+        var slow = setTimeout(function () { document.getElementById('boot-sub').textContent = t[1]; }, 5000);
+        // 遊戲畫出第一張畫面時呼叫：淡出後移除
+        window.__bootDone = function () {
+          clearTimeout(slow);
+          var b = document.getElementById('boot');
+          if (!b) return;
+          b.className = 'done';
+          setTimeout(function () { b.remove(); }, 700);
+        };
+        // 打不開（例如不支援 WebGL）：留在載入畫面，告訴玩家怎麼辦
+        window.__bootFail = function () {
+          clearTimeout(slow);
+          document.getElementById('boot-sub').textContent = t[2];
+        };
+      })();
+    </script>
     <div id="app"></div>
 
     <!-- 給搜尋引擎與遊戲平台看的遊戲說明（畫面上看不到） -->
