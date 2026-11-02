@@ -61,9 +61,7 @@ export class FishingGame {
     this.halo.scale.set(0.22, 0.22, 1); // 光暈小一點，浮標才不會糊成一團
     this.halo.position.y = tipY;
     this.bobber.add(this.halo);
-    this.glowLight = new THREE.PointLight(0xb8ff7a, 0.9, 2.2, 1.6);
-    this.glowLight.position.y = tipY;
-    this.bobber.add(this.glowLight);
+    // 不加點光源：浮標每次出現／消失都會讓手機重新編譯整個場景的著色器（卡一下），光暈和倒影就夠亮了
     this.bobber.scale.setScalar(FLOAT_SCALE); // 放大，晚上看得清楚
     this.bobber.visible = false;
     group.add(this.bobber);
@@ -540,7 +538,6 @@ export class FishingGame {
       this.reflect.rotation.set(-Math.PI / 2, 0, Math.atan2(dx, dz)); // 倒影朝向釣魚的人
       this.reflect.material.opacity = Math.max(0.08, 0.55 - depth * 2);
       this.halo.material.opacity = Math.max(0.25, 1 - depth * 2.5);
-      this.glowLight.intensity = Math.max(0.2, 0.9 - depth * 3);
     }
 
     // 「！」跟著頭

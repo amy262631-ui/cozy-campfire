@@ -35,17 +35,30 @@ export function buildMiniLayer() {
     beam.position.y = 3;
     beam.visible = false;
     g.add(beam);
-    const light = new THREE.PointLight(0xffb45a, 0, 6, 1.6);
-    light.position.set(0.38, 1.42, 0);
-    g.add(light);
     group.add(g);
-    return { g, lamp, beam, light };
+    return { g, lamp, beam };
   });
+  // 只用一盞光、而且永遠留在場景裡（亮度 0 代表關燈）：
+  // 光源數量一變，手機就要重新編譯整個場景的著色器，會卡一下
+  const raceLight = new THREE.PointLight(0xffb45a, 0, 6, 1.6);
+  group.add(raceLight);
 
   // ---- 金松果 ----
   const goldMat = new THREE.MeshStandardMaterial({ color: 0xffc83d, emissive: 0xc77a00, emissiveIntensity: 0.9, roughness: 0.35, metalness: 0.4, flatShading: true });
   const sparkMat = new THREE.MeshBasicMaterial({ color: 0xfff1b0, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide });
   const coneGeo = new THREE.ConeGeometry(0.22, 0.5, 7);
+  const sparkGeo = new THREE.CylinderGeometry(0.35, 0.6, 4, 12, 1, true);
+  // 金松果的光暈用貼圖，不用點光源（撿走時才不會卡頓）
+  const gc = document.createElement('canvas');
+  gc.width = gc.height = 64;
+  const gg = gc.getContext('2d');
+  const grad = gg.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,220,120,0.9)');
+  grad.addColorStop(0.4, 'rgba(255,190,70,0.35)');
+  grad.addColorStop(1, 'rgba(255,170,40,0)');
+  gg.fillStyle = grad;
+  gg.fillRect(0, 0, 64, 64);
+  const haloMat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   let cones = [];
 
   let raceOn = false;
@@ -60,8 +73,10 @@ export function buildMiniLayer() {
       const lit = on && i === next;
       l.lamp.material = lit ? paperOn : paperOff;
       l.beam.visible = lit;
-      l.light.intensity = lit ? 6 : on ? 1.2 : 0;
     });
+    const p = RACE_LANTERNS[next];
+    raceLight.position.set(p.x + 0.38, 1.42, p.z);
+    raceLight.intensity = on ? 6 : 0;
   }
 
   function setHunt(spots = []) {
@@ -73,12 +88,13 @@ export function buildMiniLayer() {
       cone.rotation.x = Math.PI;
       cone.position.y = 0.5;
       g.add(cone);
-      const spark = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.6, 4, 12, 1, true), sparkMat);
+      const spark = new THREE.Mesh(sparkGeo, sparkMat);
       spark.position.y = 2;
       g.add(spark);
-      const light = new THREE.PointLight(0xffcf55, 3, 4, 1.8);
-      light.position.y = 0.7;
-      g.add(light);
+      const halo = new THREE.Sprite(haloMat);
+      halo.scale.set(1.6, 1.6, 1);
+      halo.position.y = 0.55;
+      g.add(halo);
       g.visible = !p.by;
       group.add(g);
       return { g, cone, taken: !!p.by, x: p.x, z: p.z };
