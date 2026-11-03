@@ -1544,6 +1544,19 @@ async function init() {
     renderer.render(scene, camera);
   }
 
+  /**
+   * 🙈 作者自己的裝置：在 /stats 按「這台裝置不算進統計」，或網址加 ?nostat（無痕視窗測試時用）
+   * 不算進來訪人數、停留時間、新旅人
+   */
+  function isStaff() {
+    try {
+      if (params.has('nostat')) localStorage.setItem('cozy-campfire-staff', '1');
+      return localStorage.getItem('cozy-campfire-staff') === '1';
+    } catch {
+      return params.has('nostat');
+    }
+  }
+
   /** 這個瀏覽器的隨機代號（只用來算「今天有幾位旅人」，不含個人資料） */
   function visitorId() {
     try {
@@ -1638,6 +1651,7 @@ async function init() {
     code: profile.code || '',
     vid: visitorId(),
     touch: !!mobile,
+    staff: isStaff(), // 作者自己的裝置：不算進統計
     with: params.get('with') || undefined, // 朋友的邀請連結
     ch: Math.floor(Number(profile.ch ?? params.get('ch')) || 0),
     room: roomMgr.current.id,
