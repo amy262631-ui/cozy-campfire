@@ -100,11 +100,18 @@ export class FishingUI {
 
   showAlert(visible, ratio = 1) {
     this.el.alert.classList.toggle('show', visible);
+    this.#busy();
     if (visible) this.el.alertTimer.style.transform = `scaleX(${Math.max(0, ratio)})`;
   }
 
   showReel(visible) {
     this.el.reel.classList.toggle('show', visible);
+    this.#busy();
+  }
+
+  /** 魚上鉤、拉竿中：body 加上 fish-busy（手機版把擋路的東西先收起來） */
+  #busy() {
+    document.body.classList.toggle('fish-busy', this.el.alert.classList.contains('show') || this.el.reel.classList.contains('show'));
   }
 
   setReel(progress, timeRatio, pulled) {

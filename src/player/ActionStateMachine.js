@@ -17,6 +17,14 @@ const PROMPTS = {
   stargaze: t('<kbd>空白鍵</kbd> 回到營火旁　·　或直接移動'),
   fish: t('盯著浮標：整個沉下去時按 <kbd>F</kbd> 拉竿　·　<kbd>E</kbd> 或移動就收竿'),
 };
+/** 手機畫面小：提示短一點（按鍵會換成按鈕圖示） */
+const PROMPTS_SHORT = {
+  near: PROMPTS.near,
+  roast: t('<kbd>F</kbd> 收回享用'),
+  blanket: t('<kbd>Z</kbd> 起身'),
+  stargaze: t('<kbd>空白鍵</kbd> 起身'),
+  fish: t('浮標整個沉下去就按 <kbd>F</kbd>'),
+};
 
 /**
  * 角色動作狀態機
@@ -312,12 +320,12 @@ export class ActionStateMachine {
   /** 目前該顯示的互動提示（HTML）或 null */
   get prompt() {
     if (EMOTE_IDS.has(this.state)) return null;
-    if (this.state === 'fish' && this.room?.fishing?.phase === 'show') return t('<kbd>F</kbd> 繼續釣魚　·　直接走開，就舉著魚到處炫耀 🐟');
+    if (this.state === 'fish' && this.room?.fishing?.phase === 'show') return this.compact ? t('<kbd>F</kbd> 繼續釣　·　走開就舉著魚炫耀') : t('<kbd>F</kbd> 繼續釣魚　·　直接走開，就舉著魚到處炫耀 🐟');
     if (this.state === 'fish' && this.room?.fishing?.busy) return null;
     if (this.state === 'free') {
       if (this.room?.prompt) return this.room.prompt(this);
       return this.nearFire ? PROMPTS.near : null;
     }
-    return PROMPTS[this.state] ?? null;
+    return (this.compact ? PROMPTS_SHORT : PROMPTS)[this.state] ?? null;
   }
 }

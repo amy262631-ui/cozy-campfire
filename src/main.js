@@ -8,7 +8,7 @@ import { loadCharacter, DEFAULT_MODEL_URL } from './player/characters/loadCharac
 import { ProceduralFox } from './player/characters/ProceduralFox.js';
 import { ThirdPersonCamera } from './camera/ThirdPersonCamera.js';
 import { ZzzBubbles } from './fx/ZzzBubbles.js';
-import { HUD } from './ui/HUD.js';
+import { HUD, compactScreen } from './ui/HUD.js';
 import { MobileControls, isTouchDevice } from './ui/MobileControls.js';
 import { JoinScreen, autoProfile, saveProfile } from './ui/JoinScreen.js';
 import { MixerPanel } from './ui/MixerPanel.js';
@@ -141,6 +141,8 @@ async function init() {
   const zzz = new ZzzBubbles(scene);
   const actions = new ActionStateMachine({ player, campfire, world, cameraRig, hud, zzz, scene });
   input.onAction((name) => actions.handleAction(name));
+  // 手機畫面小：提示用短版
+  Object.defineProperty(actions, 'compact', { get: compactScreen });
   campfire.onCrackle = () => audio.crackleBurst();
   rooms.lake_dock.onSplash = () => audio.splash();
 
@@ -1410,6 +1412,18 @@ async function init() {
       const el = document.getElementById(id);
       if (el) stack.appendChild(el);
     }
+    // 手機：比較少用的按鈕（邀朋友、圖鑑、存檔、分流）收進「⋯」，點了才展開
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'more-chip';
+    more.textContent = '⋯';
+    more.title = t('更多');
+    more.addEventListener('pointerdown', (e) => e.stopPropagation());
+    more.addEventListener('click', () => {
+      const open = document.body.classList.toggle('m-more');
+      more.textContent = open ? '✕' : '⋯';
+    });
+    document.getElementById('online')?.appendChild(more);
   } else {
     // 電腦版：右上角一欄（專注計時器在上、湖畔動態在下），才不會和左上那排按鈕疊在一起
     const rstack = document.createElement('div');
@@ -1513,6 +1527,7 @@ async function init() {
 
   let lastFrame = 0;
   let booted = false;
+  let wasFishing = false;
   renderer.setAnimationLoop((now) => {
     tuneQuality(now);
     if (lowPower) {
@@ -1544,6 +1559,12 @@ async function init() {
     remotes.update(dt, elapsed);
     net.update(dt, netState());
     cameraRig.showOff = fishing.showingOff;
+    // 坐著釣魚：手機版左上的即時動態、活動時間先收起來，拉竿框、釣到的卡片才不會被擋
+    const isFishing = actions.state === 'fish';
+    if (isFishing !== wasFishing) {
+      wasFishing = isFishing;
+      document.body.classList.toggle('fishing', isFishing);
+    }
     // 舉著魚到處走：又坐下來釣魚、去做別的事（烤棉花糖、撿石頭、裹毯⋯）就收進魚簍
     if (trophy) {
       if (actions.state !== 'free' || forest.carrying) setTrophy(null);

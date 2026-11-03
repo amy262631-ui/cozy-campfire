@@ -653,9 +653,9 @@ export function createForestRoom() {
       if (carrying) {
         if (ci >= 0) return t('<kbd>E</kbd> 把石頭疊上去・許個願');
         if (cairnGarden.nearPile(pos)) return t('<kbd>E</kbd> 把石頭放回去');
-        return t('🪨 頭上頂著石頭，走到石塔旁按 <kbd>E</kbd> 疊上去');
+        return actions.compact ? t('🪨 走到石塔旁按 <kbd>E</kbd>') : t('🪨 頭上頂著石頭，走到石塔旁按 <kbd>E</kbd> 疊上去');
       }
-      if (pond.spotAt(pos)) return t('<kbd>F</kbd> 坐下釣魚・盯著發光的浮標');
+      if (pond.spotAt(pos)) return actions.compact ? t('<kbd>F</kbd> 坐下釣魚') : t('<kbd>F</kbd> 坐下釣魚・盯著發光的浮標');
       if (cairnGarden.nearPile(pos)) return t('<kbd>E</kbd> 撿一顆石頭');
       if (ci >= 0) return t('<kbd>E</kbd> 看石塔紀錄（{n} 顆）', { n: cairnGarden.cairns[ci].stones.length });
       if (wishTree.near(pos)) return t('<kbd>E</kbd> 心願大樹・掛一個裝飾');

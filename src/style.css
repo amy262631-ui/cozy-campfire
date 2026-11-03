@@ -4991,3 +4991,134 @@ body.chatting .trophy-btn,
 body.building .trophy-btn {
   display: none;
 }
+
+/* ================= 📱 手機釣魚：拉竿框、上鉤提示、釣到的卡片不要被左上那一欄擋住 ================= */
+/* 坐下釣魚時：左上只留小任務，即時動態、活動時間先收起來 */
+body.touch.fishing #lake-news,
+body.touch.fishing #event-line,
+body.touch.fishing #mini-line,
+body.touch.fishing #today {
+  display: none !important;
+}
+
+/* 拉竿框：移到下方（表情、聊天按鈕上面），拇指好按 */
+body.touch .fish-reel {
+  top: auto;
+  bottom: 226px;
+  z-index: 8;
+}
+
+/* 魚上鉤了：也放在畫面中下方 */
+body.touch .fish-alert {
+  top: auto;
+  bottom: 300px;
+  z-index: 8;
+}
+
+/* 上鉤、拉竿中：「靜靜釣了幾分」那行先藏起來 */
+body.touch.fish-busy .fish-focus {
+  display: none;
+}
+
+/* 釣到魚的卡片：放在互動提示上面，不疊在左上那一欄 */
+body.touch .fish-card {
+  top: auto;
+  bottom: 300px;
+  z-index: 7;
+}
+
+body.touch.fishing .fish-focus {
+  bottom: 186px;
+}
+
+/* 釣到魚的卡片出現時，「靜靜釣了幾分」在下面，不會重疊 */
+
+/* 手機橫放：畫面很矮，拉竿框放下方正中間（搖桿和動作鍵中間），表情、聊天先收起來 */
+@media (orientation: landscape) and (max-height: 500px) {
+  body.touch .fish-reel {
+    bottom: 10px;
+    width: min(260px, 40vw);
+    padding: 8px 12px;
+  }
+
+  body.touch .fish-reel-btn {
+    margin-top: 6px;
+    padding: 10px 0;
+    font-size: 18px;
+  }
+
+  body.touch .fish-alert {
+    bottom: 40px;
+  }
+
+  body.touch.fish-busy .social {
+    display: none;
+  }
+
+  body.touch .fish-card {
+    top: 52px;
+    bottom: auto;
+  }
+
+  body.touch.fishing .fish-focus {
+    bottom: 64px;
+  }
+}
+
+/* ================= 📱 手機精簡（畫面窄，或橫放很矮） ================= */
+.more-chip {
+  display: none;
+}
+
+@media (max-width: 599px), (orientation: landscape) and (max-height: 500px) {
+  /* 上面那排：只留人數、名字、松果（有帳篷加回家）；其他收進「⋯」 */
+  body.touch .more-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    padding: 1px 8px;
+    border: 1px solid rgba(255, 220, 180, 0.3);
+    border-radius: 999px;
+    background: rgba(255, 245, 230, 0.08);
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.4;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  body.touch:not(.m-more) .m-stack .invite-chip,
+  body.touch:not(.m-more) .m-stack .dex-chip,
+  body.touch:not(.m-more) .m-stack .acct-chip,
+  body.touch:not(.m-more) .m-stack .ch-chip {
+    display: none !important;
+  }
+
+  /* 標題小一點 */
+  body.touch .title-main {
+    font-size: 15px;
+  }
+
+  /* 歡迎卡只留一段話 */
+  body.touch .welcome-sub {
+    display: none;
+  }
+}
+
+/* 手機、平板：左上的資訊行加淡淡的底色，後面 3D 招牌的字才不會透出來跟介面混在一起 */
+body.touch .m-stack .event-line,
+body.touch .m-stack .mini-line,
+body.touch .m-stack .today,
+body.touch .m-stack .fire-meter {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(12, 16, 28, 0.55);
+  opacity: 1;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}

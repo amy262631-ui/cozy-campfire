@@ -3,6 +3,7 @@ import { FISH, rollFish, rollSize, packFish } from './fishData.js';
 import { createFishMesh, fishScale } from './fishModel.js';
 import { haptic } from '../fx/haptics.js';
 import { t } from '../i18n/i18n.js';
+import { compactScreen } from '../ui/HUD.js';
 
 /**
  * 釣魚小遊戲流程：
@@ -217,7 +218,9 @@ export class FishingGame {
     }
     const sec = Math.floor((performance.now() - this.session.at) / 1000);
     this.focusEl.hidden = false;
-    this.focusEl.textContent = t('🎣 靜靜釣了 {m} 分 {s} 秒・{n} 條', { m: Math.floor(sec / 60), s: sec % 60, n: this.session.n });
+    this.focusEl.textContent = compactScreen()
+      ? `🎣 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}・${t('{n} 條', { n: this.session.n })}`
+      : t('🎣 靜靜釣了 {m} 分 {s} 秒・{n} 條', { m: Math.floor(sec / 60), s: sec % 60, n: this.session.n });
   }
 
   stop() {

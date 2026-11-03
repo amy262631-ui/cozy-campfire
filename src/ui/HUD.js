@@ -3,6 +3,9 @@ import { t } from '../i18n/i18n.js';
 /**
  * 畫面上的介面：營火火力表、互動提示、烤棉花糖進度條、小提示訊息（toast）。
  */
+/** 手機（觸控、畫面窄或橫放很矮）：文字用短版 */
+export const compactScreen = () => document.body.classList.contains('touch') && Math.min(innerWidth, innerHeight) < 600;
+
 export class HUD {
   constructor(root = document.getElementById('ui')) {
     root.insertAdjacentHTML(
@@ -164,6 +167,13 @@ export class HUD {
     el.hidden = !ev;
     if (!ev) return;
     el.classList.toggle('active', ev.active);
+    // 手機：短短一行；營火時間快到了（1 小時內）或進行中才顯示
+    if (compactScreen()) {
+      if (ev.active) el.textContent = t('🌠 營火時間・剩 {m} 分', { m: Math.max(1, Math.ceil(ev.endsIn / 60)) });
+      else if (ev.startsIn < 3600) el.textContent = t('🌙 營火時間 {m} 分後開始', { m: Math.max(1, Math.ceil(ev.startsIn / 60)) });
+      else el.hidden = true;
+      return;
+    }
     if (ev.active) {
       el.textContent = t('🌠 營火時間・流星雨中！松果加倍・限定流星吊飾（還剩 {m} 分）', { m: Math.max(1, Math.ceil(ev.endsIn / 60)) });
     } else if (ev.startsIn < 3 * 3600) {
@@ -184,6 +194,17 @@ export class HUD {
     if (!m) return;
     el.classList.toggle('active', !!m.active);
     const NAME = { fish: t('🎣 釣魚大賽'), stone: t('🪨 疊石接力'), wood: t('🔥 添柴時光'), race: t('🏃 燈籠賽跑'), hunt: t('✨ 找金松果') };
+    if (compactScreen()) {
+      // 手機：短短一行
+      if (m.active) {
+        const top = m.top?.[0];
+        const lead = m.kind === 'fish' && top ? ` · 🥇${top.name} ${top.size}cm` : m.kind === 'race' && top ? ` · 🥇${top.name} ${top.time}s` : m.kind === 'hunt' ? ` · ${t('還有 {n} 顆', { n: m.left ?? 0 })}` : '';
+        el.textContent = t('{name}中・剩 {m} 分', { name: NAME[m.kind] ?? '', m: Math.max(1, Math.ceil(m.endsIn / 60)) }) + lead;
+      } else {
+        el.textContent = t('下一場 {time} {name}', { name: NAME[m.kind] ?? '', time: `${m.hour}:${String(m.minute ?? 0).padStart(2, '0')}` });
+      }
+      return;
+    }
     if (m.active) {
       const left = Math.max(1, Math.ceil(m.endsIn / 60));
       const RULE = {
