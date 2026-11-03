@@ -22,7 +22,7 @@ import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
 import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM } from '../src/fishing/fishData.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
-import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck } from './homes.js';
+import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack } from './homes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -1139,6 +1139,14 @@ io.on('connection', (socket) => {
     } else if (data.op === 'rotate') {
       if (!target) return ack?.({ ok: false, reason: 'empty' });
       target.r = ((target.r ?? 0) + 1) % 4;
+    } else if (data.op === 'move') {
+      // ✋ 直接搬家：這一層連同上面疊的，一起搬到另一格的最上面
+      const tx = Number(data.tx);
+      const tz = Number(data.tz);
+      if (!validCell(tx, tz, gridOf(h))) return ack?.({ ok: false, reason: 'cell' });
+      if (!target) return ack?.({ ok: false, reason: 'empty' });
+      const why = moveStack(h.items, x, z, lv, tx, tz);
+      if (why) return ack?.({ ok: false, reason: why });
     } else if (data.op === 'remove') {
       if (!target) return ack?.({ ok: false, reason: 'empty' });
       // 收起某一層：疊在它上面的也一起收回背包

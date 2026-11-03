@@ -122,6 +122,27 @@ export function stackY(stack, level) {
   return y;
 }
 
+/**
+ * 把 (x, z) 這一格第 level 層「連同上面疊的」整個搬到 (tx, tz) 那一格的最上面。
+ * 可以的話直接改 items、回傳 null；不行回傳原因代碼。
+ *   same：同一格　noStack：疊不上去　stackFull：疊太高　empty：那一層沒東西
+ */
+export function moveStack(items, x, z, level, tx, tz) {
+  if (x === tx && z === tz) return 'same';
+  const from = stackAt(items, x, z);
+  const moving = from.slice(level);
+  if (!moving.length) return 'empty';
+  const to = stackAt(items, tx, tz);
+  if (to.length + moving.length > MAX_STACK) return 'stackFull';
+  if (!canStackOn(to.at(-1)?.i ?? null, moving[0].i)) return 'noStack';
+  moving.forEach((it, k) => {
+    it.x = tx;
+    it.z = tz;
+    it.l = to.length + k;
+  });
+  return null;
+}
+
 // ---------- 帳篷擴建 ----------
 /** 帳篷地板一開始 6×6 格，用松果一次擴一圈，最大 10×10 */
 export const GRID_BASE = 6;

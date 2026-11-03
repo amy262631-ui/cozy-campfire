@@ -1172,11 +1172,15 @@ async function init() {
       if (res?.ok) {
         setMyHome({ ...res.home });
         audio.sfx(op === 'remove' ? 'tap' : 'stone');
-      } else if (res?.reason === 'taken') hud.toast(t('這格已經有東西了'));
-      else if (res?.reason === 'noStack') hud.toast(t('這件不能疊在上面喔'));
+        if (op === 'move') homeRoom.select({ x: data.tx, z: data.tz });
+        return true;
+      }
+      if (res?.reason === 'taken') hud.toast(t('這格已經有東西了'));
+      else if (res?.reason === 'noStack') hud.toast(op === 'move' ? t('那一格放不上去，換一格試試') : t('這件不能疊在上面喔'));
       else if (res?.reason === 'stackFull') hud.toast(t('這一格已經疊滿了'));
       else if (res?.reason === 'tooMany') hud.toast(t('帳篷放滿了，收起一些再擺吧'));
       else if (res) hud.toast(t('沒放成，再試一次吧'));
+      return false;
     },
     onExit: () => stopBuild(),
     onExpand: () => buyItem('expand'),
@@ -1191,7 +1195,8 @@ async function init() {
   });
   let buildCam = null;
   // 布置時的鏡頭距離：帳篷擴建得越大，拉得越遠
-  const buildDistance = () => Math.min(13.5, 8.5 * homeRoom.scale ** 0.9);
+  // 手機直放畫面窄，左右會切到，再拉遠一點才看得到整個帳篷
+  const buildDistance = () => Math.min(13.5, 8.5 * homeRoom.scale ** 0.9 * (camera.aspect < 0.8 ? 1.35 : 1));
   const startBuild = () => {
     if (!inHome() || !homeRoom.mine) return;
     homeRoom.setBuild(true);
@@ -1228,6 +1233,8 @@ async function init() {
       if (moved > 8) return;
       const cell = homeRoom.cellAtScreen(e.clientX, e.clientY, camera, renderer.domElement);
       if (!cell) return;
+      // ✋ 搬家模式：點的這格就是要搬去的地方
+      if (buildPanel.moving) return void buildPanel.moveTo(cell);
       homeRoom.select(cell);
       buildPanel.select(cell);
     });

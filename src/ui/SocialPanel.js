@@ -50,6 +50,19 @@ export class SocialPanel {
       chatBtn: $('#chat-btn'),
     };
 
+    // 📱 手機、平板打字時：鍵盤跳出來，輸入框就貼在鍵盤正上方，聊天訊息顯示在它上面（像 LINE 一樣）
+    //    沒偵測到鍵盤（例如平板接實體鍵盤）就留在畫面上方
+    this.fitKeyboard = () => {
+      const vv = window.visualViewport;
+      if (!vv || !document.body.classList.contains('touch')) return;
+      const kb = Math.round(window.innerHeight - (vv.offsetTop + vv.height));
+      const open = this.typing && kb > 100;
+      document.body.classList.toggle('kb', open);
+      document.body.style.setProperty('--kb', `${Math.max(0, kb)}px`);
+    };
+    window.visualViewport?.addEventListener('resize', this.fitKeyboard);
+    window.visualViewport?.addEventListener('scroll', this.fitKeyboard);
+
     // 點這些介面時不要觸發遊戲（轉鏡頭等）
     for (const el of [this.el.root, this.el.menu, this.el.form]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
 
@@ -113,12 +126,15 @@ export class SocialPanel {
     this.el.form.classList.add('show');
     document.body.classList.add('chatting'); // 手機打字時先把左上的資訊收起來，免得重疊
     setTimeout(() => this.el.input.focus(), 30);
+    // 鍵盤是慢慢滑上來的，多量幾次
+    for (const ms of [150, 400, 800]) setTimeout(() => this.fitKeyboard(), ms);
   }
 
   closeChat() {
     this.el.form.classList.remove('show');
     document.body.classList.remove('chatting');
     this.el.input.blur();
+    this.fitKeyboard();
   }
 
   get typing() {

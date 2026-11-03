@@ -8,7 +8,8 @@ import { CATALOG_BY_ID, canStackOn, stackAt, gridOf, expandPrice, MAX_STACK } fr
  * 布置帳篷：畫面下方的一條面板。
  *   點地板的格子 → 空格：選背包裡的家具放上去；有東西：每一層都能轉向或收起，上面還能再疊
  *   getHome()        { inv, items, grid }
- *   onEdit(op, data) → Promise（op：place / rotate / remove；rotate、remove 帶 l＝第幾層）
+ *   onEdit(op, data) → Promise<boolean>（op：place / rotate / remove / move；rotate、remove、move 帶 l＝第幾層，move 再帶 tx、tz）
+ *   ✋ 移動：按了之後再點另一格，那一層（連同上面疊的）就搬過去
  *   onExpand()       📐 擴建帳篷（用松果買）
  *   onExit()         結束布置
  *   onToggleOpen()   開放／關閉參觀
@@ -61,8 +62,19 @@ export class BuildPanel {
         this.render();
         return;
       }
+      if (e.target.closest('[data-cancel-move]')) {
+        this.moving = null;
+        this.render();
+        return;
+      }
       const b = e.target.closest('[data-op]');
       if (!b || !this.cell || this.busy) return;
+      if (b.dataset.op === 'move') {
+        const it = stackAt(this.getHome()?.items, this.cell.x, this.cell.z)[Number(b.dataset.l)];
+        this.moving = { ...this.cell, l: Number(b.dataset.l), i: it?.i };
+        this.render();
+        return;
+      }
       this.busy = true;
       await this.onEdit?.(b.dataset.op, { ...this.cell, i: b.dataset.i, l: b.dataset.l != null ? Number(b.dataset.l) : undefined });
       this.busy = false;
@@ -91,6 +103,7 @@ export class BuildPanel {
   stop() {
     this.el.hidden = true;
     this.cell = null;
+    this.moving = null;
   }
 
   select(cell) {
@@ -98,9 +111,36 @@ export class BuildPanel {
     this.render();
   }
 
+  /** 搬家模式中點了一格：搬過去。成功就選到新的那格，回傳新的格子；失敗留在搬家模式（可以再點別格） */
+  async moveTo(cell) {
+    const m = this.moving;
+    if (!m || this.busy) return null;
+    if (cell.x === m.x && cell.z === m.z) {
+      this.moving = null;
+      this.render();
+      return cell;
+    }
+    this.busy = true;
+    const ok = await this.onEdit?.('move', { x: m.x, z: m.z, l: m.l, tx: cell.x, tz: cell.z });
+    this.busy = false;
+    if (!ok) return null;
+    this.moving = null;
+    this.cell = { x: cell.x, z: cell.z };
+    this.render();
+    return this.cell;
+  }
+
   render() {
     if (!this.active) return;
     const home = this.getHome() ?? { inv: {}, items: [] };
+    if (this.moving) {
+      const f = FURNITURE_BY_ID[this.moving.i];
+      const above = stackAt(home.items, this.moving.x, this.moving.z).length - 1 - this.moving.l;
+      this.title.textContent = t('✋ 搬「{name}」：點要放的格子', { name: `${f?.icon ?? ''} ${f?.name ?? ''}` });
+      this.body.innerHTML = `<div class="build-tip">${above > 0 ? t('上面疊的東西會一起搬過去') : t('可以搬到空格，也可以疊到桌子、櫃子或地墊上')}</div>
+        <button type="button" class="build-act" data-cancel-move="1">${t('取消')}</button>`;
+      return;
+    }
     if (!this.cell) {
       const total = Object.values(home.inv ?? {}).reduce((a, b) => a + b, 0);
       this.title.textContent = t('🛠️ 布置模式：點地板上的格子');
@@ -145,8 +185,9 @@ export class BuildPanel {
         const above = stack.length - 1 - lv;
         return `<div class="build-layer">
           <span class="bl-name">${f.icon} ${f.name}</span>
-          <button type="button" class="build-act" data-op="rotate" data-l="${lv}">${t('🔄 轉個方向')}</button>
-          <button type="button" class="build-act" data-op="remove" data-l="${lv}" ${above ? `title="${t('上面的東西也會一起收回')}"` : ''}>${t('📦 收回背包')}${above ? ' ⤴' : ''}</button>
+          <button type="button" class="build-act" data-op="move" data-l="${lv}">${t('✋ 移動')}</button>
+          <button type="button" class="build-act" data-op="rotate" data-l="${lv}">${t('🔄 轉向')}</button>
+          <button type="button" class="build-act" data-op="remove" data-l="${lv}" ${above ? `title="${t('上面的東西也會一起收回')}"` : ''}>${t('📦 收起')}${above ? ' ⤴' : ''}</button>
         </div>`;
       })
       .reverse()

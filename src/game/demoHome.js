@@ -1,7 +1,7 @@
 import { FURNITURE_BY_ID, TENT_PRICE } from './furniture.js';
 import { TENT_STYLE_BY_ID } from './tentStyles.js';
 import { TENT_SHAPE_BY_ID } from './tentShapes.js';
-import { canStackOn, stackAt, gridOf, expandPrice, maxItems, MAX_STACK } from './furnitureCatalog.js';
+import { canStackOn, stackAt, gridOf, expandPrice, maxItems, MAX_STACK, moveStack } from './furnitureCatalog.js';
 
 /**
  * 試玩版（沒有伺服器，例如放在 Claude 的預覽頁）：
@@ -113,6 +113,13 @@ export function createDemoHome() {
       } else if (data.op === 'rotate') {
         if (!target) return { ok: false, reason: 'empty' };
         target.r = ((target.r ?? 0) + 1) % 4;
+      } else if (data.op === 'move') {
+        const tx = Number(data.tx);
+        const tz = Number(data.tz);
+        if (!(Number.isInteger(tx) && Number.isInteger(tz) && tx >= 0 && tz >= 0 && tx < grid && tz < grid)) return { ok: false, reason: 'cell' };
+        if (!target) return { ok: false, reason: 'empty' };
+        const why = moveStack(home.items, x, z, lv, tx, tz);
+        if (why) return { ok: false, reason: why };
       } else if (data.op === 'remove') {
         if (!target) return { ok: false, reason: 'empty' };
         const drop = new Set(stack.slice(lv));

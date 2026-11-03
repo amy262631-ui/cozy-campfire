@@ -4842,3 +4842,115 @@ body.touch .m-stack .pomo-buttons {
 body.touch .ritual.first {
   animation: ritual-first 2.4s ease-in-out 3;
 }
+
+/* ================= 手機、平板版面精簡 ================= */
+
+/* 平板：左上那一欄（資訊、小任務）不要撐滿整個畫面寬 */
+@media (min-width: 600px) {
+  body.touch .m-stack {
+    right: auto;
+    width: 380px;
+  }
+}
+
+/* 手機直放：「累計幾位旅人」那行收起來，左上少一行 */
+@media (max-width: 599px) {
+  body.touch #today {
+    display: none !important;
+  }
+}
+
+/* 手機橫放：畫面很矮，左上只留必要的；表情、聊天移到下方正中間（搖桿和動作鍵中間的空位） */
+@media (orientation: landscape) and (max-height: 500px) {
+  body.touch .m-stack {
+    right: auto;
+    width: 300px;
+    gap: 4px;
+  }
+
+  body.touch #today,
+  body.touch #event-line,
+  body.touch #mini-line {
+    display: none !important;
+  }
+
+  body.touch .social {
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+    align-items: center;
+    max-width: 40vw;
+  }
+
+  body.touch .chat-log {
+    align-items: center;
+  }
+
+  body.touch .emote-menu {
+    bottom: 64px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
+
+  body.touch .prompt,
+  body.touch.in-action .prompt {
+    bottom: 64px;
+    max-width: 44vw;
+    font-size: 13px;
+  }
+
+  body.touch .roast {
+    bottom: 112px;
+  }
+
+  /* 提示訊息放上方正中間（左上資訊、右上按鈕的中間） */
+  body.touch .toasts {
+    top: 8px;
+    bottom: auto;
+    width: 44vw;
+    flex-direction: column;
+  }
+
+  body.touch .build-bar {
+    width: min(520px, 62vw);
+    padding: 8px 10px;
+  }
+
+  body.touch .build-body {
+    max-height: 28vh;
+  }
+}
+
+/* 📱 打字時鍵盤跳出來：輸入框貼在鍵盤上方，聊天訊息在它上面，搖桿和按鈕先收起來 */
+body.touch.chatting.kb .chat-input {
+  top: auto;
+  bottom: calc(var(--kb, 0px) + 8px);
+}
+
+body.touch.chatting.kb .social {
+  left: 50%;
+  right: auto;
+  bottom: calc(var(--kb, 0px) + 72px);
+  transform: translateX(-50%);
+  width: min(460px, 92vw);
+  max-width: none;
+}
+
+body.touch.chatting.kb .social-buttons,
+body.touch.chatting.kb .joystick,
+body.touch.chatting.kb .action-buttons,
+body.touch.chatting.kb .toasts {
+  display: none;
+}
+
+/* 布置：搬家具的時候 */
+.build-act[data-op='move'] {
+  border-color: rgba(140, 200, 255, 0.45);
+}
+
+/* 布置的時候：左上的活動資訊先收起來，畫面清爽一點 */
+body.building #today,
+body.building #event-line,
+body.building #mini-line {
+  display: none !important;
+}

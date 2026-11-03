@@ -6,14 +6,14 @@
  */
 import crypto from 'node:crypto';
 
-import { FURNITURE_CATALOG, CATALOG_BY_ID, canStackOn, stackAt, gridOf, expandPrice, maxItems, MAX_STACK, GRID_BASE } from '../src/game/furnitureCatalog.js';
+import { FURNITURE_CATALOG, CATALOG_BY_ID, canStackOn, stackAt, gridOf, expandPrice, maxItems, MAX_STACK, GRID_BASE, moveStack } from '../src/game/furnitureCatalog.js';
 
 /** 家具價格（資料在 src/game/furnitureCatalog.js，前後端共用） */
 export const SHOP = {
   tent: 30,
   ...Object.fromEntries(FURNITURE_CATALOG.filter((f) => !f.gift).map((f) => [f.id, f.price])),
 };
-export { gridOf, expandPrice, maxItems, canStackOn, stackAt, MAX_STACK, CATALOG_BY_ID };
+export { gridOf, expandPrice, maxItems, canStackOn, stackAt, MAX_STACK, CATALOG_BY_ID, moveStack };
 
 // ---------- 帳號 ----------
 const NAME_RE = /^[\p{L}\p{N}_]{3,16}$/u;
