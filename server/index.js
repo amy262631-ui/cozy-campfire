@@ -206,8 +206,9 @@ const homeRoom = (owner) => {
 /** 存檔：統計和錢包更新很頻繁，等 10 秒合併成一次；其他 2 秒 */
 const saveJson = (file, data) => storage.save(file, data, file === 'stats.json' || file === 'players.json' ? 10000 : 2000);
 
-// ---------- 每晚的營火時間（台北時間 21:00～21:30）：流星雨、松果加倍、限定流星吊飾 ----------
-const EVENT_START = (Number(process.env.EVENT_HOUR) || 21) * 3600 + (Number(process.env.EVENT_MINUTE) || 0) * 60;
+// ---------- 每晚的營火時間（台北時間 21:30～22:00）：流星雨、松果加倍、限定流星吊飾 ----------
+const envNum = (k, def) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : def);
+const EVENT_START = envNum('EVENT_HOUR', 21) * 3600 + envNum('EVENT_MINUTE', 30) * 60;
 const EVENT_LEN = (Number(process.env.EVENT_MINUTES) || 30) * 60;
 function eventInfo(now = new Date()) {
   const parts = Object.fromEntries(
@@ -222,7 +223,8 @@ function eventInfo(now = new Date()) {
   return { active: false, startsIn };
 }
 
-// ---------- 每小時小活動（整點開始 10 分鐘；晚上 9 點是營火時間，不另外辦） ----------
+// ---------- 每小時小活動（每小時 30 分開始 10 分鐘；21:30 是營火時間，不另外辦） ----------
+const MINI_AT = envNum('MINI_MINUTE', 30) * 60; // 每小時第幾分開始
 const MINI_LEN = (Number(process.env.MINI_MINUTES) || 10) * 60;
 const MINI_CAP = 10; // 疊石、添柴：每人每場最多多拿幾顆松果
 const MINI_PRIZES = [15, 10, 6]; // 釣魚大賽前三名
@@ -240,14 +242,18 @@ function taipeiClock(now = new Date()) {
 const EVENT_HOUR = Math.floor(EVENT_START / 3600);
 function miniInfo(now = new Date()) {
   const { h, sec } = taipeiClock(now);
-  if (h !== EVENT_HOUR && sec < MINI_LEN) return { kind: miniKind(h), active: true, endsIn: MINI_LEN - sec, id: `${dayKey(now)}-${h}` };
-  let next = (h + 1) % 24;
-  let startsIn = 3600 - sec;
+  // 目前算哪一場：還沒到這小時的 30 分，就還是上一小時那場
+  const into = sec - MINI_AT;
+  const curH = into >= 0 ? h : (h + 23) % 24;
+  const since = into >= 0 ? into : into + 3600;
+  if (curH !== EVENT_HOUR && since < MINI_LEN) return { kind: miniKind(curH), active: true, endsIn: MINI_LEN - since, id: `${dayKey(now)}-${curH}` };
+  let next = (curH + 1) % 24;
+  let startsIn = 3600 - since;
   if (next === EVENT_HOUR) {
     next = (next + 1) % 24;
     startsIn += 3600;
   }
-  return { kind: miniKind(next), active: false, startsIn, hour: next };
+  return { kind: miniKind(next), active: false, startsIn, hour: next, minute: MINI_AT / 60 };
 }
 
 // ---------- 松果錢包（依瀏覽器的隨機代號記錄，不用帳號；名字和動物每次隨機也沒關係） ----------
@@ -895,6 +901,7 @@ io.on('connection', (socket) => {
     player.a = ACTION_STATES.has(s[3]) ? s[3] : 'idle';
     player.d = num(s[4], 0, 2, 0);
     player.e = Math.floor(num(s[5], 0, 99999, 0));
+    player.st = Date.now(); // 最後一次收到狀態的時間（手機鎖螢幕、切到別的 App 就不會再送）
     player.dirty = true;
   });
 
@@ -1522,6 +1529,24 @@ io.on('connection', (socket) => {
     tidyChannels();
   });
 });
+
+// ---------- 🎣 拉竿卡住的保險 ----------
+// 拉竿是幾秒鐘的動作，但玩家剛好鎖螢幕或切到別的 App，瀏覽器會暫停，就不會再送「拉完了」。
+// 超過 10 秒沒收到新狀態：在別人的畫面上讓他坐回去釣魚。
+// （舉魚炫耀不算：要玩家自己按「繼續釣魚」或「放下」才放下，可以舉著魚到處走）
+const SHORT_ACTIONS = new Set(['reel']);
+setInterval(() => {
+  const now = Date.now();
+  const rooms = [...[...channels.values()].flatMap((c) => [...c.rooms.values()]), ...homeRooms.values()];
+  for (const r of rooms) {
+    for (const p of r.players.values()) {
+      if (!SHORT_ACTIONS.has(p.a) || now - (p.st ?? 0) < 10000) continue;
+      p.a = 'fish';
+      p.e = 0;
+      p.dirty = true;
+    }
+  }
+}, 2000);
 
 // ---------- 20Hz 廣播迴圈 ----------
 let lastTick = Date.now();

@@ -548,7 +548,7 @@ export function createForestRoom() {
     setAreas: (a) => areaBoard.draw(a),
     /** 手機的 F 按鈕：在水邊變成「釣魚」、釣魚中變成「拉竿」 */
     roastHint(actions) {
-      if (actions.state === 'fish') return ['🎣', t('拉竿')];
+      if (actions.state === 'fish') return this.fishing?.phase === 'show' ? ['🎣', t('繼續')] : ['🎣', t('拉竿')];
       return actions.state === 'free' && pond.spotAt(actions.player.position) ? ['🎣', t('釣魚')] : null;
     },
     get carrying() {

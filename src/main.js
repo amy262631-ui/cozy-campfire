@@ -52,7 +52,7 @@ import { ShareCard } from './ui/ShareCard.js';
 import { ORNAMENT_BY_ID } from './game/ornaments.js';
 import { STONE_FLAG, CAIRN_MAX } from './rooms/cairns.js';
 import { FishingGame } from './fishing/FishingGame.js';
-import { FISH } from './fishing/fishData.js';
+import { FISH, packFish } from './fishing/fishData.js';
 import { FishingUI } from './ui/FishingUI.js';
 
 // 網址參數（開發測試用）
@@ -201,6 +201,34 @@ async function init() {
       if (net.online) net.sendCatch(index, size);
       else fishingUI.setBoard([], false);
     },
+    // 舉著魚起身走開：繼續舉著，走到哪都看得到（按「放下」或去做別的事才收起來）
+    onKeep: (index, size) => {
+      setTrophy({ index, size });
+      hud.toast(t('🐟 舉著{name}到處炫耀吧！想收起來就按「放下」', { name: FISH[index]?.name ?? '' }), 4500);
+    },
+  });
+
+  // ---------- 🐟 舉著魚到處走（炫耀） ----------
+  /** 正舉著的魚 { index, size }（null＝沒有） */
+  let trophy = null;
+  let trophyChar = null; // 魚掛在哪個角色模型上（換造型後要重新掛）
+  const trophyBtn = document.createElement('button');
+  trophyBtn.type = 'button';
+  trophyBtn.className = 'trophy-btn';
+  trophyBtn.hidden = true;
+  document.getElementById('ui').appendChild(trophyBtn);
+  trophyBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  /** 換成舉著這條魚（null＝收進魚簍） */
+  function setTrophy(f) {
+    trophy = f;
+    trophyChar = null;
+    trophyBtn.hidden = !f;
+    if (f) trophyBtn.textContent = t('🐟 放下{name}', { name: FISH[f.index]?.name ?? '' });
+    else player?.character?.setProp('fish', false);
+  }
+  trophyBtn.addEventListener('click', () => {
+    setTrophy(null);
+    hud.toast(t('🐟 把魚收進魚簍了'));
   });
   rooms.lake_dock.fishing = fishing;
   forest.fishing = fishing; // 營火河畔也用同一個釣魚遊戲
@@ -314,8 +342,8 @@ async function init() {
     eventState = { ...ev, at: performance.now() };
     world.eventShower = !!ev.active;
     hud.setEvent(currentEvent());
-    if (announce && ev.active && !was) hud.toast(t('🌠 營火時間開始了！流星雨、松果加倍，限定「流星吊飾」只到 9:30'), 6000);
-    if (announce && !ev.active && was) hud.toast(t('🌙 今晚的營火時間結束了，明晚 9 點見'), 4000);
+    if (announce && ev.active && !was) hud.toast(t('🌠 營火時間開始了！流星雨、松果加倍，限定「流星吊飾」只到 10 點'), 6000);
+    if (announce && !ev.active && was) hud.toast(t('🌙 今晚的營火時間結束了，明晚 9:30 見'), 4000);
     treePanel?.refresh();
   };
   net.on('event', (ev) => applyEvent(ev, true));
@@ -546,7 +574,7 @@ async function init() {
         ritual?.event('hang');
         return true;
       }
-      if (res?.reason === 'eventOnly') hud.toast(t('🌠 流星吊飾只有每晚 9:00～9:30 的營火時間才能掛'));
+      if (res?.reason === 'eventOnly') hud.toast(t('🌠 流星吊飾只有每晚 9:30～10:00 的營火時間才能掛'));
       else if (res?.reason === 'poor') hud.toast(t('松果不夠喔，做小任務或釣魚可以撿到更多 🌰'));
       else if (res?.reason === 'tooFast') hud.toast(t('慢慢來，一個一個掛 ✨'));
       else hud.toast(t('沒掛上去，再試一次吧'));
@@ -1090,7 +1118,8 @@ async function init() {
       ...player.getNetworkState(),
       actionState: actionState ?? ((actions.state === 'fish' && fishing.netAction) || player.actionState), // 拉竿、舉魚
       doneness: actions.state === 'roast' ? actions.doneness : 0,
-      extra: fishing.netExtra || (forest.carrying ? STONE_FLAG : 0), // 舉起來的魚（魚種＋公分），或頭上頂著石頭
+      // 舉起來的魚（魚種＋公分）：釣魚中舉著、或舉著到處走；不然就是頭上頂著石頭
+      extra: fishing.netExtra || (trophy ? packFish(trophy.index, trophy.size) : 0) || (forest.carrying ? STONE_FLAG : 0),
     };
   }
 
@@ -1401,6 +1430,8 @@ async function init() {
   let hiddenSince = 0;
   document.addEventListener('visibilitychange', () => {
     hiddenSince = document.hidden ? performance.now() : 0;
+    // 🎣 拉竿到一半切出去（鎖螢幕、回 LINE）：畫面會暫停，先告訴大家「坐回去釣魚了」（舉魚炫耀的話就繼續舉著）
+    if (document.hidden && joined && actions.state === 'fish' && fishing.netAction === 'reel') net.update(1, netState('fish'));
   });
   setInterval(() => {
     if (!joined || editing) return;
@@ -1512,7 +1543,16 @@ async function init() {
     remotes.pushOut(player.position, player.radius);
     remotes.update(dt, elapsed);
     net.update(dt, netState());
-    cameraRig.showOff = fishing.phase === 'show';
+    cameraRig.showOff = fishing.showingOff;
+    // 舉著魚到處走：又坐下來釣魚、去做別的事（烤棉花糖、撿石頭、裹毯⋯）就收進魚簍
+    if (trophy) {
+      if (actions.state !== 'free' || forest.carrying) setTrophy(null);
+      else if (player.character !== trophyChar) {
+        player.character.setHeldFish?.(trophy.index, trophy.size);
+        player.character.setProp('fish', true);
+        trophyChar = player.character;
+      }
+    }
     cameraRig.update(dt);
 
     const goTo = roomMgr.update(dt, elapsed, camera);

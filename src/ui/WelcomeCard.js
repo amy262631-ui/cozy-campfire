@@ -14,7 +14,7 @@ export class WelcomeCard {
       <div class="welcome" id="welcome" hidden>
         <div class="welcome-title">${t('🌲 歡迎來到迷霧森林營地')}</div>
         <p>${t('這裡很適合把網頁開著：讀書、工作、發呆都好，營火劈啪聲、蟲鳴和湖水聲會陪著你。')}</p>
-        <p class="welcome-sub">${t('想動就去釣魚、疊石頭；想靜就在火邊坐著。每個整點還有小活動 🎣')}</p>
+        <p class="welcome-sub">${t('想動就去釣魚、疊石頭；想靜就在火邊坐著。每小時 30 分還有小活動 🎣')}</p>
         <div class="welcome-btns">
           <button type="button" data-w="sound">${t('🎧 開啟營火聲')}</button>
           <button type="button" data-w="focus">${t('📚 去專注帳篷')}</button>

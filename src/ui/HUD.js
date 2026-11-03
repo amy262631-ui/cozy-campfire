@@ -170,10 +170,10 @@ export class HUD {
       const h = Math.floor(ev.startsIn / 3600);
       const m = Math.ceil((ev.startsIn % 3600) / 60);
       el.textContent = h
-        ? t('🌙 今晚 9 點營火時間・還有 {h} 小時 {m} 分', { h, m })
-        : t('🌙 今晚 9 點營火時間・還有 {m} 分鐘', { m: Math.max(1, m) });
+        ? t('🌙 今晚 9:30 營火時間・還有 {h} 小時 {m} 分', { h, m })
+        : t('🌙 今晚 9:30 營火時間・還有 {m} 分鐘', { m: Math.max(1, m) });
     } else {
-      el.textContent = t('🌙 每晚 9 點營火時間：流星雨、松果加倍');
+      el.textContent = t('🌙 每晚 9:30 營火時間：流星雨、松果加倍');
     }
   }
 
@@ -203,7 +203,7 @@ export class HUD {
       el.textContent = (RULE[m.kind] ?? '') + lead;
     } else {
       const mins = Math.max(1, Math.ceil(m.startsIn / 60));
-      el.textContent = t('下一場 {name}：{h}:00（{m} 分鐘後）', { name: NAME[m.kind] ?? '', h: m.hour, m: mins });
+      el.textContent = t('下一場 {name}：{time}（{m} 分鐘後）', { name: NAME[m.kind] ?? '', time: `${m.hour}:${String(m.minute ?? 0).padStart(2, '0')}`, m: mins });
     }
   }
 

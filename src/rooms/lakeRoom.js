@@ -303,6 +303,12 @@ export function createLakeRoom() {
       return fishingSpot(actions.player.position) ? t('<kbd>F</kbd> 坐下釣魚') : null;
     },
 
+    /** 手機的 F 按鈕：舉魚時變成「繼續」 */
+    roastHint(actions) {
+      if (actions.state === 'fish') return this.fishing?.phase === 'show' ? ['🎣', t('繼續')] : ['🎣', t('拉竿')];
+      return null;
+    },
+
     /** 由 RoomManager 每幀呼叫 */
     update(dt, t, _camera, actions) {
       water.material.uniforms.uTime.value = t;

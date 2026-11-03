@@ -312,6 +312,7 @@ export class ActionStateMachine {
   /** 目前該顯示的互動提示（HTML）或 null */
   get prompt() {
     if (EMOTE_IDS.has(this.state)) return null;
+    if (this.state === 'fish' && this.room?.fishing?.phase === 'show') return t('<kbd>F</kbd> 繼續釣魚　·　直接走開，就舉著魚到處炫耀 🐟');
     if (this.state === 'fish' && this.room?.fishing?.busy) return null;
     if (this.state === 'free') {
       if (this.room?.prompt) return this.room.prompt(this);

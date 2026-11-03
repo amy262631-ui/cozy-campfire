@@ -550,6 +550,13 @@ export class ProceduralFox {
       headRZ = Math.sin(t * 0.7) * 0.06; // idle 歪頭晃晃
     }
 
+    // 舉著魚到處走：雙手一直舉高，魚在頭上扭來扭去
+    if (this.heldFish.visible && P !== 'showOff' && !sitting) {
+      ARMS_SHOW.forEach((p, i) => armsT[i].set(...p));
+      this.heldFish.rotation.z = Math.sin(t * 9) * 0.15;
+      this.heldFish.position.y = 1.42;
+    }
+
     // 套用（插值讓姿勢切換平滑）
     const tor = this.torso;
     tor.position.y += (torsoY - tor.position.y) * (moving ? 1 : k);

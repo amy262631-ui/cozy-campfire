@@ -4954,3 +4954,40 @@ body.building #event-line,
 body.building #mini-line {
   display: none !important;
 }
+
+/* 🐟 舉著魚到處走：「放下」按鈕（在互動提示上面） */
+.trophy-btn {
+  position: absolute;
+  left: 50%;
+  bottom: 160px;
+  transform: translateX(-50%);
+  padding: 7px 16px;
+  border: 1px solid rgba(140, 200, 255, 0.55);
+  border-radius: 999px;
+  background: rgba(20, 40, 60, 0.82);
+  color: #dff1ff;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.trophy-btn[hidden] {
+  display: none;
+}
+
+body.touch .trophy-btn {
+  bottom: 280px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  body.touch .trophy-btn {
+    bottom: 112px;
+  }
+}
+
+body.chatting .trophy-btn,
+body.building .trophy-btn {
+  display: none;
+}

@@ -21,8 +21,11 @@ const FLOAT_SINK = 0.18 * FLOAT_SCALE; // 浮標基準點在水面下多深（�
 const BITE_SINK = 0.24 * FLOAT_SCALE; // 咬鉤時再往下沉多少（色段全部沒入）
 
 export class FishingGame {
-  constructor({ group, waterY, hud, ui, audio, cameraRig, onCatch }) {
-    Object.assign(this, { group, waterY, hud, ui, audio, cameraRig, onCatch });
+  /**
+   * onKeep(index, size)：舉著魚的時候起身走開 → 不收起來，繼續舉著到處炫耀（main.js 接手）
+   */
+  constructor({ group, waterY, hud, ui, audio, cameraRig, onCatch, onKeep }) {
+    Object.assign(this, { group, waterY, hud, ui, audio, cameraRig, onCatch, onKeep });
     this.phase = 'idle';
     this.t = 0;
     this.fish = null; // { index, size }
@@ -158,9 +161,14 @@ export class FishingGame {
     return null;
   }
 
-  /** 拉竿與炫耀時不能被搖桿誤觸取消 */
+  /** 拉竿時不能被搖桿誤觸取消（舉魚時可以走開：會舉著魚到處走） */
   get lockMove() {
-    return this.phase === 'reel' || this.phase === 'caught' || this.phase === 'show';
+    return this.phase === 'reel' || this.phase === 'caught';
+  }
+
+  /** 舉著魚：剛舉起來那幾秒鏡頭拉遠拍魚，之後回到平常的鏡頭 */
+  get showingOff() {
+    return this.phase === 'show' && this.t < 4;
   }
 
   /**
@@ -213,6 +221,8 @@ export class FishingGame {
   }
 
   stop() {
+    // 舉著魚起身：魚不收，交給 main.js 繼續舉著到處走
+    const keep = this.phase === 'show' && this.fish ? { ...this.fish } : null;
     this.#go('idle');
     this.bobber.visible = this.line.visible = this.bang.visible = this.reflect.visible = false;
     clearInterval(this.focusTimer);
@@ -230,6 +240,15 @@ export class FishingGame {
     const c = this.actions?.character;
     c?.setProp?.('fish', false);
     c?.setProp?.('rod', this.actions?.state === 'fish');
+    if (keep) this.onKeep?.(keep.index, keep.size);
+  }
+
+  /** 舉魚中按 F／🎣：把魚收進魚簍，繼續甩下一竿 */
+  #continue() {
+    const c = this.actions?.character;
+    c?.setProp?.('fish', false);
+    c?.setProp?.('rod', true);
+    this.#go('cast');
   }
 
   /** F 鍵／按鈕。回傳 true 表示被釣魚吃掉了（不要當成「收竿」） */
@@ -241,9 +260,11 @@ export class FishingGame {
       case 'reel':
         this.#reelTap();
         return true;
+      case 'show':
+        this.#continue();
+        return true;
       case 'cast':
       case 'caught':
-      case 'show':
       case 'scared':
         return true;
       case 'wait':
@@ -519,14 +540,9 @@ export class FishingGame {
         }
         break;
       }
-      case 'show': {
-        if (this.t > 3.6) {
-          c?.setProp?.('fish', false);
-          c?.setProp?.('rod', true);
-          this.#go('cast'); // 自動再甩一竿
-        }
+      case 'show':
+        // 一直舉著炫耀，等玩家按「繼續釣魚」（或直接走開，舉著魚到處走）
         break;
-      }
     }
 
     // 倒影光貼在水面、跟著浮標；浮標沉下去時變暗

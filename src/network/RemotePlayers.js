@@ -118,11 +118,13 @@ class RemotePlayer {
     c.setProp('stick', t.a === 'roast');
     c.setProp('blanket', t.a === 'blanket');
     c.setProp('rod', t.a === 'fish' || t.a === 'reel');
-    if (t.a === 'showFish' && t.e) {
+    // 舉著魚：坐著炫耀（showFish），或舉著魚到處走（走路、站著時也帶著魚的代碼）
+    const holdsFish = !!t.e && t.e !== STONE_FLAG;
+    if (holdsFish) {
       const { index, size } = unpackFish(t.e);
       c.setHeldFish?.(index, size);
     }
-    c.setProp('fish', t.a === 'showFish' && !!t.e);
+    c.setProp('fish', holdsFish);
     c.setProp('stone', t.a !== 'showFish' && t.e === STONE_FLAG); // 頭上頂著石頭
     c.setProp('log', t.a === 'addWood' && this.stateTime < 0.95);
     if (t.a === 'roast') c.stick.setDoneness(t.d);
