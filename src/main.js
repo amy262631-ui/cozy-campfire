@@ -1492,12 +1492,13 @@ async function init() {
     }
     try {
       frame();
-      if (!booted) {
-        booted = true;
-        window.__bootDone?.(); // 第一張畫面畫好了，收起載入畫面
-      }
     } catch (err) {
       reportError(err);
+    }
+    // 第一張畫面畫完就收起載入畫面（就算這張出了小錯也要收，不然玩家會一直卡在「正在生火」）
+    if (!booted) {
+      booted = true;
+      window.__bootDone?.();
     }
   });
 
