@@ -9,6 +9,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 
 export class GuestPanel {
   constructor({ onLike, onNote, onLeave, root = document.getElementById('ui') }) {
+    this.root = root;
     Object.assign(this, { onLike, onNote, onLeave });
     this.home = null;
     this.mine = false;
@@ -78,6 +79,12 @@ export class GuestPanel {
     this.mine = mine;
     if (liked != null) this.liked = liked;
     this.tools.hidden = !home;
+    // 主人在自己帳篷：讚、留言本排進布置那一欄的最上面，才不會和「布置／開放參觀／出去」疊在一起
+    const homeTools = document.getElementById('home-tools');
+    if (mine && home && homeTools) {
+      if (this.tools.parentElement !== homeTools) homeTools.prepend(this.tools);
+    } else if (this.tools.parentElement !== this.root) this.root.append(this.tools);
+    this.tools.classList.toggle('stacked', this.tools.parentElement === homeTools);
     if (!home) this.close();
     this.render();
   }

@@ -3,6 +3,17 @@ import { t } from '../i18n/i18n.js';
 
 const FIRST_KEY = 'cozy-campfire-first-quest';
 const LAST_KEY = 'cozy-campfire-last-quest';
+/** 按過 ✕：這台裝置之後不再自動跳出任務卡（改按「💡 今日小靈感」） */
+const QUIET_KEY = 'cozy-campfire-quest-quiet';
+const store = (k, v) => {
+  try {
+    if (v === undefined) return localStorage.getItem(k);
+    localStorage.setItem(k, v);
+  } catch {
+    /* 無痕模式 */
+  }
+  return null;
+};
 
 /** 到某個點的距離（扣掉一點互動範圍） */
 const dist = (a, b, pad = 0) => Math.max(0, Math.hypot(a.x - b.x, a.z - b.z) - pad);
@@ -203,7 +214,19 @@ export class RitualGuide {
     this.actionsEl = root.querySelector('#ritual-actions');
     this.arrow = root.querySelector('#ritual-arrow');
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
-    root.querySelector('#ritual-x').addEventListener('click', () => this.finish());
+    root.querySelector('#ritual-x').addEventListener('click', () => {
+      store(QUIET_KEY, '1');
+      this.finish();
+    });
+    // 角落的「💡 今日小靈感」：任務卡收起來時才出現，按了就給一個小任務
+    this.ideaBtn = document.createElement('button');
+    this.ideaBtn.type = 'button';
+    this.ideaBtn.className = 'home-chip idea-chip';
+    this.ideaBtn.textContent = t('💡 今日小靈感');
+    this.ideaBtn.hidden = true;
+    this.ideaBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.ideaBtn.addEventListener('click', () => this.open());
+    (document.getElementById('online') ?? root).append(this.ideaBtn);
     root.querySelector('#ritual-next').addEventListener('click', () => this.#start(this.#pick()));
     root.querySelector('#ritual-share').addEventListener('click', () => this.#share());
 
@@ -230,14 +253,19 @@ export class RitualGuide {
     this.beacon.visible = false;
     scene.add(this.beacon);
 
-    // 第一次來：疊石許願；之後每次進來隨機
-    let first = true;
-    try {
-      first = !localStorage.getItem(FIRST_KEY);
-    } catch {
-      /* 無痕模式 */
+    // 第一次來（而且沒按過 ✕）：直接帶「疊石許願」；老玩家不自動跳出，改按角落的「💡 今日小靈感」
+    if (this.newbie && !store(QUIET_KEY)) this.#start('stone');
+    else this.finish();
+  }
+
+  /** 按「💡 今日小靈感」：還有沒做完的就叫回來，不然換一個新的 */
+  open() {
+    if (this.task && this.active && !this.done) {
+      this.el.hidden = false;
+      this.ideaBtn.hidden = true;
+      return;
     }
-    this.#start(first ? 'stone' : this.#pick());
+    this.#start(this.task && !this.done ? this.id : this.newbie && !this.completed ? 'stone' : this.#pick()); // 做到一半按 ✕ 的，接著做同一個
   }
 
   /** 隨機挑一個任務（不要跟上一個一樣） */
@@ -268,6 +296,7 @@ export class RitualGuide {
     this.actionsEl.hidden = true;
     this.el.classList.remove('done');
     this.el.hidden = false;
+    if (this.ideaBtn) this.ideaBtn.hidden = true;
     try {
       localStorage.setItem(LAST_KEY, id);
     } catch {
@@ -344,6 +373,7 @@ export class RitualGuide {
   finish() {
     this.active = false;
     this.el.hidden = true;
+    this.ideaBtn.hidden = false;
     this.beacon.visible = false;
     this.arrow.hidden = true;
   }

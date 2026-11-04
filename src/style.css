@@ -4183,6 +4183,12 @@ body.building .guest-tools {
   display: none;
 }
 
+/* 排進布置那一欄時，跟著那一欄走 */
+.guest-tools.stacked,
+body.touch .guest-tools.stacked {
+  position: static;
+}
+
 .guest-panel {
   position: absolute;
   inset: 0;
@@ -5152,4 +5158,10 @@ body.touch .m-stack .fire-meter {
 .pager button:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+/* 💡 今日小靈感（老玩家叫出小任務） */
+.idea-chip {
+  background: rgba(230, 190, 80, 0.28);
+  border-color: rgba(255, 225, 140, 0.55);
 }
