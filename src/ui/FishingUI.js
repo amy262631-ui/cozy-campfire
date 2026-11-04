@@ -85,7 +85,7 @@ export class FishingUI {
     for (const el of [this.el.reel, this.el.tools, this.el.modal]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
 
     $('#fish-creel-btn').addEventListener('click', () => this.openCreel());
-    $('#fish-board-btn').addEventListener('click', () => this.openBoard());
+    $('#fish-board-btn').addEventListener('click', () => this.openBoard('all'));
     $('#fish-modal-close').addEventListener('click', () => {
       this.el.modal.classList.remove('show');
       document.activeElement?.blur?.();
@@ -162,7 +162,7 @@ export class FishingUI {
   setBoard(board, online) {
     this.board = board ?? [];
     this.boardOnline = online;
-    if (this.el.modal.classList.contains('show') && this._modal === 'board') this.openBoard();
+    if (this.el.modal.classList.contains('show') && this._modal === 'board') this.openBoard(this._btab, false);
   }
 
   /** 伺服器的圖鑑紀錄（換手機登入也會回來）合併進魚簍：{ 魚種: 最大公分 } */
@@ -245,18 +245,38 @@ export class FishingUI {
     this.el.modal.classList.add('show');
   }
 
-  openBoard() {
+  /** 外面接上：打開排行時跟伺服器要最新的大家排行（main.js 設定） */
+  onBoardOpen = null;
+
+  /** 🏆 湖畔排行：tab = all（大家，今天）或 me（自己的最大紀錄） */
+  openBoard(tab = this._btab ?? 'all', fetch = true) {
     this._modal = 'board';
-    this.el.modalTitle.textContent = t('🏆 湖畔排行（今天最大的魚）');
-    const rows = this.boardOnline ? this.board : this.#localBoard();
-    this.el.modalBody.innerHTML = rows.length
+    this._btab = tab;
+    if (fetch && tab === 'all') this.onBoardOpen?.();
+    this.el.modalTitle.textContent = tab === 'all' ? t('🏆 湖畔排行（今天最大的魚）') : t('🏆 我的最大紀錄');
+    const tabs = `<div class="dex-tabs">${[
+      ['all', t('🌍 大家')],
+      ['me', t('🙋 自己')],
+    ]
+      .map(([id, label]) => `<button type="button" data-btab="${id}" class="${id === tab ? 'on' : ''}">${label}</button>`)
+      .join('')}</div>`;
+    const rows = tab === 'all' ? this.board : this.#localBoard();
+    const list = rows.length
       ? rows
           .map(
             (r, i) =>
               `<div class="board-row"><b>${['🥇', '🥈', '🥉'][i] ?? i + 1}</b><span>${escapeHtml(r.name)}</span><small>${FISH[r.fish]?.name ?? ''}</small><em>${t('{size} 公分', { size: r.size })}</em></div>`,
           )
-          .join('') + (this.boardOnline ? '' : '<div class="creel-total">' + t('單人模式：只顯示自己的紀錄') + '</div>')
-      : '<div class="creel-total">' + t('今天還沒有人釣到魚，當第一個吧！') + '</div>';
+          .join('')
+      : '<div class="creel-total">' + (tab === 'all' ? t('今天還沒有人釣到魚，當第一個吧！') : t('還沒有釣到魚，去湖邊試試看吧！')) + '</div>';
+    const note =
+      tab === 'all'
+        ? this.boardOnline
+          ? t('每天午夜重新排行・前 10 名')
+          : t('沒有連線，看不到大家的排行')
+        : t('每種魚只算你釣過最大的一條');
+    this.el.modalBody.innerHTML = tabs + list + `<div class="creel-total">${note}</div>`;
+    for (const b of this.el.modalBody.querySelectorAll('[data-btab]')) b.addEventListener('click', () => this.openBoard(b.dataset.btab));
     this.el.modal.classList.add('show');
   }
 

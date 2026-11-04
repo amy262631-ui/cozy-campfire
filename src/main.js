@@ -199,6 +199,11 @@ async function init() {
 
   // 釣魚小遊戲（湖畔）
   const fishingUI = new FishingUI({ onPress: () => input.emitAction('roast') });
+  fishingUI.onBoardOpen = async () => {
+    if (!net.online) return;
+    const res = await net.request('boardInfo').catch(() => null);
+    if (res?.ok) fishingUI.setBoard(res.board, true);
+  };
   let lastCatch = null;
   const fishing = new FishingGame({
     group: rooms.lake_dock.group,
