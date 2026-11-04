@@ -621,6 +621,8 @@ const ECPAY = {
   key: process.env.ECPAY_HASH_KEY || 'pwFHCqoQZGmho4w6',
   iv: process.env.ECPAY_HASH_IV || 'EkRm7iFT261dpevs',
 };
+/** 月票要不要給玩家看到、能不能買：Render 的環境變數 PASS_ON 設成 1 才開（綠界審核通過前先關著） */
+const PASS_ON = process.env.PASS_ON === '1';
 const ECPAY_URL = ECPAY.prod ? 'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5' : 'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5';
 /** 綠界的檢查碼（CheckMacValue，SHA256）：參數依名稱排序、前後加 HashKey／HashIV、照 .NET 的規則網址編碼後轉小寫 */
 function ecpayMac(params) {
@@ -1270,6 +1272,7 @@ io.on('connection', (socket) => {
       wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, dex: dexView(wal), look: wal.look ?? null, outfit: outfitView(wal), basket: wal.bk ?? {}, gdex: gdexOf(wal), ...trashView(wal), dishes: wal.dish ?? {}, cooked: Object.keys(wal.cooked ?? {}), net: !!wal.net, pass: passView(wal) } : null,
       myHome: publicHome(homes[player.vid]),
       code: player.vid ? homeId(player.vid) : null, // 邀請連結用的公開代號
+      passOn: PASS_ON, // 🎫 月票要不要顯示
       ver: webVersion,
       ...roomSnapshot(chan, roomId, socket.id),
     });
@@ -1738,10 +1741,11 @@ io.on('connection', (socket) => {
 
   // 🔥 營火月票
   const hasAccount = () => !!player?.vid && Object.values(accounts).some((a) => a.vid === player.vid);
-  socket.on('passInfo', (data, ack) => ack?.(wal ? { ok: true, ...passView(wal), account: hasAccount(), price: PASS.price, test: !ECPAY.prod } : { ok: false }));
+  socket.on('passInfo', (data, ack) => ack?.(wal ? { ok: true, ...passView(wal), account: hasAccount(), price: PASS.price, test: !ECPAY.prod, on: PASS_ON } : { ok: false }));
   let lastOrder = 0;
   socket.on('passOrder', (data, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
+    if (!PASS_ON) return ack?.({ ok: false, reason: 'off' });
     if (!hasAccount()) return ack?.({ ok: false, reason: 'account' });
     const now = Date.now();
     if (now - lastOrder < 5000) return ack?.({ ok: false, reason: 'tooFast' });

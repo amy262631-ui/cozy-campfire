@@ -1260,8 +1260,9 @@ async function init() {
         </ul>
         <div class="outfit-today">${status}</div>
         ${info && !info.account ? `<div class="dex-note">${t('購買前要先建立帳號（👤 存檔），換手機登入月票才不會不見')}</div>` : ''}
-        ${info?.test ? `<div class="dex-note">${t('⚠️ 目前是綠界測試模式，不會真的扣款')}</div>` : ''}
-        <div class="outfit-today"><button type="button" id="pass-buy" ${net.online ? '' : 'disabled'}>${passState.active ? t('🔥 再買一次（往後延 {n} 天）', { n: PASS.days }) : t('🔥 購買營火月票 NT$ {p}', { p: PASS.price })}</button></div>
+        ${info?.test && info?.on ? `<div class="dex-note">${t('⚠️ 目前是綠界測試模式，不會真的扣款')}</div>` : ''}
+        ${info && !info.on ? `<div class="outfit-today">${t('🎫 月票即將推出，敬請期待！')}</div>` : ''}
+        <div class="outfit-today" ${info && !info.on ? 'hidden' : ''}><button type="button" id="pass-buy" ${net.online ? '' : 'disabled'}>${passState.active ? t('🔥 再買一次（往後延 {n} 天）', { n: PASS.days }) : t('🔥 購買營火月票 NT$ {p}', { p: PASS.price })}</button></div>
         <div class="dex-note">${t('付款由綠界處理（信用卡、ATM、超商代碼），付款完成後自動開通，不用等人工。月票只會加快松果累積，遊戲裡所有東西不買也都拿得到。')}</div>
       </div>`,
       (body) =>
@@ -1585,6 +1586,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : ''));
     }
     hud.setInviteVisible(true);
+    hud.el.passChip.hidden = !res.passOn; // 🎫 月票：伺服器開了才顯示
     myCode = res.code ?? null;
     // 伺服器更新過、自己的畫面還是舊版：提醒重新整理
     const mine = document.querySelector('script[src*="assets/index-"]')?.getAttribute('src')?.match(/index-([\w-]+)\.js/)?.[1];
