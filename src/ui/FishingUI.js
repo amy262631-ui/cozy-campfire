@@ -253,7 +253,7 @@ export class FishingUI {
     this._modal = 'board';
     this._btab = tab;
     if (fetch && tab === 'all') this.onBoardOpen?.();
-    this.el.modalTitle.textContent = tab === 'all' ? t('🏆 湖畔排行（今天最大的魚）') : t('🏆 我的最大紀錄');
+    this.el.modalTitle.textContent = tab === 'all' ? t('🏆 湖畔排行（歷史最大的魚）') : t('🏆 我的最大紀錄');
     const tabs = `<div class="dex-tabs">${[
       ['all', t('🌍 大家')],
       ['me', t('🙋 自己')],
@@ -268,11 +268,11 @@ export class FishingUI {
               `<div class="board-row"><b>${['🥇', '🥈', '🥉'][i] ?? i + 1}</b><span>${escapeHtml(r.name)}</span><small>${FISH[r.fish]?.name ?? ''}</small><em>${t('{size} 公分', { size: r.size })}</em></div>`,
           )
           .join('')
-      : '<div class="creel-total">' + (tab === 'all' ? t('今天還沒有人釣到魚，當第一個吧！') : t('還沒有釣到魚，去湖邊試試看吧！')) + '</div>';
+      : '<div class="creel-total">' + (tab === 'all' ? t('還沒有人釣到魚，當第一個吧！') : t('還沒有釣到魚，去湖邊試試看吧！')) + '</div>';
     const note =
       tab === 'all'
         ? this.boardOnline
-          ? t('每天午夜重新排行・前 10 名')
+          ? t('歷史紀錄・前 {n} 名', { n: 15 })
           : t('沒有連線，看不到大家的排行')
         : t('每種魚只算你釣過最大的一條');
     this.el.modalBody.innerHTML = tabs + list + `<div class="creel-total">${note}</div>`;
@@ -285,7 +285,7 @@ export class FishingUI {
       .filter(([i]) => !FISH[i].junk)
       .map(([i, e]) => ({ name: t('我'), fish: Number(i), size: e.best }))
       .sort((a, b) => b.size - a.size)
-      .slice(0, 10);
+      .slice(0, 15);
   }
 }
 

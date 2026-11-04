@@ -592,13 +592,10 @@ const todayPublic = () => {
 
 shared.notes = asArray(savedNotes).slice(-ARCHIVE_MAX);
 shared.wishes = asArray(savedWishes).slice(-ARCHIVE_MAX);
-shared.board = asArray(savedBoard).slice(0, 10);
-/** 🏆 湖畔排行只算「今天」（台北時間），過了午夜自動換新的一天 */
-const boardToday = () => {
-  const d = dayKey();
-  if (shared.board.some((r) => dayKey(new Date(r.at)) !== d)) shared.board = shared.board.filter((r) => dayKey(new Date(r.at)) === d);
-  return shared.board;
-};
+shared.board = asArray(savedBoard).slice(0, 15);
+/** 🏆 湖畔排行：歷史前 15 名（不會每天清掉） */
+const BOARD_MAX = 15;
+const boardAll = () => shared.board;
 {
   const saved = asArray(savedCairns);
   shared.cairns = Array.from({ length: CAIRN_COUNT }, (_, i) => (Array.isArray(saved[i]) ? saved[i].slice(0, CAIRN_MAX) : []));
@@ -1000,7 +997,7 @@ function roomSnapshot(c, id, selfId) {
     room: id,
     fuel: c.fuel,
     song: r.song,
-    board: id === 'lake_dock' || id === 'forest_main' ? boardToday() : undefined,
+    board: id === 'lake_dock' || id === 'forest_main' ? boardAll() : undefined,
     wishes: id === 'forest_main' ? recent(shared.wishes, MAX_WISHES) : undefined,
     notes: id === 'forest_main' ? recent(shared.notes, MAX_NOTES) : undefined,
     cairns: id === 'forest_main' ? shared.cairns : undefined,
@@ -2177,7 +2174,7 @@ io.on('connection', (socket) => {
   };
 
   // 🏆 湖畔排行：在哪裡打開都拿得到今天的大家排行
-  socket.on('boardInfo', (_d, ack) => ack?.({ ok: true, board: boardToday() }));
+  socket.on('boardInfo', (_d, ack) => ack?.({ ok: true, board: boardAll() }));
 
   // 釣到魚：全場公告＋湖畔排行（只收湖畔房間、每 3 秒最多一次）
   let lastCatch = 0;
@@ -2190,10 +2187,9 @@ io.on('connection', (socket) => {
     const size = Math.round(num(data.size, 1, FISH[fish].max)); // 每種魚有自己的最大尺寸
     let rank = null;
     if (!JUNK.has(fish)) {
-      boardToday();
       shared.board.push({ name: player.name, fish, size, at: now });
       shared.board.sort((a, b) => b.size - a.size);
-      shared.board = shared.board.slice(0, 10);
+      shared.board = shared.board.slice(0, BOARD_MAX);
       const i = shared.board.findIndex((r) => r.at === now && r.name === player.name);
       if (i >= 0) {
         rank = i + 1;
