@@ -422,6 +422,30 @@ async function init() {
     }
   };
   net.on('mini', (m) => applyMini(m, true));
+
+  // ---------- ⏰ 開始前 5 分鐘提醒（營火時間的魚王、每場小活動） ----------
+  const warned = new Set();
+  const MINI_NAME = { fish: () => t('🎣 釣魚大賽'), stone: () => t('🪨 疊石接力'), wood: () => t('🔥 添柴時光'), race: () => t('🏃 燈籠賽跑'), hunt: () => t('✨ 找金松果') };
+  const warnSoon = () => {
+    const ev = currentEvent();
+    if (ev && !ev.active && ev.startsIn > 20 && ev.startsIn <= 300) {
+      const key = `ev-${Math.round((Date.now() / 1000 + ev.startsIn) / 60)}`;
+      if (!warned.has(key)) {
+        warned.add(key);
+        hud.toast(t('🐉 {m} 分鐘後 9:30 營火時間！魚王會在湖畔和營火河畔出現，還有流星雨、松果加倍', { m: Math.ceil(ev.startsIn / 60) }), 7000);
+        audio.sfx('bell');
+      }
+    }
+    const m = currentMini();
+    if (m && !m.active && m.startsIn > 20 && m.startsIn <= 300 && MINI_NAME[m.kind]) {
+      const key = `mini-${Math.round((Date.now() / 1000 + m.startsIn) / 60)}`;
+      if (!warned.has(key)) {
+        warned.add(key);
+        hud.toast(t('⏰ {m} 分鐘後開始：{name}', { m: Math.ceil(m.startsIn / 60), name: MINI_NAME[m.kind]() }), 6000);
+      }
+    }
+  };
+  setInterval(warnSoon, 15000);
   net.on('areas', (a) => forest.setAreas(a));
   net.on('miniBoard', ({ top }) => {
     if (!miniState?.active) return;
@@ -2243,6 +2267,14 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     });
     document.getElementById('online')?.appendChild(more);
   } else {
+    // 電腦版：左上那幾行（按鈕列、累計、營火時間、小活動）也排成一欄，字放大後才不會互相疊到
+    const dstack = document.createElement('div');
+    dstack.className = 'd-stack';
+    document.getElementById('ui').appendChild(dstack);
+    for (const id of ['online', 'today', 'event-line', 'mini-line']) {
+      const el = document.getElementById(id);
+      if (el) dstack.appendChild(el);
+    }
     // 電腦版：右上角一欄（專注計時器在上、湖畔動態在下），才不會和左上那排按鈕疊在一起
     const rstack = document.createElement('div');
     rstack.className = 'r-stack';

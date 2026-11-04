@@ -5604,3 +5604,144 @@ body.touch .share-caption {
   font-size: 14px;
   line-height: 1.8;
 }
+
+/* ==========================================================
+   🔠 按鈕文字放大、整齊（2026/11/5）
+   一個地方統一調大小：電腦、平板 14px；手機 13px
+   ========================================================== */
+:root {
+  --chip-fs: 14px;
+  --chip-pad: 5px 12px;
+  --info-fs: 14px;
+}
+
+/* 電腦版左上一欄 */
+.d-stack {
+  position: absolute;
+  top: 96px;
+  left: 20px;
+  max-width: min(880px, calc(100vw - 300px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.d-stack > * {
+  position: static !important;
+  transform: none;
+  margin: 0;
+}
+
+.d-stack .today,
+.d-stack .event-line,
+.d-stack .mini-line {
+  padding-left: 4px;
+  max-width: 100%;
+}
+
+/* 按鈕列：會自動換行、間距一致 */
+.online {
+  flex-wrap: wrap;
+  row-gap: 7px;
+  column-gap: 7px;
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: var(--chip-fs);
+  opacity: 1;
+}
+
+.online > button,
+.online > .pc-chip,
+.online .fish-tools button {
+  margin-left: 0 !important;
+  padding: var(--chip-pad) !important;
+  font-size: var(--chip-fs) !important;
+  line-height: 1.35;
+  max-width: none;
+}
+
+.online .me-chip {
+  max-width: 160px !important;
+}
+
+.online .fish-tools {
+  margin-left: 0;
+  gap: 7px;
+}
+
+.online > #online-text {
+  margin-right: 2px;
+}
+
+.fire-meter {
+  font-size: 13px;
+}
+
+/* 資訊行（累計、營火時間、小活動） */
+.today,
+.event-line,
+.mini-line {
+  font-size: var(--info-fs) !important;
+  line-height: 1.45;
+}
+
+/* 下方的操作提示 */
+body:not(.touch) .hint {
+  font-size: 13px;
+}
+
+/* 平板（觸控、畫面夠大） */
+@media (min-width: 600px) {
+  body.touch .m-stack {
+    width: min(520px, calc(100vw - 140px));
+    gap: 8px;
+  }
+
+  body.touch .m-stack .online {
+    padding: 6px 10px;
+    font-size: var(--chip-fs);
+  }
+
+  body.touch .m-stack .fire-meter {
+    font-size: 13px;
+  }
+}
+
+/* 手機：小一點，但比原本好點 */
+@media (max-width: 599px), (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --chip-fs: 13px;
+    --chip-pad: 4px 10px;
+    --info-fs: 12.5px;
+  }
+
+  body.touch .m-stack .online {
+    padding: 5px 8px;
+    row-gap: 6px;
+    column-gap: 6px;
+    font-size: var(--chip-fs);
+  }
+
+  body.touch .more-chip {
+    min-width: 34px !important;
+    padding: var(--chip-pad) !important;
+    font-size: var(--chip-fs) !important;
+  }
+
+  .online .me-chip {
+    max-width: 120px !important;
+  }
+}
+
+/* 左下「表情／聊天」的字 */
+.social-btn small {
+  font-size: 14px;
+}
+
+@media (max-width: 599px), (orientation: landscape) and (max-height: 500px) {
+  .social-btn small {
+    font-size: 13px;
+  }
+}

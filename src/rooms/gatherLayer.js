@@ -1,6 +1,16 @@
 import * as THREE from 'three';
 import { GATHER_SPOTS, GATHER_R, BUG_WANDER, BUG_CATCH_R, isNight } from '../game/gathering.js';
 import { t } from '../i18n/i18n.js';
+import { makeRadialTexture } from '../scene/textures.js';
+
+/** 螢火蟲光暈：圓形漸層（沒有貼圖的 Sprite 會變成四方形） */
+let haloTex = null;
+const haloMap = () =>
+  (haloTex ??= makeRadialTexture([
+    [0, 'rgba(255,255,255,1)'],
+    [0.35, 'rgba(255,255,255,0.45)'],
+    [1, 'rgba(255,255,255,0)'],
+  ]));
 
 /**
  * 採集點（迷霧森林、湖邊共用）：
@@ -208,7 +218,7 @@ function buildBugSpot(rand) {
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: 0xd8ff7a, fog: false }));
   glow.position.z = -0.05;
   ripe.add(glow);
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xd8ff7a, transparent: true, opacity: 0.45, depthWrite: false, fog: false }));
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloMap(), color: 0xd8ff7a, transparent: true, opacity: 0.45, depthWrite: false, fog: false }));
   halo.scale.setScalar(0.35);
   halo.position.z = -0.05;
   ripe.add(halo);
