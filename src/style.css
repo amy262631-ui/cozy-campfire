@@ -5099,6 +5099,7 @@ body.touch.fishing .fish-focus {
   body.touch:not(.m-more) .m-stack .invite-chip,
   body.touch:not(.m-more) .m-stack .dex-chip,
   body.touch:not(.m-more) .m-stack .look-chip,
+  body.touch:not(.m-more) .m-stack .pass-chip,
   body.touch:not(.m-more) .m-stack .acct-chip,
   body.touch:not(.m-more) .m-stack .ch-chip {
     display: none !important;
@@ -5560,4 +5561,42 @@ body.touch .share-caption {
 .museum-tabs button.on {
   background: rgba(240, 138, 60, 0.42);
   border-color: rgba(255, 190, 120, 0.7);
+}
+
+/* ---------- 🎫 營火月票 ---------- */
+.pass-chip {
+  margin-left: 6px;
+  padding: 2px 9px;
+  border: 1px solid rgba(255, 210, 120, 0.55);
+  border-radius: 999px;
+  background: rgba(200, 120, 40, 0.3);
+  color: #ffe9c8;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.pass-card {
+  text-align: left;
+}
+
+.pass-price {
+  font-size: 28px;
+  font-weight: 800;
+  color: #ffd28a;
+  text-align: center;
+  margin: 4px 0 8px;
+}
+
+.pass-price small {
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+.pass-list {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.8;
 }

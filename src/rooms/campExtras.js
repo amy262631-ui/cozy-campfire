@@ -9,10 +9,31 @@ const polar = (a, r) => ({ x: Math.sin(a) * r, z: Math.cos(a) * r });
 export const MUSEUM_POS = polar(2.45, 7.4);
 /** 🍲 營火料理鍋：營火旁兩張長椅之間 */
 export const POT_POS = polar(0.42, 3.05);
+/** ♻️ 回收桶：料理鍋後面一點 */
+export const BIN_POS = polar(0.5, 4.25);
 export const EXTRA_CLEARINGS = [
   { ...MUSEUM_POS, r: 2.4 },
   { ...POT_POS, r: 0.9 },
+  { ...BIN_POS, r: 0.8 },
 ];
+
+/** ♻️ 回收桶：綠色和藍色兩個小桶子，上面有回收標誌 */
+function buildBin() {
+  const g = new THREE.Group();
+  for (const [x, c] of [[-0.22, 0x5fae4a], [0.22, 0x4a74b5]]) {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.17, 0.55, 14), lowpoly(c));
+    body.position.set(x, 0.275, 0);
+    g.add(body);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.05, 14), lowpoly(0xf6f3ec));
+    lid.position.set(x, 0.575, 0);
+    g.add(lid);
+  }
+  const sign = makeSign(t('♻️ 回收桶'), { height: 0.2 });
+  sign.position.y = 1.0;
+  g.add(sign);
+  g.traverse((o) => o.isMesh && (o.castShadow = true));
+  return g;
+}
 
 /**
  * 標本櫃的正面：一張畫布畫出所有格子，捐了的格子畫上圖示（每次有人捐就重畫）
@@ -142,11 +163,18 @@ export function buildCampExtras(group, world) {
   group.add(pot.group);
   world.colliders.push({ x: POT_POS.x, z: POT_POS.z, r: pot.colliderR });
 
+  const bin = buildBin();
+  bin.position.set(BIN_POS.x, 0, BIN_POS.z);
+  bin.rotation.y = Math.atan2(-BIN_POS.x, -BIN_POS.z);
+  group.add(bin);
+  world.colliders.push({ x: BIN_POS.x, z: BIN_POS.z, r: 0.5 });
+
   const near = (p, q, r) => Math.hypot(p.x - q.x, p.z - q.z) < r;
   return {
     drawMuseum: museum.draw,
     nearMuseum: (pos) => near(pos, museumFront, 1.8),
     nearPot: (pos) => near(pos, POT_POS, 1.25),
+    nearBin: (pos) => near(pos, BIN_POS, 1.3),
     update: pot.update,
     occluders: [museum.group],
   };

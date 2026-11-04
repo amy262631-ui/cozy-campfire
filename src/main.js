@@ -62,6 +62,8 @@ import { haveOf, canMake, specLabel } from './game/materials.js';
 import { RECIPES } from './game/crafting.js';
 import { DISHES, DISH_BY_ID } from './game/cooking.js';
 import { MUSEUM_ITEMS, MUSEUM_CATS, MUSEUM_BY_ID } from './game/museum.js';
+import { TRASH, TRASH_BY_ID, RECYCLE_DAILY_CAP } from './game/trash.js';
+import { PASS } from './game/pass.js';
 import { detectSource } from './game/sources.js';
 
 // 網址參數（開發測試用）
@@ -649,6 +651,7 @@ async function init() {
     daily: [t('每日造型：那天分享就拿到（大約一個月輪一次，錯過會再回來）'), t('那天分享就拿到')],
     weekly: [t('每週限定：朋友真的透過你的連結來玩才拿得到'), t('朋友透過連結來玩')],
     date: [t('營火之約限定：朋友在晚上 9:30 營火時間透過你的連結進來，兩個人都拿到'), t('9:30 營火時間約朋友')],
+    eco: [t('垃圾圖鑑全部收集完就拿到'), t('垃圾圖鑑收集完')],
   };
   fishingUI.extraTabs.push({
     id: 'outfit',
@@ -662,7 +665,7 @@ async function init() {
         .map((o) => {
           const has = owned.has(o.id);
           const worn = look.wear?.[o.slot] === o.id;
-          const tag = o.src === 'weekly' ? t('每週限定') : o.src === 'date' ? t('營火之約') : o.id === look.daily ? t('今天的') : t('每日');
+          const tag = o.src === 'weekly' ? t('每週限定') : o.src === 'date' ? t('營火之約') : o.src === 'eco' ? t('淨灘小隊') : o.id === look.daily ? t('今天的') : t('每日');
           return has
             ? `<div class="dex-card outfit${worn ? ' worn' : ''}" data-id="${o.id}"><i class="dex-emoji">${o.icon}</i><b>${t(o.zh)}</b><small>${tag}</small><em>${worn ? t('穿著中・點一下脫掉') : t('點一下穿上')}</em></div>`
             : `<div class="dex-card unknown" title="${HOW[o.src][0]}"><i class="dex-emoji">${o.icon}</i><b>${t('？？？')}</b><small>${tag}</small><em>${HOW[o.src][1]}</em></div>`;
@@ -1157,6 +1160,148 @@ async function init() {
     hud.toast(t('💧 {name} 幫你的{icon} {crop}澆了水，少等 30 分鐘！', { name, icon: crop?.icon ?? '', crop: t(crop?.zh ?? '') }), 5000);
   });
 
+  // ---------- ♻️ 撿垃圾 ----------
+  /** 垃圾袋（還沒丟回收桶的）、垃圾圖鑑（撿過的種類） */
+  let tbag = {};
+  let tdex = {};
+  const setTrash = (r) => {
+    if (r?.tbag) tbag = r.tbag;
+    if (r?.tdex) tdex = r.tdex;
+  };
+  const trashToast = (r) => {
+    const it = TRASH_BY_ID[r.id];
+    if (!it) return;
+    if (r.first) hud.toast(t('♻️ 垃圾圖鑑新收錄：{icon} {name}！+{n} 🌰（{c}／{t}）', { icon: it.icon, name: t(it.zh), n: r.gain, c: Object.keys(tdex).length, t: TRASH.length }), 4500);
+    else hud.toast(t('♻️ 撿起了{icon} {name}，記得拿去營火旁的回收桶', { icon: it.icon, name: t(it.zh) }), 3000);
+    if (r.done) setTimeout(() => hud.toast(t('🏆 垃圾圖鑑全部收集完成！送你「淨灘小隊領巾」'), 6000), 2500);
+  };
+  /** 地上的垃圾在哪個房間 */
+  const trashRoom = (id) => rooms[id]?.trash ?? (id === 'forest_main' ? forest.trash : null);
+  net.on('trash', ({ room, list, by, byId, item }) => {
+    if (roomMgr?.current.id === room) trashRoom(room)?.setList(list);
+    if (by && byId !== net.id) {
+      const it = TRASH_BY_ID[item];
+      if (it) hud.toast(t('♻️ {name} 撿起了{icon} {item}', { name: by, icon: it.icon, item: t(it.zh) }), 2500);
+    }
+  });
+  net.on('trashGot', (r) => {
+    setTrash(r);
+    setTimeout(() => trashToast(r), 2800); // 等釣魚卡片先秀完
+  });
+  actions.onTrash = async (tb) => {
+    const face = Math.atan2(tb.x - player.position.x, tb.z - player.position.z);
+    if (!actions.perform('pick', 1.25, face)) return;
+    const res = await net.request('pickTrash', { k: tb.k });
+    if (!res?.ok) return hud.toast(res?.reason === 'gone' ? t('哎呀，被別人先撿走了') : t('再靠近一點'));
+    setTrash(res);
+    audio.sfx(res.first ? 'bell' : 'tap');
+    trashToast(res);
+  };
+  actions.onRecycle = async () => {
+    const n = Object.values(tbag).reduce((a, b) => a + b, 0);
+    if (!net.online) return hud.toast(t('連上伺服器才能回收'));
+    if (!n) {
+      const info = await net.request('trashInfo');
+      return hud.toast(t('垃圾袋是空的。湖邊、帳篷營地路邊、營火附近偶爾會有垃圾，撿起來再拿過來丟 ♻️（今天大家一起回收了 {n} 件）', { n: info?.todayAll ?? 0 }), 5000);
+    }
+    if (!actions.perform('pick', 1.0)) return;
+    const res = await net.request('recycle');
+    if (!res?.ok) return;
+    setTrash(res);
+    audio.sfx('bell');
+    hud.toast(
+      (res.gain ? t('♻️ 丟進回收桶了！{n} 件垃圾 +{g} 🌰', { n: res.n, g: res.gain }) : t('♻️ 丟進回收桶了！今天換松果的次數已經滿了，謝謝你讓營地更乾淨')) +
+        t('（今天大家一起回收了 {d} 件）', { d: res.todayAll }),
+      5000,
+    );
+  };
+  fishingUI.extraTabs.push({
+    id: 'trash',
+    label: t('♻️ 垃圾'),
+    title: () => t('♻️ 垃圾圖鑑 {n}／{total}', { n: Object.keys(tdex).length, total: TRASH.length }),
+    render: () => {
+      const cards = TRASH.map((x) =>
+        tdex[x.id]
+          ? `<div class="dex-card rarity-${x.rarity}"><i class="dex-emoji">${x.icon}</i><b>${t(x.zh)}</b><small>${rarityStars(x.rarity)}</small><em>${t('撿過 {n} 次', { n: tdex[x.id] })}</em></div>`
+          : `<div class="dex-card unknown"><i class="dex-emoji">${x.icon}</i><b>${t('？？？')}</b><small>${rarityStars(x.rarity)}</small><em>${x.where.map((w) => ({ lake: t('湖裡'), shore: t('湖邊'), camp: t('營地路邊'), fire: t('營火區') })[w]).join('・')}</em></div>`,
+      ).join('');
+      const bag = Object.entries(tbag).filter(([, n]) => n > 0).map(([id, n]) => `${TRASH_BY_ID[id]?.icon ?? ''}×${n}`).join(' ');
+      return `<div class="dex-note">${t('湖裡釣魚、湖邊、帳篷營地的路邊、中央營火區，偶爾會出現垃圾，走過去按 E 撿起來。撿到的垃圾拿去營火旁的「♻️ 回收桶」丟，每件換 1 顆松果（每天最多 {cap} 顆）。全部收集完送「淨灘小隊領巾」♻️', { cap: RECYCLE_DAILY_CAP })}</div>
+        <div class="dex-note">${t('🗑️ 垃圾袋')}：${bag || t('空的')}</div>
+        <div class="dex-grid">${cards}</div>`;
+    },
+  });
+
+  // ---------- 🎫 營火月票（綠界付款，付完自動開通） ----------
+  let passState = { until: 0, active: false, today: false };
+  function setPass(p) {
+    if (!p) return;
+    passState = { ...passState, ...p };
+    hud.passBadge = !!passState.active; // 🔥 月票徽章
+    hud.setMe(myName);
+  }
+  const fmtDate = (ms) => new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric' }).format(new Date(ms));
+  async function openPass() {
+    const info = net.online ? await net.request('passInfo') : null;
+    if (info?.ok) setPass(info);
+    const left = passState.active ? Math.max(1, Math.ceil((passState.until - Date.now()) / 86400000)) : 0;
+    const status = passState.active
+      ? t('✅ 月票使用中：到 {date}（還有 {n} 天）', { date: fmtDate(passState.until), n: left }) + '　' + (passState.today ? t('今天的 {n} 顆已經領了', { n: PASS.daily }) : '')
+      : t('目前沒有月票');
+    modal.open(
+      t('🎫 營火月票'),
+      `<div class="pass-card">
+        <div class="pass-price">NT$ ${PASS.price} <small>/ ${t('{n} 天', { n: PASS.days })}</small></div>
+        <ul class="pass-list">
+          <li>${t('🌰 買下當天先送 {n} 顆松果', { n: PASS.first })}</li>
+          <li>${t('🌰 之後 {d} 天，每天第一次進來多領 {n} 顆（當天沒來就領不到）', { d: PASS.days, n: PASS.daily })}</li>
+          <li>${t('🔥 名字前面的小營火徽章，大家都看得到')}</li>
+          <li>${t('⛺ 月票限定帳篷花色「營火之夜」（買過就一直留著）')}</li>
+        </ul>
+        <div class="outfit-today">${status}</div>
+        ${info && !info.account ? `<div class="dex-note">${t('購買前要先建立帳號（👤 存檔），換手機登入月票才不會不見')}</div>` : ''}
+        ${info?.test ? `<div class="dex-note">${t('⚠️ 目前是綠界測試模式，不會真的扣款')}</div>` : ''}
+        <div class="outfit-today"><button type="button" id="pass-buy" ${net.online ? '' : 'disabled'}>${passState.active ? t('🔥 再買一次（往後延 {n} 天）', { n: PASS.days }) : t('🔥 購買營火月票 NT$ {p}', { p: PASS.price })}</button></div>
+        <div class="dex-note">${t('付款由綠界處理（信用卡、ATM、超商代碼），付款完成後自動開通，不用等人工。月票只會加快松果累積，遊戲裡所有東西不買也都拿得到。')}</div>
+      </div>`,
+      (body) =>
+        body.querySelector('#pass-buy')?.addEventListener('click', async () => {
+          if (info && !info.account) {
+            modal.close();
+            return hud.onMeClick?.({ focusAccount: true });
+          }
+          // 先開好新分頁（手機上非同步之後才開會被擋）
+          let win = null;
+          try {
+            win = window.open('', '_blank');
+          } catch {
+            /* 被擋就在同一頁開 */
+          }
+          const res = await net.request('passOrder');
+          if (!res?.ok) {
+            win?.close();
+            return hud.toast(res?.reason === 'account' ? t('購買前要先建立帳號（👤 存檔）') : t('現在不能購買，等一下再試'));
+          }
+          if (win) win.location.href = res.url;
+          else location.href = res.url;
+          hud.toast(t('🎫 已經打開綠界付款頁，付款完成後回到遊戲就會自動開通'), 6000);
+        }),
+    );
+  }
+  hud.onPass = () => openPass();
+  net.on('pass', (p) => {
+    setPass(p);
+    audio.sfx('bell');
+    hud.toast(t('🔥 營火月票開通了！到 {date}，先送你 {n} 顆松果，月票限定花色可以到小舖換上', { date: fmtDate(p.until), n: p.gain ?? PASS.first }), 7000);
+    if (modal.isOpen && fishingUI.el.modalTitle.textContent.startsWith('🎫')) openPass();
+  });
+  // 從綠界付款頁回來
+  if (params.get('paid')) {
+    setTimeout(() => hud.toast(t('🎫 付款完成的話，一兩分鐘內會自動開通（ATM、超商要等繳完費）'), 6000), 3000);
+    params.delete('paid');
+    history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : ''));
+  }
+
   // ---------- ✨ 營火寶藏（晚上 8～10 點） ----------
   const applyTreasures = (list) => forest.treasures.setList(list ?? []);
   net.on('treasures', ({ list, fresh, by, item, byId }) => {
@@ -1412,6 +1557,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     if (res.areas) forest.setAreas(res.areas);
     if (res.museum) setMuseum(res.museum);
     if (res.treasures) applyTreasures(res.treasures);
+    if (res.trash) trashRoom(res.room)?.setList(res.trash);
     if (res.tree) {
       forest.wishTree.setAll(res.tree);
       treePanel.refresh();
@@ -1477,6 +1623,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       if (w.outfit) setLook(w.outfit); // 👒 造型：擁有的、穿著的、今天和這週的
       basket = w.basket ?? basket;
       gdex = new Set(w.gdex ?? []);
+      setTrash(w);
       dishes = w.dishes ?? {};
       cooked = new Set(w.cooked ?? []);
       setNet(w.net);
@@ -1485,8 +1632,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       // 以前存在這個瀏覽器裡的魚簍，也一起存進帳號（換手機登入就看得到）
       const local = Object.fromEntries(Object.entries(fishingUI.creel).filter(([, e]) => e?.count).map(([i, e]) => [i, e.best || 1]));
       if (Object.keys(local).length) net.request('dexSync', { dex: local }).then((r) => r?.dex && fishingUI.mergeDex(r.dex));
-      setCoins(w.pc, w.daily?.gain ?? 0);
-      if (w.daily) {
+      setCoins(w.pc, (w.daily?.gain ?? 0) + (w.daily?.pass ?? 0));
+      if (w.daily?.gain) {
         hud.toast(
           w.daily.streak > 1
             ? t('🔥 連續第 {d} 天來營火旁，送你 {n} 顆松果 🌰', { d: w.daily.streak, n: w.daily.gain })
@@ -1494,6 +1641,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
           5000,
         );
       }
+      if (w.daily?.pass) setTimeout(() => hud.toast(t('🎫 營火月票：今天多領 {n} 顆松果 🌰', { n: w.daily.pass }), 4500), 1500);
+      setPass(w.pass);
     }
     player.character.setAccessory?.(myReward);
     applySnapshot(res);
@@ -1679,6 +1828,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       if (res.tree) forest.wishTree.setAll(res.tree);
       if (res.museum) setMuseum(res.museum);
       if (res.treasures) applyTreasures(res.treasures);
+      trashRoom(room.id)?.setList(res.trash ?? []);
     } else if (res && !res.ok && res.reason === 'full') {
       hud.toast(fullMsg(), 4000);
     }
@@ -1847,7 +1997,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     getCoins: () => (net.online || demo ? pinecones : null),
     getHome: () => myHome,
     onGoHome: goHome,
-    onGift: () => giftPanel.open(),
+    onGift: (id) => (id === PASS.style ? openPass() : giftPanel.open()),
     onEdit: async (op, data) => {
       const res = await homeReq('homeEdit', { op, ...data });
       if (res?.ok) setMyHome({ ...res.home });

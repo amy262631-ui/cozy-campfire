@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { makeResolver, makeSign, lowpoly, shadowAll } from './shared.js';
 import { seededRandom } from '../scene/textures.js';
 import { createGatherLayer } from './gatherLayer.js';
+import { createTrashLayer } from './trashLayer.js';
 import { FOG_COLOR } from '../scene/World.js';
 import { createFishMesh, fishScale } from '../fishing/fishModel.js';
 import { rollFish, rollSize } from '../fishing/fishData.js';
@@ -234,6 +235,7 @@ export function createLakeRoom() {
   shadowAll(dock);
   // ---------- 🐚 岸邊的石頭、貝殼（走近自動撿，每個人各自的） ----------
   const gather = createGatherLayer(group, 'lake_dock', seededRandom(2026));
+  const trash = createTrashLayer(group);
   // 可活動區域：岸邊（矩形）＋碼頭（細長矩形）
   const resolveCollision = makeResolver(colliders, [
     { type: 'rect', minX: -9, maxX: 9, minZ: 1.6, maxZ: 8.6 },
@@ -296,6 +298,11 @@ export function createLakeRoom() {
         return true;
       }
       if (name === 'interact') {
+        const tb = trash.near(actions.player.position);
+        if (tb) {
+          actions.onTrash?.(tb);
+          return true;
+        }
         if (gather.tryPick(actions)) return true;
         actions.hud.toast(t('湖邊沒有營火，走到水邊按 F 釣魚吧 🎣　岸邊發光的石頭、貝殼可以按 E 撿起來'));
         return true;
@@ -304,13 +311,16 @@ export function createLakeRoom() {
     },
 
     gather,
+    trash,
 
     prompt(actions) {
+      if (trash.near(actions.player.position)) return t('<kbd>E</kbd> ♻️ 撿起垃圾');
       return gather.prompt(actions) ?? (fishingSpot(actions.player.position) ? t('<kbd>F</kbd> 坐下釣魚') : null);
     },
 
     /** 手機的互動按鈕：岸邊的石頭、貝殼旁邊變「撿起來」 */
     interactHint(actions) {
+      if (trash.near(actions.player.position)) return ['♻️', t('撿起來')];
       return gather.spotNear(actions) ? ['🧺', t('撿起來')] : null;
     },
 

@@ -14,6 +14,8 @@ export const TENT_STYLES = [
   { id: 'redspot', icon: '🔴', name: t('紅點點'), canvas: '#d2453c', accent: '#f6efe2', floor: 0x8a6644, pattern: 'spots', ink: '#fbf4e6' },
   { id: 'rainbow', icon: '🌈', name: t('彩虹'), canvas: '#f4ead8', accent: '#7a5ab8', floor: 0x8a6644, pattern: 'rainbow', gift: true },
   { id: 'patch', icon: '🧵', name: t('拼布'), canvas: '#d9b98c', accent: '#8a5a3a', floor: 0x7d5a3e, pattern: 'patch' },
+  // 🔥 營火月票限定：深咖啡底、橘色火花
+  { id: 'ember', icon: '🔥', name: t('營火之夜'), canvas: '#4a2618', accent: '#f08a3c', floor: 0x6a4630, pattern: 'stars', ink: '#ffb46b', gift: true, pass: true },
 ];
 export const TENT_STYLE_BY_ID = Object.fromEntries(TENT_STYLES.map((s) => [s.id, s]));
 export const styleOf = (id) => TENT_STYLE_BY_ID[id] ?? TENT_STYLES[0];

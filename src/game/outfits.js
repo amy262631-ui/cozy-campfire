@@ -6,7 +6,7 @@
  *   kind   3D 形狀（見 outfit3d.js）
  *   c1/c2  主色、副色
  *   glow   會微微發光
- *   src    拿到的方式：daily 每日造型（分享就送）、weekly 每週限定（朋友透過連結來玩）、date 營火之約限定
+ *   src    拿到的方式：daily 每日造型（分享就送）、weekly 每週限定（朋友透過連結來玩）、date 營火之約限定、eco 垃圾圖鑑收集完
  *
  * ⚠️ 只能往後加，不能刪、不能改順序：線上同步用「第幾個」當代號。
  * 小黃花、四葉草是作者專屬（贊助回饋），不在這裡，也不當獎勵。
@@ -64,6 +64,9 @@ export const OUTFITS = [
   { id: 'dt_ember_scarf', slot: 'neck', kind: 'scarf', c1: 0xf08a3c, c2: 0xffd06a, glow: true, icon: '🔥', zh: '營火圍巾', src: 'date' },
   { id: 'dt_marsh_hat', slot: 'head', kind: 'marsh', c1: 0xfff6ea, c2: 0xe0a060, icon: '🍡', zh: '烤棉花糖帽', src: 'date' },
   { id: 'dt_meteor_pack', slot: 'back', kind: 'lanternpack', c1: 0x34466e, c2: 0xbfe0ff, glow: true, icon: '🌠', zh: '流星燈背架', src: 'date' },
+
+  // ---- ♻️ 垃圾圖鑑全部收集完 ----
+  { id: 'eco_bandana', slot: 'neck', kind: 'bandana', c1: 0x5fae4a, c2: 0xffffff, icon: '♻️', zh: '淨灘小隊領巾', src: 'eco' },
 ];
 
 export const OUTFIT_BY_ID = Object.fromEntries(OUTFITS.map((o) => [o.id, o]));

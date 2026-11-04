@@ -11,6 +11,7 @@ import { POND_CLEARINGS } from '../game/pondShape.js';
 import { buildWishTree, WISH_TREE_CLEARING } from './wishTree.js';
 import { buildShop, nearShop, SHOP_FRONT, SHOP_CLEARING } from './shop.js';
 import { buildCampExtras, createTreasures, EXTRA_CLEARINGS } from './campExtras.js';
+import { createTrashLayer } from './trashLayer.js';
 import { EMOTE_IDS } from '../social/emotes.js';
 import { t } from '../i18n/i18n.js';
 
@@ -552,6 +553,7 @@ export function createForestRoom() {
   const extras = buildCampExtras(group, world);
   extras.occluders.forEach((g) => g.traverse((o) => o.isMesh && occluders.push(o)));
   const treasures = createTreasures(group);
+  const trash = createTrashLayer(group);
 
   // ---------- 整點小活動的道具（燈籠賽跑、金松果） ----------
   const mini = buildMiniLayer();
@@ -593,6 +595,7 @@ export function createForestRoom() {
     drawMuseum: extras.drawMuseum,
     nearPot: extras.nearPot,
     treasures,
+    trash,
     /** 手機的 F 按鈕：在水邊變成「釣魚」、釣魚中變成「拉竿」 */
     roastHint(actions) {
       if (actions.state === 'fish') return this.fishing?.phase === 'show' ? ['🎣', t('繼續')] : ['🎣', t('拉竿')];
@@ -636,6 +639,15 @@ export function createForestRoom() {
         const tr = treasures.near(pos);
         if (tr) {
           actions.onTreasure?.(tr);
+          return true;
+        }
+        const tb = trash.near(pos);
+        if (tb) {
+          actions.onTrash?.(tb);
+          return true;
+        }
+        if (extras.nearBin(pos)) {
+          actions.onRecycle?.();
           return true;
         }
         if (extras.nearMuseum(pos)) {
@@ -694,6 +706,8 @@ export function createForestRoom() {
     interactHint(actions) {
       const p0 = actions.player.position;
       if (!carrying && treasures.near(p0)) return ['✨', t('撿寶藏')];
+      if (!carrying && trash.near(p0)) return ['♻️', t('撿起來')];
+      if (extras.nearBin(p0)) return ['♻️', t('回收')];
       if (extras.nearMuseum(p0)) return ['🏛️', t('標本櫃')];
       if (extras.nearPot(p0)) return ['🍲', t('料理')];
       if (nearShrine(actions)) return ['⛩️', t('祈福')];
@@ -715,6 +729,8 @@ export function createForestRoom() {
     prompt(actions) {
       const p0 = actions.player.position;
       if (!carrying && treasures.near(p0)) return t('<kbd>E</kbd> ✨ 撿起閃閃發光的東西');
+      if (!carrying && trash.near(p0)) return t('<kbd>E</kbd> ♻️ 撿起垃圾');
+      if (extras.nearBin(p0)) return t('<kbd>E</kbd> ♻️ 把垃圾丟進回收桶');
       if (extras.nearMuseum(p0)) return t('<kbd>E</kbd> 🏛️ 營地標本櫃・捐出採集到的東西');
       if (extras.nearPot(p0)) return t('<kbd>E</kbd> 🍲 營火料理');
       if (nearShrine(actions)) return t('<kbd>E</kbd> 參拜・擲筊・抽籤・寫繪馬');

@@ -71,7 +71,7 @@ const npcName = (name) => {
 };
 
 class RemotePlayer {
-  constructor({ id, name, fur, sp = 0, rw = 0, ot = null, s, npc = false }) {
+  constructor({ id, name, fur, sp = 0, rw = 0, ot = null, pb = 0, s, npc = false }) {
     this.id = id;
     this.npc = npc; // 營地居民（電腦角色）
     this.name = name;
@@ -81,7 +81,8 @@ class RemotePlayer {
     this.group = new THREE.Group();
     this.group.add(this.character.root);
 
-    this.tag = makeNameTag(npc ? npcName(name) : name, npc);
+    // 🔥 營火月票的支持者：名字前面一個小營火
+    this.tag = makeNameTag(npc ? npcName(name) : pb ? `🔥 ${name}` : name, npc);
     this.tag.position.y = 1.55;
     this.group.add(this.tag);
 

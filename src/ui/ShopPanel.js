@@ -174,7 +174,7 @@ export class ShopPanel {
         ${has ? `<div class="shop-sub">${t('🎨 花色（免費換）')}</div>
         <div class="shop-styles">${TENT_STYLES.map((x) =>
           x.gift && !(home.gifts ?? []).includes(x.id)
-            ? `<button type="button" class="build-style shop-style-locked" data-gift="${x.id}" title="${t('分享送禮才拿得到')}"><span>🔒</span>${x.name}</button>`
+            ? `<button type="button" class="build-style shop-style-locked" data-gift="${x.id}" title="${x.pass ? t('營火月票限定') : t('分享送禮才拿得到')}"><span>🔒</span>${x.name}</button>`
             : `<button type="button" class="build-style${x.id === style ? ' on' : ''}" data-style="${x.id}"><span>${x.icon}</span>${x.name}</button>`,
         ).join('')}</div>` : ''}`;
       return this.#mountPreview(pick, style);

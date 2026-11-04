@@ -9,6 +9,7 @@ import { t } from '../i18n/i18n.js';
 import { LAYOUT, CAMP_SIZE, ENTRY_Z, BOUNDS, LOOP_CENTER, plotSpots, frame } from './campLayout.js';
 import { buildSoil, buildCrop } from './gardenModels.js';
 import { slotLocal } from '../game/garden.js';
+import { createTrashLayer } from './trashLayer.js';
 
 /**
  * 🏕️ 帳篷營地：一條彎彎曲曲的環形小路繞著中央的小營火，
@@ -544,6 +545,7 @@ export function createCampgroundRoom() {
   let plots = PLOTS.map((p, i) => ({ ...p, door: spots[i].door, out: spots[i].out, garden: spots[i].garden, tent: null, key: null, g: null, collider: null }));
 
   const tentKey = (tent) => (tent ? [tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.open, tent.likes, tent.n, JSON.stringify(tent.garden ?? null)].join('|') : 'empty');
+  const trash = createTrashLayer(group);
   /** 🥕 小菜園的作物（世界座標，跟帳篷分開放） */
   const gardensGroup = new THREE.Group();
   group.add(gardensGroup);
@@ -817,6 +819,7 @@ export function createCampgroundRoom() {
     resolveCollision,
     setTents,
     plotAt,
+    trash,
     gardenFx,
     /** 菜園第幾格在世界上的位置（角色面向用） */
     gardenSlotPos(hid, i) {
@@ -869,6 +872,11 @@ export function createCampgroundRoom() {
     },
     onAction(name, actions) {
       if (name !== 'interact' || actions.state !== 'free') return false;
+      const tb = trash.near(actions.player.position);
+      if (tb) {
+        actions.onTrash?.(tb);
+        return true;
+      }
       const tg = targetAt(actions.player.position);
       if (!tg) return false;
       if (tg.garden) actions.onGarden?.(tg.garden);
@@ -876,6 +884,7 @@ export function createCampgroundRoom() {
       return true;
     },
     prompt(actions) {
+      if (trash.near(actions.player.position)) return t('<kbd>E</kbd> ♻️ 撿起垃圾');
       const tg = targetAt(actions.player.position);
       if (tg?.garden) return tg.garden.tent.mine ? t('<kbd>E</kbd> 🥕 我的小菜園') : t('<kbd>E</kbd> 💧 看看「{name}」的菜園', { name: tg.garden.tent.name || t('旅人') });
       const p = tg?.door;
@@ -886,6 +895,7 @@ export function createCampgroundRoom() {
       return t('<kbd>E</kbd> 拜訪「{name}」', { name: p.tent.name || t('旅人的帳篷') });
     },
     interactHint(actions) {
+      if (trash.near(actions.player.position)) return ['♻️', t('撿起來')];
       const tg = targetAt(actions.player.position);
       if (tg?.garden) return ['🥕', t('菜園')];
       return tg ? ['🚪', t('拜訪')] : null;

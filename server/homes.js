@@ -37,9 +37,9 @@ export function validateCredentials(user, pass) {
 
 // ---------- 帳篷 ----------
 /** 帳篷風格（免費切換；跟 src/game/tentStyles.js 一致） */
-export const TENT_STYLES = new Set(['classic', 'forest', 'stripe', 'night', 'sakura', 'redspot', 'rainbow', 'patch']);
+export const TENT_STYLES = new Set(['classic', 'forest', 'stripe', 'night', 'sakura', 'redspot', 'rainbow', 'patch', 'ember']);
 /** 🎁 分享禮物（小舖買不到）：id → 怎麼拿到（share＝分享一次；refN＝N 位朋友透過連結來玩） */
-export const GIFTS = { postcard: 'share', foxlamp: 'ref1', rainbow: 'ref3', telescope: 'ref5' };
+export const GIFTS = { postcard: 'share', foxlamp: 'ref1', rainbow: 'ref3', telescope: 'ref5', ember: 'pass' };
 export const GIFT_FURNITURE = new Set(FURNITURE_CATALOG.filter((f) => f.gift).map((f) => f.id));
 /** 帳篷造型：價格（鐘形帳買帳篷就有）、剛買下時換上的花色（跟 src/game/tentShapes.js 一致） */
 export const TENT_SHAPES = {

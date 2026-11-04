@@ -30,7 +30,7 @@ export class HUD {
 
       <div class="prompt" id="prompt"></div>
 
-      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="date-chip" id="date-chip" hidden>${t('🔥 約朋友')}</button><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="home-chip fire-chip" id="fire-chip" hidden>${t('🔥 回營火')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="look-chip" id="look-chip">${t('👒 造型')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button></div>
+      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="date-chip" id="date-chip" hidden>${t('🔥 約朋友')}</button><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="home-chip fire-chip" id="fire-chip" hidden>${t('🔥 回營火')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="look-chip" id="look-chip">${t('👒 造型')}</button><button type="button" class="pass-chip" id="pass-chip">${t('🎫 月票')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button></div>
       <div class="today" id="today" hidden></div>
       <div class="event-line" id="event-line" hidden></div>
       <div class="mini-line" id="mini-line" hidden></div>
@@ -61,6 +61,7 @@ export class HUD {
       dexChip: root.querySelector('#dex-chip'),
       dateChip: root.querySelector('#date-chip'),
       lookChip: root.querySelector('#look-chip'),
+      passChip: root.querySelector('#pass-chip'),
       eventLine: root.querySelector('#event-line'),
       miniLine: root.querySelector('#mini-line'),
     };
@@ -80,7 +81,8 @@ export class HUD {
     /** 🔥 約朋友今晚 9:30、👒 造型（main.js 設定） */
     this.onDate = null;
     this.onLook = null;
-    for (const [el, fn] of [[this.el.dateChip, () => this.onDate?.()], [this.el.lookChip, () => this.onLook?.()]]) {
+    this.onPass = null;
+    for (const [el, fn] of [[this.el.dateChip, () => this.onDate?.()], [this.el.lookChip, () => this.onLook?.()], [this.el.passChip, () => this.onPass?.()]]) {
       el.addEventListener('pointerdown', (e) => e.stopPropagation());
       el.addEventListener('click', fn);
     }
@@ -137,7 +139,8 @@ export class HUD {
 
   /** 左上角自己的名字（點了可以改名字、換動物） */
   setMe(name) {
-    this.el.meChip.textContent = `${name} ✏️`;
+    this._meName = name;
+    this.el.meChip.textContent = `${this.passBadge ? '🔥 ' : ''}${name} ✏️`;
     this.el.meChip.title = t('改名字・換動物');
   }
 
