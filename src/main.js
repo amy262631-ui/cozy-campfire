@@ -1015,6 +1015,7 @@ async function init() {
       stopBuild();
     }
     document.body.classList.toggle('in-home', room.id === 'home');
+    hud.setFireVisible(room.id !== 'forest_main');
     refreshHomeChip();
     if (res?.ok) {
       remotes.reset(res.players);
@@ -1157,6 +1158,13 @@ async function init() {
     roomMgr.switchTo('home', () => net.switchRoom('home', { x: 0, z: homeRoom.spawn.z, ry: Math.PI }));
   };
   hud.onHome = goHome;
+  /** 一鍵回到中央營火（在哪裡都可以） */
+  hud.onFire = () => {
+    if (roomMgr.current.id === 'forest_main') return;
+    shopPanel.close();
+    stopBuild();
+    roomMgr.switchTo('forest_main', switchOnServer);
+  };
 
   /** 在小舖買東西（布置面板的「擴建」也走這裡） */
   const buyItem = async (id) => {

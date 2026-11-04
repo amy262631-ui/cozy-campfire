@@ -30,7 +30,7 @@ export class HUD {
 
       <div class="prompt" id="prompt"></div>
 
-      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button></div>
+      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="home-chip fire-chip" id="fire-chip" hidden>${t('🔥 回營火')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button></div>
       <div class="today" id="today" hidden></div>
       <div class="event-line" id="event-line" hidden></div>
       <div class="mini-line" id="mini-line" hidden></div>
@@ -56,6 +56,7 @@ export class HUD {
       pcChip: root.querySelector('#pc-chip'),
       invite: root.querySelector('#invite-chip'),
       homeChip: root.querySelector('#home-chip'),
+      fireChip: root.querySelector('#fire-chip'),
       acctChip: root.querySelector('#acct-chip'),
       dexChip: root.querySelector('#dex-chip'),
       eventLine: root.querySelector('#event-line'),
@@ -65,7 +66,13 @@ export class HUD {
     this.onInvite = null;
     this.onHome = null;
     this.el.homeChip.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.el.homeChip.addEventListener('pointerup', () => this.onHome?.());
     this.el.homeChip.addEventListener('click', () => this.onHome?.());
+    this.onFire = null;
+    this.el.fireChip.addEventListener('pointerdown', (e) => e.stopPropagation());
+    // 手機上有些瀏覽器點了不會送 click：放開手指時也觸發（重複觸發沒關係，換房中會自動忽略）
+    this.el.fireChip.addEventListener('pointerup', () => this.onFire?.());
+    this.el.fireChip.addEventListener('click', () => this.onFire?.());
     this.el.dexChip.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.dexChip.addEventListener('click', () => this.onDex?.());
     this.el.acctChip.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -147,6 +154,11 @@ export class HUD {
   /** 還沒建立帳號、但已經有東西值得保存時，顯示「👤 存檔」提醒 */
   setAccountVisible(v) {
     this.el.acctChip.hidden = !v;
+  }
+
+  /** 「🔥 回營火」：不在營火區時才出現 */
+  setFireVisible(v) {
+    this.el.fireChip.hidden = !v;
   }
 
   setHomeVisible(v) {
