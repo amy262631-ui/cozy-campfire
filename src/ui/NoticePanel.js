@@ -1,6 +1,7 @@
 import { t } from '../i18n/i18n.js';
 import { SPONSOR_URL } from '../config.js';
 import { trButton, bindTranslate } from '../network/chatTranslate.js';
+import { localPage, pagerHtml, bindPager } from './pager.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 /** 便條紙的顏色（與木牌上畫的一致） */
@@ -27,8 +28,11 @@ function ago(at) {
  *   onPost(text, color)  貼出留言
  */
 export class NoticePanel {
-  constructor({ hud, onPost, onIdea, root = document.getElementById('ui') }) {
+  constructor({ hud, onPost, onIdea, onHistory, root = document.getElementById('ui') }) {
     this.hud = hud;
+    this.onHistory = onHistory;
+    this.page = 0;
+    this.reqId = 0;
     this.onPost = onPost;
     this.onIdea = onIdea;
     this.notes = [];
@@ -157,6 +161,7 @@ export class NoticePanel {
 
   open() {
     this.el.classList.add('show');
+    this.page = 0;
     this.#renderNotes();
   }
 
@@ -168,7 +173,7 @@ export class NoticePanel {
   /** 伺服器（或單人模式）傳來最新留言 */
   setNotes(list) {
     this.notes = list ?? [];
-    if (this.isOpen) this.#renderNotes();
+    if (this.isOpen && this.page === 0) this.#renderNotes(); // 翻到舊的頁面時不要突然跳走
   }
 
   #setTab(tab) {
@@ -192,10 +197,15 @@ export class NoticePanel {
     this.text.blur();
   }
 
-  #renderNotes() {
+  async #renderNotes() {
     bindTranslate(this.listEl);
-    const list = [...this.notes].reverse();
-    this.listEl.innerHTML = list.length
+    const id = ++this.reqId;
+    let res = (await this.onHistory?.('notes', this.page)) ?? null;
+    if (id !== this.reqId) return; // 已經翻到別頁了
+    if (!res?.ok) res = localPage([...this.notes].reverse(), this.page);
+    this.page = res.page;
+    const list = res.items;
+    this.listEl.innerHTML = pagerHtml(res.page, res.pages) + (list.length
       ? list
           .map(
             (n, i) => `
@@ -205,6 +215,12 @@ export class NoticePanel {
           </div>`,
           )
           .join('')
-      : `<div class="notice-empty">${t('還沒有人留言，來貼第一張吧 📌')}</div>`;
+      : `<div class="notice-empty">${t('還沒有人留言，來貼第一張吧 📌')}</div>`) + pagerHtml(res.page, res.pages);
+    bindPager(this.listEl, (d) => {
+      this.page = Math.max(0, this.page + d);
+      this.listEl.scrollTop = 0;
+      this.listEl.closest('.notice-page')?.scrollTo?.(0, 0);
+      this.#renderNotes();
+    });
   }
 }

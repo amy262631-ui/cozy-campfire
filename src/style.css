@@ -5123,3 +5123,33 @@ body.touch .m-stack .fire-meter {
   text-overflow: ellipsis;
   box-sizing: border-box;
 }
+
+/* ---------- 留言板、繪馬的翻頁 ---------- */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0 4px;
+  font-size: 13px;
+  color: #ffe2b8;
+  flex-basis: 100%;
+  width: 100%;
+  grid-column: 1 / -1;
+}
+
+.pager button {
+  padding: 5px 12px;
+  border: 1px solid rgba(255, 210, 140, 0.45);
+  border-radius: 999px;
+  background: rgba(200, 140, 70, 0.3);
+  color: #ffe2b8;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.pager button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

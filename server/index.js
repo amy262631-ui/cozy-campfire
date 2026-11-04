@@ -58,6 +58,10 @@ const ACTION_STATES = new Set([
 const EMOJIS = new Set(['😊', '😂', '🥰', '👍', '❤️', '🎉', '😴', '🥺', '😮', '🔥', '✨', '🍡']);
 const MAX_WISHES = 40;
 const MAX_NOTES = 60;
+/** 舊的留言、繪馬不刪，留著給大家翻頁看（最多這麼多則） */
+const ARCHIVE_MAX = 1500;
+const HISTORY_PAGE = 20;
+const recent = (arr, n) => arr.slice(-n);
 /** 石塔祈願：幾座石塔、每座最多幾顆（與前端 cairns.js 相同） */
 const CAIRN_COUNT = 6;
 const CAIRN_MAX = 99;
@@ -412,8 +416,8 @@ const todayPublic = () => {
   return { visitors: d.vids.length || d.visits, stones: d.stones, wishes: d.wishes, allVisitors: Object.keys(players).length, allStones: totals.stones };
 };
 
-shared.notes = asArray(savedNotes).slice(-MAX_NOTES);
-shared.wishes = asArray(savedWishes).slice(-MAX_WISHES);
+shared.notes = asArray(savedNotes).slice(-ARCHIVE_MAX);
+shared.wishes = asArray(savedWishes).slice(-ARCHIVE_MAX);
 shared.board = asArray(savedBoard).slice(0, 10);
 {
   const saved = asArray(savedCairns);
@@ -525,7 +529,7 @@ app.get('/api/sponsors', (_req, res) => {
   res.json(sponsors.map((s) => ({ name: s.name, date: s.date ?? '', reward: s.reward ?? 'flower' })));
 });
 
-app.get('/api/notes', (_req, res) => res.json(shared.notes));
+app.get('/api/notes', (_req, res) => res.json(recent(shared.notes, MAX_NOTES)));
 app.get('/api/channels', (_req, res) => {
   res.set('Access-Control-Allow-Origin', '*'); // 上架其他平台的版本從別的網址來問
   tidyChannels();
@@ -632,8 +636,8 @@ function roomSnapshot(c, id, selfId) {
     fuel: c.fuel,
     song: r.song,
     board: id === 'lake_dock' ? shared.board : undefined,
-    wishes: id === 'forest_main' ? shared.wishes : undefined,
-    notes: id === 'forest_main' ? shared.notes : undefined,
+    wishes: id === 'forest_main' ? recent(shared.wishes, MAX_WISHES) : undefined,
+    notes: id === 'forest_main' ? recent(shared.notes, MAX_NOTES) : undefined,
     cairns: id === 'forest_main' ? shared.cairns : undefined,
     cairnLog: id === 'forest_main' ? publicCairnLog() : undefined,
     tree: id === 'forest_main' ? tree : undefined,
@@ -993,10 +997,10 @@ io.on('connection', (socket) => {
     const text = String(data.text ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 30);
     if (!text) return;
     shared.wishes.push({ name: player.name, text, at: now });
-    shared.wishes = shared.wishes.slice(-MAX_WISHES);
+    shared.wishes = shared.wishes.slice(-ARCHIVE_MAX);
     saveJson('wishes.json', shared.wishes);
     bump('wishes');
-    emitAllChannels('forest_main', 'wishes', { wishes: shared.wishes, by: socket.id, name: player.name });
+    emitAllChannels('forest_main', 'wishes', { wishes: recent(shared.wishes, MAX_WISHES), by: socket.id, name: player.name });
     pushNews('wish');
   });
 
@@ -1241,6 +1245,15 @@ io.on('connection', (socket) => {
   });
 
   // 帳篷營地：列出大家的帳篷
+  // 翻看以前的留言／繪馬：page 0 是最新的一頁，回傳新的在前
+  socket.on('history', (data = {}, ack) => {
+    const all = data.kind === 'wishes' ? shared.wishes : data.kind === 'notes' ? shared.notes : null;
+    if (!all) return ack?.({ ok: false });
+    const pages = Math.max(1, Math.ceil(all.length / HISTORY_PAGE));
+    const page = Math.min(pages - 1, Math.max(0, Math.floor(Number(data.page) || 0)));
+    const end = all.length - page * HISTORY_PAGE;
+    ack?.({ ok: true, page, pages, total: all.length, items: all.slice(Math.max(0, end - HISTORY_PAGE), end).reverse() });
+  });
   socket.on('campList', (data, ack) => ack?.({ ok: true, tents: campList(player?.vid) }));
   // 拜訪別人的帳篷：按讚（再按一次收回）
   socket.on('homeLike', (data, ack) => {
@@ -1369,10 +1382,10 @@ io.on('connection', (socket) => {
     lastNote = now;
     const color = Math.max(0, Math.min(3, data.color | 0));
     shared.notes.push({ name: player.name, text, at: now, color, ch: chan.ch });
-    shared.notes = shared.notes.slice(-MAX_NOTES);
+    shared.notes = shared.notes.slice(-ARCHIVE_MAX);
     saveJson('notes.json', shared.notes);
     bump('notes');
-    emitAllChannels('forest_main', 'notes', { notes: shared.notes, by: socket.id, name: player.name });
+    emitAllChannels('forest_main', 'notes', { notes: recent(shared.notes, MAX_NOTES), by: socket.id, name: player.name });
   });
 
   // 📣 即時動態：釣魚、添柴、疊石、繪馬、掛裝飾，所有分流、所有地點都看得到

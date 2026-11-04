@@ -1,5 +1,6 @@
 import { t } from '../i18n/i18n.js';
 import { trButton, bindTranslate } from '../network/chatTranslate.js';
+import { localPage, pagerHtml, bindPager } from './pager.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -33,8 +34,10 @@ const JIAOBEI = {
  *   onWish(text)        寫好繪馬
  */
 export class ShrinePanel {
-  constructor({ onPray, onWish, root = document.getElementById('ui') }) {
-    Object.assign(this, { onPray, onWish });
+  constructor({ onPray, onWish, onHistory, root = document.getElementById('ui') }) {
+    Object.assign(this, { onPray, onWish, onHistory });
+    this.wPage = 0;
+    this.reqId = 0;
     this.wishes = [];
     root.insertAdjacentHTML(
       'beforeend',
@@ -211,9 +214,13 @@ export class ShrinePanel {
     });
   }
 
-  #read() {
+  async #read(page = 0) {
     bindTranslate(this.body);
-    const list = [...this.wishes].reverse();
+    const id = ++this.reqId;
+    let res = (await this.onHistory?.('wishes', page)) ?? null;
+    if (id !== this.reqId) return;
+    if (!res?.ok) res = localPage([...this.wishes].reverse(), page);
+    const list = res.items;
     this.body.innerHTML = `
       <div class="ema-list">
         ${
@@ -222,8 +229,13 @@ export class ShrinePanel {
             : '<div class="shrine-sub">' + t('還沒有人掛繪馬，寫下第一個願望吧！') + '</div>'
         }
       </div>
+      ${pagerHtml(res.page, res.pages)}
       ${this.#back()}
     `;
     this.#bindBack();
+    bindPager(this.body, (d) => {
+      this.body.querySelector('.ema-list')?.scrollTo?.(0, 0);
+      this.#read(res.page + d);
+    });
   }
 }

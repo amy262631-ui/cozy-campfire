@@ -266,7 +266,10 @@ async function init() {
   social.onDisabled = () => hud.toast(t('專注帳篷裡不能聊天，專心一下吧 📖'));
 
   // ---------- 地藏祈福處 ----------
+  /** 翻看以前的留言／繪馬（沒連線時回傳 null，面板自己用手上的清單分頁） */
+  const loadHistory = (kind, page) => (net.online ? net.request('history', { kind, page }) : Promise.resolve(null));
   const shrinePanel = new ShrinePanel({
+    onHistory: loadHistory,
     onPray: (quiet) => {
       actions.emote('pray');
       forest.shrine.ringBell();
@@ -295,6 +298,7 @@ async function init() {
   };
   const noticePanel = new NoticePanel({
     hud,
+    onHistory: loadHistory,
     onIdea: async (text) => (net.online ? ((await net.request('idea', { text })) ?? { ok: false }) : { ok: false, reason: 'offline' }),
     onPost: (text, color) => {
       ritual?.event('note');
