@@ -176,7 +176,7 @@ export class HUD {
 
   /** 連上伺服器才顯示「邀朋友」 */
   setInviteVisible(v) {
-    this.el.invite.hidden = !v;
+    this.el.invite.hidden = true; // 「邀朋友送禮」已經併進「🔥 約朋友」
     this.el.dateChip.hidden = !v;
   }
 

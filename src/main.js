@@ -61,6 +61,7 @@ import { CROPS, CROP_BY_ID, WATER_MAX } from './game/garden.js';
 import { haveOf, canMake, specLabel } from './game/materials.js';
 import { RECIPES } from './game/crafting.js';
 import { DISHES, DISH_BY_ID } from './game/cooking.js';
+import { MUSEUM_ITEMS, MUSEUM_CATS, MUSEUM_BY_ID } from './game/museum.js';
 import { detectSource } from './game/sources.js';
 
 // 網址參數（開發測試用）
@@ -497,21 +498,36 @@ async function init() {
   /** 我的公開邀請代號（連上伺服器後才有；不是 vid） */
   let myCode = null;
   const inviteUrl = () => `${location.origin}${location.pathname}${myCode ? `?with=${myCode}` : ''}`;
-  /** 分享邀請連結；分享成功（或複製成功）回傳 true */
-  const shareInvite = async () => {
+  /** 邀請文字（連結放最後面，貼到哪裡都點得到） */
+  const inviteText = () => (currentEvent()?.active ? t('營火時間開始了，快來營火旁找我 🔥') : t('今晚 9:30 一起來營火旁坐坐吧 🔥')) + '\n' + t('點連結會直接出現在我旁邊，免安裝打開就能玩：');
+  /** 📋 複製邀請連結（文字＋連結） */
+  const copyInvite = async () => {
     const url = inviteUrl();
-    const text = t('來營火旁找我！點這個連結，就會出現在我旁邊 🔥');
     try {
-      if (navigator.share) {
-        await navigator.share({ title: t('迷霧森林露營地'), text, url });
-      } else {
-        await navigator.clipboard.writeText(`${text}\n${url}`);
-        hud.toast(t('📋 已複製邀請連結，貼給朋友吧'));
-      }
+      await navigator.clipboard.writeText(`${inviteText()}\n${url}`);
+    } catch {
+      // 舊瀏覽器：用隱藏的輸入框複製
+      const ta = document.createElement('textarea');
+      ta.value = `${inviteText()}\n${url}`;
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand?.('copy');
+      ta.remove();
+      if (!ok) return hud.toast(t('複製不了，請長按上面的連結自己複製')), false;
+    }
+    hud.toast(t('📋 已複製邀請連結，貼到 LINE、Threads、IG 給朋友吧'), 4000);
+    await claimShareGift({ kind: 'invite' });
+    return true;
+  };
+  /** 📤 分享連結（只分享文字和連結，不夾圖片，連結一定會跟著送出去） */
+  const shareInvite = async () => {
+    if (!navigator.share) return copyInvite();
+    try {
+      await navigator.share({ title: t('迷霧森林露營地'), text: inviteText(), url: inviteUrl() });
     } catch {
       return false; // 取消分享
     }
-    await claimShareGift();
+    await claimShareGift({ kind: 'invite' });
     return true;
   };
   /** 分享過一次：領「營火明信片牆」（伺服器只會給一次） */
@@ -532,8 +548,12 @@ async function init() {
       const res = await net.request('giftInfo');
       return res?.ok ? res : null;
     },
-    onShare: shareInvite,
+    getUrl: () => inviteUrl(),
+    onCopy: copyInvite,
+    onShareLink: shareInvite,
+    onShareImage: () => openDateInvite(),
   });
+  // 「🔥 約朋友」和「🎁 邀朋友送禮」合成同一個地方
   hud.onInvite = () => giftPanel.open();
   const giftName = (id) => {
     const f = GIFT_FURNITURE.find((x) => x.id === id);
@@ -669,7 +689,7 @@ async function init() {
       for (const c of body.querySelectorAll('.dex-card.outfit')) c.addEventListener('click', () => wearOutfit(c.dataset.id));
       body.querySelector('#outfit-share')?.addEventListener('click', () => {
         fishingUI.el.modal.classList.remove('show');
-        openDateInvite();
+        giftPanel.open();
       });
     },
   });
@@ -826,28 +846,56 @@ async function init() {
     museum = m ?? {};
     forest.drawMuseum(museum);
   };
-  function openMuseum() {
+  let museumCat = 'mush';
+  async function openMuseum() {
+    const info = await net.request('museumInfo');
+    if (!info?.ok) return hud.toast(t('連上伺服器才能看標本櫃'));
+    setMuseum(info.museum);
+    const fishDex = new Set((info.fishDex ?? []).map(Number));
+    const has = (x) => (x.type === 'fish' ? fishDex.has(x.fish) : basket[x.id] > 0);
+    const known = (x) => (x.type === 'fish' ? fishDex.has(x.fish) : found(x.id));
+    const nameOf = (x) => (x.type === 'fish' ? x.name : t(x.zh));
+    const total = MUSEUM_ITEMS.length;
     const n = Object.keys(museum).length;
-    const cards = GATHER_ITEMS.map((x) => {
-      const d = museum[x.id];
-      if (d) return `<div class="dex-card rarity-${x.rarity}"><i class="dex-emoji">${x.icon}</i><b>${t(x.zh)}</b><small>${t('第一個捐的人')}</small><em>${escapeHtml(d.n)}</em></div>`;
-      const can = basket[x.id] > 0;
-      return `<div class="dex-card ${can ? 'can-donate' : 'unknown'}"><i class="dex-emoji">${x.icon}</i><b>${found(x.id) ? t(x.zh) : t('？？？')}</b><small>${rarityStars(x.rarity)}</small>${can ? `<button type="button" class="mini-btn" data-donate="${x.id}">${t('🎁 捐出')}</button>` : `<em>${t('還沒有人捐')}</em>`}</div>`;
+    const tabs = MUSEUM_CATS.map((c) => {
+      const items = MUSEUM_ITEMS.filter((x) => x.type === c.id);
+      const done = items.filter((x) => museum[x.id]).length;
+      return `<button type="button" data-mcat="${c.id}" class="${c.id === museumCat ? 'on' : ''}">${c.icon} ${t(c.zh)}<small>${done}/${items.length}</small></button>`;
     }).join('');
+    const cards = MUSEUM_ITEMS.filter((x) => x.type === museumCat)
+      .map((x) => {
+        const d = museum[x.id];
+        if (d) return `<div class="dex-card rarity-${x.rarity}"><i class="dex-emoji">${x.icon}</i><b>${nameOf(x)}</b><small>${t('第一個捐的人')}</small><em>${escapeHtml(d.n)}</em></div>`;
+        const can = has(x) && info.left > 0;
+        return `<div class="dex-card ${has(x) ? 'can-donate' : 'unknown'}"><i class="dex-emoji">${x.icon}</i><b>${known(x) ? nameOf(x) : t('？？？')}</b><small>${rarityStars(x.rarity)}</small>${has(x) ? `<button type="button" class="mini-btn" data-donate="${x.id}" ${can ? '' : 'disabled'}>${x.type === 'fish' ? t('🎣 捐魚拓') : t('🎁 捐出')}</button>` : `<em>${t('還沒有人捐')}</em>`}</div>`;
+      })
+      .join('');
     modal.open(
-      t('🏛️ 營地標本櫃 {n}／{total}', { n, total: GATHER_ITEMS.length }),
-      `<div class="dex-note">${t('大家一起把採集到的東西捐進標本櫃，每一格都會寫上「第一個捐的人」的名字。捐出一個送松果（★ 越多送越多）。')}</div><div class="dex-grid">${cards}</div>`,
+      t('🏛️ 營地標本櫃 {n}／{total}', { n, total }),
+      `<div class="dex-note">${t('大家一起把採集到的東西、釣過的魚拓捐進標本櫃，每一格都會寫上「第一個捐的人」。每個人每天只能捐一件，慢慢一起填滿吧！捐出一件送松果（★ 越多送越多）。')}</div>
+       <div class="outfit-today">${info.left > 0 ? t('🎁 今天還可以捐 {n} 件', { n: info.left }) : t('✅ 今天已經捐過了，明天再來捐下一件吧')}</div>
+       <div class="museum-tabs">${tabs}</div>
+       <div class="dex-grid">${cards}</div>`,
       (body) => {
+        for (const b of body.querySelectorAll('[data-mcat]')) {
+          b.addEventListener('click', () => {
+            museumCat = b.dataset.mcat;
+            openMuseum();
+          });
+        }
         for (const b of body.querySelectorAll('[data-donate]')) {
           b.addEventListener('click', async () => {
             b.disabled = true;
             const res = await net.request('donate', { id: b.dataset.donate });
             if (res?.ok) {
-              basket[b.dataset.donate] = res.count;
-              if (!res.count) delete basket[b.dataset.donate];
+              if (MUSEUM_BY_ID[b.dataset.donate]?.type !== 'fish') {
+                basket[b.dataset.donate] = res.count;
+                if (!res.count) delete basket[b.dataset.donate];
+              }
               audio.sfx('bell');
               hud.toast(t('🏛️ 捐進標本櫃了！你的名字會留在這一格 +{n} 🌰', { n: res.gain }), 5000);
             } else if (res?.reason === 'done') hud.toast(t('剛好有人先捐了：{name}', { name: res.by }));
+            else if (res?.reason === 'daily') hud.toast(t('今天已經捐過了，明天再來捐下一件吧'));
             openMuseum();
           });
         }
@@ -858,8 +906,8 @@ async function init() {
   net.on('museum', ({ id, n }) => {
     museum = { ...museum, [id]: { n, at: Date.now() } };
     forest.drawMuseum(museum);
-    const it = GATHER_BY_ID[id];
-    if (it && n !== myName) hud.toast(t('🏛️ {name} 把{icon} {item}捐進了標本櫃', { name: n, icon: it.icon, item: t(it.zh) }), 4000);
+    const it = MUSEUM_BY_ID[id];
+    if (it && n !== myName) hud.toast(t('🏛️ {name} 把{icon} {item}捐進了標本櫃', { name: n, icon: it.icon, item: it.type === 'fish' ? it.name : t(it.zh) }), 4000);
     if (modal.isOpen && fishingUI._modal === 'custom' && fishingUI.el.modalTitle.textContent.startsWith('🏛️')) openMuseum();
   });
 
@@ -1023,11 +1071,24 @@ async function init() {
         return `<div class="garden-slot"><b>${c.icon} ${t(c.zh)}・${t('還要 {t}', { t: left(remain) })}</b>${water ? `<small>${water}</small>` : ''}${!mine ? (sl.iw ? `<small>${t('你已經幫忙澆過水了 💧')}</small>` : sl.w >= WATER_MAX ? `<small>${t('今天已經有很多人澆過了')}</small>` : `<button type="button" class="mini-btn" data-water="${i}">${t('💧 幫忙澆水（少等 30 分鐘）')}</button>`) : ''}</div>`;
       })
       .join('');
+    const expand =
+      mine && res.next
+        ? `<div class="garden-slot empty"><b>${t('🌱 還可以再開墾（最多 {max} 格）', { max: res.max })}</b><button type="button" class="mini-btn" id="garden-expand" ${(pinecones ?? 0) < res.next ? 'disabled' : ''}>${t('➕ 開墾第 {n} 格 🌰 {p}', { n: res.slots.length + 1, p: res.next })}</button></div>`
+        : '';
     modal.open(
-      mine ? t('🥕 我的小菜園') : t('🥕 {name} 的小菜園', { name: plot.tent.name || t('旅人') }),
-      `<div class="dex-note">${mine ? t('種子用松果買（越慢長的越貴），種下去等幾小時就能收成，放著不收也不會枯掉。朋友路過可以幫忙澆水，少等 30 分鐘、收成多一個。收成的蔬菜可以拿去營火旁煮料理，或當手作家具的材料。') : t('幫朋友的菜澆水，可以少等 30 分鐘、收成多一個 💧')}</div>${slots}`,
+      (mine ? t('🥕 我的小菜園') : t('🥕 {name} 的小菜園', { name: plot.tent.name || t('旅人') })) + ` ${res.slots.length}/${res.max}`,
+      `<div class="dex-note">${mine ? t('種子用松果買（越慢長的越貴），種下去等幾小時就能收成，放著不收也不會枯掉。朋友路過可以幫忙澆水，少等 30 分鐘、收成多一個。收成的蔬菜可以拿去營火旁煮料理，或當手作家具的材料。') : t('幫朋友的菜澆水，可以少等 30 分鐘、收成多一個 💧')}</div>${slots}${expand}`,
       (body) => {
         const hid = plot.tent.hid;
+        body.querySelector('#garden-expand')?.addEventListener('click', async () => {
+          const r = await net.request('gardenExpand');
+          if (r?.ok) {
+            audio.sfx('bell');
+            hud.toast(t('🌱 開墾好了！菜園現在有 {n} 格', { n: r.slots.length }), 4000);
+            renderGarden(r, plot);
+            refreshCamp();
+          } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : t('現在不能開墾'));
+        });
         /** 面向菜園的第幾格，播動作 */
         const act = (i, pose, dur) => {
           const at = camp.gardenSlotPos(hid, i);
@@ -1162,15 +1223,14 @@ async function init() {
       bigSize: 84,
       small: real || t('流星雨、松果加倍，一起圍著營火烤棉花糖'),
       url: inviteUrl(),
+      qr: inviteUrl(), // 圖上放 QR Code：只傳圖片的話，朋友掃一下也算透過你的連結
       text: `${ev?.active ? t('營火時間開始了，快來營火旁找我 🔥') : t('今晚 9:30 一起來營火旁坐坐吧 🔥')}${real ? `
 ${real}` : ''}
 ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
-      note: daily
-        ? t('分享出去就送今天的每日造型：{name}　朋友 9:30 營火時間進來，兩個人再拿營火之約限定造型', { name: outfitName(daily.id) })
-        : t('朋友透過連結來玩，你會拿到每週限定造型；9:30 營火時間進來，兩個人都拿到營火之約限定造型'),
+      note: t('按「📤 分享」會順便複製下面的文案和連結：如果 App 只送出圖片，在聊天框貼上就好；朋友掃圖上的 QR Code 也算 📱') + (daily ? '　' + t('分享出去就送今天的每日造型：{name}', { name: outfitName(daily.id) }) : ''),
     });
   }
-  hud.onDate = () => openDateInvite();
+  hud.onDate = () => giftPanel.open();
   // 湖畔排行按鈕併進上方那一排（不再另外浮一層，免得和上方文字疊在一起）
   hud.el.online.insertBefore(fishingUI.el.tools, hud.el.acctChip);
   // 📖 圖鑑收錄新魚

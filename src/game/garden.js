@@ -1,7 +1,7 @@
 /**
  * 帳篷前的小菜園（前端、伺服器共用的資料）。
  *
- * - 每頂帳篷前一塊菜園，有 3 格；種子用松果買（seed：一包幾顆松果，越慢長的越貴，收成一定比種子划算）
+ * - 每頂帳篷前一塊菜園，一開始 3 格，可以用松果開墾到 6 格；種子用松果買（seed：一包幾顆松果，越慢長的越貴，收成一定比種子划算）
  * - 種下去幾小時後可以收成，不會枯死（放著不收也沒關係）
  * - 朋友路過可以幫忙澆水：每次澆水少等 30 分鐘（每格最多 3 位朋友）
  * - 收成的蔬菜放進採集籃，拿到營火旁煮料理、或當手作家具的材料
@@ -19,7 +19,14 @@ export const CROPS = [
   { id: 'pumpkin', icon: '🎃', zh: '南瓜', hours: 6, seed: 3, yield: [1, 2], color: 0xe0782a },
 ];
 export const CROP_BY_ID = Object.fromEntries(CROPS.map((c) => [c.id, c]));
-export const GARDEN_SLOTS = 3;
+/** 菜園的格數：一開始 3 格，可以用松果開墾到 6 格 */
+export const GARDEN_BASE = 3;
+export const GARDEN_MAX = 6;
+/** 開墾第 n 格要幾顆松果 */
+export const GARDEN_EXPAND = { 4: 10, 5: 15, 6: 20 };
+export const gardenSlotsOf = (h) => Math.min(GARDEN_MAX, Math.max(GARDEN_BASE, h?.gslots ?? GARDEN_BASE));
+/** 菜園第 i 格在菜園裡的位置（兩排，每排 3 格） */
+export const slotLocal = (i) => ({ x: ((i % 3) - 1) * 0.5, z: i < 3 ? -0.24 : 0.24 });
 /** 朋友澆一次水少等多久、每格最多幾位朋友澆 */
 export const WATER_MS = 30 * 60 * 1000;
 export const WATER_MAX = 3;

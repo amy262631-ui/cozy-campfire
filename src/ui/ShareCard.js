@@ -1,4 +1,21 @@
+import qrcode from 'qrcode-generator';
 import { t } from '../i18n/i18n.js';
+
+/** 在畫布上畫 QR Code（白底、深色方塊） */
+function drawQr(g, text, x, y, size) {
+  const qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  const n = qr.getModuleCount();
+  const pad = Math.round(size * 0.06);
+  g.fillStyle = '#fffaf2';
+  g.beginPath();
+  g.roundRect(x, y, size, size, 22);
+  g.fill();
+  const cell = (size - pad * 2) / n;
+  g.fillStyle = '#2a1c12';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) g.fillRect(x + pad + c * cell, y + pad + r * cell, Math.ceil(cell), Math.ceil(cell));
+}
 
 /** 文字太長自動換行，回傳畫了幾行 */
 function wrapText(g, text, x, y, maxW, lineH, maxLines = 3) {
@@ -37,9 +54,11 @@ export class ShareCard {
         <div class="share-inner">
           <img id="share-img" alt="" />
           <div class="share-note" id="share-note" hidden></div>
+          <div class="share-caption" id="share-caption" hidden></div>
           <div class="share-hint">${t('手機：長按圖片可以儲存或分享 📱')}</div>
           <div class="share-actions">
             <button type="button" id="share-go">${t('📤 分享')}</button>
+            <button type="button" id="share-copy">${t('📋 複製文案')}</button>
             <a id="share-dl" download="campfire.png">${t('⬇️ 存圖')}</a>
             <button type="button" id="share-close">${t('關閉')}</button>
           </div>
@@ -52,10 +71,16 @@ export class ShareCard {
     this.img = $('#share-img');
     this.dl = $('#share-dl');
     this.note = $('#share-note');
+    this.captionEl = $('#share-caption');
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.addEventListener('click', (e) => e.target === this.el && this.close());
     $('#share-close').addEventListener('click', () => this.close());
     $('#share-go').addEventListener('click', () => this.#share());
+    $('#share-copy').addEventListener('click', () => {
+      this.#copy(this.#caption());
+      this.hud.toast(t('📋 文案和連結複製好了，貼到 LINE、Threads、IG 都可以'), 3500);
+      this.onShared?.(this.info);
+    });
   }
 
   close() {
@@ -66,8 +91,47 @@ export class ShareCard {
    * @param {{ icon: string, big: string, small?: string, text?: string }} info
    *   big：大字（例如「大吉」「完成疊石許願」），small：小字，text：分享時附的文字
    */
+  /** 分享的文案（最後一行是連結） */
+  #caption() {
+    const text = this.info?.text ?? t('沒力氣出門的夜晚，一起來迷霧森林露營地的營火旁坐一下吧 🔥');
+    const url = this.info?.url ?? this.getUrl?.() ?? location.origin + location.pathname;
+    return `${text}\n${url}`;
+  }
+
+  /** 複製到剪貼簿（不等它完成，才不會讓分享選單打不開） */
+  #copy(text) {
+    try {
+      const p = navigator.clipboard?.writeText(text);
+      if (p) {
+        p.catch(() => this.#copyOld(text));
+        return;
+      }
+    } catch {
+      /* 舊瀏覽器 */
+    }
+    this.#copyOld(text);
+  }
+
+  #copyOld(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+    } catch {
+      /* 複製不了就算了：文案也顯示在圖片下面，可以長按自己複製 */
+    }
+    ta.remove();
+  }
+
   async open(info) {
     this.info = info;
+    this.file = null;
+    this.captionEl.hidden = false;
+    this.captionEl.textContent = this.#caption();
     this.note.hidden = !info.note;
     this.note.textContent = info.note ?? '';
     const shot = await new Promise((resolve) => {
@@ -88,13 +152,44 @@ export class ShareCard {
       const k = Math.max(1080 / shot.width, H / shot.height);
       const w = shot.width * k;
       const h = shot.height * k;
+      g.save();
+      g.beginPath();
+      g.rect(0, 0, 1080, H); // 只畫在上半部，下半部留給文字
+      g.clip();
       g.drawImage(shot, (1080 - w) / 2, (H - h) / 2, w, h);
+      g.restore();
     }
     const fade = g.createLinearGradient(0, H - 260, 0, H + 10);
     fade.addColorStop(0, 'rgba(29,23,20,0)');
     fade.addColorStop(1, 'rgba(29,23,20,1)');
     g.fillStyle = fade;
     g.fillRect(0, H - 260, 1080, 270);
+    // 邀請卡：下半部放 QR Code（只傳圖片的話，朋友掃 QR Code 也算透過你的連結）
+    if (info.qr) {
+      g.textAlign = 'center';
+      g.fillStyle = '#ffe6b8';
+      g.font = `800 ${info.bigSize ?? 84}px ${FONT}`;
+      g.fillText(`${info.icon} ${info.big}`, 540, 880);
+      if (info.small) {
+        g.fillStyle = '#f5e6d3';
+        g.font = `500 36px ${FONT}`;
+        wrapText(g, info.small, 540, 945, 940, 50, 2);
+      }
+      drawQr(g, info.qr, 90, 1040, 270);
+      g.textAlign = 'left';
+      g.fillStyle = '#fff3e2';
+      g.font = `800 46px ${FONT}`;
+      g.fillText(t('📱 掃描 QR Code'), 400, 1105);
+      g.font = `500 36px ${FONT}`;
+      g.fillStyle = '#f5e6d3';
+      g.fillText(t('就會出現在我旁邊'), 400, 1165);
+      g.fillText(t('免安裝，打開就能玩'), 400, 1213);
+      g.fillStyle = '#fff3e2';
+      g.font = `800 40px ${FONT}`;
+      g.fillText(t('🔥 迷霧森林露營地'), 400, 1285);
+      this.#finish(c);
+      return;
+    }
     // 下半部：一句話
     g.textAlign = 'center';
     g.fillStyle = '#ffe6b8';
@@ -121,7 +216,15 @@ export class ShareCard {
     g.font = `500 30px ${FONT}`;
     g.fillText(location.host, 540, 1300);
 
+    this.#finish(c);
+  }
+
+  #finish(c) {
     this.canvas = c;
+    // 先把圖片檔準備好：按「分享」時不用再等，手機才不會因為等太久而打不開分享選單
+    c.toBlob((blob) => {
+      if (blob && this.canvas === c) this.file = new File([blob], 'campfire.png', { type: 'image/png' });
+    }, 'image/png');
     const url = c.toDataURL('image/png');
     this.img.src = url;
     this.dl.href = url;
@@ -129,17 +232,19 @@ export class ShareCard {
   }
 
   async #share() {
-    const text = this.info?.text ?? t('沒力氣出門的夜晚，一起來迷霧森林露營地的營火旁坐一下吧 🔥');
-    const url = this.info?.url ?? this.getUrl?.() ?? location.origin + location.pathname;
+    const caption = this.#caption();
+    // 1. 先把「文案＋連結」複製起來：有些 App（IG、LINE）收到圖片會把文字拿掉，傳完圖再貼上就好
+    this.#copy(caption);
     try {
-      const blob = await new Promise((r) => this.canvas.toBlob(r, 'image/png'));
-      const file = new File([blob], 'campfire.png', { type: 'image/png' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], text: `${text}\n${url}` });
+      const file = this.file;
+      if (file && navigator.canShare?.({ files: [file] })) {
+        // 2. 分享圖片，同時帶著文案和連結（App 支援的話會一起送出）
+        await navigator.share({ files: [file], text: caption });
+        this.hud.toast(t('✅ 圖片分享出去了！文案和連結也幫你複製好了，如果朋友那邊沒看到連結，在聊天框長按「貼上」就好'), 6000);
       } else if (navigator.share) {
-        await navigator.share({ title: t('迷霧森林露營地'), text, url });
+        await navigator.share({ title: t('迷霧森林露營地'), text: caption });
+        this.hud.toast(t('✅ 分享出去了！圖片可以按「存圖」另外傳'), 4000);
       } else {
-        await navigator.clipboard.writeText(`${text}\n${url}`);
         this.hud.toast(t('已複製分享文字和網址，圖片可以按「存圖」下載 📋'));
       }
       this.onShared?.(this.info); // 分享成功：領分享禮物

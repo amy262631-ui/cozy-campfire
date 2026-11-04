@@ -45,7 +45,7 @@ for (const file of files) {
     const isFn = /Function/.test(node.type);
     if (isFn && declaresT(node)) sh = true;
     if (node.type === 'BlockStatement' || node.type === 'Program' || isFn) {
-      const body = node.type === 'BlockStatement' || node.type === 'Program' ? node.body : node.body?.body ?? [];
+      const body = node.type === 'BlockStatement' || node.type === 'Program' ? node.body : Array.isArray(node.body?.body) ? node.body.body : []; // 箭頭函式直接回傳另一個函式時，body.body 不是陣列
       for (const st of body || []) {
         if (st.type === 'VariableDeclaration' && st.declarations.some((d) => d.id.type === 'Identifier' && d.id.name === 't')) sh = true;
       }

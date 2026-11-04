@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CROP_BY_ID } from '../game/garden.js';
+import { CROP_BY_ID, slotLocal } from '../game/garden.js';
 
 /** 小菜園的 3D：一格土＋依生長階段變化的作物（1 剛發芽、2 長大中、3 可以收成） */
 const mats = new Map();
@@ -21,15 +21,17 @@ function leaves(g, n, size, h) {
   }
 }
 
-export function buildSoil() {
+/** 菜園：開墾了幾格就有幾塊土（兩排，每排 3 格），還沒開墾的是草地 */
+export function buildSoil(n = 3) {
   const g = new THREE.Group();
-  const soil = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.06, 1.0), m(0x6a4a32));
-  soil.position.y = 0.03;
-  g.add(soil);
-  for (const x of [-0.5, 0, 0.5]) {
-    const row = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 0.86), m(0x5a3c26));
-    row.position.set(x, 0.07, 0);
-    g.add(row);
+  for (let i = 0; i < n; i++) {
+    const p = slotLocal(i);
+    const soil = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.4), m(0x6a4a32));
+    soil.position.set(p.x, 0.03, p.z);
+    g.add(soil);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.03, 0.32), m(0x5a3c26));
+    top.position.set(p.x, 0.07, p.z);
+    g.add(top);
   }
   return g;
 }

@@ -8,6 +8,7 @@ import { styleOf, tentTexture } from '../game/tentStyles.js';
 import { t } from '../i18n/i18n.js';
 import { LAYOUT, CAMP_SIZE, ENTRY_Z, BOUNDS, LOOP_CENTER, plotSpots, frame } from './campLayout.js';
 import { buildSoil, buildCrop } from './gardenModels.js';
+import { slotLocal } from '../game/garden.js';
 
 /**
  * 🏕️ 帳篷營地：一條彎彎曲曲的環形小路繞著中央的小營火，
@@ -610,14 +611,15 @@ export function createCampgroundRoom() {
     const gg = new THREE.Group();
     gg.position.set(p.garden.x, 0, p.garden.z);
     gg.rotation.y = p.garden.ry;
-    gg.add(buildSoil());
+    gg.add(buildSoil(tent.garden?.length ?? 3));
     gg.userData.crops = [];
     (tent.garden ?? []).forEach((slot, i) => {
       if (!slot) return;
       const crop = buildCrop(slot[0], slot[1]);
       gg.userData.crops[i] = crop;
-      crop.position.x = (i - 1) * 0.5;
-      crop.scale.setScalar(1.5); // 營地鏡頭比較遠，作物放大一點才看得到
+      const sp = slotLocal(i);
+      crop.position.set(sp.x, 0, sp.z);
+      crop.scale.setScalar(1.2); // 營地鏡頭比較遠，作物放大一點才看得到
       gg.add(crop);
       crop.traverse((o) => o.userData.spin && spinners.push(o));
     });
@@ -703,7 +705,10 @@ export function createCampgroundRoom() {
   const fx = [];
   const dirtMat = new THREE.MeshStandardMaterial({ color: 0x6a4a32, roughness: 1 });
   const splashMat = new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false });
-  const slotWorld = (p, i) => p.gg.localToWorld(new THREE.Vector3((i - 1) * 0.5, 0.1, 0));
+  const slotWorld = (p, i) => {
+    const sp = slotLocal(i);
+    return p.gg.localToWorld(new THREE.Vector3(sp.x, 0.1, sp.z));
+  };
   /**
    * @param {string} hid 哪一頂帳篷的菜園
    * @param {number} i 第幾格

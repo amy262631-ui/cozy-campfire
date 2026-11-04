@@ -26,10 +26,11 @@ import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateO
 import { GATHER_SPOTS, GATHER_ITEMS, regrowMs, GATHER_FIRST_GAIN, GATHER_DEX_BONUS, gatherItemAt, isNight, GATHER_R, NET_PRICE, BUG_WANDER, BUG_CATCH_R } from '../src/game/gathering.js';
 import { SOURCES, cleanSource, sourceFrom } from '../src/game/sources.js';
 import { GATHER_BY_ID, treasureTime, TREASURE_MAX } from '../src/game/gathering.js';
-import { CROP_BY_ID, GARDEN_SLOTS, WATER_MAX, CROP_FIRST_GAIN, readyAtOf, stageOf } from '../src/game/garden.js';
+import { CROP_BY_ID, GARDEN_MAX, GARDEN_EXPAND, gardenSlotsOf, WATER_MAX, CROP_FIRST_GAIN, readyAtOf, stageOf } from '../src/game/garden.js';
 import { canMake, takeMaterials } from '../src/game/materials.js';
 import { RECIPE_BY_ID } from '../src/game/crafting.js';
 import { DISH_BY_ID, dishFirstGain } from '../src/game/cooking.js';
+import { MUSEUM_BY_ID, DONATE_PER_DAY } from '../src/game/museum.js';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack } from './homes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -153,7 +154,7 @@ const DATA_DIR = path.resolve(__dirname, 'data');
 await storage.init(DATA_DIR);
 const asArray = (v) => (Array.isArray(v) ? v : []);
 const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog, savedAccounts, savedHomes, savedIdeas, savedTotals, savedMuseum] = await Promise.all(
-  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json', 'ideas.json', 'totals.json', 'museum.json'].map((f) =>
+  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json', 'ideas.json', 'totals.json', 'museum2.json'].map((f) =>
     storage.load(f),
   ),
 );
@@ -214,7 +215,7 @@ function campList(selfVid) {
   }));
 }
 /** 🥕 菜園給大家看的樣子：[[作物, 階段], ...]（空的格子是 null） */
-const gardenView = (h, now = Date.now()) => Array.from({ length: GARDEN_SLOTS }, (_, i) => (h?.garden?.[i]?.c ? [h.garden[i].c, stageOf(h.garden[i], now)] : null));
+const gardenView = (h, now = Date.now()) => Array.from({ length: gardenSlotsOf(h) }, (_, i) => (h?.garden?.[i]?.c ? [h.garden[i].c, stageOf(h.garden[i], now)] : null));
 /** 採集圖鑑：找到過哪些（就算用掉、捐掉也還在）；第一次找到回傳 true */
 function discover(w, id) {
   w.gdex ??= Object.fromEntries(Object.keys(w.bk ?? {}).filter((k) => GATHER_BY_ID[k]).map((k) => [k, 1]));
@@ -223,7 +224,7 @@ function discover(w, id) {
   return true;
 }
 const gdexOf = (w) => Object.keys(w?.gdex ?? Object.fromEntries(Object.keys(w?.bk ?? {}).filter((k) => GATHER_BY_ID[k]).map((k) => [k, 1])));
-/** 🏛️ 營地標本櫃：{ 採集品: { n: 第一個捐的人, at } }（所有分流共用） */
+/** 🏛️ 營地標本櫃：{ 品項: { n: 第一個捐的人, at } }（所有分流共用；museum2.json＝11/4 測試完重新開始） */
 const museum = asObject(savedMuseum);
 
 // ---------- ✨ 營火寶藏（晚上 8～10 點）：營火附近偶爾藏一個稀有寶物，同一分流先找到的人拿走 ----------
@@ -1527,7 +1528,7 @@ io.on('connection', (socket) => {
   });
   socket.on('giftInfo', (data, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
-    ack?.({ ok: true, code: homeId(player.vid), shared: !!wal.shared, refs: wal.refs ?? 0, gifts: homes[player.vid]?.gifts ?? [], gain: REF_GAIN, stay: Math.round(REF_STAY_MS / 60000) });
+    ack?.({ ok: true, code: homeId(player.vid), shared: !!wal.shared, refs: wal.refs ?? 0, gifts: homes[player.vid]?.gifts ?? [], gain: REF_GAIN, stay: Math.round(REF_STAY_MS / 60000), ...outfitView(wal) });
   });
 
   // 帳篷營地：列出大家的帳篷
@@ -1543,24 +1544,34 @@ io.on('connection', (socket) => {
   socket.on('campList', (data, ack) => ack?.({ ok: true, tents: campList(player?.vid) }));
 
   // ---------- 🏛️ 營地標本櫃：大家一起捐，寫上第一個捐的人 ----------
-  socket.on('museumInfo', (data, ack) => ack?.({ ok: true, museum }));
+  const donatedToday = () => (wal?.mday === dayKey() ? wal.mcount ?? 1 : 0);
+  socket.on('museumInfo', (data, ack) => ack?.({ ok: true, museum, left: wal ? Math.max(0, DONATE_PER_DAY - donatedToday()) : 0, fishDex: Object.keys(dexView(wal)) }));
   socket.on('donate', (data = {}, ack) => {
     if (!wal || !player) return ack?.({ ok: false });
     const id = String(data.id ?? '');
-    const it = GATHER_BY_ID[id];
+    const it = MUSEUM_BY_ID[id];
     if (!it) return ack?.({ ok: false, reason: 'unknown' });
     if (museum[id]) return ack?.({ ok: false, reason: 'done', by: museum[id].n });
-    if (!(wal.bk?.[id] > 0)) return ack?.({ ok: false, reason: 'none' });
-    wal.bk[id]--;
-    if (!wal.bk[id]) delete wal.bk[id];
+    // 每個人每天只能捐一件：大家慢慢一起填滿
+    if (donatedToday() >= DONATE_PER_DAY) return ack?.({ ok: false, reason: 'daily' });
+    if (it.type === 'fish') {
+      if (!(dexView(wal)[it.fish] > 0)) return ack?.({ ok: false, reason: 'none' }); // 釣過才能捐魚拓
+    } else {
+      if (!(wal.bk?.[id] > 0)) return ack?.({ ok: false, reason: 'none' });
+      wal.bk[id]--;
+      if (!wal.bk[id]) delete wal.bk[id];
+    }
+    const d = dayKey();
+    wal.mcount = wal.mday === d ? (wal.mcount ?? 0) + 1 : 1;
+    wal.mday = d;
     museum[id] = { n: player.name, at: Date.now() };
     const gain = [0, 3, 5, 10][it.rarity] ?? 3;
     award(gain, 'donate');
-    saveJson('museum.json', museum);
+    saveJson('museum2.json', museum);
     saveJson('players.json', players);
     bump('donates');
     emitAllChannels('forest_main', 'museum', { id, n: player.name });
-    ack?.({ ok: true, gain, count: wal.bk[id] ?? 0 });
+    ack?.({ ok: true, gain, count: wal.bk?.[id] ?? 0, left: Math.max(0, DONATE_PER_DAY - donatedToday()) });
   });
 
   // ---------- 🔨 手作家具：用採集籃的東西做，放進帳篷背包 ----------
@@ -1645,7 +1656,9 @@ io.on('connection', (socket) => {
       ok: true,
       now: Date.now(),
       mine: owner === player.vid,
-      slots: Array.from({ length: GARDEN_SLOTS }, (_, i) => {
+      max: GARDEN_MAX,
+      next: gardenSlotsOf(h) < GARDEN_MAX ? GARDEN_EXPAND[gardenSlotsOf(h) + 1] : null,
+      slots: Array.from({ length: gardenSlotsOf(h) }, (_, i) => {
         const sl = h?.garden?.[i];
         if (!sl?.c) return null;
         return { c: sl.c, at: sl.at, ready: readyAtOf(sl), w: sl.w?.length ?? 0, iw: !!sl.w?.includes(me) };
@@ -1663,9 +1676,10 @@ io.on('connection', (socket) => {
     if (!player?.vid) return ack?.({ ok: false });
     const h = homes[player.vid];
     if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
-    const i = Math.floor(num(data.slot, 0, GARDEN_SLOTS - 1, 0));
+    const i = Math.floor(num(data.slot, 0, GARDEN_MAX - 1, 0));
     const c = CROP_BY_ID[String(data.c ?? '')];
     if (!c) return ack?.({ ok: false, reason: 'unknown' });
+    if (i >= gardenSlotsOf(h)) return ack?.({ ok: false, reason: 'locked' });
     h.garden ??= [];
     if (h.garden[i]?.c) return ack?.({ ok: false, reason: 'busy' });
     if (!wal || wal.pc < c.seed) return ack?.({ ok: false, reason: 'poor', pc: wal?.pc ?? 0 });
@@ -1677,10 +1691,27 @@ io.on('connection', (socket) => {
     bump('plants');
     ack?.(gardenInfo(player.vid));
   });
+  // ➕ 開墾菜園：多一格（最多 6 格），越後面越貴
+  socket.on('gardenExpand', (data, ack) => {
+    if (!player?.vid || !wal) return ack?.({ ok: false });
+    const h = homes[player.vid];
+    if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
+    const n = gardenSlotsOf(h);
+    if (n >= GARDEN_MAX) return ack?.({ ok: false, reason: 'max' });
+    const price = GARDEN_EXPAND[n + 1];
+    if (wal.pc < price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
+    wal.pc -= price;
+    h.gslots = n + 1;
+    saveJson('players.json', players);
+    saveJson('homes.json', homes);
+    socket.emit('wallet', { pc: wal.pc, delta: 0 });
+    bump('buys');
+    ack?.(gardenInfo(player.vid));
+  });
   socket.on('gardenHarvest', (data = {}, ack) => {
     if (!player?.vid || !wal) return ack?.({ ok: false });
     const h = homes[player.vid];
-    const i = Math.floor(num(data.slot, 0, GARDEN_SLOTS - 1, 0));
+    const i = Math.floor(num(data.slot, 0, GARDEN_MAX - 1, 0));
     const sl = h?.garden?.[i];
     if (!sl?.c) return ack?.({ ok: false, reason: 'empty' });
     if (Date.now() < readyAtOf(sl)) return ack?.({ ok: false, reason: 'notYet' });
@@ -1703,7 +1734,7 @@ io.on('connection', (socket) => {
     if (!player?.vid) return ack?.({ ok: false });
     const owner = ownerOf(data.hid);
     if (!owner || owner === player.vid) return ack?.({ ok: false, reason: 'own' });
-    const sl = homes[owner]?.garden?.[Math.floor(num(data.slot, 0, GARDEN_SLOTS - 1, 0))];
+    const sl = homes[owner]?.garden?.[Math.floor(num(data.slot, 0, GARDEN_MAX - 1, 0))];
     if (!sl?.c) return ack?.({ ok: false, reason: 'empty' });
     const me = homeId(player.vid);
     sl.w ??= [];
