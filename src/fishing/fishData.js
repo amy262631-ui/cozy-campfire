@@ -62,6 +62,9 @@ export const FISH = [
   { name: t('遠古湖神鯨'), rarity: 5, legend: true, min: 180, max: 299, color: 0x2d4a6a, glow: 0x7ad8ff, weight: 0.12, pull: 34, fight: 0.17, window: 0.95, where: 'lake', note: t('傳說中住在湖底最深處') },
   { name: t('熔岩火龍魚'), rarity: 5, legend: true, min: 160, max: 260, color: 0xff4a1a, glow: 0xffb000, weight: 0.12, pull: 34, fight: 0.17, window: 0.95, where: 'pond', note: t('被營火的光吸引而來') },
   { name: t('星河龍王'), rarity: 5, legend: true, min: 220, max: 320, color: 0x241a5a, glow: 0xffe28a, weight: 0.25, pull: 38, fight: 0.18, window: 0.9, when: 'event', note: t('只在每晚 9:30，從星空游下來') },
+  // 每晚 9:30 營火時間限定的魚王：湖畔、營火河畔各一隻
+  { name: t('流星劍魚王'), rarity: 5, legend: true, min: 200, max: 300, color: 0xdfe8ff, glow: 0x9fd0ff, weight: 0.22, pull: 37, fight: 0.18, window: 0.9, when: 'event', where: 'lake', note: t('只在每晚 9:30，追著流星衝進湖裡') },
+  { name: t('螢光幽靈魚王'), rarity: 5, legend: true, min: 150, max: 240, color: 0xc8fff0, glow: 0x7affc8, weight: 0.22, pull: 36, fight: 0.18, window: 0.9, when: 'event', where: 'pond', note: t('只在每晚 9:30，在營火河畔若隱若現') },
 ];
 /** 第一次釣到某種魚（收進圖鑑）送的松果，依星等（伺服器 server/index.js 的 DEX_GAIN 相同） */
 export const DEX_GAIN = [1, 2, 3, 5, 10, 20];

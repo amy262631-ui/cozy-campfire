@@ -93,7 +93,7 @@ export class NetworkClient {
     socket.on('disconnect', () => this.#setStatus('offline'));
     socket.on('connect_error', () => this.#setStatus('offline'));
 
-    for (const ev of ['playerJoined', 'playerLeft', 'states', 'fire', 'fireSync', 'song', 'caught', 'board', 'chat', 'emoji', 'wishes', 'notes', 'stone', 'lakeNews', 'wallet', 'ornament', 'event', 'friendJoined', 'cairnReset', 'homeUpdate', 'mini', 'miniBoard', 'miniHunt', 'areas', 'gift', 'friendCredit', 'bigCatch', 'outfit', 'outfitGift', 'dateFriend']) {
+    for (const ev of ['playerJoined', 'playerLeft', 'states', 'fire', 'fireSync', 'song', 'caught', 'board', 'chat', 'emoji', 'wishes', 'notes', 'stone', 'lakeNews', 'wallet', 'ornament', 'event', 'friendJoined', 'cairnReset', 'homeUpdate', 'mini', 'miniBoard', 'miniHunt', 'areas', 'gift', 'friendCredit', 'bigCatch', 'outfit', 'outfitGift', 'dateFriend', 'museum', 'ate', 'cooked', 'dishGift', 'gardenWatered', 'treasures']) {
       socket.on(ev, (data) => this.#emit(ev, data));
     }
   }

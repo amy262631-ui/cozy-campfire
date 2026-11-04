@@ -56,7 +56,11 @@ import { FISH, packFish } from './fishing/fishData.js';
 import { FishingUI } from './ui/FishingUI.js';
 import { createMistForestRoom } from './rooms/mistForestRoom.js';
 import { OUTFITS, OUTFIT_BY_ID, OUTFIT_SLOTS } from './game/outfits.js';
-import { GATHER_ITEMS, GATHER_BY_ID, GATHER_TYPES, GATHER_DEX_BONUS } from './game/gathering.js';
+import { GATHER_ITEMS, GATHER_BY_ID, GATHER_TYPES, GATHER_DEX_BONUS, NET_PRICE } from './game/gathering.js';
+import { CROPS, CROP_BY_ID, WATER_MAX } from './game/garden.js';
+import { haveOf, canMake, specLabel } from './game/materials.js';
+import { RECIPES } from './game/crafting.js';
+import { DISHES, DISH_BY_ID } from './game/cooking.js';
 import { detectSource } from './game/sources.js';
 
 // 網址參數（開發測試用）
@@ -361,7 +365,7 @@ async function init() {
   net.on('event', (ev) => applyEvent(ev, true));
   setInterval(() => eventState && hud.setEvent(currentEvent()), 20000);
 
-  // ---------- 每小時小活動（釣魚大賽、疊石接力、添柴時光） ----------
+  // ---------- 晚上的小活動（19:00～23:00 每半小時：釣魚大賽、疊石接力、添柴時光⋯） ----------
   let miniState = null;
   const currentMini = () => {
     if (!miniState) return null;
@@ -710,56 +714,409 @@ async function init() {
   });
   net.on('dateFriend', ({ name }) => hud.toast(t('🔥 {name} 赴約了！一起在營火旁坐坐吧', { name }), 6000));
 
-  // ---------- 🍄 迷霧森林採集 ----------
-  /** 採集籃：{ 種類: 數量 }（不限格子，不會壞） */
+  // ---------- 🍄 採集（迷霧森林、湖邊的石頭貝殼） ----------
+  /** 採集籃：{ 種類: 數量 }（不限格子，不會壞；菜園收成也放這裡） */
   let basket = {};
-  const mist = rooms.mist_forest;
-  mist.onGather = async (i) => {
+  /** 有採集點的房間 */
+  const gatherRooms = ['mist_forest', 'lake_dock'];
+  const onGather = async (i) => {
     const res = await net.request('gather', { i });
     if (!res?.ok) return res;
     basket[res.id] = res.count;
+    gdex.add(res.id);
     logToday({ gather: (todayLog.gather ?? 0) + 1 });
     const it = GATHER_BY_ID[res.id];
     audio.sfx(res.first ? 'bell' : 'tap');
     if (res.first) {
-      const found = GATHER_ITEMS.filter((x) => basket[x.id]).length;
-      hud.toast(t('📖 圖鑑新收錄：{icon} {name}！+{n} 🌰（{c}／{t}）', { icon: it.icon, name: t(it.zh), n: res.gain, c: found, t: GATHER_ITEMS.length }), 4500);
+      const n = GATHER_ITEMS.filter((x) => found(x.id)).length;
+      hud.toast(t('📖 圖鑑新收錄：{icon} {name}！+{n} 🌰（{c}／{t}）', { icon: it.icon, name: t(it.zh), n: res.gain, c: n, t: GATHER_ITEMS.length }), 4500);
       if (res.bonus) setTimeout(() => hud.toast(t('🏆 採集圖鑑全部收集完成！再送你 {n} 顆松果', { n: res.bonus }), 6000), 2500);
     } else {
       hud.toast(t('🧺 採到{icon} {name}（採集籃裡有 {n} 個）', { icon: it.icon, name: t(it.zh), n: res.count }), 2200);
     }
     return res;
   };
+  for (const id of gatherRooms) rooms[id].gather.onGather = onGather;
   const refreshGather = async () => {
-    if (roomMgr?.current.id !== 'mist_forest') return;
-    if (!net.online) return mist.setOffline();
+    const room = roomMgr?.current;
+    if (!room?.gather) return;
+    if (!net.online) return room.gather.setOffline();
     const res = await net.request('gatherInfo');
     if (res?.ok) {
       basket = res.basket ?? basket;
-      mist.setState(res);
+      gdex = new Set(res.gdex ?? []);
+      setNet(res.net);
+      room.gather.setState(res);
     }
+  };
+  const escapeHtml = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  /** 採集圖鑑：找到過的（就算用掉、捐掉也算） */
+  let gdex = new Set();
+  const found = (id) => gdex.has(id) || basket[id] > 0;
+  const rarityStars = (r) => '★'.repeat(r);
+  /** 通用的彈出視窗（借用圖鑑那個視窗） */
+  const modal = {
+    open(title, html, bind) {
+      fishingUI._modal = 'custom';
+      fishingUI._tab = null;
+      fishingUI.el.modalTitle.textContent = title;
+      fishingUI.el.modalBody.innerHTML = html;
+      bind?.(fishingUI.el.modalBody);
+      fishingUI.el.modal.classList.add('show');
+    },
+    close: () => fishingUI.el.modal.classList.remove('show'),
+    get isOpen() {
+      return fishingUI.el.modal.classList.contains('show');
+    },
   };
   fishingUI.extraTabs.push({
     id: 'gather',
     label: t('🍄 採集'),
-    title: () => t('🍄 採集圖鑑 {n}／{total}', { n: GATHER_ITEMS.filter((x) => basket[x.id]).length, total: GATHER_ITEMS.length }),
+    title: () => t('🍄 採集圖鑑 {n}／{total}', { n: GATHER_ITEMS.filter((x) => found(x.id)).length, total: GATHER_ITEMS.length }),
     render: () => {
       const groups = GATHER_TYPES.map((ty) => {
         const cards = GATHER_ITEMS.filter((x) => x.type === ty.id)
           .map((x) =>
-            basket[x.id]
-              ? `<div class="dex-card rarity-${x.rarity}"><i class="dex-emoji">${x.icon}</i><b>${t(x.zh)}</b><small>${'★'.repeat(x.rarity)}</small><em>${t('採集籃裡 ×{n}', { n: basket[x.id] })}</em></div>`
-              : `<div class="dex-card unknown"><i class="dex-emoji">${x.icon}</i><b>${t('？？？')}</b><small>${'★'.repeat(x.rarity)}${x.night ? ' 🌙' : ''}</small><em>${t(x.hint)}</em></div>`,
+            found(x.id)
+              ? `<div class="dex-card rarity-${x.rarity}"><i class="dex-emoji">${x.icon}</i><b>${t(x.zh)}</b><small>${rarityStars(x.rarity)}${museum[x.id] ? ' 🏛️' : ''}</small><em>${t('採集籃裡 ×{n}', { n: basket[x.id] ?? 0 })}</em></div>`
+              : `<div class="dex-card unknown"><i class="dex-emoji">${x.icon}</i><b>${t('？？？')}</b><small>${rarityStars(x.rarity)}${x.night ? ' 🌙' : x.day ? ' ☀️' : ''}</small><em>${t(x.hint)}</em></div>`,
           )
           .join('');
         return `<div class="dex-note">${ty.icon} ${t(ty.zh)}</div><div class="dex-grid">${cards}</div>`;
       }).join('');
+      const veg = CROPS.filter((c) => basket[c.id] > 0).map((c) => `${c.icon} ${t(c.zh)} ×${basket[c.id]}`).join('　');
       const total = Object.values(basket).reduce((a, b) => a + b, 0);
-      return `<div class="dex-note">${t('從營火旁的「🍄 迷霧森林」走進去，走到發光的蘑菇、果實、野花旁邊就會自動採。第一次採到新的種類送松果（★ 越多送越多），全部 {n} 種收集完再送 {b} 顆 🌰', { n: GATHER_ITEMS.length, b: GATHER_DEX_BONUS })}</div>
+      return `<div class="dex-note">${t('🍄 迷霧森林：地上有發光圈圈的蘑菇、果實、野花，走過去按 E 採摘；空中飛的蟲蟲要用捕蟲網（{p} 🌰）按 E 捕。🐚 湖畔碼頭的岸邊可以撿石頭和貝殼。✨ 晚上 8～10 點營火附近偶爾會有寶藏。第一次找到新的種類送松果，全部收集完再送 {b} 顆 🌰', { p: NET_PRICE, b: GATHER_DEX_BONUS })}</div>
+        <div class="dex-note">${netOwned ? t('🦋 捕蟲網：已經有了') : t('🦋 捕蟲網：還沒有')}${!netOwned && net.online ? ` <button type="button" class="mini-btn" id="buy-net">${t('買一支 🌰 {p}', { p: NET_PRICE })}</button>` : ''}</div>
         ${groups}
+        ${veg ? `<div class="dex-note">${t('🥕 菜園收成')}：${veg}</div>` : ''}
         <div class="creel-total">${t('🧺 採集籃：總共 {n} 個（不限格子，不會壞）', { n: total })}</div>`;
     },
+    bind: (body) => body.querySelector('#buy-net')?.addEventListener('click', () => buyNet()),
   });
+
+  // ---------- 🦋 捕蟲網 ----------
+  let netOwned = false;
+  const setNet = (v) => {
+    netOwned = !!v;
+    for (const id of gatherRooms) rooms[id].gather.hasNet = netOwned;
+  };
+  async function buyNet() {
+    const res = await net.request('buyNet');
+    if (res?.ok) {
+      setNet(true);
+      setCoins(res.pc, 0);
+      audio.sfx('bell');
+      hud.toast(t('🦋 買了一支捕蟲網！看到空中飛的蟲蟲，走近按 E 捕捉'), 5000);
+      modal.close();
+    } else if (res?.reason === 'poor') hud.toast(t('松果不夠，還差 {n} 顆 🌰', { n: NET_PRICE - (res.pc ?? 0) }));
+    else hud.toast(t('還沒連上伺服器，等一下再試'));
+  }
+  rooms.mist_forest.gather.onNoNet = () =>
+    modal.open(
+      t('🦋 捕蟲網'),
+      `<div class="dex-note">${t('空中飛的蟲蟲要用捕蟲網才捕得到。買一支之後一直都能用：白天有瓢蟲、金龜子、螳螂⋯，晚上有螢火蟲、獨角仙、月光蛾⋯')}</div>
+       <div class="outfit-today"><button type="button" id="buy-net2">${t('🦋 買一支捕蟲網 🌰 {p}', { p: NET_PRICE })}</button></div>`,
+      (body) => body.querySelector('#buy-net2').addEventListener('click', () => buyNet()),
+    );
+
+  // ---------- 🏛️ 營地標本櫃（大家一起捐，寫上第一個捐的人） ----------
+  let museum = {};
+  const setMuseum = (m) => {
+    museum = m ?? {};
+    forest.drawMuseum(museum);
+  };
+  function openMuseum() {
+    const n = Object.keys(museum).length;
+    const cards = GATHER_ITEMS.map((x) => {
+      const d = museum[x.id];
+      if (d) return `<div class="dex-card rarity-${x.rarity}"><i class="dex-emoji">${x.icon}</i><b>${t(x.zh)}</b><small>${t('第一個捐的人')}</small><em>${escapeHtml(d.n)}</em></div>`;
+      const can = basket[x.id] > 0;
+      return `<div class="dex-card ${can ? 'can-donate' : 'unknown'}"><i class="dex-emoji">${x.icon}</i><b>${found(x.id) ? t(x.zh) : t('？？？')}</b><small>${rarityStars(x.rarity)}</small>${can ? `<button type="button" class="mini-btn" data-donate="${x.id}">${t('🎁 捐出')}</button>` : `<em>${t('還沒有人捐')}</em>`}</div>`;
+    }).join('');
+    modal.open(
+      t('🏛️ 營地標本櫃 {n}／{total}', { n, total: GATHER_ITEMS.length }),
+      `<div class="dex-note">${t('大家一起把採集到的東西捐進標本櫃，每一格都會寫上「第一個捐的人」的名字。捐出一個送松果（★ 越多送越多）。')}</div><div class="dex-grid">${cards}</div>`,
+      (body) => {
+        for (const b of body.querySelectorAll('[data-donate]')) {
+          b.addEventListener('click', async () => {
+            b.disabled = true;
+            const res = await net.request('donate', { id: b.dataset.donate });
+            if (res?.ok) {
+              basket[b.dataset.donate] = res.count;
+              if (!res.count) delete basket[b.dataset.donate];
+              audio.sfx('bell');
+              hud.toast(t('🏛️ 捐進標本櫃了！你的名字會留在這一格 +{n} 🌰', { n: res.gain }), 5000);
+            } else if (res?.reason === 'done') hud.toast(t('剛好有人先捐了：{name}', { name: res.by }));
+            openMuseum();
+          });
+        }
+      },
+    );
+  }
+  actions.onMuseum = () => (net.online ? openMuseum() : hud.toast(t('連上伺服器才能看標本櫃')));
+  net.on('museum', ({ id, n }) => {
+    museum = { ...museum, [id]: { n, at: Date.now() } };
+    forest.drawMuseum(museum);
+    const it = GATHER_BY_ID[id];
+    if (it && n !== myName) hud.toast(t('🏛️ {name} 把{icon} {item}捐進了標本櫃', { name: n, icon: it.icon, item: t(it.zh) }), 4000);
+    if (modal.isOpen && fishingUI._modal === 'custom' && fishingUI.el.modalTitle.textContent.startsWith('🏛️')) openMuseum();
+  });
+
+  // ---------- 材料（手作、料理共用） ----------
+  const needHtml = (need) =>
+    need
+      .map((sp) => {
+        const have = haveOf(basket, sp);
+        return `<span class="need ${have >= sp.n ? 'ok' : ''}">${specLabel(sp, t)} ${Math.min(have, sp.n)}/${sp.n}</span>`;
+      })
+      .join('');
+
+  // ---------- 🔨 手作家具 ----------
+  fishingUI.extraTabs.push({
+    id: 'craft',
+    label: t('🔨 手作'),
+    title: () => t('🔨 手作家具'),
+    render: () => {
+      const cards = RECIPES.map((r) => {
+        const f = FURNITURE_BY_ID[r.id];
+        const ok = canMake(basket, r.need);
+        return `<div class="craft-row"><i class="dex-emoji">${f?.icon ?? '🔨'}</i><div class="craft-info"><b>${f?.name ?? r.id}</b><div class="needs">${needHtml(r.need)}</div></div><button type="button" class="mini-btn" data-craft="${r.id}" ${ok && net.online ? '' : 'disabled'}>${t('做一個')}</button></div>`;
+      }).join('');
+      return `<div class="dex-note">${t('用採集籃裡的東西做家具，做好會放進帳篷背包，回帳篷按「🛠️ 布置」擺出來。「任意」的材料會先用數量多、常見的，★★★ 稀有的不會被拿去用。')}</div>${cards}`;
+    },
+    bind: (body) => {
+      for (const b of body.querySelectorAll('[data-craft]')) {
+        b.addEventListener('click', async () => {
+          b.disabled = true;
+          const res = await net.request('craft', { id: b.dataset.craft });
+          if (res?.ok) {
+            basket = res.basket;
+            setMyHome(res.home);
+            audio.sfx('bell');
+            const f = FURNITURE_BY_ID[b.dataset.craft];
+            hud.toast(t('🔨 做好了：{icon} {name}！放進帳篷背包了', { icon: f?.icon ?? '', name: f?.name ?? '' }), 4500);
+          } else hud.toast(t('材料不夠喔'));
+          fishingUI.openCreel('craft');
+        });
+      }
+    },
+  });
+
+  // ---------- 🍲 營火料理 ----------
+  let dishes = {};
+  let cooked = new Set();
+  /** 在料理鍋旁邊才能煮 */
+  const atPot = () => roomMgr?.current.id === 'forest_main' && forest.nearPot?.(player.position);
+  fishingUI.extraTabs.push({
+    id: 'cook',
+    label: t('🍲 料理'),
+    title: () => t('🍲 營火料理 {n}／{total}', { n: DISHES.filter((d) => cooked.has(d.id)).length, total: DISHES.length }),
+    render: () => {
+      const here = atPot();
+      const mine = DISHES.filter((d) => dishes[d.id] > 0);
+      const others = [...remotes.players.values()].filter((r) => !r.npc);
+      const myDishes = mine.length
+        ? mine
+            .map(
+              (d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${t(d.zh)} ×${dishes[d.id]}</b></div>
+                <button type="button" class="mini-btn" data-eat="${d.id}">${t('😋 吃')}</button>
+                ${others.length ? `<select class="mini-sel" data-gift="${d.id}"><option value="">${t('🎁 送給⋯')}</option>${others.map((r) => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('')}</select>` : ''}</div>`,
+            )
+            .join('')
+        : `<div class="dex-note">${t('還沒有料理，煮一道吧！')}</div>`;
+      const recipes = DISHES.map((d) => {
+        const ok = canMake(basket, d.need);
+        return `<div class="craft-row ${cooked.has(d.id) ? '' : 'new-dish'}"><i class="dex-emoji">${cooked.has(d.id) ? d.icon : '❔'}</i><div class="craft-info"><b>${cooked.has(d.id) ? t(d.zh) : t('？？？（還沒煮過）')}</b><div class="needs">${needHtml(d.need)}</div></div><button type="button" class="mini-btn" data-cook="${d.id}" ${ok && here && net.online ? '' : 'disabled'}>${t('煮')}</button></div>`;
+      }).join('');
+      return `<div class="dex-note">${here ? t('🔥 在料理鍋旁邊，可以開始煮了！') : t('到中央營火旁的「🍲 營火料理」鍋子才能煮。蔬菜在帳篷前的小菜園種。')}</div>
+        <div class="dex-note">${t('🍱 我的料理')}</div>${myDishes}
+        <div class="dex-note">${t('📖 食譜（第一次煮出新料理送松果）')}</div>${recipes}`;
+    },
+    bind: (body) => {
+      for (const b of body.querySelectorAll('[data-cook]')) {
+        b.addEventListener('click', async () => {
+          b.disabled = true;
+          const res = await net.request('cook', { id: b.dataset.cook });
+          if (res?.ok) {
+            basket = res.basket;
+            dishes = res.dishes;
+            cooked = new Set(res.cooked);
+            const d = DISH_BY_ID[b.dataset.cook];
+            audio.sfx('bell');
+            hud.toast(res.first ? t('🍲 第一次煮出「{icon} {name}」！+{n} 🌰', { icon: d.icon, name: t(d.zh), n: res.gain }) : t('🍲 煮好了：{icon} {name}', { icon: d.icon, name: t(d.zh) }), 4500);
+          } else hud.toast(res?.reason === 'notHere' ? t('到營火旁的料理鍋才能煮') : t('材料不夠喔'));
+          fishingUI.openCreel('cook');
+        });
+      }
+      for (const b of body.querySelectorAll('[data-eat]')) {
+        b.addEventListener('click', async () => {
+          const res = await net.request('eat', { id: b.dataset.eat });
+          if (res?.ok) {
+            dishes = res.dishes;
+            fishingUI.openCreel('cook');
+          }
+        });
+      }
+      for (const sel of body.querySelectorAll('[data-gift]')) {
+        sel.addEventListener('change', async () => {
+          if (!sel.value) return;
+          const name = remotes.get(sel.value)?.name ?? '';
+          const res = await net.request('giftDish', { id: sel.dataset.gift, to: sel.value });
+          if (res?.ok) {
+            dishes = res.dishes;
+            const d = DISH_BY_ID[sel.dataset.gift];
+            hud.toast(t('🎁 把{icon} {dish}送給 {name} 了', { icon: d.icon, dish: t(d.zh), name }), 4000);
+          } else hud.toast(t('對方剛好離開了'));
+          fishingUI.openCreel('cook');
+        });
+      }
+    },
+  });
+  actions.onCook = () => fishingUI.openCreel('cook');
+  net.on('ate', ({ id, dish }) => {
+    const d = DISH_BY_ID[dish];
+    if (!d) return;
+    bubbles.show(id === net.id ? 'self' : id, `${d.icon}😋`, { emoji: true });
+    if (id === net.id) hud.toast(t('😋 好吃！{icon} {name}', { icon: d.icon, name: t(d.zh) }));
+  });
+  net.on('cooked', ({ id, name, dish }) => {
+    const d = DISH_BY_ID[dish];
+    if (d && id !== net.id) hud.toast(t('🍲 {name} 煮了一道{icon} {dish}', { name, icon: d.icon, dish: t(d.zh) }), 3500);
+  });
+  net.on('dishGift', ({ from, dish, dishes: all }) => {
+    dishes = all ?? dishes;
+    const d = DISH_BY_ID[dish];
+    audio.sfx('bell');
+    hud.toast(t('🎁 {name} 送你一份{icon} {dish}！到「📖 圖鑑 → 🍲 料理」可以吃', { name: from, icon: d?.icon ?? '', dish: t(d?.zh ?? '') }), 6000);
+  });
+
+  // ---------- 🥕 帳篷前的小菜園 ----------
+  let gardenPlot = null;
+  async function openGarden(plot) {
+    gardenPlot = plot;
+    const hid = plot.tent.mine ? undefined : plot.tent.hid;
+    const res = await net.request('gardenInfo', { hid });
+    if (!res?.ok) return hud.toast(t('還沒連上伺服器，等一下再試'));
+    renderGarden(res, plot);
+  }
+  function renderGarden(res, plot) {
+    const mine = res.mine;
+    const now = Date.now();
+    const skew = (res.now ?? now) - now;
+    const left = (ms) => {
+      const m = Math.max(1, Math.ceil(ms / 60000));
+      return m >= 60 ? t('{h} 小時 {m} 分', { h: Math.floor(m / 60), m: m % 60 }) : t('{m} 分鐘', { m });
+    };
+    const slots = res.slots
+      .map((sl, i) => {
+        if (!sl) {
+          if (!mine) return `<div class="garden-slot empty"><b>${t('空著')}</b></div>`;
+          return `<div class="garden-slot empty"><b>${t('第 {n} 格：空著', { n: i + 1 })}</b><div class="crop-pick">${CROPS.map((c) => `<button type="button" class="mini-btn" data-plant="${i}" data-c="${c.id}" ${(pinecones ?? 0) < c.seed ? 'disabled' : ''}>${c.icon} ${t(c.zh)}<small>🌰 ${c.seed}・${t('{h} 小時', { h: c.hours })}</small></button>`).join('')}</div></div>`;
+        }
+        const c = CROP_BY_ID[sl.c];
+        const remain = sl.ready - (Date.now() + skew);
+        const water = sl.w ? t('💧 朋友澆了 {n} 次水（收成多 1 個）', { n: sl.w }) : '';
+        if (remain <= 0) {
+          return `<div class="garden-slot ready"><b>${c.icon} ${t(c.zh)}・${t('可以收成了！')}</b>${water ? `<small>${water}</small>` : ''}${mine ? `<button type="button" class="mini-btn" data-harvest="${i}">${t('🧺 收成')}</button>` : ''}</div>`;
+        }
+        return `<div class="garden-slot"><b>${c.icon} ${t(c.zh)}・${t('還要 {t}', { t: left(remain) })}</b>${water ? `<small>${water}</small>` : ''}${!mine ? (sl.iw ? `<small>${t('你已經幫忙澆過水了 💧')}</small>` : sl.w >= WATER_MAX ? `<small>${t('今天已經有很多人澆過了')}</small>` : `<button type="button" class="mini-btn" data-water="${i}">${t('💧 幫忙澆水（少等 30 分鐘）')}</button>`) : ''}</div>`;
+      })
+      .join('');
+    modal.open(
+      mine ? t('🥕 我的小菜園') : t('🥕 {name} 的小菜園', { name: plot.tent.name || t('旅人') }),
+      `<div class="dex-note">${mine ? t('種子用松果買（越慢長的越貴），種下去等幾小時就能收成，放著不收也不會枯掉。朋友路過可以幫忙澆水，少等 30 分鐘、收成多一個。收成的蔬菜可以拿去營火旁煮料理，或當手作家具的材料。') : t('幫朋友的菜澆水，可以少等 30 分鐘、收成多一個 💧')}</div>${slots}`,
+      (body) => {
+        const hid = plot.tent.hid;
+        /** 面向菜園的第幾格，播動作 */
+        const act = (i, pose, dur) => {
+          const at = camp.gardenSlotPos(hid, i);
+          const face = at ? Math.atan2(at.x - player.position.x, at.z - player.position.z) : null;
+          modal.close();
+          return actions.perform(pose, dur, face);
+        };
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        for (const b of body.querySelectorAll('[data-plant]')) {
+          b.addEventListener('click', async () => {
+            const i = Number(b.dataset.plant);
+            const c = CROP_BY_ID[b.dataset.c];
+            if ((pinecones ?? 0) < c.seed) return hud.toast(t('松果不夠，還差 {n} 顆 🌰', { n: c.seed - (pinecones ?? 0) }));
+            if (!act(i, 'plant', 1.6)) return;
+            camp.gardenFx(hid, i, 'dirt');
+            audio.sfx('tap');
+            await wait(1100); // 挖好土再種下去
+            const r = await net.request('gardenPlant', { slot: i, c: c.id });
+            if (r?.ok) {
+              hud.toast(t('🌱 種下{icon} {name}了！大約 {h} 小時後收成', { icon: c.icon, name: t(c.zh), h: c.hours }), 4000);
+              refreshCamp();
+            } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : t('沒種成，再試一次吧'));
+          });
+        }
+        for (const b of body.querySelectorAll('[data-harvest]')) {
+          b.addEventListener('click', async () => {
+            const i = Number(b.dataset.harvest);
+            if (!act(i, 'pick', 1.25)) return;
+            camp.gardenFx(hid, i, 'pull', player.position);
+            const r = await net.request('gardenHarvest', { slot: i });
+            if (r?.ok) {
+              basket = r.basket;
+              const c = CROP_BY_ID[r.got.id];
+              await wait(500);
+              audio.sfx('bell');
+              hud.toast(t('🧺 收成了 {icon} {name} ×{n}', { icon: c.icon, name: t(c.zh), n: r.got.n }) + (r.first ? t('（第一次收成 +{g} 🌰）', { g: r.gain }) : ''), 4500);
+              await wait(800);
+              refreshCamp();
+            }
+          });
+        }
+        for (const b of body.querySelectorAll('[data-water]')) {
+          b.addEventListener('click', async () => {
+            const i = Number(b.dataset.water);
+            if (!act(i, 'water', 1.8)) return;
+            camp.gardenFx(hid, i, 'water');
+            const r = await net.request('gardenWater', { hid, slot: i });
+            if (r?.ok) {
+              await wait(900);
+              audio.sfx('tap');
+              hud.toast(t('💧 幫忙澆水了，謝謝你！'));
+              refreshCamp();
+            } else hud.toast(t('現在不能澆水'));
+          });
+        }
+      },
+    );
+  }
+  actions.onGarden = (plot) => {
+    if (!net.online) return hud.toast(t('連上伺服器才能種菜'));
+    if (plot.tent.demo) return;
+    openGarden(plot);
+  };
+  net.on('gardenWatered', ({ name, c }) => {
+    const crop = CROP_BY_ID[c];
+    hud.toast(t('💧 {name} 幫你的{icon} {crop}澆了水，少等 30 分鐘！', { name, icon: crop?.icon ?? '', crop: t(crop?.zh ?? '') }), 5000);
+  });
+
+  // ---------- ✨ 營火寶藏（晚上 8～10 點） ----------
+  const applyTreasures = (list) => forest.treasures.setList(list ?? []);
+  net.on('treasures', ({ list, fresh, by, item, byId }) => {
+    applyTreasures(list);
+    if (fresh && roomMgr?.current.id === 'forest_main') hud.toast(t('✨ 營火附近好像有什麼東西在閃⋯'), 3500);
+    if (by && byId !== net.id) {
+      const it = GATHER_BY_ID[item];
+      hud.toast(t('✨ {name} 找到了{icon} {item}！', { name: by, icon: it?.icon ?? '', item: t(it?.zh ?? '') }), 3500);
+    }
+  });
+  actions.onTreasure = async (tr) => {
+    const face = Math.atan2(tr.x - player.position.x, tr.z - player.position.z);
+    if (!actions.perform('pick', 1.25, face)) return;
+    const res = await net.request('treasure', { k: tr.k });
+    if (!res?.ok) return hud.toast(res?.reason === 'gone' ? t('哎呀，被別人先撿走了') : t('再靠近一點'));
+    basket[res.id] = res.count;
+    gdex.add(res.id);
+    const it = GATHER_BY_ID[res.id];
+    audio.sfx('bell');
+    hud.toast(t('✨ 找到寶藏：{icon} {name}！+{n} 🌰', { icon: it.icon, name: t(it.zh), n: res.gain }) + (res.first ? t('（圖鑑新收錄）') : ''), 5000);
+  };
 
   // ---------- 🔥 約朋友今晚 9:30 ----------
   const TODAY_KEY = 'cozy-campfire-today';
@@ -993,6 +1350,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     if (res.event) applyEvent(res.event);
     if (res.mini) applyMini(res.mini);
     if (res.areas) forest.setAreas(res.areas);
+    if (res.museum) setMuseum(res.museum);
+    if (res.treasures) applyTreasures(res.treasures);
     if (res.tree) {
       forest.wishTree.setAll(res.tree);
       treePanel.refresh();
@@ -1057,6 +1416,10 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       }
       if (w.outfit) setLook(w.outfit); // 👒 造型：擁有的、穿著的、今天和這週的
       basket = w.basket ?? basket;
+      gdex = new Set(w.gdex ?? []);
+      dishes = w.dishes ?? {};
+      cooked = new Set(w.cooked ?? []);
+      setNet(w.net);
       refreshGather();
       fishingUI.mergeDex(w.dex);
       // 以前存在這個瀏覽器裡的魚簍，也一起存進帳號（換手機登入就看得到）
@@ -1228,8 +1591,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     }
     // 帳篷營地：拿大家的帳篷清單
     if (room.id === 'campground') refreshCamp();
-    // 迷霧森林：拿自己的採集點狀態
-    if (room.id === 'mist_forest') refreshGather();
+    // 迷霧森林、湖邊：拿自己的採集點狀態
+    if (room.gather) refreshGather();
     // 進到帳篷：換上主人的擺設
     guestPanel.set(room.id === 'home' ? (res?.home ?? myHome) : null, { mine: res ? !!res.mine : true, liked: !!res?.liked });
     if (room.id === 'home') {
@@ -1254,6 +1617,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       if (res.cairns) applyCairns(res.cairns);
       if (res.lakeNews) lakeNews.setAll(res.lakeNews);
       if (res.tree) forest.wishTree.setAll(res.tree);
+      if (res.museum) setMuseum(res.museum);
+      if (res.treasures) applyTreasures(res.treasures);
     } else if (res && !res.ok && res.reason === 'full') {
       hud.toast(fullMsg(), 4000);
     }

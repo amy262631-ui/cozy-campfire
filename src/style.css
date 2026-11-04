@@ -5303,3 +5303,132 @@ body.touch .m-stack .fire-meter {
   min-width: 0;
   white-space: nowrap;
 }
+
+/* ---------- 標本櫃、手作、料理、菜園 ---------- */
+.mini-btn {
+  margin: 4px 2px 0;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 200, 130, 0.5);
+  border-radius: 999px;
+  background: rgba(240, 138, 60, 0.32);
+  color: #ffe9cc;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.mini-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.mini-btn small {
+  display: block;
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+.mini-sel {
+  margin-left: 4px;
+  padding: 4px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 200, 130, 0.4);
+  background: #2a211c;
+  color: #ffe9cc;
+  font: inherit;
+  font-size: 12px;
+  max-width: 120px;
+}
+
+.craft-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 245, 230, 0.06);
+}
+
+.craft-row .dex-emoji {
+  flex: none;
+  width: 34px;
+  text-align: center;
+}
+
+.craft-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.craft-info b {
+  display: block;
+  font-size: 14px;
+}
+
+.needs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.need {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.need.ok {
+  background: rgba(120, 200, 120, 0.22);
+  opacity: 1;
+}
+
+.dex-card.can-donate {
+  outline: 1px dashed rgba(255, 200, 130, 0.6);
+}
+
+.garden-slot {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(120, 90, 60, 0.25);
+}
+
+.garden-slot b {
+  display: block;
+  font-size: 14px;
+}
+
+.garden-slot small {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.garden-slot.ready {
+  background: rgba(120, 200, 120, 0.2);
+  outline: 1px solid rgba(160, 230, 160, 0.4);
+}
+
+.crop-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.dex-tabs {
+  flex-wrap: wrap;
+}
+
+.dex-tabs button {
+  flex: 1 1 18%;
+  font-size: 12px;
+  padding-left: 4px;
+  padding-right: 4px;
+}

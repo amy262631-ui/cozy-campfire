@@ -11,7 +11,7 @@ import { FURNITURE_CATALOG, CATALOG_BY_ID, canStackOn, stackAt, gridOf, expandPr
 /** 家具價格（資料在 src/game/furnitureCatalog.js，前後端共用） */
 export const SHOP = {
   tent: 30,
-  ...Object.fromEntries(FURNITURE_CATALOG.filter((f) => !f.gift).map((f) => [f.id, f.price])),
+  ...Object.fromEntries(FURNITURE_CATALOG.filter((f) => !f.gift && !f.craft).map((f) => [f.id, f.price])),
 };
 export { gridOf, expandPrice, maxItems, canStackOn, stackAt, MAX_STACK, CATALOG_BY_ID, moveStack };
 

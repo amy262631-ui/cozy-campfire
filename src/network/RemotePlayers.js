@@ -24,6 +24,7 @@ const SNAP_DIST = 4; // 一次跳太遠（例如重連）就直接瞬移
 const POSE_OF = {
   addWood: 'throw', roast: 'roast', blanket: 'blanket', stargaze: 'lookUp', fish: 'roast', reel: 'reel', showFish: 'showOff',
   wave: 'wave', salute: 'salute', bye: 'bye', pray: 'pray', // 表情動作
+  pick: 'pick', catch: 'catch', plant: 'plant', water: 'water', // 採摘、揮網、種菜、澆水
 };
 
 function makeNameTag(name, npc = false) {

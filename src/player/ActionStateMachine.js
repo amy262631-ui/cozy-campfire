@@ -9,6 +9,8 @@ const ROAST_SECONDS = 7; // 從生到焦黑（doneness = 1）需要的秒數
 const WOOD_FUEL = 25;
 
 const SIT_STATES = new Set(['roast', 'blanket', 'stargaze', 'fish']);
+/** 短短的動作：採摘、揮網、種菜、澆水 */
+const PERFORMS = new Set(['pick', 'catch', 'plant', 'water']);
 
 const PROMPTS = {
   near: t('<kbd>E</kbd> 添柴火　<kbd>F</kbd> 烤棉花糖'),
@@ -93,6 +95,19 @@ export class ActionStateMachine {
     this.state = id;
     this.t = 0;
     this.emoteDuration = EMOTES.find((e) => e.id === id).duration;
+  }
+
+  /**
+   * 短短的動作（採摘 pick、揮網 catch、種菜 plant、澆水 water）：播完自動結束，播的時候不能動
+   * @returns {boolean} 有沒有開始（正在做別的事就不行）
+   */
+  perform(id, duration, faceAngle = null) {
+    if (this.state !== 'free') return false;
+    this.state = id;
+    this.t = 0;
+    this.performDuration = duration;
+    this.performFace = faceAngle;
+    return true;
   }
 
   /** 給房間用：結束目前動作 */
@@ -226,6 +241,20 @@ export class ActionStateMachine {
         r.locked = true;
         r.pose = this.state;
         r.state = this.state;
+        return r;
+      }
+    }
+
+    // 採摘、揮網：播完自動結束
+    if (PERFORMS.has(this.state)) {
+      if (this.t > this.performDuration) {
+        this.state = 'free';
+        this.t = 0;
+      } else {
+        r.locked = true;
+        r.pose = this.state;
+        r.state = this.state;
+        r.faceAngle = this.performFace;
         return r;
       }
     }

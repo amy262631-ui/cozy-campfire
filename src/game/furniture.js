@@ -11,14 +11,16 @@ import { FURNITURE_CATALOG, FURNITURE_CATS } from './furnitureCatalog.js';
 export const TENT_PRICE = 30;
 const withName = (f) => ({ ...f, name: t(f.zh) });
 /** 小舖賣的家具 */
-export const FURNITURE = FURNITURE_CATALOG.filter((f) => !f.gift).map(withName);
+export const FURNITURE = FURNITURE_CATALOG.filter((f) => !f.gift && !f.craft).map(withName);
+/** 🔨 手作家具 */
+export const CRAFT_FURNITURE = FURNITURE_CATALOG.filter((f) => f.craft).map(withName);
 /**
  * 🎁 分享禮物：小舖買不到，只能靠分享、邀朋友拿到
  *   how：拿到的方式（顯示用）
  */
 export const GIFT_FURNITURE = FURNITURE_CATALOG.filter((f) => f.gift).map((f) => ({ ...withName(f), how: f.gift }));
 /** 布置時背包會列出的所有家具（買的＋送的） */
-export const ALL_FURNITURE = [...FURNITURE, ...GIFT_FURNITURE];
+export const ALL_FURNITURE = [...FURNITURE, ...GIFT_FURNITURE, ...CRAFT_FURNITURE];
 export const FURNITURE_BY_ID = Object.fromEntries(ALL_FURNITURE.map((f) => [f.id, f]));
 export const CATS = FURNITURE_CATS.map(withName);
 
@@ -126,6 +128,117 @@ export function buildFurniture(id, opts = {}) {
   const DARK = 0x2a1a14;
 
   switch (id) {
+    // ---------- 🔨 手作家具 ----------
+    case 'shellchime': {
+      // 漂流木橫桿上掛著一串串小貝殼
+      const wood = mat(0xb8a088);
+      cyl(0.03, 0.035, 1.1, wood, -0.28, 0.55);
+      cyl(0.03, 0.035, 1.1, wood, 0.28, 0.55);
+      const bar = cyl(0.03, 0.03, 0.66, wood, 0, 1.08);
+      bar.rotation.z = Math.PI / 2;
+      const shellC = [0xf3d8c8, 0xf3b0c0, 0xe8c8a8, 0xffffff];
+      for (let k = 0; k < 4; k++) {
+        const x = -0.2 + k * 0.135;
+        cyl(0.004, 0.004, 0.3, mat(0xcfc8b8), x, 0.92, 0, 4);
+        for (let j = 0; j < 3; j++) ball(0.03, mat(shellC[(k + j) % 4]), x, 0.74 + j * 0.09, 0, 1, 0.7, 0.4);
+      }
+      break;
+    }
+    case 'stonetower': {
+      let y = 0;
+      const cs = [0x8a8a84, 0xa89a8a, 0x6a7a6a, 0xd8d8d0, 0xc98a7a];
+      for (let k = 0; k < 5; k++) {
+        const r = 0.13 - k * 0.02;
+        ball(r, mat(cs[k]), (k % 2 ? 0.01 : -0.01), y + r * 0.55, 0, 1, 0.55, 1);
+        y += r * 1.05;
+      }
+      break;
+    }
+    case 'wreath': {
+      const ring = torus(0.15, 0.035, mat(0x5f8a4a), 0, 0.2, 0);
+      ring.rotation.x = -0.3;
+      const fc = [0xffd84a, 0xf3a6c0, 0xffffff, 0x8a5ac9, 0x7ab8f2];
+      for (let k = 0; k < 10; k++) {
+        const a = (k / 10) * Math.PI * 2;
+        ball(0.035, mat(fc[k % 5]), Math.cos(a) * 0.15, 0.2 + Math.sin(a) * 0.15 * Math.cos(0.3), Math.sin(a) * 0.15 * Math.sin(0.3) + 0.03);
+      }
+      cyl(0.012, 0.012, 0.12, mat(0x7a5236), 0, 0.06, -0.03, 4);
+      break;
+    }
+    case 'jam': {
+      const glass = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, roughness: 0.15 });
+      cyl(0.08, 0.08, 0.16, mat(0xa8223a), 0, 0.075);
+      cyl(0.085, 0.085, 0.17, glass, 0, 0.085);
+      cyl(0.09, 0.09, 0.03, mat(0xf3e0c8), 0, 0.185);
+      cyl(0.11, 0.11, 0.01, mat(0xd2453c), 0, 0.2);
+      break;
+    }
+    case 'terrarium': {
+      const glass = new THREE.MeshStandardMaterial({ color: 0xdff6ff, transparent: true, opacity: 0.28, roughness: 0.1 });
+      cyl(0.13, 0.13, 0.04, mat(0x5a4030), 0, 0.02);
+      cyl(0.12, 0.12, 0.04, mat(0x4a7a3a), 0, 0.05);
+      for (const [x, z, c, sc] of [[-0.04, 0, 0xd2453c, 1], [0.05, 0.03, 0xf0a83a, 0.7], [0.01, -0.05, 0xf3ecdf, 0.6]]) {
+        cyl(0.012 * sc, 0.015 * sc, 0.08 * sc, mat(0xf3ecdf), x, 0.07 + 0.04 * sc, z, 6);
+        dome(0.04 * sc, mat(c), x, 0.07 + 0.08 * sc, z, 0.7);
+      }
+      add(new THREE.SphereGeometry(0.15, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), glass, 0, 0.07, 0).scale.y = 1.2;
+      break;
+    }
+    case 'pumpkinlamp': {
+      const glow = new THREE.MeshStandardMaterial({ color: 0xe0782a, emissive: 0xff8a20, emissiveIntensity: 0.55, roughness: 0.7 });
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        ball(0.09, glow, Math.cos(a) * 0.06, 0.12, Math.sin(a) * 0.06, 0.8, 1, 0.8);
+      }
+      cyl(0.015, 0.02, 0.07, mat(0x4a6a2a), 0, 0.25);
+      for (const s2 of [-1, 1]) ball(0.022, mat(0xffe08a, { emissive: 0xffd060, emissiveIntensity: 1 }), s2 * 0.045, 0.15, 0.15);
+      break;
+    }
+    case 'cornhang': {
+      const wood = mat(0x7a5236);
+      cyl(0.03, 0.035, 1.2, wood, 0, 0.6);
+      cyl(0.16, 0.18, 0.04, wood, 0, 0.02);
+      for (let k = 0; k < 3; k++) {
+        const a = -0.4 + k * 0.4;
+        const corn = ball(0.05, mat(0xf2c94e), Math.sin(a) * 0.09, 0.82, 0.07 + Math.cos(a) * 0.02, 1, 2.6, 1);
+        corn.rotation.z = a * 0.6;
+        const husk = cone(0.05, 0.14, mat(0xc8b070), Math.sin(a) * 0.08, 1.02, 0.07);
+        husk.rotation.x = Math.PI;
+      }
+      break;
+    }
+    case 'vegbasket': {
+      cyl(0.17, 0.13, 0.13, mat(0xb08a5a), 0, 0.065, 0, 14);
+      torus(0.17, 0.015, mat(0x8a6a3a), 0, 0.13, 0).rotation.x = Math.PI / 2;
+      ball(0.05, mat(0xe0443c), -0.06, 0.15, 0.03);
+      ball(0.06, mat(0x8ac96a), 0.06, 0.15, -0.02);
+      const ca = cone(0.025, 0.14, mat(0xf08a3c), 0, 0.17, 0.06);
+      ca.rotation.x = 1.2;
+      ball(0.045, mat(0xc8a06a), 0.02, 0.15, -0.08);
+      break;
+    }
+    case 'driftshelf': {
+      const wood = mat(0xb8a088);
+      for (const x of [-0.3, 0.3]) cyl(0.04, 0.05, 0.5, wood, x, 0.25);
+      box(0.72, 0.05, 0.3, wood, 0, 0.475);
+      box(0.66, 0.04, 0.26, wood, 0, 0.2);
+      ball(0.05, mat(0x9a9a94), -0.18, 0.25, 0, 1, 0.6, 1);
+      ball(0.04, mat(0xf3b0c0), 0.15, 0.24, 0.02, 1, 0.5, 0.8);
+      break;
+    }
+    case 'shellframe': {
+      box(0.26, 0.32, 0.03, mat(0xe8dcc8), 0, 0.17);
+      box(0.18, 0.24, 0.032, mat(0x8ac0d8), 0, 0.17);
+      const sc = [0xf3b0c0, 0xf3d8c8, 0xffffff, 0xe8c8a8];
+      for (let k = 0; k < 10; k++) {
+        const top = k < 5;
+        const x = -0.1 + (k % 5) * 0.05;
+        ball(0.018, mat(sc[k % 4]), x, top ? 0.31 : 0.03, 0.02, 1, 0.8, 0.5);
+      }
+      ball(0.03, mat(0xffd84a), 0.06, 0.2, 0.02, 1, 1, 0.4);
+      cyl(0.006, 0.006, 0.08, mat(0x4f8a4a), 0.06, 0.15, 0.02, 4);
+      break;
+    }
     case 'hatrack': {
       // 衣帽架：木頭直立桿＋三根掛鉤，掛著主人收集到的造型（帽子、背包、圍巾）
       const wood = mat(0x7a5236);

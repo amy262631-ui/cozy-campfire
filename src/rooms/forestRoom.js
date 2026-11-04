@@ -10,6 +10,7 @@ import { ENTRANCE_GEO } from '../game/entrances.js';
 import { POND_CLEARINGS } from '../game/pondShape.js';
 import { buildWishTree, WISH_TREE_CLEARING } from './wishTree.js';
 import { buildShop, nearShop, SHOP_FRONT, SHOP_CLEARING } from './shop.js';
+import { buildCampExtras, createTreasures, EXTRA_CLEARINGS } from './campExtras.js';
 import { EMOTE_IDS } from '../social/emotes.js';
 import { t } from '../i18n/i18n.js';
 
@@ -464,7 +465,7 @@ export function createForestRoom() {
   });
   const shrinePos = polar(SHRINE_ANGLE, SHRINE_R);
   const world = createWorld(group, {
-    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING, WISH_TREE_CLEARING, SHOP_CLEARING, ...POND_CLEARINGS],
+    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING, WISH_TREE_CLEARING, SHOP_CLEARING, ...POND_CLEARINGS, ...EXTRA_CLEARINGS],
   });
 
   const campfire = new Campfire();
@@ -547,6 +548,11 @@ export function createForestRoom() {
   const pond = buildPond(world, group);
   group.add(pond.group);
 
+  // ---------- 🏛️ 營地標本櫃、🍲 營火料理鍋、✨ 營火寶藏 ----------
+  const extras = buildCampExtras(group, world);
+  extras.occluders.forEach((g) => g.traverse((o) => o.isMesh && occluders.push(o)));
+  const treasures = createTreasures(group);
+
   // ---------- 整點小活動的道具（燈籠賽跑、金松果） ----------
   const mini = buildMiniLayer();
   group.add(mini.group);
@@ -584,6 +590,9 @@ export function createForestRoom() {
     fishSpot: null, // 坐下釣魚時記錄（ActionStateMachine 用來固定位置與面向）
     fishing: null, // 由 main.js 放入 FishingGame（和湖畔共用）
     setAreas: (a) => areaBoard.draw(a),
+    drawMuseum: extras.drawMuseum,
+    nearPot: extras.nearPot,
+    treasures,
     /** 手機的 F 按鈕：在水邊變成「釣魚」、釣魚中變成「拉竿」 */
     roastHint(actions) {
       if (actions.state === 'fish') return this.fishing?.phase === 'show' ? ['🎣', t('繼續')] : ['🎣', t('拉竿')];
@@ -622,6 +631,22 @@ export function createForestRoom() {
       if (carrying && name !== 'interact') setCarry(actions.character, false);
       // 正在打招呼、合十時按 E：先結束動作再互動
       if (name === 'interact' && EMOTE_IDS.has(actions.state)) actions.stop();
+      if (name === 'interact' && actions.state === 'free' && !carrying) {
+        const pos = actions.player.position;
+        const tr = treasures.near(pos);
+        if (tr) {
+          actions.onTreasure?.(tr);
+          return true;
+        }
+        if (extras.nearMuseum(pos)) {
+          actions.onMuseum?.();
+          return true;
+        }
+        if (extras.nearPot(pos)) {
+          actions.onCook?.();
+          return true;
+        }
+      }
       if (name === 'interact' && actions.state === 'free' && !carrying && nearShop(actions.player.position)) {
         actions.onShop?.();
         return true;
@@ -667,6 +692,10 @@ export function createForestRoom() {
 
     /** 手機的互動按鈕要顯示什麼（null ＝預設的「添柴」） */
     interactHint(actions) {
+      const p0 = actions.player.position;
+      if (!carrying && treasures.near(p0)) return ['✨', t('撿寶藏')];
+      if (extras.nearMuseum(p0)) return ['🏛️', t('標本櫃')];
+      if (extras.nearPot(p0)) return ['🍲', t('料理')];
       if (nearShrine(actions)) return ['⛩️', t('祈福')];
       if (nearBoard(actions)) return ['📌', t('告示牌')];
       const pos = actions.player.position;
@@ -684,6 +713,10 @@ export function createForestRoom() {
     },
 
     prompt(actions) {
+      const p0 = actions.player.position;
+      if (!carrying && treasures.near(p0)) return t('<kbd>E</kbd> ✨ 撿起閃閃發光的東西');
+      if (extras.nearMuseum(p0)) return t('<kbd>E</kbd> 🏛️ 營地標本櫃・捐出採集到的東西');
+      if (extras.nearPot(p0)) return t('<kbd>E</kbd> 🍲 營火料理');
       if (nearShrine(actions)) return t('<kbd>E</kbd> 參拜・擲筊・抽籤・寫繪馬');
       if (nearBoard(actions)) return t('<kbd>E</kbd> 看告示牌・留言　<kbd>F</kbd> 烤棉花糖');
       const pos = actions.player.position;
@@ -702,6 +735,8 @@ export function createForestRoom() {
     },
 
     update(dt, t, camera, actions) {
+      extras.update(dt, t);
+      treasures.update(dt, t, actions?.player?.position);
       shrine.update(dt, t);
       cairnGarden.update(dt, t);
       wishTree.update(dt, t);

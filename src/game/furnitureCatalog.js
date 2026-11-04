@@ -13,6 +13,7 @@
  *     top: 高度      上面有平台（公尺），可以放「小東西」
  *   walk   可以踩上去（不擋路）
  *   gift   分享禮物：拿到的方式（share / ref1 / ref5）
+ *   craft  手作家具：小舖買不到，用採集籃的材料做（crafting.js）
  */
 export const FURNITURE_CATS = [
   { id: 'rug', icon: '🟫', zh: '地墊' },
@@ -93,6 +94,17 @@ export const FURNITURE_CATALOG = [
   { id: 'guitar', icon: '🎸', zh: '木吉他', price: 20, cat: 'deco' },
   { id: 'stove', icon: '🔥', zh: '小暖爐', price: 22, cat: 'deco' },
   { id: 'hatrack', icon: '🧥', zh: '衣帽架', price: 15, cat: 'deco' }, // 展示收集到的造型
+  // ---- 🔨 手作家具（小舖買不到，用採集籃的東西做；材料在 crafting.js） ----
+  { id: 'shellchime', icon: '🎐', zh: '貝殼風鈴', cat: 'deco', craft: true },
+  { id: 'stonetower', icon: '🪨', zh: '小石塔', cat: 'deco', kind: 'small', craft: true },
+  { id: 'wreath', icon: '💐', zh: '野花花圈', cat: 'plant', kind: 'small', craft: true },
+  { id: 'jam', icon: '🫙', zh: '莓果果醬罐', cat: 'deco', kind: 'small', craft: true },
+  { id: 'terrarium', icon: '🍄', zh: '蘑菇生態瓶', cat: 'plant', kind: 'small', craft: true },
+  { id: 'pumpkinlamp', icon: '🎃', zh: '南瓜燈', cat: 'light', kind: 'small', craft: true },
+  { id: 'cornhang', icon: '🌽', zh: '玉米吊飾', cat: 'deco', craft: true },
+  { id: 'vegbasket', icon: '🧺', zh: '蔬菜籃', cat: 'deco', kind: 'small', craft: true },
+  { id: 'driftshelf', icon: '🪵', zh: '漂流木小架', cat: 'table', top: 0.5, craft: true },
+  { id: 'shellframe', icon: '🖼️', zh: '貝殼相框', cat: 'deco', kind: 'small', craft: true },
   // ---- 🎁 分享禮物（小舖買不到） ----
   { id: 'postcard', icon: '📮', zh: '營火明信片牆', cat: 'deco', gift: 'share' },
   { id: 'foxlamp', icon: '🏮', zh: '狐狸提燈', cat: 'light', kind: 'small', gift: 'ref1' },

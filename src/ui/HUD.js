@@ -209,7 +209,7 @@ export class HUD {
     }
   }
 
-  /** 每小時小活動：進行中顯示倒數（釣魚大賽加上目前第一名），沒有的話顯示下一場 */
+  /** 晚上的小活動（19:00～23:00 每半小時）：進行中顯示倒數（釣魚大賽加上目前第一名），沒有的話顯示下一場 */
   setMini(m) {
     const el = this.el.miniLine;
     el.hidden = !m;
@@ -222,6 +222,8 @@ export class HUD {
         const top = m.top?.[0];
         const lead = m.kind === 'fish' && top ? ` · 🥇${top.name} ${top.size}cm` : m.kind === 'race' && top ? ` · 🥇${top.name} ${top.time}s` : m.kind === 'hunt' ? ` · ${t('還有 {n} 顆', { n: m.left ?? 0 })}` : '';
         el.textContent = t('{name}中・剩 {m} 分', { name: NAME[m.kind] ?? '', m: Math.max(1, Math.ceil(m.endsIn / 60)) }) + lead;
+      } else if (m.startsIn > 2 * 3600) {
+        el.hidden = true; // 白天：離晚上的活動還很久，手機不佔位置
       } else {
         el.textContent = t('下一場 {time} {name}', { name: NAME[m.kind] ?? '', time: `${m.hour}:${String(m.minute ?? 0).padStart(2, '0')}` });
       }
@@ -244,6 +246,8 @@ export class HUD {
             ? ` · ${t('目前最快：{name} {s} 秒', { name: top.name, s: top.time })}`
             : '';
       el.textContent = (RULE[m.kind] ?? '') + lead;
+    } else if (m.startsIn > 2 * 3600) {
+      el.textContent = t('🌙 每晚 7 點～11 點，每半小時一場小活動（9:30 營火時間有魚王）');
     } else {
       const mins = Math.max(1, Math.ceil(m.startsIn / 60));
       el.textContent = t('下一場 {name}：{time}（{m} 分鐘後）', { name: NAME[m.kind] ?? '', time: `${m.hour}:${String(m.minute ?? 0).padStart(2, '0')}`, m: mins });

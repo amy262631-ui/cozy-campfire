@@ -1,9 +1,9 @@
 /**
- * 迷霧森林的採集（前端、伺服器共用的資料）。
+ * 採集（前端、伺服器共用的資料）：迷霧森林 50 種＋湖邊石頭貝殼 12 種＋營火寶藏 8 種。
  *
  * - 每個人的採集點各自分開：你採走了，別人那邊還在
  * - 採過的點幾小時後長回來，東西放進採集籃不會壞，採集籃不限格子
- * - 蟲蟲（螢火蟲、甲蟲）只有晚上（台北時間 18:00～隔天 6:00）才出現
+ * - 蟲蟲在空中飛，要用捕蟲網（小舖用松果買）走近按 E 捕捉；白天、晚上（台北時間 18:00～隔天 6:00）出現的種類不一樣
  * - 第一次採到新的種類收進圖鑑，送松果（共 50 種）
  *
  * ⚠️ 採集點（GATHER_SPOTS）只能往後加：伺服器用「第幾個」記錄長回來的時間。
@@ -12,7 +12,10 @@ export const GATHER_TYPES = [
   { id: 'mush', icon: '🍄', zh: '蘑菇' },
   { id: 'fruit', icon: '🫐', zh: '果實' },
   { id: 'flower', icon: '🌼', zh: '野花' },
-  { id: 'bug', icon: '🪲', zh: '晚上的蟲蟲' },
+  { id: 'bug', icon: '🦋', zh: '飛來飛去的蟲蟲' },
+  { id: 'stone', icon: '🪨', zh: '湖邊的石頭', lake: true },
+  { id: 'shell', icon: '🐚', zh: '貝殼和漂流木', lake: true },
+  { id: 'treasure', icon: '✨', zh: '營火寶藏' },
 ];
 
 /** rarity：1 常見、2 少見、3 稀有（越稀有越難遇到，第一次採到送越多松果） */
@@ -60,24 +63,53 @@ export const GATHER_ITEMS = [
   { id: 'snowdrop', type: 'flower', icon: '❄️', zh: '雪花蓮', rarity: 3, color: 0xf6f3ec, hint: '冬天快到時才找得到' },
   // 晚上的蟲蟲（看完就放回去，收進圖鑑）
   { id: 'firefly', type: 'bug', icon: '✨', zh: '螢火蟲', rarity: 1, color: 0xd8ff7a, night: true, hint: '晚上的草叢一閃一閃' },
-  { id: 'ladybug', type: 'bug', icon: '🐞', zh: '瓢蟲', rarity: 1, color: 0xd2453c, night: true, hint: '躲在葉子背面睡覺' },
-  { id: 'scarab', type: 'bug', icon: '🪲', zh: '金龜子', rarity: 2, color: 0x3f9a6a, night: true, hint: '背上綠綠亮亮的' },
+  { id: 'ladybug', type: 'bug', icon: '🐞', zh: '瓢蟲', rarity: 1, color: 0xd2453c, day: true, hint: '躲在葉子背面睡覺' },
+  { id: 'scarab', type: 'bug', icon: '🪲', zh: '金龜子', rarity: 2, color: 0x3f9a6a, day: true, hint: '背上綠綠亮亮的' },
   { id: 'stag', type: 'bug', icon: '🪲', zh: '鍬形蟲', rarity: 2, color: 0x5a3a24, night: true, hint: '有一對大大的角' },
   { id: 'rhino', type: 'bug', icon: '🪲', zh: '獨角仙', rarity: 3, color: 0x3a2418, night: true, hint: '森林裡的大力士' },
   { id: 'luna_moth', type: 'bug', icon: '🦋', zh: '月光蛾', rarity: 3, color: 0xc8f0d8, night: true, hint: '翅膀淡綠色，深夜才出現' },
   { id: 'cricket', type: 'bug', icon: '🦗', zh: '蟋蟀', rarity: 1, color: 0x5a4a2a, night: true, hint: '草叢裡唧唧叫' },
   { id: 'snail', type: 'bug', icon: '🐌', zh: '小蝸牛', rarity: 1, color: 0xb08a5a, night: true, hint: '晚上出來慢慢散步' },
   { id: 'katydid', type: 'bug', icon: '🦗', zh: '紡織娘', rarity: 2, color: 0x6ab05a, night: true, hint: '叫聲像在織布' },
-  { id: 'mantis', type: 'bug', icon: '🦗', zh: '螳螂', rarity: 2, color: 0x7ac95a, night: true, hint: '舉著兩把小鐮刀' },
-  { id: 'stick_insect', type: 'bug', icon: '🌿', zh: '竹節蟲', rarity: 2, color: 0x8a7a4a, night: true, hint: '仔細看才發現不是樹枝' },
-  { id: 'jewel_beetle', type: 'bug', icon: '💎', zh: '彩虹吉丁蟲', rarity: 3, color: 0x3ac9a8, night: true, hint: '背上閃著彩虹光，很難遇到' },
+  { id: 'mantis', type: 'bug', icon: '🦗', zh: '螳螂', rarity: 2, color: 0x7ac95a, day: true, hint: '舉著兩把小鐮刀' },
+  { id: 'stick_insect', type: 'bug', icon: '🌿', zh: '竹節蟲', rarity: 2, color: 0x8a7a4a, day: true, hint: '仔細看才發現不是樹枝' },
+  { id: 'jewel_beetle', type: 'bug', icon: '💎', zh: '彩虹吉丁蟲', rarity: 3, color: 0x3ac9a8, day: true, hint: '背上閃著彩虹光，很難遇到' },
+  // 湖邊的石頭（湖畔碼頭的岸邊）
+  { id: 'pebble', type: 'stone', icon: '🪨', zh: '圓圓鵝卵石', rarity: 1, color: 0x9a9a94, hint: '被湖水磨得圓圓的' },
+  { id: 'striped_stone', type: 'stone', icon: '🪨', zh: '條紋石', rarity: 1, color: 0x8a7a6a, hint: '一圈一圈的白色條紋' },
+  { id: 'moss_stone', type: 'stone', icon: '🟢', zh: '青苔石', rarity: 1, color: 0x5a7a4a, hint: '摸起來軟軟的' },
+  { id: 'quartz', type: 'stone', icon: '💎', zh: '白石英', rarity: 2, color: 0xf3f3f3, hint: '對著月光會閃一下' },
+  { id: 'lake_glass', type: 'stone', icon: '🔷', zh: '湖玻璃', rarity: 2, color: 0x8ad0c8, hint: '被磨圓的碎玻璃，像糖果' },
+  { id: 'heart_stone', type: 'stone', icon: '🤎', zh: '心形石', rarity: 3, color: 0xc98a7a, hint: '剛好是愛心的形狀' },
+  // 貝殼和漂流木
+  { id: 'clam_shell', type: 'shell', icon: '🐚', zh: '河蜆殼', rarity: 1, color: 0x6a5a4a, hint: '小小一片，岸邊很多' },
+  { id: 'snail_shell', type: 'shell', icon: '🐚', zh: '田螺殼', rarity: 1, color: 0x8a7a5a, hint: '螺旋一圈一圈' },
+  { id: 'driftwood', type: 'shell', icon: '🪵', zh: '漂流木', rarity: 1, color: 0xb8a088, hint: '手作家具的好材料' },
+  { id: 'fan_shell', type: 'shell', icon: '🐚', zh: '扇形貝殼', rarity: 2, color: 0xe8c8a8, hint: '像一把小扇子' },
+  { id: 'pink_shell', type: 'shell', icon: '🩷', zh: '粉紅貝殼', rarity: 2, color: 0xf3b0c0, hint: '內側亮亮的粉紅色' },
+  { id: 'pearl_mussel', type: 'shell', icon: '🦪', zh: '珍珠蚌', rarity: 3, color: 0xf6f0e8, hint: '打開裡面有一顆小珍珠' },
+  // ✨ 營火寶藏：只在晚上 8 點～10 點，營火附近偶爾閃一下，先找到的人拿走
+  { id: 'meteor_shard', type: 'treasure', icon: '☄️', zh: '流星碎片', rarity: 3, color: 0xbfe0ff, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'star_sand', type: 'treasure', icon: '✨', zh: '星砂小瓶', rarity: 2, color: 0xffe08a, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'moon_feather', type: 'treasure', icon: '🪶', zh: '月光羽毛', rarity: 2, color: 0xe8f0ff, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'fire_amber', type: 'treasure', icon: '🟠', zh: '營火琥珀', rarity: 2, color: 0xf0a03a, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'old_coin', type: 'treasure', icon: '🪙', zh: '古老銅幣', rarity: 2, color: 0xc8a050, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'paper_crane', type: 'treasure', icon: '🕊️', zh: '許願紙鶴', rarity: 2, color: 0xffffff, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'glow_crystal', type: 'treasure', icon: '🔮', zh: '螢光水晶', rarity: 3, color: 0x9ff0e0, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'fox_mask', type: 'treasure', icon: '🦊', zh: '狐狸小面具', rarity: 3, color: 0xf08a3c, hint: '晚上 8～10 點，營火附近閃閃發光' },
 ];
 export const GATHER_BY_ID = Object.fromEntries(GATHER_ITEMS.map((x) => [x.id, x]));
 /** 第一次採到：依稀有度送松果；全部收集完再送 */
 export const GATHER_FIRST_GAIN = [0, 2, 4, 8];
 export const GATHER_DEX_BONUS = 30;
-/** 採過幾小時長回來 */
-export const GATHER_REGROW_MS = 3 * 3600 * 1000;
+/** 採過幾小時長回來（4～8 小時，每個點不一樣，不會一次全部長好） */
+export const GATHER_REGROW_MS = 4 * 3600 * 1000;
+export const regrowMs = () => GATHER_REGROW_MS * (1 + Math.random());
+/** 捕蟲網的價格（松果） */
+export const NET_PRICE = 15;
+/** 飛的蟲蟲：繞著自己的點飛多遠、多近可以捕到 */
+export const BUG_WANDER = 2.2;
+export const BUG_CATCH_R = 1.5;
 /** 走到多近會自動採 */
 export const GATHER_R = 1.0;
 /** 迷霧森林的活動範圍（圓形） */
@@ -90,16 +122,16 @@ function makeSpots() {
   let seed = 20261104;
   const rnd = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
   const plan = [
-    ['mush', 10],
-    ['fruit', 10],
-    ['flower', 10],
+    ['mush', 7],
+    ['fruit', 7],
+    ['flower', 7],
     ['bug', 8],
   ];
   let k = 0;
   for (const [type, n] of plan) {
     for (let i = 0; i < n; i++, k++) {
       // 一圈一圈錯開，避開中央小水池和入口小徑
-      const a = (k / 38) * Math.PI * 2 + rnd() * 0.25;
+      const a = (k / 29) * Math.PI * 2 + rnd() * 0.25;
       const r = 4.6 + ((k * 7) % 5) * 1.9 + rnd() * 0.8;
       const x = Math.round(Math.sin(a) * r * 100) / 100;
       const z = Math.round(Math.cos(a) * r * 100) / 100;
@@ -110,7 +142,25 @@ function makeSpots() {
   }
   return spots;
 }
-export const GATHER_SPOTS = makeSpots();
+/** 湖畔碼頭的岸邊：石頭 5 個、貝殼 5 個（避開中間的碼頭） */
+const LAKE_SPOTS = [
+  [-8.2, 2.3, 'stone'], [-6.6, 3.2, 'shell'], [-5.0, 2.1, 'stone'], [-3.6, 3.0, 'shell'], [-2.2, 2.2, 'stone'],
+  [2.2, 2.3, 'shell'], [3.7, 3.1, 'stone'], [5.2, 2.1, 'shell'], [6.7, 3.0, 'stone'], [8.2, 2.2, 'shell'],
+].map(([x, z, type]) => ({ type, x, z, room: 'lake_dock' }));
+/** 所有採集點：前面是迷霧森林，後面是湖邊（room 標示在哪裡） */
+export const GATHER_SPOTS = [...makeSpots().map((s) => ({ ...s, room: 'mist_forest' })), ...LAKE_SPOTS];
+
+/** ✨ 營火寶藏時間（台北時間 20:00～22:00） */
+export const TREASURE_FROM = 20;
+export const TREASURE_TO = 22;
+export const TREASURE_MAX = 3; // 同時最多藏幾個
+export function taipeiHour(now = new Date()) {
+  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', hourCycle: 'h23' }).format(now));
+}
+export const treasureTime = (now = new Date()) => {
+  const h = taipeiHour(now);
+  return h >= TREASURE_FROM && h < TREASURE_TO;
+};
 
 /** 台北時間是不是晚上（18:00～隔天 6:00） */
 export function isNight(now = new Date()) {
@@ -118,11 +168,11 @@ export function isNight(now = new Date()) {
   return h >= 18 || h < 6;
 }
 
-/** 在某一型的採集點採到什麼（依稀有度抽；白天不會抽到晚上限定的） */
+/** 在某一型的採集點採到什麼（依稀有度抽：★★★ 很難遇到；白天、晚上的種類不一樣） */
 export function gatherItemAt(type, night, rand = Math.random) {
-  const pool = GATHER_ITEMS.filter((x) => x.type === type && (night || !x.night));
-  const weight = (x) => [0, 10, 4, 1][x.rarity];
-  let total = pool.reduce((a, x) => a + weight(x), 0);
+  const pool = GATHER_ITEMS.filter((x) => x.type === type && (night ? !x.day : !x.night));
+  const weight = (x) => [0, 14, 3, 0.5][x.rarity];
+  const total = pool.reduce((a, x) => a + weight(x), 0);
   let r = rand() * total;
   for (const x of pool) {
     r -= weight(x);

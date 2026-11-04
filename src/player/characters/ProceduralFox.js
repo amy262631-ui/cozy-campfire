@@ -34,6 +34,9 @@ const ARMS_TOSS = [[-0.18, 0.6, 0.38], [0.18, 0.6, 0.38]];
 const ARMS_BLANKET = [[-0.16, 0.4, 0.3], [0.16, 0.4, 0.3]];
 const ARMS_REEL = [[-0.12, 0.5, 0.2], [0.15, 0.52, 0.2]]; // 拉竿：手往胸口收
 const ARMS_SHOW = [[-0.2, 1.02, 0.06], [0.2, 1.02, 0.06]]; // 舉魚：雙手高舉
+const ARMS_REACH = [[-0.12, 0.2, 0.36], [0.12, 0.2, 0.36]]; // 採摘：彎腰伸手到地上
+const ARMS_PULL = [[-0.14, 0.62, 0.24], [0.14, 0.62, 0.24]]; // 用力拔起來
+const ARMS_NET = [[0.05, 0.95, 0.12], [0.2, 0.98, 0.1]]; // 揮網：雙手舉高
 
 const v3 = (a) => new THREE.Vector3(...a);
 
@@ -277,6 +280,44 @@ export class ProceduralFox {
     this.headStone.position.set(0, 0.4, 0);
     this.headStone.visible = false;
     head.add(this.headStone);
+
+    // 🦋 捕蟲網（揮網時才出現）
+    this.netProp = new THREE.Group();
+    const netPole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.75, 6), mat(0xb08a5a));
+    netPole.position.y = 0.37;
+    const netRing = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.012, 6, 18), mat(0xe8e0cc));
+    netRing.position.y = 0.86;
+    const netBag = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.26, 14, 1, true), new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, side: THREE.DoubleSide, roughness: 1 }));
+    netBag.position.set(0, 0.86, -0.12);
+    netBag.rotation.x = -Math.PI / 2;
+    this.netProp.add(netPole, netRing, netBag);
+    this.netProp.visible = false;
+    torso.add(this.netProp);
+
+    // 🚿 小澆水壺（澆水時才出現），壺嘴灑出小水滴
+    this.canProp = new THREE.Group();
+    const canMat = new THREE.MeshStandardMaterial({ color: 0x7ab8d8, roughness: 0.5, metalness: 0.2 });
+    const canBody = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.13, 14), canMat);
+    const canHandle = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 6, 12, Math.PI), canMat);
+    canHandle.position.set(0, 0.06, -0.04);
+    canHandle.rotation.y = Math.PI / 2;
+    const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, 0.16, 6), canMat);
+    spout.position.set(0, 0.03, 0.12);
+    spout.rotation.x = 1.0;
+    const rose = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.02, 0.025, 10), canMat);
+    rose.position.set(0, 0.085, 0.19);
+    rose.rotation.x = 1.0;
+    this.canProp.add(canBody, canHandle, spout, rose);
+    const dropMat = new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.85 });
+    this.drops = Array.from({ length: 8 }, (_, i) => {
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 4), dropMat);
+      d.userData.p = i / 8;
+      d.scale.y = 1.6;
+      this.canProp.add(d);
+      return d;
+    });
+    this.canProp.visible = false;
+    torso.add(this.canProp);
 
     this.log = createLogProp();
     this.log.position.set(0, 0.52, 0.34);
@@ -563,6 +604,78 @@ export class ProceduralFox {
       tailWag = Math.sin(t * 11) * 0.6;
       this.heldFish.rotation.z = Math.sin(t * 9) * 0.15; // 魚在手上扭來扭去
       this.heldFish.position.y = 1.42 + bounce * 0.03;
+    } else if (P === 'pick') {
+      // 0~0.4 蹲下伸手、0.4~0.75 用力往上拔（身體往後仰一下）、之後開心地拿起來
+      const pt = this.poseTime;
+      if (pt < 0.4) {
+        ARMS_REACH.forEach((p, i) => armsT[i].set(...p));
+        torsoY = -0.1;
+        torsoRX = 0.5;
+        headRX = 0.25;
+      } else if (pt < 0.75) {
+        ARMS_PULL.forEach((p, i) => armsT[i].set(...p));
+        const w = Math.sin(pt * 40) * 0.04; // 拔的時候抖一抖
+        torsoY = -0.04;
+        torsoRX = -0.18 + w;
+        torsoRZ = w;
+        headRX = -0.1;
+        eyesOpen = 0.1;
+      } else {
+        ARMS_HOLD.forEach((p, i) => armsT[i].set(...p));
+        torsoY = Math.abs(Math.sin((pt - 0.75) * 9)) * 0.06; // 開心跳一下
+        headRX = -0.15;
+        eyesOpen = 0.12;
+        tailWag = Math.sin(t * 12) * 0.6;
+      }
+    } else if (P === 'plant') {
+      // 種菜：蹲下、兩手輪流挖土，最後拍拍土
+      const pt = this.poseTime;
+      torsoY = -0.1;
+      torsoRX = 0.5;
+      headRX = 0.3;
+      const dig = Math.sin(pt * 14);
+      armsT[0].set(-0.12, 0.2 + Math.max(0, dig) * 0.1, 0.36);
+      armsT[1].set(0.12, 0.2 + Math.max(0, -dig) * 0.1, 0.36);
+      if (pt > 1.1) {
+        // 拍拍土、開心
+        torsoY = -0.06 + Math.abs(Math.sin(pt * 10)) * 0.02;
+        eyesOpen = 0.12;
+        tailWag = Math.sin(t * 12) * 0.6;
+      }
+    } else if (P === 'water') {
+      // 澆水：拿著小水壺往前傾，水滴灑下去，尾巴搖搖
+      const pt = this.poseTime;
+      const tilt = Math.min(1, pt / 0.35);
+      ARMS_HOLD.forEach((p, i) => armsT[i].set(p[0] * 0.6, p[1] - 0.04, p[2] + 0.06));
+      torsoRX = 0.18 * tilt;
+      headRX = 0.2;
+      eyesOpen = 0.12;
+      tailWag = Math.sin(t * 10) * 0.5;
+      this.canProp.position.set(0, 0.48, 0.42);
+      this.canProp.rotation.x = 0.9 * tilt + Math.sin(pt * 6) * 0.06;
+      for (const d of this.drops) {
+        const u = (pt * 1.8 + d.userData.p) % 1;
+        d.visible = tilt > 0.9;
+        d.position.set(Math.sin(d.userData.p * 20) * 0.03, 0.06 - u * 0.35, 0.22 + u * 0.08);
+      }
+    } else if (P === 'catch') {
+      // 揮網：舉高 → 往前撲 → 收回來
+      const pt = this.poseTime;
+      this.netProp.position.copy(this.arms[1].position);
+      this.netProp.rotation.x = pt < 0.35 ? -0.3 : pt < 0.7 ? 1.1 : 0.4;
+      if (pt < 0.35) {
+        ARMS_NET.forEach((p, i) => armsT[i].set(...p));
+        torsoRX = -0.15;
+        headRX = -0.3;
+      } else if (pt < 0.7) {
+        ARMS_TOSS.forEach((p, i) => armsT[i].set(...p));
+        torsoRX = 0.3;
+        torsoY = 0.05;
+      } else {
+        ARMS_HOLD.forEach((p, i) => armsT[i].set(...p));
+        eyesOpen = 0.12;
+        tailWag = Math.sin(t * 12) * 0.6;
+      }
     } else if (P === 'throw') {
       // 0~0.5 抱起木柴、0.5~0.9 往後蓄力、0.9~1.1 丟出、之後回復
       const pt = this.poseTime;
@@ -583,6 +696,9 @@ export class ProceduralFox {
     } else {
       headRZ = Math.sin(t * 0.7) * 0.06; // idle 歪頭晃晃
     }
+
+    this.netProp.visible = P === 'catch';
+    this.canProp.visible = P === 'water';
 
     // 舉著魚到處走：雙手一直舉高，魚在頭上扭來扭去
     if (this.heldFish.visible && P !== 'showOff' && !sitting) {

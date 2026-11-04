@@ -6,7 +6,8 @@ import { seededRandom, makeRadialTexture } from '../scene/textures.js';
 import { buildTentShell, shapeOf } from '../game/tentShapes.js';
 import { styleOf, tentTexture } from '../game/tentStyles.js';
 import { t } from '../i18n/i18n.js';
-import { LAYOUT, CAMP_SIZE, ENTRY_Z, BOUNDS, LOOP_CENTER, plotSpots } from './campLayout.js';
+import { LAYOUT, CAMP_SIZE, ENTRY_Z, BOUNDS, LOOP_CENTER, plotSpots, frame } from './campLayout.js';
+import { buildSoil, buildCrop } from './gardenModels.js';
 
 /**
  * 🏕️ 帳篷營地：一條彎彎曲曲的環形小路繞著中央的小營火，
@@ -541,7 +542,11 @@ export function createCampgroundRoom() {
   const patchOther = lowpoly(0x3a5230);
   let plots = PLOTS.map((p, i) => ({ ...p, door: spots[i].door, out: spots[i].out, garden: spots[i].garden, tent: null, key: null, g: null, collider: null }));
 
-  const tentKey = (tent) => (tent ? [tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.open, tent.likes, tent.n].join('|') : 'empty');
+  const tentKey = (tent) => (tent ? [tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.open, tent.likes, tent.n, JSON.stringify(tent.garden ?? null)].join('|') : 'empty');
+  /** 🥕 小菜園的作物（世界座標，跟帳篷分開放） */
+  const gardensGroup = new THREE.Group();
+  group.add(gardensGroup);
+  const spinners = [];
 
   /** 拆掉一格：名牌的貼圖、地面圓片要釋放（帳篷外殼和光暈是共用的，不能丟） */
   function disposeGroup(g) {
@@ -601,7 +606,22 @@ export function createCampgroundRoom() {
     g.add(status);
     signs.push(status);
     const sp = doorAt(front);
-    return { g, door: sp.door, out: sp.out, collider: { x: p.x, z: p.z, r: front * 0.92 } };
+    // 🥕 帳篷前的小菜園：翻好的土＋三格作物
+    const gg = new THREE.Group();
+    gg.position.set(p.garden.x, 0, p.garden.z);
+    gg.rotation.y = p.garden.ry;
+    gg.add(buildSoil());
+    gg.userData.crops = [];
+    (tent.garden ?? []).forEach((slot, i) => {
+      if (!slot) return;
+      const crop = buildCrop(slot[0], slot[1]);
+      gg.userData.crops[i] = crop;
+      crop.position.x = (i - 1) * 0.5;
+      crop.scale.setScalar(1.5); // 營地鏡頭比較遠，作物放大一點才看得到
+      gg.add(crop);
+      crop.traverse((o) => o.userData.spin && spinners.push(o));
+    });
+    return { g, gg, door: sp.door, out: sp.out, collider: { x: p.x, z: p.z, r: front * 0.92 } };
   }
 
   function setTents(list = []) {
@@ -619,8 +639,18 @@ export function createCampgroundRoom() {
         disposeGroup(p.g);
         plotsGroup.remove(p.g);
       }
+      if (p.gg) {
+        gardensGroup.remove(p.gg);
+        p.gg.traverse((o) => {
+          o.geometry?.dispose();
+          const k = spinners.indexOf(o);
+          if (k >= 0) spinners.splice(k, 1);
+        });
+        p.gg = null;
+      }
       const built = buildPlot(p, tent);
       plotsGroup.add(built.g);
+      if (built.gg) gardensGroup.add(built.gg);
       return { ...p, tent, key, ...built };
     });
     if (!changed) return;
@@ -645,6 +675,124 @@ export function createCampgroundRoom() {
     return best;
   }
 
+  /** 站在哪一塊菜園旁邊（有帳篷的才有菜園） */
+  function gardenAt(pos) {
+    let best = null;
+    let bd = 1.5;
+    for (const p of plots) {
+      if (!p.tent || p.tent.demo) continue;
+      const d = Math.hypot(pos.x - p.garden.x, pos.z - p.garden.z);
+      if (d < bd) {
+        bd = d;
+        best = p;
+      }
+    }
+    return best;
+  }
+  /** 門口和菜園都在旁邊：比較近的那個 */
+  function targetAt(pos) {
+    const door = plotAt(pos);
+    const gd = gardenAt(pos);
+    if (door && gd) {
+      return Math.hypot(pos.x - door.door.x, pos.z - door.door.z) <= Math.hypot(pos.x - gd.garden.x, pos.z - gd.garden.z) ? { door } : { garden: gd };
+    }
+    return door ? { door } : gd ? { garden: gd } : null;
+  }
+
+  // ---------- 菜園的小特效：挖土的土粒、澆水的水花＋菜葉抖抖、收成時菜被拔起來 ----------
+  const fx = [];
+  const dirtMat = new THREE.MeshStandardMaterial({ color: 0x6a4a32, roughness: 1 });
+  const splashMat = new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false });
+  const slotWorld = (p, i) => p.gg.localToWorld(new THREE.Vector3((i - 1) * 0.5, 0.1, 0));
+  /**
+   * @param {string} hid 哪一頂帳篷的菜園
+   * @param {number} i 第幾格
+   * @param {'dirt'|'water'|'pull'} kind
+   * @param {THREE.Vector3} [to] 收成時菜飛去哪裡（玩家）
+   */
+  function gardenFx(hid, i, kind, to) {
+    const p = plots.find((x) => x.tent?.hid === hid || (hid === 'me' && x.tent?.mine));
+    if (!p?.gg) return;
+    p.gg.updateMatrixWorld(true);
+    const at = slotWorld(p, i);
+    if (kind === 'dirt') {
+      for (let k = 0; k < 10; k++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.025 + Math.random() * 0.02, 6, 4), dirtMat);
+        m.position.copy(at);
+        group.add(m);
+        const a = Math.random() * Math.PI * 2;
+        fx.push({ m, t: -Math.random() * 0.8, life: 0.6, v: new THREE.Vector3(Math.sin(a) * 0.6, 1.4 + Math.random(), Math.cos(a) * 0.6), from: at.clone(), kind });
+      }
+    } else if (kind === 'water') {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.05, 0.08, 20), splashMat.clone());
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.copy(at).setY(0.12);
+      group.add(ring);
+      fx.push({ m: ring, t: -0.4, life: 1.2, kind });
+      const crop = p.gg.userData.crops?.[i];
+      if (crop) fx.push({ crop, t: -0.3, life: 1.2, kind: 'shake' });
+    } else if (kind === 'pull') {
+      const crop = p.gg.userData.crops?.[i];
+      if (!crop) return;
+      // 從菜園拿出來放到世界座標，才能飛向玩家
+      const wp = crop.getWorldPosition(new THREE.Vector3());
+      const sc = crop.getWorldScale(new THREE.Vector3()).x;
+      crop.parent.remove(crop);
+      crop.position.copy(wp);
+      crop.scale.setScalar(sc);
+      crop.rotation.y = p.garden.ry;
+      group.add(crop);
+      p.gg.userData.crops[i] = null;
+      fx.push({ crop, t: -0.4, life: 1.1, kind, from: wp.clone(), sc, to });
+    }
+  }
+  function updateFx(dt) {
+    for (let k = fx.length - 1; k >= 0; k--) {
+      const f = fx[k];
+      f.t += dt;
+      if (f.t < 0) {
+        if (f.kind === 'pull') f.crop.rotation.z = Math.sin(f.t * 45) * 0.08; // 抓住、抖一抖
+        if (f.m && f.kind === 'dirt') f.m.visible = false;
+        continue;
+      }
+      const u = f.t / f.life;
+      if (u >= 1) {
+        if (f.m) {
+          group.remove(f.m);
+          f.m.geometry.dispose();
+          if (f.kind === 'water') f.m.material.dispose();
+        }
+        if (f.kind === 'shake') f.crop.rotation.z = 0;
+        if (f.kind === 'pull') group.remove(f.crop);
+        fx.splice(k, 1);
+        continue;
+      }
+      if (f.kind === 'dirt') {
+        f.m.visible = true;
+        f.m.position.set(f.from.x + f.v.x * f.t, f.from.y + f.v.y * f.t - 4.9 * f.t * f.t, f.from.z + f.v.z * f.t);
+        if (f.m.position.y < 0.05) f.m.position.y = 0.05;
+      } else if (f.kind === 'water') {
+        f.m.scale.setScalar(1 + u * 4);
+        f.m.material.opacity = 0.7 * (1 - u);
+      } else if (f.kind === 'shake') {
+        f.crop.rotation.z = Math.sin(f.t * 30) * 0.18 * (1 - u);
+      } else if (f.kind === 'pull') {
+        f.crop.rotation.z = 0;
+        if (u < 0.35) {
+          // 啵！拔出來往上彈
+          const k2 = u / 0.35;
+          f.crop.position.set(f.from.x, f.from.y + Math.sin(k2 * Math.PI * 0.5) * 0.55, f.from.z);
+          f.crop.scale.setScalar(f.sc * (1 + Math.sin(k2 * Math.PI) * 0.3));
+        } else {
+          const k2 = (u - 0.35) / 0.65;
+          const to = f.to ?? f.from;
+          f.crop.position.set(f.from.x + (to.x - f.from.x) * k2, f.from.y + 0.55 + k2 * 0.3, f.from.z + (to.z - f.from.z) * k2);
+          f.crop.scale.setScalar(f.sc * Math.max(0.01, 1 - k2));
+        }
+      }
+    }
+  }
+
   const returnSpawn = {};
   // 站在門口、面朝外；鏡頭在前面看著自己和身後的帳篷（不然會卡進帳篷裡）
   const outSpot = (p) => (p ? { x: p.out.x, z: p.out.z, ry: p.out.ry, camYaw: Math.PI, camPitch: 0.42 } : undefined);
@@ -664,6 +812,14 @@ export function createCampgroundRoom() {
     resolveCollision,
     setTents,
     plotAt,
+    gardenFx,
+    /** 菜園第幾格在世界上的位置（角色面向用） */
+    gardenSlotPos(hid, i) {
+      const p = plots.find((x) => x.tent?.hid === hid || (hid === 'me' && x.tent?.mine));
+      if (!p?.gg) return null;
+      p.gg.updateMatrixWorld(true);
+      return slotWorld(p, i);
+    },
     /** 從某頂帳篷出來時，站回那頂帳篷的門口 */
     setReturnFrom(plot) {
       returnSpawn.home = outSpot(plot);
@@ -700,16 +856,24 @@ export function createCampgroundRoom() {
       flyGeo.attributes.position.needsUpdate = true;
       flyMat.opacity = 0.55 + Math.sin(time * 1.7) * 0.3;
       lanternHalo.opacity = 0.62 + Math.sin(time * 1.3) * 0.06;
+      updateFx(dt);
+      for (const o of spinners) {
+        o.rotation.y = time * 2;
+        o.position.y = 0.62 + Math.sin(time * 3) * 0.03;
+      }
     },
     onAction(name, actions) {
       if (name !== 'interact' || actions.state !== 'free') return false;
-      const p = plotAt(actions.player.position);
-      if (!p) return false;
-      actions.onVisit?.(p);
+      const tg = targetAt(actions.player.position);
+      if (!tg) return false;
+      if (tg.garden) actions.onGarden?.(tg.garden);
+      else actions.onVisit?.(tg.door);
       return true;
     },
     prompt(actions) {
-      const p = plotAt(actions.player.position);
+      const tg = targetAt(actions.player.position);
+      if (tg?.garden) return tg.garden.tent.mine ? t('<kbd>E</kbd> 🥕 我的小菜園') : t('<kbd>E</kbd> 💧 看看「{name}」的菜園', { name: tg.garden.tent.name || t('旅人') });
+      const p = tg?.door;
       if (!p) return null;
       if (!p.tent) return t('<kbd>E</kbd> 空地・到營火旁的小舖買帳篷就能住進來');
       if (p.tent.mine) return t('<kbd>E</kbd> 回我的帳篷');
@@ -717,8 +881,9 @@ export function createCampgroundRoom() {
       return t('<kbd>E</kbd> 拜訪「{name}」', { name: p.tent.name || t('旅人的帳篷') });
     },
     interactHint(actions) {
-      const p = plotAt(actions.player.position);
-      return p ? ['🚪', t('拜訪')] : null;
+      const tg = targetAt(actions.player.position);
+      if (tg?.garden) return ['🥕', t('菜園')];
+      return tg ? ['🚪', t('拜訪')] : null;
     },
   };
 }
