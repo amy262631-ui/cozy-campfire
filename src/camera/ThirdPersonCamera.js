@@ -7,7 +7,7 @@ const MAX_PITCH = 1.25;
 
 /**
  * 第三人稱軌道跟隨相機
- * - 滑鼠右鍵拖曳：旋轉（手機：單指拖曳）
+ * - 滑鼠左鍵或右鍵拖曳：旋轉（手機：單指拖曳）
  * - 滾輪：縮放
  * - 閒置 idleAfter 秒：進入掛機巡航（Cinematic Idle Mode），緩慢環繞
  */
@@ -48,8 +48,8 @@ export class ThirdPersonCamera {
     el.addEventListener('contextmenu', (e) => e.preventDefault());
 
     el.addEventListener('pointerdown', (e) => {
-      // 桌機用右鍵；觸控用任意手指
-      if (e.pointerType === 'mouse' && e.button !== 2) return;
+      // 桌機用左鍵或右鍵拖曳；觸控用任意手指（布置模式「點一下選格子」會判斷有沒有拖動，不衝突）
+      if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
       dragging = true;
       lastX = e.clientX;
       lastY = e.clientY;

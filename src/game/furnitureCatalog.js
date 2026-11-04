@@ -92,6 +92,7 @@ export const FURNITURE_CATALOG = [
   { id: 'easel', icon: '🎨', zh: '小畫架', price: 18, cat: 'deco' },
   { id: 'guitar', icon: '🎸', zh: '木吉他', price: 20, cat: 'deco' },
   { id: 'stove', icon: '🔥', zh: '小暖爐', price: 22, cat: 'deco' },
+  { id: 'hatrack', icon: '🧥', zh: '衣帽架', price: 15, cat: 'deco' }, // 展示收集到的造型
   // ---- 🎁 分享禮物（小舖買不到） ----
   { id: 'postcard', icon: '📮', zh: '營火明信片牆', cat: 'deco', gift: 'share' },
   { id: 'foxlamp', icon: '🏮', zh: '狐狸提燈', cat: 'light', kind: 'small', gift: 'ref1' },

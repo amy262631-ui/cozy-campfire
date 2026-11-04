@@ -20,6 +20,7 @@ const ENTRANCES = [
   { to: 'lake_dock', angle: 1.15, label: t('🎣 湖畔碼頭') },
   { to: 'tent_social', angle: -1.25, label: t('☕ 交流帳篷') },
   { to: 'campground', angle: -2.95, label: t('🏕️ 帳篷營地') },
+  { to: 'mist_forest', angle: 0.8, label: t('🍄 迷霧森林') },
 ];
 /** 地藏祈福處的方位（不用換房間，就在森林裡） */
 const SHRINE_ANGLE = -0.15;
@@ -335,13 +336,13 @@ function buildBellTent() {
 /** 營火上方的人數看板（一直面向鏡頭） */
 function buildAreaBoard() {
   const c = document.createElement('canvas');
-  c.width = 720;
+  c.width = 860;
   c.height = 150;
   const g = c.getContext('2d');
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
-  sprite.scale.set(5.4, 1.12, 1);
+  sprite.scale.set(6.4, 1.12, 1);
   sprite.renderOrder = 6;
   sprite.visible = false;
   const AREAS = [
@@ -350,6 +351,7 @@ function buildAreaBoard() {
     ['campground', '🏕️', t('營地')],
     ['treehouse_music', '🎵', t('樹屋')],
     ['tent_social', '☕', t('交流')],
+    ['mist_forest', '🍄', t('迷霧')],
   ];
   function draw(a) {
     if (!a) return;
@@ -412,7 +414,43 @@ function buildCampGate() {
   return { group: g, colliderR: 0.6 };
 }
 
-const BUILDERS = { tent_focus: buildTent, treehouse_music: buildTreehouse, lake_dock: buildLakePath, tent_social: buildBellTent, campground: buildCampGate };
+/** 迷霧森林的入口：兩棵彎彎的老樹搭成拱門，地上幾朵發光小蘑菇，霧氣從裡面飄出來 */
+function buildMistGate() {
+  const g = new THREE.Group();
+  const bark = lowpoly(0x3d2c22);
+  for (const s of [-1, 1]) {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 3.0, 7), bark);
+    trunk.position.set(s * 1.25, 1.45, 0);
+    trunk.rotation.z = s * 0.18;
+    g.add(trunk);
+    const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(0.95, 0), lowpoly(0x1f3a2c));
+    crown.position.set(s * 0.75, 3.0, 0);
+    crown.scale.set(1.2, 0.8, 1);
+    g.add(crown);
+  }
+  const glow = new THREE.MeshBasicMaterial({ color: 0x9ff0e0 });
+  const stem = lowpoly(0xe8e0cc);
+  for (const [x, z, sc] of [[-1.7, 0.4, 1], [-1.45, 0.7, 0.7], [1.6, 0.5, 0.9], [1.9, 0.1, 0.6], [-0.9, -0.6, 0.8]]) {
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.04 * sc, 0.05 * sc, 0.2 * sc, 6), stem);
+    st.position.set(x, 0.1 * sc, z);
+    g.add(st);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.13 * sc, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), glow);
+    cap.position.set(x, 0.19 * sc, z);
+    cap.scale.y = 0.7;
+    g.add(cap);
+  }
+  // 霧：幾片半透明的圓
+  const fogMat = new THREE.MeshBasicMaterial({ color: 0xcfe0ea, transparent: true, opacity: 0.12, depthWrite: false });
+  for (let i = 0; i < 4; i++) {
+    const f = new THREE.Mesh(new THREE.CircleGeometry(1.4 - i * 0.2, 16), fogMat);
+    f.rotation.x = -Math.PI / 2;
+    f.position.set((i - 1.5) * 0.4, 0.15 + i * 0.12, -0.4 - i * 0.3);
+    g.add(f);
+  }
+  return { group: g, colliderR: 0.6 };
+}
+
+const BUILDERS = { tent_focus: buildTent, treehouse_music: buildTreehouse, lake_dock: buildLakePath, tent_social: buildBellTent, campground: buildCampGate, mist_forest: buildMistGate };
 
 // ---------- 森林房間 ----------
 

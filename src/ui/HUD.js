@@ -30,7 +30,7 @@ export class HUD {
 
       <div class="prompt" id="prompt"></div>
 
-      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="home-chip fire-chip" id="fire-chip" hidden>${t('🔥 回營火')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button></div>
+      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="date-chip" id="date-chip" hidden>${t('🔥 約朋友')}</button><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="home-chip fire-chip" id="fire-chip" hidden>${t('🔥 回營火')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="look-chip" id="look-chip">${t('👒 造型')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button></div>
       <div class="today" id="today" hidden></div>
       <div class="event-line" id="event-line" hidden></div>
       <div class="mini-line" id="mini-line" hidden></div>
@@ -59,6 +59,8 @@ export class HUD {
       fireChip: root.querySelector('#fire-chip'),
       acctChip: root.querySelector('#acct-chip'),
       dexChip: root.querySelector('#dex-chip'),
+      dateChip: root.querySelector('#date-chip'),
+      lookChip: root.querySelector('#look-chip'),
       eventLine: root.querySelector('#event-line'),
       miniLine: root.querySelector('#mini-line'),
     };
@@ -75,6 +77,13 @@ export class HUD {
     this.el.fireChip.addEventListener('click', () => this.onFire?.());
     this.el.dexChip.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.dexChip.addEventListener('click', () => this.onDex?.());
+    /** 🔥 約朋友今晚 9:30、👒 造型（main.js 設定） */
+    this.onDate = null;
+    this.onLook = null;
+    for (const [el, fn] of [[this.el.dateChip, () => this.onDate?.()], [this.el.lookChip, () => this.onLook?.()]]) {
+      el.addEventListener('pointerdown', (e) => e.stopPropagation());
+      el.addEventListener('click', fn);
+    }
     this.el.acctChip.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.acctChip.addEventListener('click', () => this.onMeClick?.({ focusAccount: true }));
     this.el.invite.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -168,6 +177,7 @@ export class HUD {
   /** 連上伺服器才顯示「邀朋友」 */
   setInviteVisible(v) {
     this.el.invite.hidden = !v;
+    this.el.dateChip.hidden = !v;
   }
 
   /**

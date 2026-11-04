@@ -36,6 +36,7 @@ export class ShareCard {
       <div class="share-card" id="share-card">
         <div class="share-inner">
           <img id="share-img" alt="" />
+          <div class="share-note" id="share-note" hidden></div>
           <div class="share-hint">${t('手機：長按圖片可以儲存或分享 📱')}</div>
           <div class="share-actions">
             <button type="button" id="share-go">${t('📤 分享')}</button>
@@ -50,6 +51,7 @@ export class ShareCard {
     this.el = $('#share-card');
     this.img = $('#share-img');
     this.dl = $('#share-dl');
+    this.note = $('#share-note');
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.addEventListener('click', (e) => e.target === this.el && this.close());
     $('#share-close').addEventListener('click', () => this.close());
@@ -66,6 +68,8 @@ export class ShareCard {
    */
   async open(info) {
     this.info = info;
+    this.note.hidden = !info.note;
+    this.note.textContent = info.note ?? '';
     const shot = await new Promise((resolve) => {
       const img = new Image();
       img.onload = () => resolve(img);
@@ -94,7 +98,7 @@ export class ShareCard {
     // 下半部：一句話
     g.textAlign = 'center';
     g.fillStyle = '#ffe6b8';
-    g.font = `800 92px ${FONT}`;
+    g.font = `800 ${info.bigSize ?? 92}px ${FONT}`;
     g.fillText(`${info.icon} ${info.big}`, 540, 900);
     if (info.small) {
       g.fillStyle = '#f5e6d3';
@@ -126,7 +130,7 @@ export class ShareCard {
 
   async #share() {
     const text = this.info?.text ?? t('沒力氣出門的夜晚，一起來迷霧森林露營地的營火旁坐一下吧 🔥');
-    const url = this.getUrl?.() ?? location.origin + location.pathname;
+    const url = this.info?.url ?? this.getUrl?.() ?? location.origin + location.pathname;
     try {
       const blob = await new Promise((r) => this.canvas.toBlob(r, 'image/png'));
       const file = new File([blob], 'campfire.png', { type: 'image/png' });
@@ -138,7 +142,7 @@ export class ShareCard {
         await navigator.clipboard.writeText(`${text}\n${url}`);
         this.hud.toast(t('已複製分享文字和網址，圖片可以按「存圖」下載 📋'));
       }
-      this.onShared?.(); // 分享成功：領分享禮物
+      this.onShared?.(this.info); // 分享成功：領分享禮物
     } catch {
       /* 使用者取消分享 */
     }

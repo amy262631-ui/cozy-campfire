@@ -71,8 +71,27 @@
         var t = T[l];
         document.getElementById('boot-msg').textContent = t[0];
         var slow = setTimeout(function () { document.getElementById('boot-sub').textContent = t[1]; }, 5000);
+        // 📍 來源統計：網頁一打開就記一次（還沒下載遊戲），遊戲畫面出來再記一次，算「載入完成前就離開」
+        var hit = function (extra) {
+          try {
+            if (localStorage.getItem('cozy-campfire-staff') === '1') return; // 作者自己的裝置不算
+          } catch (e) {}
+          try {
+            var srv = '%VITE_SERVER_URL%';
+            if (srv.charAt(0) === '%') srv = '';
+            var q = new URLSearchParams(location.search);
+            var ref = '';
+            try { ref = document.referrer ? new URL(document.referrer).hostname : ''; } catch (e) {}
+            var u = srv.replace(/\/$/, '') + (srv ? '/' : '') + 'api/hit?src=' + encodeURIComponent(q.get('src') || q.get('utm_source') || q.get('ref') || '') +
+              '&w=' + (q.get('with') ? 1 : 0) + '&h=' + encodeURIComponent(location.hostname) + '&r=' + encodeURIComponent(ref) + (extra || '');
+            if (navigator.sendBeacon) navigator.sendBeacon(u);
+            else fetch(u, { mode: 'no-cors', keepalive: true });
+          } catch (e) {}
+        };
+        hit('');
         // 遊戲畫出第一張畫面時呼叫：淡出後移除
         window.__bootDone = function () {
+          if (!window.__bootHit) { window.__bootHit = 1; hit('&loaded=1'); }
           clearTimeout(slow);
           var b = document.getElementById('boot');
           if (!b) return;
@@ -122,7 +141,7 @@
         <span class="only-tent" data-i18n>🍅 番茄鐘在畫面上方</span>
         <span><kbd>Z</kbd> <i data-i18n>裹毯發呆</i></span>
         <span><kbd data-i18n>空白鍵</kbd> <i data-i18n>仰望星空</i></span>
-        <span data-i18n>右鍵拖曳 旋轉 · 滾輪 縮放</span>
+        <span data-i18n>滑鼠拖曳 旋轉 · 滾輪 縮放</span>
         <button type="button" class="hint-toggle always" id="hint-toggle" data-i18n>⌨️ 更多操作</button>
       </footer>
     </div>

@@ -4,6 +4,17 @@ import { STONE_FLAG } from '../rooms/cairns.js';
 import { ProceduralFox } from '../player/characters/ProceduralFox.js';
 import { lerpAngle } from '../player/Player.js';
 import { unpackFish } from '../fishing/fishData.js';
+import { outfitOfCode } from '../game/outfits.js';
+
+/** 線上同步的造型代號 [頭, 背, 脖子] → { head, back, neck } */
+export const wearOfCodes = (ot) => {
+  const w = {};
+  for (const n of Array.isArray(ot) ? ot : []) {
+    const o = outfitOfCode(n);
+    if (o) w[o.slot] = o.id;
+  }
+  return w;
+};
 
 const POS_SMOOTH = 10; // 位置插值係數（越大越貼近最新位置，越小越平滑）
 const ROT_SMOOTH = 10;
@@ -59,11 +70,12 @@ const npcName = (name) => {
 };
 
 class RemotePlayer {
-  constructor({ id, name, fur, sp = 0, rw = 0, s, npc = false }) {
+  constructor({ id, name, fur, sp = 0, rw = 0, ot = null, s, npc = false }) {
     this.id = id;
     this.npc = npc; // 營地居民（電腦角色）
     this.name = name;
     this.character = new ProceduralFox({ fur, species: sp });
+    this.character.setOutfit(wearOfCodes(ot)); // 造型（帽子、背包、圍巾）
     this.character.setAccessory(rw); // 贊助者的小花
     this.group = new THREE.Group();
     this.group.add(this.character.root);
@@ -208,6 +220,11 @@ export class RemotePlayers {
 
   get(id) {
     return this.players.get(id);
+  }
+
+  /** 別人換了造型 */
+  setOutfit(id, ot) {
+    this.players.get(id)?.character.setOutfit(wearOfCodes(ot));
   }
 
   update(dt, elapsed) {

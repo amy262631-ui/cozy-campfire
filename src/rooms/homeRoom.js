@@ -177,7 +177,7 @@ export function createHomeRoom() {
       const stack = stackAt(home.items, x, z).filter((it) => FURNITURE_BY_ID[it.i]);
       const c = cellCenter(x, z, grid);
       stack.forEach((it, lv) => {
-        const m = buildFurniture(it.i);
+        const m = buildFurniture(it.i, { rack: home.rack });
         m.position.set(c.x, stackY(stack, lv), c.z);
         m.rotation.y = (it.r ?? 0) * (Math.PI / 2);
         m.userData.cell = { x, z };

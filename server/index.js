@@ -22,6 +22,9 @@ import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
 import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM } from '../src/fishing/fishData.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
+import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateOutfit } from '../src/game/outfits.js';
+import { GATHER_SPOTS, GATHER_ITEMS, GATHER_REGROW_MS, GATHER_FIRST_GAIN, GATHER_DEX_BONUS, gatherItemAt, isNight, GATHER_R } from '../src/game/gathering.js';
+import { SOURCES, cleanSource, sourceFrom } from '../src/game/sources.js';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack } from './homes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +37,7 @@ const ROOM_DEFS = {
   lake_dock: { label: '湖畔碼頭', capacity: 30 },
   tent_social: { label: '交流帳篷', capacity: 40 },
   campground: { label: '帳篷營地', capacity: 60 },
+  mist_forest: { label: '迷霧森林', capacity: 60 },
 };
 /** 分流：每個分流最多幾人、平常開幾個、最多開到幾個 */
 const CHANNEL_MAX = Number(process.env.CHANNEL_MAX) || 100;
@@ -169,6 +173,7 @@ const publicHome = (h) =>
         likes: h.likes?.length ?? 0,
         notes: h.notes ?? [],
         gifts: h.gifts ?? [],
+        rack: h.rack ?? [],
       }
     : { tent: false, inv: {}, items: [], grid: gridOf(null), open: true, style: 'classic', shape: 'bell', shapes: ['bell'], name: '', likes: 0, notes: [], gifts: [] };
 /** 公開代號 → vid（找不到回傳 null） */
@@ -340,6 +345,7 @@ const REF_TIERS = [
 ];
 const REF_GAIN = 10; // 每位朋友 +10 松果
 const REF_STAY_MS = (Number(process.env.REF_STAY_SEC) || 180) * 1000; // 朋友要待滿 3 分鐘才算
+const DATE_STAY_MS = (Number(process.env.DATE_STAY_SEC) || 60) * 1000; // 營火之約：待滿 1 分鐘
 const lastIp = new Map(); // vid → 最近一次連線的 IP（自己開無痕視窗刷不算）
 /** 朋友待滿時間：幫邀請人記一筆 */
 function creditReferral(refVid, friendName) {
@@ -348,10 +354,50 @@ function creditReferral(refVid, friendName) {
   rw.refs = (rw.refs ?? 0) + 1;
   giveTo(refVid, REF_GAIN, 'friend');
   for (const [n, id] of REF_TIERS) if (rw.refs >= n) grantGift(refVid, id);
+  // 👒 每週限定造型：朋友真的透過連結來玩才拿得到
+  grantOutfit(refVid, weeklyOutfit(dayKey()).id, 'weekly');
   saveJson('players.json', players);
   for (const s of io.sockets.sockets.values()) if (s.data.vid === refVid) s.emit('friendCredit', { name: friendName, refs: rw.refs });
   console.log(`[邀請] ${friendName} 待滿了，邀請人累積 ${rw.refs} 位`);
 }
+
+// ---------- 👒 造型收集 ----------
+const OUTFIT_SLOTS = ['head', 'back', 'neck'];
+/** 身上穿的造型 → 線上同步用的代號 [頭, 背, 脖子]（0＝沒穿） */
+const wearCodes = (w) => OUTFIT_SLOTS.map((k) => outfitCode(w?.wear?.[k]));
+/** 送一款造型（不一定在線上；在線上的話通知他）；已經有了回傳 null */
+function grantOutfit(vid, id, why) {
+  const w = players[vid];
+  if (!w || !OUTFIT_BY_ID[id]) return null;
+  w.outfits ??= [];
+  if (w.outfits.includes(id)) return null;
+  w.outfits.push(id);
+  syncRack(vid);
+  saveJson('players.json', players);
+  for (const s of io.sockets.sockets.values()) if (s.data.vid === vid) s.emit('outfitGift', { id, why, outfits: w.outfits });
+  return id;
+}
+/** 帳篷裡的衣帽架：每個部位展示一件（最近拿到、現在沒穿在身上的） */
+function syncRack(vid) {
+  const w = players[vid];
+  const h = homes[vid];
+  if (!w || !h) return;
+  const owned = w.outfits ?? [];
+  const rack = OUTFIT_SLOTS.map((slot) => {
+    const mine = owned.filter((id) => OUTFIT_BY_ID[id]?.slot === slot);
+    return [...mine].reverse().find((id) => id !== w.wear?.[slot]) ?? mine[mine.length - 1] ?? null;
+  }).filter(Boolean);
+  if (JSON.stringify(rack) === JSON.stringify(h.rack ?? [])) return;
+  h.rack = rack;
+  saveJson('homes.json', homes);
+}
+const outfitView = (w) => {
+  const d = dayKey();
+  const daily = dailyOutfit(d).id;
+  const weekly = weeklyOutfit(d).id;
+  const owned = w?.outfits ?? [];
+  return { outfits: owned, wear: w?.wear ?? {}, daily, dailyGot: owned.includes(daily), weekly, weeklyGot: owned.includes(weekly), dateNext: nextDateOutfit(owned)?.id ?? null };
+};
 
 function wallet(vid) {
   if (!vid) return null;
@@ -544,14 +590,46 @@ app.get(['/stats', '/api/stats'], (req, res) => {
     const avg = d.sessions ? Math.round(d.totalSec / d.sessions) : 0;
     const pct = (n) => (d.sessions ? `${Math.round((n / d.sessions) * 100)}%` : '-');
     const nbPct = (n) => (d.nb ? `${Math.round(((n ?? 0) / d.nb) * 100)}%` : '-');
-    return { day: k, visits: d.visits, visitors: d.vids.length, mobile: d.visits ? `${Math.round((d.touch / d.visits) * 100)}%` : '-', avg: `${Math.floor(avg / 60)}分${avg % 60}秒`, s30: pct(d.stay[0]), s120: pct(d.stay[1]), s600: pct(d.stay[2]), s600p: pct(d.stay[3]), nb: d.nb ?? '-', nb30: nbPct(d.nb30), nbDid: nbPct(d.nbDid), ritual: d.ritual, quests: d.ritual + Object.values(d.quests ?? {}).reduce((a, b) => a + b, 0), hangs: d.hangs ?? 0, stones: d.stones, wishes: d.wishes, notes: d.notes, fish: d.fish, chats: d.chats };
+    return { day: k, visits: d.visits, visitors: d.vids.length, mobile: d.visits ? `${Math.round((d.touch / d.visits) * 100)}%` : '-', avg: `${Math.floor(avg / 60)}分${avg % 60}秒`, s30: pct(d.stay[0]), s120: pct(d.stay[1]), s600: pct(d.stay[2]), s600p: pct(d.stay[3]), nb: d.nb ?? '-', nb30: nbPct(d.nb30), nbDid: nbPct(d.nbDid), ritual: d.ritual, quests: d.ritual + Object.values(d.quests ?? {}).reduce((a, b) => a + b, 0), hangs: d.hangs ?? 0, stones: d.stones, wishes: d.wishes, notes: d.notes, fish: d.fish, chats: d.chats, hits: d.hits ?? '-', preLeave: d.hits ? `${Math.max(0, Math.round(((d.hits - (d.loaded ?? 0)) / d.hits) * 100))}%` : '-', shares: d.shares ?? 0, invNew: d.invNew ?? 0, dates: d.dates ?? 0, gathers: d.gathers ?? 0 };
   });
   if (req.path.startsWith('/api')) return res.json(rows);
-  const head = ['日期', '進來次數', '不重複旅人', '手機比例', '平均停留', '30秒內離開', '30秒～2分', '2～10分', '10分以上', '新旅人', '新旅人30秒內離開', '新旅人完成任務', '疊過石頭的人', '完成任務', '掛裝飾', '石頭', '繪馬', '留言', '釣魚', '聊天'];
-  const keys = ['day', 'visits', 'visitors', 'mobile', 'avg', 's30', 's120', 's600', 's600p', 'nb', 'nb30', 'nbDid', 'ritual', 'quests', 'hangs', 'stones', 'wishes', 'notes', 'fish', 'chats'];
+  const head = ['日期', '打開網頁', '載入完成前就離開', '進來次數', '不重複旅人', '手機比例', '平均停留', '30秒內離開', '30秒～2分', '2～10分', '10分以上', '新旅人', '新旅人30秒內離開', '新旅人完成任務', '分享', '邀請來的新旅人', '營火之約', '採集', '疊過石頭的人', '完成任務', '掛裝飾', '石頭', '繪馬', '留言', '釣魚', '聊天'];
+  const keys = ['day', 'hits', 'preLeave', 'visits', 'visitors', 'mobile', 'avg', 's30', 's120', 's600', 's600p', 'nb', 'nb30', 'nbDid', 'shares', 'invNew', 'dates', 'gathers', 'ritual', 'quests', 'hangs', 'stones', 'wishes', 'notes', 'fish', 'chats'];
+  // 來源統計：最近 7 天每個來源的人數、30 秒內離開、平均停留、隔天回來的比例
+  const srcDays = days.slice(0, 7);
+  const srcRows = SOURCES.map((so) => {
+    const a = { id: so.id, zh: so.zh, hits: 0, loaded: 0, v: 0, n: 0, ss: 0, s30: 0, sec: 0, d1: 0, nOld: 0 };
+    srcDays.forEach((k, idx) => {
+      const e = stats[k]?.src?.[so.id];
+      a.hits += stats[k]?.hitSrc?.[so.id] ?? 0;
+      a.loaded += stats[k]?.loadSrc?.[so.id] ?? 0;
+      if (!e) return;
+      a.v += e.v ?? 0;
+      a.n += e.n ?? 0;
+      a.ss += e.ss ?? 0;
+      a.s30 += e.s30 ?? 0;
+      a.sec += e.sec ?? 0;
+      // 隔天回來：今天還沒過完，不算今天的
+      if (idx > 0) {
+        a.d1 += e.d1 ?? 0;
+        a.nOld += e.n ?? 0;
+      }
+    });
+    return a;
+  }).filter((a) => a.v || a.hits);
+  const p100 = (x, y) => (y ? `${Math.round((x / y) * 100)}%` : '-');
+  const srcTable = `<h3>📍 來源（最近 7 天）</h3><div class="wrap"><table><tr><th>來源</th><th>打開網頁</th><th>載入完成前就離開</th><th>進來次數</th><th>新旅人</th><th>30秒內離開</th><th>平均停留</th><th>隔天又回來</th></tr>${
+    srcRows
+      .sort((x, y) => y.v - x.v)
+      .map((a) => {
+        const avg = a.ss ? Math.round(a.sec / a.ss) : 0;
+        return `<tr><td>${a.zh}</td><td>${a.hits || '-'}</td><td>${a.hits ? p100(Math.max(0, a.hits - a.loaded), a.hits) : '-'}</td><td>${a.v}</td><td>${a.n}</td><td>${p100(a.s30, a.ss)}</td><td>${Math.floor(avg / 60)}分${avg % 60}秒</td><td>${p100(a.d1, a.nOld)}</td></tr>`;
+      })
+      .join('') || '<tr><td colspan="8">還沒有資料（這版上線後才開始記）</td></tr>'
+  }</table></div><p>「打開網頁」是網頁一打開就記一次（還沒載入遊戲）；「載入完成前就離開」＝打開網頁但沒等到遊戲畫面就走了，如果很高，代表 30 秒流失是卡在載入。「隔天又回來」＝第一次來的人，隔天又進來的比例（今天的還沒算）。來源是看玩家從哪個網站點過來；Threads、IG 的 App 常常不告訴網站從哪裡來，會算進「直接進來」，貼連結時可以在網址後面加 <code>?src=threads</code>。</p>`;
   const online = [...channels.values()].reduce((n, c) => n + chCount(c), 0);
   res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>營地統計</title>
-<style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px}table{border-collapse:collapse;font-size:13px}th,td{padding:6px 9px;border-bottom:1px solid #3a2e27;text-align:right;white-space:nowrap}th{color:#ffb46b;position:sticky;top:0;background:#1d1714}td:first-child,th:first-child{text-align:left}.wrap{overflow-x:auto}p{opacity:.75;font-size:13px}.me{opacity:1;padding:8px 12px;border-radius:10px;background:#2a211c;display:inline-block}.me button{margin-left:6px;padding:4px 10px;border:none;border-radius:999px;background:#f08a3c;color:#2a1608;font-weight:700;cursor:pointer}.me small{opacity:.7}</style></head>
+<style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px}h3{color:#ffb46b;margin-top:28px}code{background:#2a211c;padding:1px 5px;border-radius:4px}table{border-collapse:collapse;font-size:13px}th,td{padding:6px 9px;border-bottom:1px solid #3a2e27;text-align:right;white-space:nowrap}th{color:#ffb46b;position:sticky;top:0;background:#1d1714}td:first-child,th:first-child{text-align:left}.wrap{overflow-x:auto}p{opacity:.75;font-size:13px}.me{opacity:1;padding:8px 12px;border-radius:10px;background:#2a211c;display:inline-block}.me button{margin-left:6px;padding:4px 10px;border:none;border-radius:999px;background:#f08a3c;color:#2a1608;font-weight:700;cursor:pointer}.me small{opacity:.7}</style></head>
 <body><h2>🔥 營地統計</h2>
 <p class="me">這台裝置：<b id="me-st"></b> <button id="me-btn" type="button"></button><br><small>自己測試用的手機、平板、電腦，各打開這頁按一次，你自己進出就不會被算進「進來次數、停留時間、新旅人」。（只影響之後，之前的數字改不了）</small></p>
 <script>
@@ -564,7 +642,22 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   draw();
 })();
 </script><p>伺服器已經連續醒著 <b>${awakeText()}</b>（從 ${new Date(BOOT_AT).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })} 起；正常只有重新部署時才會歸零，如果常常歸零，代表定時叫醒沒有生效、伺服器睡著過）</p><p>現在在線：${online} 人 · 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好；「新旅人」是第一次來的人（從 11/3 開始統計）。</p>
-<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="${head.length}">還沒有資料</td></tr>'}</table></div></body></html>`);
+<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="${head.length}">還沒有資料</td></tr>'}</table></div>${srcTable}</body></html>`);
+});
+
+// 📍 網頁一打開就記一次（還沒載入遊戲）：算「載入完成前就離開」；遊戲畫出第一張畫面再記一次 loaded
+app.get('/api/hit', (req, res) => {
+  res.set({ 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
+  res.status(204).end();
+  if (req.query.staff === '1') return;
+  const d = today();
+  const q = (k) => String(req.query[k] ?? '').slice(0, 80);
+  const src = sourceFrom({ tag: q('src'), invite: q('w') === '1', host: q('h'), ref: q('r') });
+  const field = req.query.loaded === '1' ? 'loadSrc' : 'hitSrc';
+  d[field === 'loadSrc' ? 'loaded' : 'hits'] = (d[field === 'loadSrc' ? 'loaded' : 'hits'] ?? 0) + 1;
+  d[field] ??= {};
+  d[field][src] = (d[field][src] ?? 0) + 1;
+  saveJson('stats.json', stats);
 });
 
 // 💡 玩家建議：/ideas（有設 STATS_KEY 時要帶 ?key=）
@@ -625,7 +718,7 @@ const packState = (p) => [
   p.e | 0,
 ];
 
-const publicInfo = (p) => ({ id: p.id, name: p.name, fur: p.fur, sp: p.sp, rw: p.rw, s: packState(p) });
+const publicInfo = (p) => ({ id: p.id, name: p.name, fur: p.fur, sp: p.sp, rw: p.rw, ot: p.ot, s: packState(p) });
 
 /** 某個分流的某個房間，給新進玩家的完整資料 */
 function roomSnapshot(c, id, selfId) {
@@ -654,7 +747,7 @@ function areaCounts(c) {
   const n = (id) => c.rooms.get(id)?.players.size ?? 0;
   let inTents = 0;
   for (const r of homeRooms.values()) inTents += r.players.size;
-  return { forest_main: n('forest_main'), lake_dock: n('lake_dock'), tent_focus: n('tent_focus'), treehouse_music: n('treehouse_music'), tent_social: n('tent_social'), campground: n('campground') + inTents };
+  return { forest_main: n('forest_main'), lake_dock: n('lake_dock'), tent_focus: n('tent_focus'), treehouse_music: n('treehouse_music'), tent_social: n('tent_social'), campground: n('campground') + inTents, mist_forest: n('mist_forest') };
 }
 const lastAreas = new Map();
 setInterval(() => {
@@ -703,6 +796,7 @@ io.on('connection', (socket) => {
   };
   let stacked = false; // 這次來訪疊過石頭了嗎
   let refTimer = null; // 朋友邀請：待滿時間才算
+  let dateTimer = null; // 營火之約：待滿 1 分鐘才算
 
   /** 離開目前的分流／房間 */
   /** 離開目前的房間；to：去了哪裡（沒有＝離開遊戲） */
@@ -796,6 +890,7 @@ io.on('connection', (socket) => {
       vid: String(data.vid ?? '').slice(0, 24),
     };
     player.rw = findReward(player.name, data.code);
+    const src = cleanSource(data.src);
     // 統計：第一次進來才算一次來訪（斷線重連、改名字不重複算）
     // 🙈 作者自己的裝置（在 /stats 按過「這台裝置不算進統計」）：來訪、停留、新旅人都不算
     if (!data.rejoin && !data.staff) {
@@ -805,6 +900,11 @@ io.on('connection', (socket) => {
       const vid = String(data.vid ?? '').slice(0, 24);
       if (vid && !d.vids.includes(vid) && d.vids.length < 50000) d.vids.push(vid);
       if (data.touch) d.touch++;
+      // 來源統計：從哪裡來的、各來源有幾個新旅人
+      d.src ??= {};
+      const e = (d.src[src] ??= { v: 0, n: 0 });
+      e.v++;
+      session.src = src;
       saveJson('stats.json', stats);
     }
     enter(c, wanted);
@@ -815,6 +915,13 @@ io.on('connection', (socket) => {
     const firstVisit = !!myVid && !players[myVid]; // 第一次來（瀏覽器裡還沒有任何紀錄）
     if (session && firstVisit) session.newbie = true; // 統計：新旅人留不留得住
     wal = wallet(myVid);
+    if (wal) player.ot = wearCodes(wal);
+    // 第一次來：記住是從哪裡來的（算隔天回來的比例用）
+    if (firstVisit && wal) {
+      wal.src = src;
+      wal.fd = dayKey();
+      if (session) today().src[src].n++;
+    }
     socket.data.vid = wal ? String(data.vid).slice(0, 24) : null;
     const ip = String(socket.handshake.headers['x-forwarded-for'] ?? socket.handshake.address ?? '').split(',')[0].trim();
     // 朋友透過邀請連結第一次來：待滿 3 分鐘，邀請人就拿到松果和禮物
@@ -825,6 +932,22 @@ io.on('connection', (socket) => {
         wal.by = homeId(refVid);
         const name = player.name;
         refTimer = setTimeout(() => creditReferral(refVid, name), REF_STAY_MS);
+        if (!data.staff) bump('invNew');
+      }
+    }
+    // 🔥 營火之約：朋友在營火時間（21:30～22:00）透過連結進來，待滿 1 分鐘，兩個人都拿到限定造型
+    if (data.with && !data.rejoin && wal && eventInfo().active) {
+      const raw = String(data.with).slice(0, 24);
+      const refVid = vidOfCode(raw);
+      if (refVid && refVid !== myVid && lastIp.get(refVid) !== ip && players[refVid]) {
+        const name = player.name;
+        clearTimeout(dateTimer);
+        dateTimer = setTimeout(() => {
+          const a = grantOutfit(myVid, nextDateOutfit(wal.outfits)?.id, 'date');
+          const b = grantOutfit(refVid, nextDateOutfit(players[refVid].outfits)?.id, 'date');
+          if (a || b) bump('dates');
+          for (const s2 of io.sockets.sockets.values()) if (s2.data.vid === refVid) s2.emit('dateFriend', { name });
+        }, DATE_STAY_MS);
       }
     }
     if (wal) lastIp.set(myVid, ip);
@@ -833,6 +956,11 @@ io.on('connection', (socket) => {
       const d = dayKey();
       if (wal.last !== d) {
         const yesterday = dayKey(new Date(Date.now() - 86400000));
+        // 來源統計：昨天第一次來的人，今天又回來了
+        if (wal.fd === yesterday && wal.src && stats[yesterday]?.src?.[wal.src] && !data.staff) {
+          stats[yesterday].src[wal.src].d1 = (stats[yesterday].src[wal.src].d1 ?? 0) + 1;
+          saveJson('stats.json', stats);
+        }
         wal.streak = wal.last === yesterday ? wal.streak + 1 : 1;
         wal.last = d;
         const gain = 2 + Math.min(wal.streak, 7);
@@ -863,7 +991,7 @@ io.on('connection', (socket) => {
       ok: true,
       id: socket.id,
       reward: player.rw,
-      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, dex: dexView(wal), look: wal.look ?? null } : null,
+      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, dex: dexView(wal), look: wal.look ?? null, outfit: outfitView(wal), basket: wal.bk ?? {} } : null,
       myHome: publicHome(homes[player.vid]),
       code: player.vid ? homeId(player.vid) : null, // 邀請連結用的公開代號
       ver: webVersion,
@@ -1231,13 +1359,69 @@ io.on('connection', (socket) => {
   });
 
   // 🎁 分享一次就送「營火明信片牆」（每人一次）
+  // 👒 每天第一次分享：送今天的每日造型（每天換一款）
   socket.on('shared', (data, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
-    if (wal.shared) return ack?.({ ok: false, reason: 'done' });
+    const d = dayKey();
+    const first = !wal.shared;
+    const todayFirst = wal.sd2 !== d;
+    if (!first && !todayFirst) return ack?.({ ok: false, reason: 'done' });
     wal.shared = true;
+    wal.sd2 = d;
     saveJson('players.json', players);
-    bump('shares');
-    ack?.({ ok: true, gift: grantGift(player.vid, 'postcard') });
+    if (todayFirst && !data?.staff) bump('shares');
+    const kind = String(data?.kind ?? '').slice(0, 12);
+    if (kind === 'invite' && todayFirst) bump('invShares');
+    ack?.({ ok: true, gift: first ? grantGift(player.vid, 'postcard') : null, outfit: todayFirst ? grantOutfit(player.vid, dailyOutfit(d).id, 'daily') : null });
+  });
+  socket.on('outfitInfo', (data, ack) => ack?.(wal ? { ok: true, ...outfitView(wal) } : { ok: false }));
+  socket.on('wear', (data = {}, ack) => {
+    if (!wal || !player) return ack?.({ ok: false });
+    const slot = OUTFIT_SLOTS.includes(data.slot) ? data.slot : null;
+    if (!slot) return ack?.({ ok: false });
+    const id = data.id ? String(data.id) : null;
+    if (id && (OUTFIT_BY_ID[id]?.slot !== slot || !wal.outfits?.includes(id))) return ack?.({ ok: false, reason: 'notOwned' });
+    wal.wear ??= {};
+    if (id) wal.wear[slot] = id;
+    else delete wal.wear[slot];
+    saveJson('players.json', players);
+    player.ot = wearCodes(wal);
+    syncRack(player.vid);
+    socket.to(rkey).emit('outfit', { id: socket.id, ot: player.ot });
+    ack?.({ ok: true, wear: wal.wear });
+  });
+
+  // 🍄 迷霧森林採集：每個人的採集點各自分開
+  socket.on('gatherInfo', (data, ack) => {
+    if (!wal) return ack?.({ ok: false });
+    ack?.({ ok: true, ready: GATHER_SPOTS.map((_, i) => wal.gat?.[i] ?? 0), basket: wal.bk ?? {}, night: isNight(), now: Date.now() });
+  });
+  socket.on('gather', (data = {}, ack) => {
+    if (!wal || !player || roomId !== 'mist_forest') return ack?.({ ok: false });
+    const i = Math.floor(num(data.i, -1, GATHER_SPOTS.length, -1));
+    const spot = GATHER_SPOTS[i];
+    if (!spot) return ack?.({ ok: false });
+    if (Math.hypot(player.x - spot.x, player.z - spot.z) > GATHER_R + 2.5) return ack?.({ ok: false, reason: 'far' });
+    const now = Date.now();
+    wal.gat ??= {};
+    if ((wal.gat[i] ?? 0) > now) return ack?.({ ok: false, reason: 'notYet', readyAt: wal.gat[i] });
+    const night = isNight();
+    if (spot.type === 'bug' && !night) return ack?.({ ok: false, reason: 'day' });
+    const item = gatherItemAt(spot.type, night);
+    wal.gat[i] = now + GATHER_REGROW_MS;
+    wal.bk ??= {};
+    const first = !wal.bk[item.id];
+    wal.bk[item.id] = (wal.bk[item.id] ?? 0) + 1;
+    let gain = 0;
+    let bonus = 0;
+    if (first) {
+      gain = GATHER_FIRST_GAIN[item.rarity] ?? 2;
+      if (GATHER_ITEMS.every((x) => wal.bk[x.id])) bonus = GATHER_DEX_BONUS;
+      award(gain + bonus, 'gather');
+    }
+    saveJson('players.json', players);
+    bump('gathers');
+    ack?.({ ok: true, id: item.id, count: wal.bk[item.id], first, gain, bonus, readyAt: wal.gat[i], now });
   });
   socket.on('giftInfo', (data, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
@@ -1520,6 +1704,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     clearTimeout(refTimer); // 還沒待滿就走了：不算
+    clearTimeout(dateTimer);
     if (!player) return;
     leave();
     clearInterval(sitTimer);
@@ -1529,6 +1714,12 @@ io.on('connection', (socket) => {
       d.sessions++;
       d.totalSec += Math.round(sec);
       d.stay[sec < 30 ? 0 : sec < 120 ? 1 : sec < 600 ? 2 : 3]++;
+      const se = session.src && d.src?.[session.src];
+      if (se) {
+        se.ss = (se.ss ?? 0) + 1;
+        se.sec = (se.sec ?? 0) + Math.round(sec);
+        if (sec < 30) se.s30 = (se.s30 ?? 0) + 1;
+      }
       // 新旅人：第一次來的人有幾個、30 秒內就走的、有完成小任務的
       if (session.newbie) {
         d.nb = (d.nb ?? 0) + 1;

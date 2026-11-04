@@ -4,6 +4,7 @@ import { createRoastStick, createLogProp, createBlanket, createFishingRod } from
 import { FUR_PALETTES } from './furPalettes.js';
 import { SPECIES } from './species.js';
 import { buildAccessory } from '../accessories.js';
+import { buildOutfit, animateOutfit } from '../outfit3d.js';
 import { createFishMesh, fishScale } from '../../fishing/fishModel.js';
 
 /**
@@ -386,24 +387,56 @@ export class ProceduralFox {
     else if (name === 'fish') this.heldFish.visible = visible;
     else if (name === 'log') this.log.visible = visible;
     else if (name === 'stone') this.headStone.visible = visible;
-    else if (name === 'blanket') this.blanket.body.visible = this.blanket.hood.visible = visible;
+    else if (name === 'blanket') {
+      this.blanket.body.visible = this.blanket.hood.visible = visible;
+      if (this.outfit?.back) this.outfit.back.visible = !visible;
+      if (this.outfit?.head) this.outfit.head.visible = !visible;
+    }
   }
 
   getHeadWorldPosition(target = new THREE.Vector3()) {
     return this.head.getWorldPosition(target);
   }
 
-  /** 贊助者頭飾：0 無、1 小黃花、2 四葉草（插在頭頂右側） */
+  /** 贊助者頭飾：0 無、1 小黃花、2 四葉草（插在頭頂右側；戴帽子時插在帽子上，不會被蓋掉） */
   setAccessory(code) {
     if (this._accCode === code) return;
     this._accCode = code;
     if (this.accessory) this.head.remove(this.accessory);
     this.accessory = buildAccessory(code);
-    if (this.accessory) {
+    if (this.accessory) this.head.add(this.accessory);
+    this.#placeAccessory();
+  }
+
+  #placeAccessory() {
+    if (!this.accessory) return;
+    const top = this.outfit?.head?.userData.hatTop ?? 0;
+    if (top) {
+      // 帽子：插在帽子右側外面一點，往上翹，整朵露出來
+      this.accessory.position.set(0.24, Math.max(0.3, top - 0.1), 0.06);
+      this.accessory.rotation.z = -0.55;
+    } else {
       this.accessory.position.set(0.13, 0.3, 0.03);
       this.accessory.rotation.z = -0.25;
-      this.head.add(this.accessory);
     }
+  }
+
+  /** 造型：{ head, back, neck }（造型代號，沒穿是 null） */
+  setOutfit(wear = {}) {
+    const key = `${wear.head ?? ''}|${wear.back ?? ''}|${wear.neck ?? ''}`;
+    if (this._outfitKey === key) return;
+    this._outfitKey = key;
+    this.outfit ??= {};
+    for (const slot of ['head', 'back', 'neck']) {
+      const old = this.outfit[slot];
+      if (old) old.parent?.remove(old);
+      const g = wear[slot] ? buildOutfit(wear[slot]) : null;
+      this.outfit[slot] = g;
+      if (g) (slot === 'head' ? this.head : this.torso).add(g);
+    }
+    // 耳朵太長（兔耳）時帽子稍微往上
+    if (this.outfit.head && this.species.ears === 'long') this.outfit.head.position.y = 0.03;
+    this.#placeAccessory();
   }
 
   /** 換成要炫耀的魚（魚種索引、公分） */
@@ -424,6 +457,7 @@ export class ProceduralFox {
 
   update(dt, t, speed) {
     this.poseTime += dt;
+    if (this.outfit?.back) animateOutfit(this.outfit.back, t);
     const k = 1 - Math.exp(-12 * dt);
     const P = this.pose;
     const moving = (P === 'walk' || P === 'run') && speed > 0.3;

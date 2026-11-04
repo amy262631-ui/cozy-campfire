@@ -155,6 +155,9 @@ export class GltfCharacter {
     else if (name === 'blanket') this.blanket.body.visible = visible;
   }
 
+  /** 自訂模型不支援造型（只有內建動物有） */
+  setOutfit() {}
+
   setAccessory(code) {
     if (this.accessory) this.headAnchor.remove(this.accessory);
     this.accessory = buildAccessory(code);

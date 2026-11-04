@@ -180,7 +180,7 @@ export class FishingUI {
       } catch {
         /* 存不了就算了 */
       }
-      if (this.el.modal.classList.contains('show') && this._modal === 'creel') this.openCreel();
+      if (this.el.modal.classList.contains('show') && this._modal === 'creel') this.openCreel(this._tab);
     }
   }
 
@@ -189,7 +189,37 @@ export class FishingUI {
   }
 
   /** 📖 魚類圖鑑：釣過的顯示名字與最大紀錄；沒釣過的是剪影，附上出現提示 */
-  openCreel() {
+  /**
+   * 圖鑑的其他分頁（main.js 加進來）：{ id, label, title(), render() → html, bind?(body) }
+   * @type {Array<{ id: string, label: string, title: () => string, render: () => string, bind?: (body: HTMLElement) => void }>}
+   */
+  extraTabs = [];
+
+  #tabsHtml(cur) {
+    const tabs = [{ id: 'fish', label: t('🐟 魚') }, ...this.extraTabs];
+    return `<div class="dex-tabs">${tabs.map((x) => `<button type="button" data-tab="${x.id}" class="${x.id === cur ? 'on' : ''}">${x.label}</button>`).join('')}</div>`;
+  }
+
+  #bindTabs() {
+    for (const b of this.el.modalBody.querySelectorAll('.dex-tabs [data-tab]')) {
+      b.addEventListener('click', () => this.openCreel(b.dataset.tab));
+    }
+  }
+
+  /** 打開圖鑑；tab：fish（預設）或其他分頁的 id */
+  openCreel(tab = 'fish') {
+    const extra = this.extraTabs.find((x) => x.id === tab);
+    if (extra) {
+      this._modal = 'creel';
+      this._tab = tab;
+      this.el.modalTitle.textContent = extra.title();
+      this.el.modalBody.innerHTML = this.#tabsHtml(tab) + extra.render();
+      this.#bindTabs();
+      extra.bind?.(this.el.modalBody);
+      this.el.modal.classList.add('show');
+      return;
+    }
+    this._tab = 'fish';
     this._modal = 'creel';
     const total = Object.values(this.creel).reduce((s, e) => s + e.count, 0);
     const found = this.dexCount;
@@ -207,10 +237,11 @@ export class FishingUI {
       return `<div class="dex-card rarity-${f.rarity}${f.legend ? ' legend' : ''}"><i class="dex-fish" style="${patch}${glow}"></i><b>${f.name}</b><small>${rank(f)}</small><em>${f.junk ? `×${e.count}` : t('最大 {size} 公分・×{n}', { size: e.best, n: e.count })}</em></div>`;
     }).join('');
     this.el.modalBody.innerHTML = `
-      <div class="dex-tabs"><button type="button" class="on">${t('🐟 魚')}</button><button type="button" disabled>${t('🌸 花（下次更新）')}</button></div>
+      ${this.#tabsHtml('fish')}
       <div class="dex-note">${t('第一次釣到新的魚會收進圖鑑，送松果（★ 越多送越多）；全部 {n} 種收集完再送 {b} 顆 🌰', { n: FISH.length, b: DEX_BONUS })}</div>
       <div class="dex-grid">${cards}</div>
       <div class="creel-total">${t('總共釣了 {n} 次（每條魚都放回湖裡了）', { n: total })}</div>`;
+    this.#bindTabs();
     this.el.modal.classList.add('show');
   }
 

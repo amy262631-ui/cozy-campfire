@@ -54,6 +54,10 @@ import { STONE_FLAG, CAIRN_MAX } from './rooms/cairns.js';
 import { FishingGame } from './fishing/FishingGame.js';
 import { FISH, packFish } from './fishing/fishData.js';
 import { FishingUI } from './ui/FishingUI.js';
+import { createMistForestRoom } from './rooms/mistForestRoom.js';
+import { OUTFITS, OUTFIT_BY_ID, OUTFIT_SLOTS } from './game/outfits.js';
+import { GATHER_ITEMS, GATHER_BY_ID, GATHER_TYPES, GATHER_DEX_BONUS } from './game/gathering.js';
+import { detectSource } from './game/sources.js';
 
 // 網址參數（開發測試用）
 //   ?idle=5        掛機巡航等待秒數
@@ -67,7 +71,7 @@ const IDLE_AFTER = Number(params.get('idle')) || 60;
 const MODEL_URL = params.get('model') || DEFAULT_MODEL_URL;
 
 /** 線上人數顯示用的地點名稱 */
-const PLACE = { forest_main: '營火旁', tent_focus: '帳篷裡', treehouse_music: '樹屋上', lake_dock: '湖畔', tent_social: '交流帳篷裡', campground: '帳篷營地', home: '帳篷裡' };
+const PLACE = { forest_main: '營火旁', tent_focus: '帳篷裡', treehouse_music: '樹屋上', lake_dock: '湖畔', tent_social: '交流帳篷裡', campground: '帳篷營地', home: '帳篷裡', mist_forest: '迷霧森林' };
 
 async function init() {
   translateStatic(); // index.html 裡的固定文字
@@ -102,6 +106,7 @@ async function init() {
     tent_social: createSocialTentRoom(),
     campground: createCampgroundRoom(), // 帳篷營地：大家的帳篷排在一起
     home: createHomeRoom(), // 我的帳篷（每個人的帳篷共用這個房間，進來時換上主人的擺設）
+    mist_forest: createMistForestRoom(), // 迷霧森林：採蘑菇、果實、野花，晚上有螢火蟲
   };
   const { world, campfire } = forest;
   if (lowPower) campfire.light.castShadow = false; // 省電模式不算影子
@@ -197,6 +202,7 @@ async function init() {
     cameraRig,
     onCatch: (index, size) => {
       ritual?.event('fish', { junk: !!FISH[index]?.junk });
+      if (!FISH[index]?.junk && size > (todayLog.size ?? 0)) logToday({ fish: index, size }); // 分享文案用：今天最大的魚
       const rec = fishingUI.record(index, size);
       lastCatch = { index, size, rec };
       fishingUI.showCard(index, size, rec);
@@ -318,7 +324,7 @@ async function init() {
   const shareCard = new ShareCard({
     hud,
     getUrl: () => inviteUrl(),
-    onShared: () => claimShareGift(),
+    onShared: (info) => claimShareGift(info),
     snapshot: () => {
       renderer.render(scene, camera); // 畫完馬上截圖（不然畫布會是空的）
       return renderer.domElement.toDataURL('image/jpeg', 0.9);
@@ -505,8 +511,17 @@ async function init() {
     return true;
   };
   /** 分享過一次：領「營火明信片牆」（伺服器只會給一次） */
-  const claimShareGift = async () => {
-    if (net.online) await net.request('shared');
+  const claimShareGift = async (info) => {
+    if (!net.online) return;
+    const res = await net.request('shared', { kind: info?.kind ?? 'card', staff: isStaff() });
+    if (res?.outfit) {
+      look.outfits = [...new Set([...look.outfits, res.outfit])];
+      look.dailyGot = true;
+      const o = OUTFIT_BY_ID[res.outfit];
+      audio.sfx('bell');
+      hud.toast(t('👒 謝謝分享！拿到今天的每日造型：{name}', { name: outfitName(res.outfit) }), 6000);
+      if (o && !look.wear?.[o.slot]) wearOutfit(res.outfit);
+    }
   };
   const giftPanel = new GiftPanel({
     getInfo: async () => {
@@ -598,6 +613,207 @@ async function init() {
   });
   // 上方的「📖 圖鑑」：在哪裡都能打開（之後花、其他收集也放在這裡）
   hud.onDex = () => fishingUI.openCreel();
+
+  // ---------- 👒 造型收集 ----------
+  /** 伺服器給的：擁有的造型、身上穿的、今天的每日造型、這週限定 */
+  let look = { outfits: [], wear: {}, daily: null, dailyGot: false, weekly: null, weeklyGot: false, dateNext: null };
+  let lookSlot = 'head';
+  const applyWear = () => player.character.setOutfit?.(look.wear ?? {});
+  const outfitName = (id) => (OUTFIT_BY_ID[id] ? `${OUTFIT_BY_ID[id].icon} ${t(OUTFIT_BY_ID[id].zh)}` : '');
+  /** 怎麼拿到：長的說明（滑鼠移上去）、短的（卡片上） */
+  const HOW = {
+    daily: [t('每日造型：那天分享就拿到（大約一個月輪一次，錯過會再回來）'), t('那天分享就拿到')],
+    weekly: [t('每週限定：朋友真的透過你的連結來玩才拿得到'), t('朋友透過連結來玩')],
+    date: [t('營火之約限定：朋友在晚上 9:30 營火時間透過你的連結進來，兩個人都拿到'), t('9:30 營火時間約朋友')],
+  };
+  fishingUI.extraTabs.push({
+    id: 'outfit',
+    label: t('👒 造型'),
+    title: () => t('👒 造型 {n}／{total}', { n: look.outfits.length, total: OUTFITS.length }),
+    render: () => {
+      const owned = new Set(look.outfits);
+      const today = look.daily ? OUTFIT_BY_ID[look.daily] : null;
+      const week = look.weekly ? OUTFIT_BY_ID[look.weekly] : null;
+      const cards = OUTFITS.filter((o) => o.slot === lookSlot)
+        .map((o) => {
+          const has = owned.has(o.id);
+          const worn = look.wear?.[o.slot] === o.id;
+          const tag = o.src === 'weekly' ? t('每週限定') : o.src === 'date' ? t('營火之約') : o.id === look.daily ? t('今天的') : t('每日');
+          return has
+            ? `<div class="dex-card outfit${worn ? ' worn' : ''}" data-id="${o.id}"><i class="dex-emoji">${o.icon}</i><b>${t(o.zh)}</b><small>${tag}</small><em>${worn ? t('穿著中・點一下脫掉') : t('點一下穿上')}</em></div>`
+            : `<div class="dex-card unknown" title="${HOW[o.src][0]}"><i class="dex-emoji">${o.icon}</i><b>${t('？？？')}</b><small>${tag}</small><em>${HOW[o.src][1]}</em></div>`;
+        })
+        .join('');
+      return `
+        <div class="outfit-today">
+          ${today ? (look.dailyGot ? t('✅ 今天的每日造型「{name}」已經拿到了', { name: outfitName(today.id) }) : t('🎁 今天的每日造型：{name}（分享一次就拿到）', { name: outfitName(today.id) })) : ''}
+          ${week ? `<br>${look.weeklyGot ? t('✅ 這週限定「{name}」已經拿到了', { name: outfitName(week.id) }) : t('🌟 這週限定：{name}（朋友透過你的連結來玩就拿到）', { name: outfitName(week.id) })}` : ''}
+          <br>${t('🔥 營火之約：朋友在 9:30 營火時間透過你的連結進來，兩個人都拿到限定造型')}
+          ${!look.dailyGot && net.online ? `<br><button type="button" id="outfit-share">${t('🔥 約朋友今晚 9:30，順便領今天的造型')}</button>` : ''}
+        </div>
+        <div class="outfit-slot-tabs">${OUTFIT_SLOTS.map((sl) => `<button type="button" data-slot="${sl.id}" class="${sl.id === lookSlot ? 'on' : ''}">${sl.icon} ${t(sl.zh)}</button>`).join('')}</div>
+        <div class="dex-grid">${cards}</div>
+        <div class="creel-total">${net.online ? t('造型可以同時戴帽子、背背包、圍圍巾，其他人都看得到 ✨') : t('單人模式：連上伺服器才能領造型')}</div>`;
+    },
+    bind: (body) => {
+      for (const b of body.querySelectorAll('[data-slot]')) {
+        b.addEventListener('click', () => {
+          lookSlot = b.dataset.slot;
+          fishingUI.openCreel('outfit');
+        });
+      }
+      for (const c of body.querySelectorAll('.dex-card.outfit')) c.addEventListener('click', () => wearOutfit(c.dataset.id));
+      body.querySelector('#outfit-share')?.addEventListener('click', () => {
+        fishingUI.el.modal.classList.remove('show');
+        openDateInvite();
+      });
+    },
+  });
+  async function wearOutfit(id) {
+    const o = OUTFIT_BY_ID[id];
+    if (!o) return;
+    const next = look.wear?.[o.slot] === id ? null : id;
+    look.wear = { ...look.wear };
+    if (next) look.wear[o.slot] = next;
+    else delete look.wear[o.slot];
+    applyWear();
+    audio.sfx('tap');
+    if (fishingUI.el.modal.classList.contains('show')) fishingUI.openCreel('outfit');
+    const res = await net.request('wear', { slot: o.slot, id: next });
+    if (res?.ok) look.wear = res.wear ?? look.wear;
+  }
+  hud.onLook = () => {
+    if (look.daily && !look.dailyGot) lookSlot = OUTFIT_BY_ID[look.daily]?.slot ?? lookSlot;
+    fishingUI.openCreel('outfit');
+  };
+  const setLook = (v) => {
+    look = { ...look, ...v };
+    applyWear();
+  };
+  net.on('outfit', ({ id, ot }) => id !== net.id && remotes.setOutfit(id, ot));
+  net.on('outfitGift', ({ id, why, outfits }) => {
+    look.outfits = outfits ?? [...look.outfits, id];
+    if (id === look.daily) look.dailyGot = true;
+    if (id === look.weekly) look.weeklyGot = true;
+    if (why === 'date') look.dateNext = null;
+    audio.sfx('bell');
+    const msg =
+      why === 'weekly'
+        ? t('🌟 朋友透過你的連結來玩了！拿到每週限定造型：{name}', { name: outfitName(id) })
+        : why === 'date'
+          ? t('🔥 營火之約成立！拿到限定造型：{name}', { name: outfitName(id) })
+          : t('👒 拿到今天的每日造型：{name}', { name: outfitName(id) });
+    hud.toast(`${msg}${t('（按上方「👒 造型」穿上）')}`, 6500);
+    // 還沒穿這個部位：直接幫他穿上，馬上看得到
+    const o = OUTFIT_BY_ID[id];
+    if (o && !look.wear?.[o.slot]) wearOutfit(id);
+  });
+  net.on('dateFriend', ({ name }) => hud.toast(t('🔥 {name} 赴約了！一起在營火旁坐坐吧', { name }), 6000));
+
+  // ---------- 🍄 迷霧森林採集 ----------
+  /** 採集籃：{ 種類: 數量 }（不限格子，不會壞） */
+  let basket = {};
+  const mist = rooms.mist_forest;
+  mist.onGather = async (i) => {
+    const res = await net.request('gather', { i });
+    if (!res?.ok) return res;
+    basket[res.id] = res.count;
+    logToday({ gather: (todayLog.gather ?? 0) + 1 });
+    const it = GATHER_BY_ID[res.id];
+    audio.sfx(res.first ? 'bell' : 'tap');
+    if (res.first) {
+      const found = GATHER_ITEMS.filter((x) => basket[x.id]).length;
+      hud.toast(t('📖 圖鑑新收錄：{icon} {name}！+{n} 🌰（{c}／{t}）', { icon: it.icon, name: t(it.zh), n: res.gain, c: found, t: GATHER_ITEMS.length }), 4500);
+      if (res.bonus) setTimeout(() => hud.toast(t('🏆 採集圖鑑全部收集完成！再送你 {n} 顆松果', { n: res.bonus }), 6000), 2500);
+    } else {
+      hud.toast(t('🧺 採到{icon} {name}（採集籃裡有 {n} 個）', { icon: it.icon, name: t(it.zh), n: res.count }), 2200);
+    }
+    return res;
+  };
+  const refreshGather = async () => {
+    if (roomMgr?.current.id !== 'mist_forest') return;
+    if (!net.online) return mist.setOffline();
+    const res = await net.request('gatherInfo');
+    if (res?.ok) {
+      basket = res.basket ?? basket;
+      mist.setState(res);
+    }
+  };
+  fishingUI.extraTabs.push({
+    id: 'gather',
+    label: t('🍄 採集'),
+    title: () => t('🍄 採集圖鑑 {n}／{total}', { n: GATHER_ITEMS.filter((x) => basket[x.id]).length, total: GATHER_ITEMS.length }),
+    render: () => {
+      const groups = GATHER_TYPES.map((ty) => {
+        const cards = GATHER_ITEMS.filter((x) => x.type === ty.id)
+          .map((x) =>
+            basket[x.id]
+              ? `<div class="dex-card rarity-${x.rarity}"><i class="dex-emoji">${x.icon}</i><b>${t(x.zh)}</b><small>${'★'.repeat(x.rarity)}</small><em>${t('採集籃裡 ×{n}', { n: basket[x.id] })}</em></div>`
+              : `<div class="dex-card unknown"><i class="dex-emoji">${x.icon}</i><b>${t('？？？')}</b><small>${'★'.repeat(x.rarity)}${x.night ? ' 🌙' : ''}</small><em>${t(x.hint)}</em></div>`,
+          )
+          .join('');
+        return `<div class="dex-note">${ty.icon} ${t(ty.zh)}</div><div class="dex-grid">${cards}</div>`;
+      }).join('');
+      const total = Object.values(basket).reduce((a, b) => a + b, 0);
+      return `<div class="dex-note">${t('從營火旁的「🍄 迷霧森林」走進去，走到發光的蘑菇、果實、野花旁邊就會自動採。第一次採到新的種類送松果（★ 越多送越多），全部 {n} 種收集完再送 {b} 顆 🌰', { n: GATHER_ITEMS.length, b: GATHER_DEX_BONUS })}</div>
+        ${groups}
+        <div class="creel-total">${t('🧺 採集籃：總共 {n} 個（不限格子，不會壞）', { n: total })}</div>`;
+    },
+  });
+
+  // ---------- 🔥 約朋友今晚 9:30 ----------
+  const TODAY_KEY = 'cozy-campfire-today';
+  const dayStr = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Taipei' }).format(new Date());
+  /** 今天的真實小紀錄（分享文案用）：釣到最大的魚、採了幾個、疊了幾顆石頭 */
+  const todayLog = (() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(TODAY_KEY) ?? 'null');
+      return v?.day === dayStr() ? v : { day: dayStr() };
+    } catch {
+      return { day: dayStr() };
+    }
+  })();
+  const logToday = (patch) => {
+    if (todayLog.day !== dayStr()) for (const k of Object.keys(todayLog)) delete todayLog[k];
+    Object.assign(todayLog, patch, { day: dayStr() });
+    try {
+      localStorage.setItem(TODAY_KEY, JSON.stringify(todayLog));
+    } catch {
+      /* 私密模式 */
+    }
+  };
+  function todayLines() {
+    const lines = [];
+    if (todayLog.fish != null && FISH[todayLog.fish]) lines.push(t('我今天釣到 {size} 公分的{name} 🐟', { size: todayLog.size, name: FISH[todayLog.fish].name }));
+    if (myHome?.tent && myHome.items?.length) lines.push(t('帳篷裡擺了 {n} 件家具 ⛺', { n: myHome.items.length }));
+    if (todayLog.gather) lines.push(t('在迷霧森林採了 {n} 樣東西 🍄', { n: todayLog.gather }));
+    if (todayLog.stones) lines.push(t('疊了 {n} 顆石頭許願 🪨', { n: todayLog.stones }));
+    const worn = OUTFIT_SLOTS.map((sl) => look.wear?.[sl.id]).filter(Boolean);
+    if (worn.length) lines.push(t('今天穿著{name}', { name: worn.map((id) => t(OUTFIT_BY_ID[id].zh)).join('、') }));
+    return lines;
+  }
+  function openDateInvite() {
+    const lines = todayLines();
+    const ev = currentEvent();
+    const big = ev?.active ? t('營火時間進行中！') : t('今晚 9:30 營火見');
+    const real = lines.slice(0, 2).join('・');
+    const daily = look.daily && !look.dailyGot ? OUTFIT_BY_ID[look.daily] : null;
+    shareCard.open({
+      kind: 'invite',
+      icon: '🔥',
+      big,
+      bigSize: 84,
+      small: real || t('流星雨、松果加倍，一起圍著營火烤棉花糖'),
+      url: inviteUrl(),
+      text: `${ev?.active ? t('營火時間開始了，快來營火旁找我 🔥') : t('今晚 9:30 一起來營火旁坐坐吧 🔥')}${real ? `
+${real}` : ''}
+${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
+      note: daily
+        ? t('分享出去就送今天的每日造型：{name}　朋友 9:30 營火時間進來，兩個人再拿營火之約限定造型', { name: outfitName(daily.id) })
+        : t('朋友透過連結來玩，你會拿到每週限定造型；9:30 營火時間進來，兩個人都拿到營火之約限定造型'),
+    });
+  }
+  hud.onDate = () => openDateInvite();
   // 湖畔排行按鈕併進上方那一排（不再另外浮一層，免得和上方文字疊在一起）
   hud.el.online.insertBefore(fishingUI.el.tools, hud.el.acctChip);
   // 📖 圖鑑收錄新魚
@@ -839,6 +1055,9 @@ async function init() {
         hud.setMe(myName);
         net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
       }
+      if (w.outfit) setLook(w.outfit); // 👒 造型：擁有的、穿著的、今天和這週的
+      basket = w.basket ?? basket;
+      refreshGather();
       fishingUI.mergeDex(w.dex);
       // 以前存在這個瀏覽器裡的魚簍，也一起存進帳號（換手機登入就看得到）
       const local = Object.fromEntries(Object.entries(fishingUI.creel).filter(([, e]) => e?.count).map(([i, e]) => [i, e.best || 1]));
@@ -872,6 +1091,7 @@ async function init() {
     tent_social: '交流帳篷',
     campground: '帳篷營地',
     home: '帳篷裡',
+    mist_forest: '迷霧森林',
   };
   net.on('playerLeft', ({ id, to }) => {
     const wasNpc = remotes.isNpc(id);
@@ -1008,6 +1228,8 @@ async function init() {
     }
     // 帳篷營地：拿大家的帳篷清單
     if (room.id === 'campground') refreshCamp();
+    // 迷霧森林：拿自己的採集點狀態
+    if (room.id === 'mist_forest') refreshGather();
     // 進到帳篷：換上主人的擺設
     guestPanel.set(room.id === 'home' ? (res?.home ?? myHome) : null, { mine: res ? !!res.mine : true, liked: !!res?.liked });
     if (room.id === 'home') {
@@ -1728,6 +1950,7 @@ async function init() {
     touch: !!mobile,
     staff: isStaff(), // 作者自己的裝置：不算進統計
     with: params.get('with') || undefined, // 朋友的邀請連結
+    src: detectSource(), // 來源統計：從哪個網站來的
     ch: Math.floor(Number(profile.ch ?? params.get('ch')) || 0),
     room: roomMgr.current.id,
     x: player.position.x,

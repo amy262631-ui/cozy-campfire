@@ -9,6 +9,7 @@ export const ENTRANCE_GEO = {
   lake_dock: { angle: 1.15, trigger: 13.6, build: 15.3 },
   tent_social: { angle: -1.25, trigger: 15.6, build: 17.3 },
   campground: { angle: -2.95, trigger: 13.6, build: 15.3 },
+  mist_forest: { angle: 0.8, trigger: 13.6, build: 15.3 },
 };
 
 const polar = (a, r) => ({ x: Math.sin(a) * r, z: Math.cos(a) * r });

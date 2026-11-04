@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { buildOutfit } from '../player/outfit3d.js';
+import { OUTFIT_BY_ID } from './outfits.js';
 import { t } from '../i18n/i18n.js';
 import { FURNITURE_CATALOG, FURNITURE_CATS } from './furnitureCatalog.js';
 
@@ -35,7 +37,7 @@ const glow = (color) => {
 const glass = (color, opacity = 0.35) => mat(color, { transparent: true, opacity, roughness: 0.2, flatShading: false, depthWrite: false });
 
 /** 做一件家具的模型（中心在格子正中央、底部貼地） */
-export function buildFurniture(id) {
+export function buildFurniture(id, opts = {}) {
   const g = new THREE.Group();
   const box = (w, h, d, m, x = 0, y = h / 2, z = 0) => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
@@ -124,6 +126,32 @@ export function buildFurniture(id) {
   const DARK = 0x2a1a14;
 
   switch (id) {
+    case 'hatrack': {
+      // 衣帽架：木頭直立桿＋三根掛鉤，掛著主人收集到的造型（帽子、背包、圍巾）
+      const wood = mat(0x7a5236);
+      cyl(0.2, 0.24, 0.05, wood, 0, 0.025);
+      cyl(0.025, 0.03, 1.15, wood, 0, 0.6);
+      ball(0.045, wood, 0, 1.2);
+      for (const [a, y] of [[0, 1.05], [2.1, 0.85], [-2.1, 0.68]]) {
+        const hook = cyl(0.012, 0.012, 0.16, wood, Math.sin(a) * 0.07, y, Math.cos(a) * 0.07, 6);
+        hook.rotation.set(Math.cos(a) * 1.1, 0, -Math.sin(a) * 1.1);
+      }
+      const rack = Array.isArray(opts.rack) ? opts.rack : [];
+      const spots = { head: [0, 1.08, 0.12, 0.42], back: [0.16, 0.42, -0.08, 0.5], neck: [-0.13, 0.42, 0.06, 0.55] };
+      for (const id of rack) {
+        const o = buildOutfit(id);
+        const slot = OUTFIT_BY_ID[id]?.slot;
+        if (!o || !spots[slot]) continue;
+        const [x, y, z, sc] = spots[slot];
+        o.scale.setScalar(sc);
+        // 模型原本是戴在身上的座標：往回移到掛鉤上
+        if (slot === 'head') o.position.set(x, y - 0.12 * sc, z);
+        else if (slot === 'back') o.position.set(x, y - 0.42 * sc, z + 0.38 * sc);
+        else o.position.set(x, y - 0.6 * sc, z - 0.02 * sc);
+        g.add(o);
+      }
+      break;
+    }
     case 'rug':
       box(0.76, 0.02, 0.76, mat(0xb5553f), 0, 0.01);
       box(0.6, 0.022, 0.6, mat(0xe8c48a), 0, 0.012);
