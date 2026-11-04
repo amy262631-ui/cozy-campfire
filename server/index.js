@@ -178,8 +178,8 @@ function vidOfHid(hid) {
   }
   return null;
 }
-/** 帳篷營地要顯示的帳篷：自己的一定在，其他依最近有動靜排序，最多 16 頂 */
-const CAMP_PLOTS = 16;
+/** 帳篷營地要顯示的帳篷：自己的一定在，其他依最近有動靜排序，最多 32 頂 */
+const CAMP_PLOTS = 32;
 function campList(selfVid) {
   const list = Object.entries(homes)
     .filter(([vid, h]) => h?.tent && vid !== selfVid)
@@ -527,6 +527,7 @@ app.get('/api/sponsors', (_req, res) => {
 
 app.get('/api/notes', (_req, res) => res.json(shared.notes));
 app.get('/api/channels', (_req, res) => {
+  res.set('Access-Control-Allow-Origin', '*'); // 上架其他平台的版本從別的網址來問
   tidyChannels();
   res.json(channelList());
 });

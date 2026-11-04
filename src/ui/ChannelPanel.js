@@ -25,7 +25,7 @@ export function channelButtonHtml(c, { selected = false, current = false } = {})
 /** 取得分流列表；單人模式（沒有伺服器）回傳 null */
 export async function fetchChannels() {
   try {
-    const res = await fetch('api/channels', { cache: 'no-store' });
+    const res = await fetch(`${import.meta.env.VITE_SERVER_URL ? import.meta.env.VITE_SERVER_URL.replace(/\/$/, '') + '/' : ''}api/channels`, { cache: 'no-store' });
     if (!res.ok) return null;
     const list = await res.json();
     return Array.isArray(list) && list.length ? list : null;

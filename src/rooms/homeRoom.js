@@ -227,6 +227,7 @@ export function createHomeRoom() {
     /** 出了帳篷要回哪裡（從營地進來就回營地） */
     setExit(to) {
       entrance.to = to;
+      entrance.label = to === 'campground' ? t('回到帳篷營地') : t('回到營火');
     },
     get exitTo() {
       return entrance.to;

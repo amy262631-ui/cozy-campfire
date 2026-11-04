@@ -147,7 +147,7 @@ async function init() {
   rooms.lake_dock.onSplash = () => audio.splash();
 
   // ---------- 多人連線 ----------
-  const net = new NetworkClient({ url: params.get('server') || undefined });
+  const net = new NetworkClient({ url: params.get('server') || import.meta.env.VITE_SERVER_URL || undefined });
   const remotes = new RemotePlayers(scene, zzz);
   /** 小任務引導（下面建立；先宣告，讓前面的事件也能通知它） */
   let ritual = null;
@@ -1151,7 +1151,9 @@ async function init() {
   const goHome = () => {
     if (!myHome?.tent) return hud.toast(t('還沒有帳篷，先到「🏪 營地小舖」買一頂吧 ⛺'));
     shopPanel.close();
-    homeRoom.setExit(roomMgr.current.id === 'campground' ? 'campground' : 'forest_main');
+    // 從哪裡回家都一樣：出門時站在帳篷營地裡自己帳篷的門口
+    camp.setReturnToMine(myHome.shape);
+    homeRoom.setExit('campground');
     roomMgr.switchTo('home', () => net.switchRoom('home', { x: 0, z: homeRoom.spawn.z, ry: Math.PI }));
   };
   hud.onHome = goHome;

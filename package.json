@@ -8,6 +8,7 @@
     "dev": "vite",
     "server": "node server/index.js",
     "build": "vite build",
+    "build:portal": "vite build --mode portal --outDir dist-portal",
     "start": "node server/index.js",
     "preview": "vite preview",
     "check": "node scripts/check-i18n.mjs"
