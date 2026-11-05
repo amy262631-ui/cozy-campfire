@@ -105,7 +105,7 @@ export class GiftPanel {
         </div>`;
     const o = (id) => OUTFIT_BY_ID[id];
     const rows = [];
-    if (o(info.daily)) rows.push(row(o(info.daily).icon, t(o(info.daily).zh), t('👒 今天的每日造型・今天分享一次（複製或分享連結都算）'), info.dailyGot));
+    if (o(info.daily)) rows.push(row(o(info.daily).icon, t(o(info.daily).zh), t('👒 今天的每日造型・朋友點你的連結進來玩 1 分鐘'), info.dailyGot));
     if (o(info.weekly)) rows.push(row(o(info.weekly).icon, t(o(info.weekly).zh), t('🌟 這週限定造型・朋友第一次透過你的連結來玩，待滿 {m} 分鐘', { m: info.stay }), info.weeklyGot));
     if (o(info.dateNext)) rows.push(row(o(info.dateNext).icon, t(o(info.dateNext).zh), t('🔥 營火之約限定・早上或晚上 9:30～10:00 朋友透過你的連結進來，兩個人都拿到'), false));
     const nameOf = (id) => {

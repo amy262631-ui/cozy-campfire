@@ -243,8 +243,8 @@ export class NetworkClient {
   }
 
   /** 釣到魚（伺服器會公告給整個湖畔，並更新排行） */
-  sendCatch(fish, size) {
-    if (this.online) this.socket.emit('catch', { fish, size });
+  sendCatch(fish, size, perfect = false) {
+    if (this.online) this.socket.emit('catch', { fish, size, perfect: !!perfect });
   }
 
   setSong(index) {

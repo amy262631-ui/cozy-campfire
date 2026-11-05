@@ -1,3 +1,4 @@
+import { randomName } from './social/names.js';
 import * as THREE from 'three';
 import './style.css';
 import { t, translateStatic } from './i18n/i18n.js';
@@ -197,7 +198,7 @@ async function init() {
   };
   const STAGE_MSG = {
     1: () => t('📖 上面多了「圖鑑」：釣到的魚、採到的東西都會收在這裡'),
-    2: () => t('👒 「造型」和「🔥 約朋友」打開了：分享一次就能拿到今天的造型'),
+    2: () => t('👒 「造型」和「🔥 約朋友」打開了：朋友點你的連結進來玩 1 分鐘，就送你今天的造型'),
     3: () => t('💡 歡迎回來！多了「今日小靈感」，每天都有新的小任務'),
     4: () => t('🎉 營地全部打開了：到「🏪 營地小舖」買帳篷，也可以用「🧭 去哪裡」到迷霧森林採集'),
   };
@@ -291,14 +292,14 @@ async function init() {
     ui: fishingUI,
     audio,
     cameraRig,
-    onCatch: (index, size) => {
+    onCatch: (index, size, perfect) => {
       setStage(2); // 🌱 第一次釣到魚：造型、約朋友打開
       ritual?.event('fish', { junk: !!FISH[index]?.junk });
       if (!FISH[index]?.junk && size > (todayLog.size ?? 0)) logToday({ fish: index, size }); // 分享文案用：今天最大的魚
       const rec = fishingUI.record(index, size);
       lastCatch = { index, size, rec };
       fishingUI.showCard(index, size, rec);
-      if (net.online) net.sendCatch(index, size);
+      if (net.online) net.sendCatch(index, size, perfect);
       else fishingUI.setBoard([], false);
     },
     // 舉著魚起身走開：繼續舉著，走到哪都看得到（按「放下」或去做別的事才收起來）
@@ -333,6 +334,7 @@ async function init() {
   rooms.lake_dock.fishing = fishing;
   forest.fishing = fishing; // 營火河畔也用同一個釣魚遊戲
   // 特殊魚的出現條件：營火時間、整點釣魚大賽
+  fishing.roll = () => (net.online ? net.request('fishRoll') : null); // 🎣 這一竿的魚由伺服器決定
   fishing.context = () => ({ event: !!currentEvent()?.active, contest: !!(miniState?.active && miniState.kind === 'fish') });
 
   // ---------- 表情、聊天 ----------
@@ -645,6 +647,7 @@ async function init() {
   const claimShareGift = async (info) => {
     if (!net.online) return;
     const res = await net.request('shared', { kind: info?.kind ?? 'card', staff: isStaff() });
+    if (res?.ok && !look.dailyGot) hud.toast(t('📤 分享出去了！朋友點你的連結進來玩 1 分鐘，就送你今天的每日造型'), 5500);
     if (res?.outfit) {
       look.outfits = [...new Set([...look.outfits, res.outfit])];
       look.dailyGot = true;
@@ -796,7 +799,7 @@ async function init() {
   const outfitName = (id) => (OUTFIT_BY_ID[id] ? `${OUTFIT_BY_ID[id].icon} ${t(OUTFIT_BY_ID[id].zh)}` : '');
   /** 怎麼拿到：長的說明（滑鼠移上去）、短的（卡片上） */
   const HOW = {
-    daily: [t('每日造型：那天分享就拿到（大約一個月輪一次，錯過會再回來）'), t('那天分享就拿到')],
+    daily: [t('每日造型：那天有朋友點你的連結進來玩 1 分鐘就拿到（大約一個月輪一次，錯過會再回來）'), t('那天朋友點你的連結來玩')],
     weekly: [t('每週限定：朋友真的透過你的連結來玩才拿得到'), t('朋友透過連結來玩')],
     date: [t('營火之約限定：朋友在早上或晚上 9:30 營火時間透過你的連結進來，兩個人都拿到'), t('9:30 營火時間約朋友')],
     eco: [t('垃圾圖鑑全部收集完就拿到'), t('垃圾圖鑑收集完')],
@@ -823,7 +826,7 @@ async function init() {
         .join('');
       return `
         <div class="outfit-today">
-          ${today ? (look.dailyGot ? t('✅ 今天的每日造型「{name}」已經拿到了', { name: outfitName(today.id) }) : t('🎁 今天的每日造型：{name}（分享一次就拿到）', { name: outfitName(today.id) })) : ''}
+          ${today ? (look.dailyGot ? t('✅ 今天的每日造型「{name}」已經拿到了', { name: outfitName(today.id) }) : t('🎁 今天的每日造型：{name}（朋友點你的連結進來玩 1 分鐘就拿到）', { name: outfitName(today.id) })) : ''}
           ${week ? `<br>${look.weeklyGot ? t('✅ 這週限定「{name}」已經拿到了', { name: outfitName(week.id) }) : t('🌟 這週限定：{name}（朋友透過你的連結來玩就拿到）', { name: outfitName(week.id) })}` : ''}
           <br>${t('🔥 營火之約：朋友在 9:30 營火時間透過你的連結進來，兩個人都拿到限定造型')}
           ${!look.dailyGot && net.online ? `<br><button type="button" id="outfit-share">${t('🔥 約朋友今晚 9:30，順便領今天的造型')}</button>` : ''}
@@ -924,7 +927,7 @@ async function init() {
     applyLook(profile);
     saveProfile(profile);
     net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '' });
-    net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
+    net.rejoin({ auto: !profile.custom, name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
     audio.sfx('tap');
     if (fishingUI.el.modal.classList.contains('show')) fishingUI.openCreel('outfit');
   }
@@ -963,7 +966,9 @@ async function init() {
         ? t('🌟 朋友透過你的連結來玩了！拿到每週限定造型：{name}', { name: outfitName(id) })
         : why === 'date'
           ? t('🔥 營火之約成立！拿到限定造型：{name}', { name: outfitName(id) })
-          : t('👒 拿到今天的每日造型：{name}', { name: outfitName(id) });
+          : why === 'daily'
+            ? t('👒 朋友點了你的連結！拿到今天的每日造型：{name}', { name: outfitName(id) })
+            : t('👒 拿到今天的每日造型：{name}', { name: outfitName(id) });
     hud.toast(`${msg}${t('（按上方「👒 造型」穿上）')}`, 6500);
     // 還沒穿這個部位：直接幫他穿上，馬上看得到
     const o = OUTFIT_BY_ID[id];
@@ -1713,7 +1718,7 @@ async function init() {
       text: `${ev?.active ? t('營火時間開始了，快來營火旁找我 🔥') : t('今晚 9:30 一起來營火旁坐坐吧 🔥')}${real ? `
 ${real}` : ''}
 ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
-      note: t('按「📤 分享」會順便複製下面的文案和連結：如果 App 只送出圖片，在聊天框貼上就好；朋友掃圖上的 QR Code 也算 📱') + (daily ? '　' + t('分享出去就送今天的每日造型：{name}', { name: outfitName(daily.id) }) : ''),
+      note: t('按「📤 分享」會順便複製下面的文案和連結：如果 App 只送出圖片，在聊天框貼上就好；朋友掃圖上的 QR Code 也算 📱') + (daily ? '　' + t('朋友點連結進來玩 1 分鐘，就送你今天的每日造型：{name}', { name: outfitName(daily.id) }) : ''),
     });
   }
   hud.onDate = () => giftPanel.open();
@@ -1923,6 +1928,13 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     if (st !== 'online') net.updateJoinData({ x: player.position.x, z: player.position.z, ry: player.rotationY });
   });
   net.on('joined', (res) => {
+    // 🎲 隨機名字和線上的人撞名：伺服器換了一個
+    if (res.name && res.name !== profile.name && !profile.custom) {
+      profile = { ...profile, name: res.name };
+      myName = res.name;
+      hud.setMe(myName);
+      net.updateJoinData({ name: res.name });
+    }
     // 邀請連結只用一次（之後斷線重連不要又跑去朋友旁邊）
     if (params.has('with')) {
       net.updateJoinData({ with: undefined });
@@ -1970,7 +1982,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
         myName = profile.name;
         applyLook(profile);
         hud.setMe(myName);
-        net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
+        net.rejoin({ auto: !profile.custom, name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
       }
       if (w.outfit) setLook(w.outfit); // 👒 造型：擁有的、穿著的、今天和這週的
       // 🌱 來了幾天：第二天開「今日小靈感」，第三天全部打開（老玩家直接全開，不跳提示）
@@ -2633,7 +2645,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
         <ul>
           <li>${t('🌰 明天一進來就送 {n} 顆松果（連續來越多）', { n: next })}</li>
           <li>${t('🌅 早上 9:30、晚上 9:30 營火時間：魚王、流星雨、松果加倍')}</li>
-          <li>${t('👒 每天都有新的每日造型，分享一次就拿到')}</li>
+          <li>${t('👒 每天都有新的每日造型，朋友點你的連結進來玩 1 分鐘就拿到')}</li>
           <li>${t('🌙 晚上 7～11 點每半小時一場小活動')}</li>
         </ul>
         ${saved ? `<p class="seeyou-ok">${t('✅ 你已經有帳號了，換手機登入也找得回來')}</p>` : `<p class="seeyou-warn">${t('⚠️ 還沒建帳號：松果、帳篷只存在這台裝置，清掉瀏覽器資料或換手機就找不回來')}</p>
@@ -3025,7 +3037,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     profile.customLook = true;
     saveProfile(profile);
     net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '' });
-    net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
+    net.rejoin({ auto: !profile.custom, name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
     hud.toast(t('✨ 換好了，{name}', { name: myName }));
   };
   net.connect({
@@ -3036,6 +3048,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     ear: profile.ear || '',
     code: profile.code || '',
     vid: visitorId(),
+    auto: !profile.custom, // 隨機名字：撞名時伺服器從 alts 換一個
+    alts: Array.from({ length: 6 }, () => randomName()),
     touch: !!mobile,
     staff: isStaff(), // 作者自己的裝置：不算進統計
     with: params.get('with') || undefined, // 朋友的邀請連結

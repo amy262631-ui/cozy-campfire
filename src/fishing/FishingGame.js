@@ -28,6 +28,8 @@ export class FishingGame {
   constructor({ group, waterY, hud, ui, audio, cameraRig, onCatch, onKeep }) {
     Object.assign(this, { group, waterY, hud, ui, audio, cameraRig, onCatch, onKeep });
     this.phase = 'idle';
+    this.rollId = 0;
+    this.served = null;
     this.t = 0;
     this.fish = null; // { index, size }
     this.actions = null;
@@ -291,6 +293,7 @@ export class FishingGame {
       this.castStarted = false;
     }
     if (phase === 'wait') {
+      this.#requestRoll(); // 浮標落水：跟伺服器要這一竿的魚
       this.biteAt = 4 + Math.random() * 9;
       // 試探：浮標輕輕點一下（1～3 次），這時拉竿會把魚嚇跑
       const n = 1 + Math.floor(Math.random() * 3);
@@ -324,9 +327,32 @@ export class FishingGame {
     this.cameraRig?.shake?.(a);
   }
 
+  /**
+   * 這一竿的魚由伺服器決定（this.roll 回傳 { ok, fish, size }）；離線時才在本機抽
+   * served：null＝本機抽、'pending'＝等伺服器回覆、{ index, size }＝伺服器給的魚
+   */
+  #requestRoll() {
+    const id = ++this.rollId;
+    this.served = null;
+    if (!this.roll) return;
+    this.served = 'pending';
+    Promise.resolve(this.roll()).then((res) => {
+      if (id !== this.rollId) return;
+      if (res?.ok) this.served = { index: res.fish, size: res.size };
+      else if (res?.reason === 'tooFast')
+        setTimeout(() => {
+          if (id === this.rollId && this.phase === 'wait') this.#requestRoll();
+        }, (res.wait ?? 1000) + 80);
+      else this.served = null;
+    });
+  }
+
   #bite() {
-    const index = rollFish({ place: this.spot?.place, ...(this.context?.() ?? {}) });
-    this.fish = { index, size: rollSize(index) };
+    const got = this.served && this.served !== 'pending' ? this.served : null;
+    const index = got ? got.index : rollFish({ place: this.spot?.place, ...(this.context?.() ?? {}) });
+    this.fish = { index, size: got ? got.size : rollSize(index), perfect: false };
+    this.served = null;
+    this.rollId++;
     this.window = FISH[index].window * 1.35; // 不再跳「！」，只能看浮標沉下去，所以時間放寬一點
     this.#go('bite');
     this.#ring(this.target.x, this.target.z, true);
@@ -341,6 +367,7 @@ export class FishingGame {
     // 浮標一沉就拉（前 45% 的時間）：漂亮的時機，魚會大一點
     if (this.t < this.window * 0.45 && !f.junk) {
       this.fish.size = Math.min(f.max, Math.round(this.fish.size * 1.15) + 1);
+      this.fish.perfect = true; // 伺服器用同一個算法加大
       this.hud.toast(t('🎯 時機抓得漂亮！'), 1600);
     }
     this.need = f.pull;
@@ -472,7 +499,7 @@ export class FishingGame {
           }
         }
         this.bobber.position.set(this.target.x, this.waterY - FLOAT_SINK + Math.sin(time * 1.7) * 0.006 - dip, this.target.z);
-        if (this.t > this.biteAt) this.#bite();
+        if (this.t > this.biteAt && this.served !== 'pending') this.#bite();
         break;
       }
       case 'bite': {
@@ -536,7 +563,7 @@ export class FishingGame {
           c?.setProp?.('fish', true);
           this.#go('show');
           if (this.session) this.session.n += 1;
-          this.onCatch?.(this.fish.index, this.fish.size);
+          this.onCatch?.(this.fish.index, this.fish.size, this.fish.perfect);
           const f = FISH[this.fish.index];
           this.audio?.sfx?.(f.junk ? 'junk' : f.rarity >= 4 ? 'legend' : 'catch');
           this.#shake(f.rarity >= 4 ? 0.12 : 0.04);

@@ -20,7 +20,7 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
-import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM } from '../src/fishing/fishData.js';
+import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM, rollFish, rollSize } from '../src/fishing/fishData.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
 import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateOutfit, sponsorOutfits } from '../src/game/outfits.js';
 import { GATHER_SPOTS, GATHER_ITEMS, regrowMs, GATHER_FIRST_GAIN, GATHER_DEX_BONUS, gatherItemAt, isNight, GATHER_R, NET_PRICE, BUG_WANDER, BUG_CATCH_R } from '../src/game/gathering.js';
@@ -420,6 +420,10 @@ const SIT_GAIN = 2;
 const SIT_DAILY_CAP = 30; // 每天靠「待著」最多撿幾顆
 const QUEST_GAIN = 5;
 const FISH_RARITY = FISH.map((f) => f.rarity);
+const POS_MAX = 45; // 座標上限（帳篷營地到 ±37；以前限制 ±20，營地外圍的垃圾撿不到）
+const MAX_SPEED = 7; // 每秒最多移動幾公尺（跑步大約 5.1）
+const FISH_ROLL_GAP = 4000; // 兩次拋竿（要魚）最少間隔
+const FISH_MIN_MS = 4500; // 要到魚之後，最快多久才能拉起來（浮標最快 4 秒才會沉＋拉竿）
 const FISH_DAILY_FULL = 30; // 每天前幾條魚的松果照算（之後每條 1 顆）
 /** 給玩家看的圖鑑：伺服器紀錄＋以前存在瀏覽器裡的舊紀錄（舊紀錄只顯示，不送松果） */
 const dexView = (w) => {
@@ -513,6 +517,61 @@ function creditReferral(refVid, friendName) {
   for (const s of io.sockets.sockets.values()) if (s.data.vid === refVid) s.emit('friendCredit', { name: friendName, refs: rw.refs });
   console.log(`[邀請] ${friendName} 待滿了，邀請人累積 ${rw.refs} 位`);
 }
+
+// ---------- ⏳ 朋友透過連結進來，待滿時間才算（斷線不取消） ----------
+// 從朋友「進來那一刻」開始算（跳出 App 的時間也算）；時間到時朋友還連著就發；
+// 剛好斷線的話保留 30 分鐘，朋友回來（重新連上）就立刻發。只有很快就關掉、而且沒回來，才不算。
+const SHARE_STAY_MS = (Number(process.env.SHARE_STAY_SEC) || 60) * 1000; // 分享：朋友待滿 1 分鐘，分享人拿今天的每日造型
+const STAY_GRACE_MS = 30 * 60 * 1000;
+/** key → { kind: 'invite'|'share'|'date', friend, ref, name, at, need } */
+const stays = new Map();
+const isOnline = (vid) => {
+  for (const s of io.sockets.sockets.values()) if (s.data.vid === vid) return true;
+  return false;
+};
+function addStay(kind, friend, ref, name, need) {
+  const key = `${kind}:${friend}:${ref}`;
+  if (!stays.has(key)) stays.set(key, { kind, friend, ref, name, at: Date.now(), need });
+}
+function finishStay(st) {
+  const { kind, friend, ref, name } = st;
+  if (!players[ref]) return;
+  if (kind === 'invite') return creditReferral(ref, name);
+  if (kind === 'share') {
+    const got = grantOutfit(ref, dailyOutfit(dayKey()).id, 'daily');
+    console.log(`[分享] ${name} 點了連結待滿了${got ? '，送出今天的每日造型' : '（今天的每日造型已經有了）'}`);
+    return;
+  }
+  if (kind === 'date') {
+    // 🔥 營火之約：同一對朋友每天只算一次
+    const d = dayKey();
+    const pair = [friend, ref].sort().join('|');
+    shared.datePairs ??= {};
+    if (shared.datePairs.d !== d) shared.datePairs = { d, list: [] };
+    if (shared.datePairs.list.includes(pair)) return console.log(`[營火之約] 沒算到：${name} 和邀請人今天已經約過了`);
+    shared.datePairs.list.push(pair);
+    const a = players[friend] ? grantOutfit(friend, nextDateOutfit(players[friend].outfits)?.id, 'date') : null;
+    const b = grantOutfit(ref, nextDateOutfit(players[ref].outfits)?.id, 'date');
+    if (a || b) bump('dates');
+    for (const s2 of io.sockets.sockets.values()) if (s2.data.vid === ref) s2.emit('dateFriend', { name });
+  }
+}
+/** 檢查哪些已經待滿（每 5 秒，或朋友重新連上時） */
+function checkStays(onlyFriend = null) {
+  const now = Date.now();
+  for (const [key, st] of stays) {
+    if (onlyFriend && st.friend !== onlyFriend) continue;
+    if (now - st.at < st.need) continue;
+    if (isOnline(st.friend)) {
+      stays.delete(key);
+      finishStay(st);
+    } else if (now - st.at > st.need + STAY_GRACE_MS) {
+      stays.delete(key);
+      console.log(`[${st.kind === 'invite' ? '邀請' : st.kind === 'share' ? '分享' : '營火之約'}] 沒算到：${st.name} 時間到時已經離開，30 分鐘內也沒回來`);
+    }
+  }
+}
+setInterval(() => checkStays(), 5000);
 
 // ---------- 👒 造型收集 ----------
 const OUTFIT_SLOTS = ['head', 'back', 'neck', 'hair'];
@@ -1106,8 +1165,6 @@ io.on('connection', (socket) => {
     award(1, 'mini');
   };
   let stacked = false; // 這次來訪疊過石頭了嗎
-  let refTimer = null; // 朋友邀請：待滿時間才算
-  let dateTimer = null; // 營火之約：待滿 1 分鐘才算
 
   /** 離開目前的分流／房間 */
   /** 離開目前的房間；to：去了哪裡（沒有＝離開遊戲） */
@@ -1194,8 +1251,8 @@ io.on('connection', (socket) => {
       tl: TAIL_BY_ID[data.tail] ? data.tail : '', // 🐾 尾巴、耳朵形狀（下面會檢查有沒有買）
       er: EAR_BY_ID[data.ear] ? data.ear : '',
       rw: 0, // 贊助回饋：0 無、1 小黃花、2 四葉草（由伺服器判斷，玩家改不了）
-      x: num(data.x, -20, 20, 0),
-      z: num(data.z, -20, 20, 6),
+      x: num(data.x, -POS_MAX, POS_MAX, 0),
+      z: num(data.z, -POS_MAX, POS_MAX, 6),
       ry: num(data.ry, -10, 10, Math.PI),
       a: 'idle',
       d: 0,
@@ -1203,6 +1260,24 @@ io.on('connection', (socket) => {
       dirty: true,
       vid: String(data.vid ?? '').slice(0, 24),
     };
+    // 🎲 隨機名字不要和線上的人撞名：撞到了就換前端先準備好的備用名字（自己取的名字不動）
+    {
+      const me = String(data.vid ?? '').slice(0, 24);
+      const inUse = (n) => {
+        for (const s2 of io.sockets.sockets.values()) if (s2.id !== socket.id && s2.data.vid !== me && s2.data.name === n) return true;
+        return false;
+      };
+      if (data.auto && inUse(player.name)) {
+        const alts = Array.isArray(data.alts) ? data.alts.slice(0, 8).map(cleanName) : [];
+        let next = alts.find((n) => !inUse(n));
+        for (let i = 0; !next && i < 20; i++) {
+          const n = `${player.name.slice(0, 10)}${Math.floor(Math.random() * 90 + 10)}`;
+          if (!inUse(n)) next = n;
+        }
+        if (next) player.name = next;
+      }
+      socket.data.name = player.name;
+    }
     player.rw = findReward(player.name, data.code);
     const src = cleanSource(data.src);
     // 統計：第一次進來才算一次來訪（斷線重連、改名字不重複算）
@@ -1246,33 +1321,28 @@ io.on('connection', (socket) => {
     }
     socket.data.vid = wal ? String(data.vid).slice(0, 24) : null;
     const ip = String(socket.handshake.headers['x-forwarded-for'] ?? socket.handshake.address ?? '').split(',')[0].trim();
-    // 朋友透過邀請連結第一次來：待滿 3 分鐘，邀請人就拿到松果和禮物
-    if (firstVisit && data.with && !data.rejoin && wal) {
+    // 朋友透過連結進來（?with=）：
+    // ① 第一次來、待滿 3 分鐘 → 邀請人拿松果和每週造型
+    // ② 待滿 1 分鐘（新、舊玩家都算）→ 分享人拿今天的每日造型
+    // ③ 營火時間進來、待滿 1 分鐘 → 兩個人都拿營火之約造型（同一對每天一次）
+    if (data.with && !data.rejoin && wal) {
       const raw = String(data.with).slice(0, 24);
       const refVid = vidOfCode(raw) ?? (players[raw] ? raw : null);
-      if (refVid && refVid !== myVid && lastIp.get(refVid) !== ip) {
-        wal.by = homeId(refVid);
+      const why = !refVid ? '找不到邀請人' : refVid === myVid ? '自己點自己的連結' : lastIp.get(refVid) === ip ? '和邀請人同一個網路' : null;
+      if (why) console.log(`[邀請] 沒算到：${player.name}（${why}）`);
+      else {
         const name = player.name;
-        refTimer = setTimeout(() => creditReferral(refVid, name), REF_STAY_MS);
-        if (!data.staff) bump('invNew');
-      }
-    }
-    // 🔥 營火之約：朋友在營火時間（21:30～22:00）透過連結進來，待滿 1 分鐘，兩個人都拿到限定造型
-    if (data.with && !data.rejoin && wal && eventInfo().active) {
-      const raw = String(data.with).slice(0, 24);
-      const refVid = vidOfCode(raw);
-      if (refVid && refVid !== myVid && lastIp.get(refVid) !== ip && players[refVid]) {
-        const name = player.name;
-        clearTimeout(dateTimer);
-        dateTimer = setTimeout(() => {
-          const a = grantOutfit(myVid, nextDateOutfit(wal.outfits)?.id, 'date');
-          const b = grantOutfit(refVid, nextDateOutfit(players[refVid].outfits)?.id, 'date');
-          if (a || b) bump('dates');
-          for (const s2 of io.sockets.sockets.values()) if (s2.data.vid === refVid) s2.emit('dateFriend', { name });
-        }, DATE_STAY_MS);
+        if (firstVisit) {
+          wal.by = homeId(refVid);
+          addStay('invite', myVid, refVid, name, REF_STAY_MS);
+          if (!data.staff) bump('invNew');
+        }
+        addStay('share', myVid, refVid, name, SHARE_STAY_MS);
+        if (eventInfo().active && players[refVid]) addStay('date', myVid, refVid, name, DATE_STAY_MS);
       }
     }
     if (wal) lastIp.set(myVid, ip);
+    if (wal) setTimeout(() => checkStays(myVid), 0); // 朋友跳出去又回來：時間已經到了就馬上發
     let daily = null;
     if (wal) {
       const d = dayKey();
@@ -1320,6 +1390,7 @@ io.on('connection', (socket) => {
     ack?.({
       ok: true,
       id: socket.id,
+      name: player.name, // 隨機名字撞名時，伺服器換過的名字
       reward: player.rw,
       wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, age: walletAge(wal), dex: dexView(wal), look: wal.look ?? null, outfit: outfitView(wal), basket: wal.bk ?? {}, gdex: gdexOf(wal), ...trashView(wal), dishes: wal.dish ?? {}, cooked: Object.keys(wal.cooked ?? {}), net: !!wal.net, pass: passView(wal) } : null,
       myHome: publicHome(homes[player.vid]),
@@ -1359,8 +1430,22 @@ io.on('connection', (socket) => {
   // 客戶端 20Hz 送來的狀態
   socket.on('state', (s) => {
     if (!player || !Array.isArray(s)) return;
-    player.x = num(s[0], -20, 20, player.x);
-    player.z = num(s[1], -20, 20, player.z);
+    // 🏃 位置檢查：一次最多只能移動「跑步速度 × 經過時間」那麼遠，用主控台瞬移會被拉回來慢慢走
+    {
+      const now = Date.now();
+      const dt = Math.min(Math.max((now - (player.posAt ?? now)) / 1000, 0.05), 1.5);
+      player.posAt = now;
+      const tx = num(s[0], -POS_MAX, POS_MAX, player.x);
+      const tz = num(s[1], -POS_MAX, POS_MAX, player.z);
+      const dx = tx - player.x;
+      const dz = tz - player.z;
+      const dist = Math.hypot(dx, dz);
+      const maxStep = MAX_SPEED * dt + 1.5;
+      if (dist > maxStep) {
+        player.x += (dx / dist) * maxStep;
+        player.z += (dz / dist) * maxStep;
+      } else [player.x, player.z] = [tx, tz];
+    }
     player.ry = num(s[2], -1000, 1000, player.ry);
     player.a = ACTION_STATES.has(s[3]) ? s[3] : 'idle';
     player.d = num(s[4], 0, 2, 0);
@@ -1381,8 +1466,8 @@ io.on('connection', (socket) => {
       if (owner !== player.vid && h.open === false) return ack?.({ ok: false, reason: 'closed' });
       if (homeRoom(owner).players.size >= 12) return ack?.({ ok: false, reason: 'full', message: fullMsg('帳篷') });
       leave('home');
-      player.x = num(data.x, -20, 20, 0);
-      player.z = num(data.z, -20, 20, 0);
+      player.x = num(data.x, -POS_MAX, POS_MAX, 0);
+      player.z = num(data.z, -POS_MAX, POS_MAX, 0);
       player.ry = num(data.ry, -1000, 1000, 0);
       player.a = 'idle';
       player.d = 0;
@@ -1403,8 +1488,8 @@ io.on('connection', (socket) => {
     }
 
     leave(next);
-    player.x = num(data.x, -20, 20, 0);
-    player.z = num(data.z, -20, 20, 0);
+    player.x = num(data.x, -POS_MAX, POS_MAX, 0);
+    player.z = num(data.z, -POS_MAX, POS_MAX, 0);
     player.ry = num(data.ry, -1000, 1000, 0);
     player.a = 'idle';
     player.d = 0;
@@ -1482,7 +1567,7 @@ io.on('connection', (socket) => {
     saveJson('totals.json', totals);
     // 「你是今天第幾位許願的旅人」：每次來訪第一次疊石頭才算
     let ritual = null;
-    if (!stacked) {
+    if (!stacked && questFirst('stone')) {
       stacked = true;
       if (session) session.did = true;
       bump('ritual');
@@ -1502,13 +1587,22 @@ io.on('connection', (socket) => {
   // 每日任務完成：回傳「你是今天第幾位完成這個任務的旅人」（每次來訪每種任務只算一次）
   const QUEST_IDS = new Set(['wood', 'roast', 'kuji', 'ema', 'note', 'fish', 'meteor', 'hang']);
   const questsDone = new Set();
+  /** 每天每種任務只算一次：記在玩家存檔（以前記在這次連線，重新整理網頁就能再領） */
+  const questFirst = (id) => {
+    if (!wal) return !questsDone.has(id);
+    const d = dayKey();
+    if (wal.qd !== d) [wal.qd, wal.qdone] = [d, []];
+    if (wal.qdone.includes(id)) return false;
+    wal.qdone.push(id);
+    return true;
+  };
   socket.on('quest', (data = {}, ack) => {
     const id = String(data.id ?? '');
     if (!player || !QUEST_IDS.has(id)) return ack?.({ ok: false });
     const d = today();
     d.quests ??= {};
     if (session) session.did = true;
-    if (!questsDone.has(id)) {
+    if (!questsDone.has(id) && questFirst(id)) {
       questsDone.add(id);
       award(QUEST_GAIN, 'quest');
       d.quests[id] = (d.quests[id] ?? 0) + 1;
@@ -1767,7 +1861,8 @@ io.on('connection', (socket) => {
     if (todayFirst && !data?.staff) bump('shares');
     const kind = String(data?.kind ?? '').slice(0, 12);
     if (kind === 'invite' && todayFirst) bump('invShares');
-    ack?.({ ok: true, gift: first ? grantGift(player.vid, 'postcard') : null, outfit: todayFirst ? grantOutfit(player.vid, dailyOutfit(d).id, 'daily') : null });
+    // 每日造型不再按了就送（以前傳到只有自己的群組也拿得到）：要有朋友點連結進來待滿 1 分鐘才送（見 addStay 'share'）
+    ack?.({ ok: true, gift: first ? grantGift(player.vid, 'postcard') : null, outfit: null });
   });
   socket.on('outfitInfo', (data, ack) => ack?.(wal ? { ok: true, ...outfitView(wal) } : { ok: false }));
   socket.on('wear', (data = {}, ack) => {
@@ -2311,15 +2406,33 @@ io.on('connection', (socket) => {
   // 🏆 湖畔排行：在哪裡打開都拿得到今天的大家排行
   socket.on('boardInfo', (_d, ack) => ack?.({ ok: true, board: boardAll() }));
 
-  // 釣到魚：全場公告＋湖畔排行（只收湖畔房間、每 3 秒最多一次）
+  // 🎣 魚由伺服器決定：浮標落水時前端來要一條魚（記下魚種、尺寸、時間），拉起來成功時才照這條算
+  // 前端不能自己說釣到什麼魚（以前可以用主控台一直送「釣到傳說魚」）
+  let hooked = null; // { fish, size, at }
+  let lastRoll = 0;
   let lastCatch = 0;
+  socket.on('fishRoll', (_d, ack) => {
+    if (!player || (roomId !== 'lake_dock' && roomId !== 'forest_main')) return ack?.({ ok: false, reason: 'place' });
+    const now = Date.now();
+    if (now - lastRoll < FISH_ROLL_GAP) return ack?.({ ok: false, reason: 'tooFast', wait: FISH_ROLL_GAP - (now - lastRoll) });
+    lastRoll = now;
+    const place = roomId === 'lake_dock' ? 'lake' : 'pond';
+    const m = miniNow();
+    const fish = rollFish({ place, event: !!eventInfo().active, contest: m?.kind === 'fish' });
+    hooked = { fish, size: rollSize(fish), at: now };
+    ack?.({ ok: true, fish, size: hooked.size });
+  });
+  // 釣到魚：全場公告＋湖畔排行（只收湖畔房間；一定要先有伺服器給的魚，而且要過了最少的時間）
   socket.on('catch', (data = {}) => {
     if (!player || (roomId !== 'lake_dock' && roomId !== 'forest_main')) return; // 湖畔或營火河畔
     const now = Date.now();
-    if (now - lastCatch < 3000) return;
+    if (!hooked || Number(data.fish) !== hooked.fish || now - hooked.at < FISH_MIN_MS || now - lastCatch < 3000) return;
     lastCatch = now;
-    const fish = Math.floor(num(data.fish, 0, FISH_COUNT - 1));
-    const size = Math.round(num(data.size, 1, FISH[fish].max)); // 每種魚有自己的最大尺寸
+    const fish = hooked.fish;
+    let size = hooked.size;
+    // 浮標一沉就拉的漂亮時機：魚大一點（和前端同一個算法）
+    if (data.perfect && !FISH[fish].junk) size = Math.min(FISH[fish].max, Math.round(size * 1.15) + 1);
+    hooked = null; // 同一竿只能領一次
     let rank = null;
     if (!JUNK.has(fish)) {
       shared.board.push({ name: player.name, fish, size, at: now });
@@ -2446,8 +2559,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    clearTimeout(refTimer); // 還沒待滿就走了：不算
-    clearTimeout(dateTimer);
     if (!player) return;
     leave();
     clearInterval(sitTimer);
