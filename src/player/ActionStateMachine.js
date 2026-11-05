@@ -8,7 +8,7 @@ const ROAST_DIST = 1.9; // 烤棉花糖時自動站到的位置
 const ROAST_SECONDS = 7; // 從生到焦黑（doneness = 1）需要的秒數
 const WOOD_FUEL = 25;
 
-const SIT_STATES = new Set(['roast', 'blanket', 'stargaze', 'fish']);
+const SIT_STATES = new Set(['roast', 'blanket', 'stargaze', 'fish', 'sofa', 'sleep']);
 /** 短短的動作：採摘、揮網、種菜、澆水 */
 const PERFORMS = new Set(['pick', 'catch', 'plant', 'water']);
 
@@ -18,6 +18,8 @@ const PROMPTS = {
   blanket: t('<kbd>Z</kbd> 起身　·　或直接移動'),
   stargaze: t('<kbd>空白鍵</kbd> 回到營火旁　·　或直接移動'),
   fish: t('盯著浮標：整個沉下去時按 <kbd>F</kbd> 拉竿　·　<kbd>E</kbd> 或移動就收竿'),
+  sofa: t('坐著休息中　·　移動就起身'),
+  sleep: t('躺著睡一下 💤　·　移動就起身'),
 };
 /** 手機畫面小：提示短一點（按鍵會換成按鈕圖示） */
 const PROMPTS_SHORT = {
@@ -26,6 +28,8 @@ const PROMPTS_SHORT = {
   blanket: t('<kbd>Z</kbd> 起身'),
   stargaze: t('<kbd>空白鍵</kbd> 起身'),
   fish: t('浮標整個沉下去就按 <kbd>F</kbd>'),
+  sofa: t('移動就起身'),
+  sleep: t('💤 移動就起身'),
 };
 
 /**
@@ -108,6 +112,15 @@ export class ActionStateMachine {
     this.performDuration = duration;
     this.performFace = faceAngle;
     return true;
+  }
+
+  /** 🛋️ 坐沙發（sofa）、躺床（sleep）：一移動就起身 */
+  rest(kind, faceAngle) {
+    if (this.state !== 'free') this.#exit(true);
+    this.state = kind;
+    this.t = 0;
+    this.restFace = faceAngle;
+    this._zzzTimer = 1.2;
   }
 
   /** 給房間用：結束目前動作 */
@@ -296,6 +309,20 @@ export class ActionStateMachine {
       case 'stargaze':
         r.locked = true;
         r.pose = 'lookUp';
+        break;
+
+      case 'sofa':
+      case 'sleep':
+        r.locked = true;
+        r.pose = this.state === 'sleep' ? 'sleep' : 'sit';
+        r.faceAngle = this.restFace;
+        if (this.state === 'sleep') {
+          this._zzzTimer -= dt;
+          if (this._zzzTimer <= 0) {
+            this._zzzTimer = 1.4 + Math.random() * 0.5;
+            this.zzz.spawn(this.character.getHeadWorldPosition(new THREE.Vector3()));
+          }
+        }
         break;
 
       case 'fish': {

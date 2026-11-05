@@ -21,7 +21,7 @@ import { createFishMesh, fishScale } from '../../fishing/fishModel.js';
  *   update(dt, elapsed, speed)
  */
 
-const SIT_POSES = new Set(['sit', 'roast', 'blanket', 'lookUp', 'reel']);
+const SIT_POSES = new Set(['sit', 'roast', 'blanket', 'lookUp', 'reel', 'sleep']);
 
 // 兩隻腳（像小人一樣站著，手是另外兩顆小丸子）
 const FEET_STAND = [[-0.13, 0.07, 0.04], [0.13, 0.07, 0.04]];
@@ -172,10 +172,13 @@ export class ProceduralFox {
    * @param {{ fur?: number, species?: number }} [options]
    *   fur = 毛色索引（furPalettes.js）、species = 動物種類（species.js）
    */
-  constructor({ fur = 0, species = 0 } = {}) {
+  constructor({ fur = 0, species = 0, tail = '', ears = '' } = {}) {
     this._furIndex = fur;
     this.speciesIndex = SPECIES[species] ? species : 0;
-    this.species = SPECIES[this.speciesIndex];
+    // 🐾 可以換別的尾巴、耳朵形狀（looks.js）
+    this.species = { ...SPECIES[this.speciesIndex], ...(tail ? { tail } : {}), ...(ears ? { ears } : {}) };
+    this.tailId = tail;
+    this.earId = ears;
     this.root = new THREE.Group();
     this.pose = 'idle';
     this.poseTime = 0;
@@ -366,6 +369,33 @@ export class ProceduralFox {
         ear.rotation.z = -0.5 * side;
         add(ear, 0.105, earMat, [0, 0.04, 0], [1, 1, 0.55]);
         add(ear, 0.06, furDark, [0, 0.04, 0.04], [1, 1, 0.3], false);
+      } else if (type === 'fold') {
+        // 折耳：小小的耳朵往前折下來
+        ear.position.set(0.17 * side, 0.27, 0.02);
+        ear.rotation.set(0.9, 0, -0.5 * side);
+        const outer = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.13, 16), earMat);
+        outer.scale.z = 0.55;
+        outer.position.y = 0.04;
+        outer.castShadow = true;
+        ear.add(outer);
+      } else if (type === 'droopy') {
+        // 垂耳：長長軟軟地垂在臉頰兩邊
+        ear.position.set(0.25 * side, 0.12, -0.01);
+        ear.rotation.z = 0.25 * side;
+        add(ear, 0.09, furDark, [0, -0.1, 0], [0.75, 1.9, 0.4]);
+      } else if (type === 'fennec') {
+        // 大耳狐：又大又尖的耳朵
+        ear.position.set(0.21 * side, 0.29, -0.03);
+        ear.rotation.z = -0.45 * side;
+        const outer = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.36, 20), earMat);
+        outer.scale.z = 0.45;
+        outer.position.y = 0.12;
+        outer.castShadow = true;
+        ear.add(outer);
+        const inner = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.26, 16), pink);
+        inner.scale.z = 0.3;
+        inner.position.set(0, 0.1, 0.04);
+        ear.add(inner);
       } else if (type === 'long') {
         // 兔子：長長的耳朵，微微往外張
         ear.position.set(0.11 * side, 0.3, -0.04);
@@ -396,6 +426,26 @@ export class ProceduralFox {
       add(this.tail, 0.08, this.species.fixed ? fur : furDark, [0, 0, 0]);
     } else if (type === 'cotton') {
       add(this.tail, 0.1, cream, [0, 0, 0]);
+    } else if (type === 'sleek') {
+      // 滑順的長尾巴：一條平滑的弧線往上翹
+      const curve = new THREE.CatmullRomCurve3([[0, 0, -0.02], [0, 0.04, -0.14], [0, 0.14, -0.22], [0, 0.28, -0.24], [0, 0.4, -0.17], [0, 0.44, -0.09]].map((p) => new THREE.Vector3(...p)));
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.045, 10), fur);
+      tube.castShadow = true;
+      this.tail.add(tube);
+      add(this.tail, 0.047, fur, [0, 0.44, -0.09]);
+    } else if (type === 'lion') {
+      // 獅子尾：細細的尾巴，尾端一撮深色毛球
+      const curve = new THREE.CatmullRomCurve3([[0, 0, -0.02], [0, -0.02, -0.16], [0, 0.04, -0.28], [0, 0.14, -0.34]].map((p) => new THREE.Vector3(...p)));
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.03, 8), fur);
+      tube.castShadow = true;
+      this.tail.add(tube);
+      add(this.tail, 0.075, furDark, [0, 0.17, -0.36], [1, 1.2, 1]);
+    } else if (type === 'fluffy') {
+      // 大蓬蓬尾：比狐狸尾巴更大更蓬
+      add(this.tail, 0.17, fur, [0, 0.02, -0.04]);
+      add(this.tail, 0.18, fur, [0, 0.16, -0.18]);
+      add(this.tail, 0.15, fur, [0, 0.3, -0.24]);
+      add(this.tail, 0.11, cream, [0, 0.42, -0.25]);
     } else if (type === 'curl') {
       // 柴犬的捲尾巴：在背上捲一圈
       const curl = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.055, 12, 24, Math.PI * 1.6), fur);
@@ -561,6 +611,12 @@ export class ProceduralFox {
         scaleY = 1 + Math.sin(t * 1.1) * 0.035; // 呼吸變慢變深
         eyesOpen = 0.12;
         tailWag = Math.sin(t * 0.6) * 0.1;
+      } else if (P === 'sleep') {
+        // 躺在床上睡覺：閉眼、慢慢呼吸（整個人躺平在下面處理）
+        headRX = -0.1;
+        eyesOpen = 0.12;
+        scaleY = 1 + Math.sin(t * 1.0) * 0.03;
+        tailWag = Math.sin(t * 0.5) * 0.08;
       } else if (P === 'lookUp') {
         torsoRX = -0.22;
         headRX = -0.55;
@@ -719,6 +775,10 @@ export class ProceduralFox {
     this.tail.rotation.y = tailWag;
     this.feet.forEach((f, i) => f.position.lerp(feetT[i], moving ? 1 : k));
     this.arms.forEach((a, i) => a.position.lerp(armsT[i], P === 'throw' ? 1 - Math.exp(-20 * dt) : k));
+    // 🛏️ 躺平：整個人往後倒，頭朝後面（床頭）
+    const lie = P === 'sleep';
+    this.root.rotation.x += ((lie ? -Math.PI / 2 : 0) - this.root.rotation.x) * k;
+    this.root.position.y += ((lie ? 0.2 : 0) - this.root.position.y) * k;
 
     // 眨眼（裹毯時閉眼）：直接換成閉眼貼圖
     this._blinkTimer -= dt;

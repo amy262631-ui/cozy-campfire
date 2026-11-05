@@ -25,6 +25,7 @@ const POSE_OF = {
   addWood: 'throw', roast: 'roast', blanket: 'blanket', stargaze: 'lookUp', fish: 'roast', reel: 'reel', showFish: 'showOff',
   wave: 'wave', salute: 'salute', bye: 'bye', pray: 'pray', // 表情動作
   pick: 'pick', catch: 'catch', plant: 'plant', water: 'water', // 採摘、揮網、種菜、澆水
+  sofa: 'sit', sleep: 'sleep', // 🛋️ 坐沙發、躺床
 };
 
 function makeNameTag(name, npc = false) {
@@ -71,11 +72,11 @@ const npcName = (name) => {
 };
 
 class RemotePlayer {
-  constructor({ id, name, fur, sp = 0, rw = 0, ot = null, pb = 0, s, npc = false }) {
+  constructor({ id, name, fur, sp = 0, tl = '', er = '', rw = 0, ot = null, pb = 0, s, npc = false }) {
     this.id = id;
     this.npc = npc; // 營地居民（電腦角色）
     this.name = name;
-    this.character = new ProceduralFox({ fur, species: sp });
+    this.character = new ProceduralFox({ fur, species: sp, tail: tl, ears: er });
     this.character.setOutfit(wearOfCodes(ot)); // 造型（帽子、背包、圍巾）
     this.character.setAccessory(rw); // 贊助者的小花
     this.group = new THREE.Group();
@@ -158,6 +159,11 @@ class RemotePlayer {
     this.tag.position.y += ((t.a === 'blanket' ? 1.45 : 1.55) - this.tag.position.y) * k;
 
     this.group.position.copy(this.pos);
+    // 🏡 小木屋的樓梯、二樓：用目前房間的高度規則算（伺服器只傳平面位置）
+    if (heightFn) {
+      this._y = heightFn(this.pos.x, this.pos.z, this._y ?? 0);
+      this.group.position.y = this._y + (this.target?.a === 'sleep' ? 0.26 : this.target?.a === 'sofa' ? 0.2 : 0);
+    } else this._y = 0;
     this.group.rotation.y = this.ry;
   }
 
@@ -171,6 +177,18 @@ class RemotePlayer {
 }
 
 /** 管理所有遠端玩家：加入、離開、狀態更新、碰撞資料 */
+/** 目前房間的地面高度（小木屋才有）；null＝平地 */
+let heightFn = null;
+export const setRemoteHeight = (fn) => {
+  heightFn = fn;
+};
+/** 角色大小（帳篷裡縮小一點，家具比例才對） */
+let charScale = 1;
+export const setCharScale = (s, remotes) => {
+  charScale = s;
+  for (const p of remotes?.players?.values?.() ?? []) p.group.scale.setScalar(s);
+};
+
 export class RemotePlayers {
   constructor(scene, zzz) {
     this.scene = scene;
@@ -193,6 +211,7 @@ export class RemotePlayers {
   add(info) {
     if (this.players.has(info.id)) this.remove(info.id);
     const p = new RemotePlayer(info);
+    p.group.scale.setScalar(charScale);
     this.players.set(info.id, p);
     this.scene.add(p.group);
     return p;

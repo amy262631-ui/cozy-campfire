@@ -24,7 +24,7 @@ export const FISH = [
   { name: t('溪哥王'), rarity: 3, min: 25, max: 45, color: 0x7fb6d6, patch: 0xff8a50, weight: 4, pull: 14, fight: 0.09, window: 1.25 },
   { name: t('螢光燈籠魚'), rarity: 3, min: 18, max: 36, color: 0xe8ffcf, glow: 0xb8ff7a, weight: 6, pull: 13, fight: 0.08, window: 1.25, where: 'pond', note: t('只在營火河畔出現') },
   { name: t('彩虹鱒'), rarity: 3, min: 28, max: 55, color: 0xd9a3ff, patch: 0x6fd0ff, weight: 6, pull: 14, fight: 0.09, window: 1.25, where: 'lake', note: t('只在湖畔碼頭出現') },
-  { name: t('星空鯉'), rarity: 4, min: 40, max: 80, color: 0x2b3a7a, glow: 0x9fb8ff, weight: 5, pull: 18, fight: 0.11, window: 1.15, when: 'event', note: t('只在每晚 9:30 營火時間出現') },
+  { name: t('星空鯉'), rarity: 4, min: 40, max: 80, color: 0x2b3a7a, glow: 0x9fb8ff, weight: 5, pull: 18, fight: 0.11, window: 1.15, when: 'event', note: t('只在早晚 9:30 營火時間出現') },
   { name: t('營火紅鯉'), rarity: 4, min: 35, max: 70, color: 0xff6a3a, patch: 0xffd08a, weight: 1.6, pull: 18, fight: 0.11, window: 1.15, note: t('鱗片像火光一樣') },
   { name: t('雪白龍鯉'), rarity: 5, min: 80, max: 128, color: 0xf6fbff, glow: 0xcfe8ff, weight: 2, pull: 26, fight: 0.14, window: 1.0, when: 'contest', note: t('只在釣魚大賽時出現') },
   // ---- 圖鑑擴充到 50 種 ----
@@ -49,11 +49,11 @@ export const FISH = [
   { name: t('蜂蜜鱒'), rarity: 4, min: 30, max: 55, color: 0xffc25a, weight: 1.4, pull: 18, fight: 0.11, window: 1.15 },
   { name: t('森林鱷雀鱔'), rarity: 4, min: 60, max: 110, color: 0x6d7a55, weight: 1, pull: 20, fight: 0.12, window: 1.1, where: 'lake', note: t('長得像小恐龍') },
   { name: t('雲朵魚'), rarity: 4, min: 25, max: 50, color: 0xffffff, glow: 0xe8f2ff, weight: 1.2, pull: 18, fight: 0.11, window: 1.15, note: t('摸起來軟綿綿的') },
-  { name: t('極光魚'), rarity: 4, min: 30, max: 60, color: 0x7affd0, glow: 0x7ab0ff, weight: 3, pull: 18, fight: 0.11, window: 1.15, when: 'event', note: t('只在每晚 9:30 營火時間出現') },
+  { name: t('極光魚'), rarity: 4, min: 30, max: 60, color: 0x7affd0, glow: 0x7ab0ff, weight: 3, pull: 18, fight: 0.11, window: 1.15, when: 'event', note: t('只在早晚 9:30 營火時間出現') },
   { name: t('琥珀鯰'), rarity: 4, min: 50, max: 95, color: 0xd99a3a, glow: 0xffc070, weight: 1, pull: 19, fight: 0.11, window: 1.1, where: 'pond', note: t('只在營火河畔出現') },
   { name: t('熊貓魚'), rarity: 4, min: 20, max: 40, color: 0xffffff, patch: 0x222222, weight: 1, pull: 18, fight: 0.11, window: 1.15, note: t('黑白配色超可愛') },
   { name: t('松果魚'), rarity: 4, min: 15, max: 30, color: 0x8a5a30, patch: 0xc88a50, weight: 1.2, pull: 18, fight: 0.11, window: 1.15, note: t('營地的吉祥物？') },
-  { name: t('銀河鯨鯉'), rarity: 5, min: 90, max: 128, color: 0x1a2050, glow: 0xc8a0ff, weight: 1.2, pull: 26, fight: 0.14, window: 1.0, when: 'event', note: t('只在每晚 9:30 營火時間出現') },
+  { name: t('銀河鯨鯉'), rarity: 5, min: 90, max: 128, color: 0x1a2050, glow: 0xc8a0ff, weight: 1.2, pull: 26, fight: 0.14, window: 1.0, when: 'event', note: t('只在早晚 9:30 營火時間出現') },
   { name: t('鳳凰鯉'), rarity: 5, min: 80, max: 125, color: 0xff5030, glow: 0xffd060, weight: 1.2, pull: 26, fight: 0.14, window: 1.0, when: 'contest', note: t('只在釣魚大賽時出現') },
   { name: t('彩虹獨角魚'), rarity: 5, min: 50, max: 90, color: 0xffb0e0, glow: 0xa0e0ff, weight: 0.25, pull: 26, fight: 0.14, window: 1.0, note: t('看過的人都說會帶來好運') },
   { name: t('漂流瓶'), rarity: 0, junk: 'bottle', min: 18, max: 22, color: 0xd8f0ff, weight: 1.5, pull: 4, fight: 0.02, window: 1.6, note: t('裡面有一張紙條') },
@@ -61,10 +61,10 @@ export const FISH = [
   // ---- 🐉 傳說之魚：超大、超稀有，釣到時整個伺服器都會看到公告 ----
   { name: t('遠古湖神鯨'), rarity: 5, legend: true, min: 180, max: 299, color: 0x2d4a6a, glow: 0x7ad8ff, weight: 0.12, pull: 34, fight: 0.17, window: 0.95, where: 'lake', note: t('傳說中住在湖底最深處') },
   { name: t('熔岩火龍魚'), rarity: 5, legend: true, min: 160, max: 260, color: 0xff4a1a, glow: 0xffb000, weight: 0.12, pull: 34, fight: 0.17, window: 0.95, where: 'pond', note: t('被營火的光吸引而來') },
-  { name: t('星河龍王'), rarity: 5, legend: true, min: 220, max: 320, color: 0x241a5a, glow: 0xffe28a, weight: 0.25, pull: 38, fight: 0.18, window: 0.9, when: 'event', note: t('只在每晚 9:30，從星空游下來') },
+  { name: t('星河龍王'), rarity: 5, legend: true, min: 220, max: 320, color: 0x241a5a, glow: 0xffe28a, weight: 0.25, pull: 38, fight: 0.18, window: 0.9, when: 'event', note: t('只在早晚 9:30，從星空游下來') },
   // 每晚 9:30 營火時間限定的魚王：湖畔、營火河畔各一隻
-  { name: t('流星劍魚王'), rarity: 5, legend: true, min: 200, max: 300, color: 0xdfe8ff, glow: 0x9fd0ff, weight: 0.22, pull: 37, fight: 0.18, window: 0.9, when: 'event', where: 'lake', note: t('只在每晚 9:30，追著流星衝進湖裡') },
-  { name: t('螢光幽靈魚王'), rarity: 5, legend: true, min: 150, max: 240, color: 0xc8fff0, glow: 0x7affc8, weight: 0.22, pull: 36, fight: 0.18, window: 0.9, when: 'event', where: 'pond', note: t('只在每晚 9:30，在營火河畔若隱若現') },
+  { name: t('流星劍魚王'), rarity: 5, legend: true, min: 200, max: 300, color: 0xdfe8ff, glow: 0x9fd0ff, weight: 0.22, pull: 37, fight: 0.18, window: 0.9, when: 'event', where: 'lake', note: t('只在早晚 9:30，追著流星衝進湖裡') },
+  { name: t('螢光幽靈魚王'), rarity: 5, legend: true, min: 150, max: 240, color: 0xc8fff0, glow: 0x7affc8, weight: 0.22, pull: 36, fight: 0.18, window: 0.9, when: 'event', where: 'pond', note: t('只在早晚 9:30，在營火河畔若隱若現') },
 ];
 /** 第一次釣到某種魚（收進圖鑑）送的松果，依星等（伺服器 server/index.js 的 DEX_GAIN 相同） */
 export const DEX_GAIN = [1, 2, 3, 5, 10, 20];

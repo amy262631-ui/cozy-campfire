@@ -102,7 +102,7 @@ export class TreePanel {
       <button type="button" class="tree-item${o.eventOnly ? ' limited' : ''}" data-o="${o.id}" ${coins == null || coins < o.price || locked ? 'disabled' : ''}>
         <span class="ti-icon">${o.icon}</span>
         <span class="ti-name">${o.name}</span>
-        <span class="ti-price">${locked ? t('每晚 9:30') : `🌰 ${o.price}`}</span>
+        <span class="ti-price">${locked ? t('早晚 9:30') : `🌰 ${o.price}`}</span>
       </button>`;
     }).join('');
     const people = new Set(items.map((x) => x.n)).size;

@@ -10,6 +10,7 @@ import { LAYOUT, CAMP_SIZE, ENTRY_Z, BOUNDS, LOOP_CENTER, plotSpots, frame } fro
 import { buildSoil, buildCrop } from './gardenModels.js';
 import { slotLocal } from '../game/garden.js';
 import { createTrashLayer } from './trashLayer.js';
+import { buildYard, yardRadius } from './yardModels.js';
 
 /**
  * 🏕️ 帳篷營地：一條彎彎曲曲的環形小路繞著中央的小營火，
@@ -544,7 +545,7 @@ export function createCampgroundRoom() {
   const patchOther = lowpoly(0x3a5230);
   let plots = PLOTS.map((p, i) => ({ ...p, door: spots[i].door, out: spots[i].out, garden: spots[i].garden, tent: null, key: null, g: null, collider: null }));
 
-  const tentKey = (tent) => (tent ? [tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.open, tent.likes, tent.n, JSON.stringify(tent.garden ?? null)].join('|') : 'empty');
+  const tentKey = (tent) => (tent ? [tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.open, tent.likes, tent.n, tent.yard ?? '', JSON.stringify(tent.garden ?? null)].join('|') : 'empty');
   const trash = createTrashLayer(group);
   /** 🥕 小菜園的作物（世界座標，跟帳篷分開放） */
   const gardensGroup = new THREE.Group();
@@ -583,7 +584,7 @@ export function createCampgroundRoom() {
       s.userData.own = true;
       g.add(s);
       const sp = doorAt(0.7);
-      return { g, door: sp.door, out: sp.out, collider: null };
+      return { g, door: sp.door, out: sp.out, collider: null, yardCol: null };
     }
     const shell = tentShell(tent.shape, tent.style);
     shell.scale.setScalar(SCALE);
@@ -625,7 +626,21 @@ export function createCampgroundRoom() {
       gg.add(crop);
       crop.traverse((o) => o.userData.spin && spinners.push(o));
     });
-    return { g, gg, door: sp.door, out: sp.out, collider: { x: p.x, z: p.z, r: front * 0.92 } };
+    // 🚙 門口擺設：帳篷前面、菜園的另一邊
+    let yardCol = null;
+    if (tent.yard) {
+      const y = buildYard(tent.yard);
+      y.traverse((o) => o.isMesh && (o.userData.ownGeo = true));
+      y.scale.setScalar(SCALE);
+      const lx = -2.4 * (p.gardenSide || 1);
+      const lz = 2.3;
+      y.position.set(lx, 0, lz);
+      y.rotation.y = -Math.PI / 2;
+      g.add(y);
+      const f = frame(p.ry);
+      yardCol = { x: p.x + f.fx * lz + f.rx * lx, z: p.z + f.fz * lz + f.rz * lx, r: yardRadius(tent.yard) * SCALE };
+    }
+    return { g, gg, door: sp.door, out: sp.out, collider: { x: p.x, z: p.z, r: front * 0.92 }, yardCol };
   }
 
   function setTents(list = []) {
@@ -659,7 +674,7 @@ export function createCampgroundRoom() {
     });
     if (!changed) return;
     colliders.length = 0;
-    colliders.push(...staticColliders, ...plots.map((p) => p.collider).filter(Boolean));
+    colliders.push(...staticColliders, ...plots.flatMap((p) => [p.collider, p.yardCol]).filter(Boolean));
   }
   setTents([]);
 

@@ -1,9 +1,10 @@
 import { t } from '../i18n/i18n.js';
 import { FURNITURE, TENT_PRICE, CATS } from '../game/furniture.js';
-import { gridOf, expandPrice, EXPAND_PRICES, GRID_MAX } from '../game/furnitureCatalog.js';
+import { gridOf, expandPrice, EXPAND_PRICES, GRID_MAX, FURNITURE_COLORS, hasColors } from '../game/furnitureCatalog.js';
 import { TENT_SHAPES, TENT_SHAPE_BY_ID } from '../game/tentShapes.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TentPreview } from './TentPreview.js';
+import { YARD_ITEMS } from '../game/yardCatalog.js';
 
 /**
  * 營地小舖：用松果買帳篷、家具。
@@ -83,11 +84,23 @@ export class ShopPanel {
         this.busy = false;
         return this.render();
       }
+      const yd = e.target.closest('[data-yard]');
+      if (yd && !this.busy) {
+        this.busy = true;
+        await this.onEdit?.('yard', { s: yd.dataset.yard });
+        this.busy = false;
+        return this.render();
+      }
+      const col = e.target.closest('[data-color]');
+      if (col) {
+        this.color = Number(col.dataset.color);
+        return this.render();
+      }
       const btn = e.target.closest('[data-buy]');
       if (!btn || btn.disabled || this.busy) return;
       this.busy = true;
       this.body.classList.add('busy');
-      await this.onBuy?.(btn.dataset.buy);
+      await this.onBuy?.(btn.dataset.buy, btn.dataset.c ? Number(btn.dataset.c) : 0);
       this.busy = false;
       this.body.classList.remove('busy');
       this.render();
@@ -147,7 +160,25 @@ export class ShopPanel {
         <button type="button" data-tab="look" class="${this.tab === 'look' ? 'on' : ''}">${t('⛺ 帳篷外觀')}</button>
         <button type="button" data-tab="furn" class="${this.tab === 'furn' ? 'on' : ''}">${t('🪑 家具')}</button>
         <button type="button" data-tab="expand" class="${this.tab === 'expand' ? 'on' : ''}">${t('📐 擴建')}</button>
+        <button type="button" data-tab="yard" class="${this.tab === 'yard' ? 'on' : ''}">${t('🚙 門口擺設')}</button>
       </div>`;
+    if (this.tab === 'yard') {
+      this.preview.stop();
+      const own = home.yard?.own ?? [];
+      const on = home.yard?.on ?? null;
+      this.body.innerHTML = `${tabs}
+        <div class="shop-sub">${t('擺在帳篷營地裡、你家門口旁邊，大家經過都看得到（一次擺一樣，買過的可以隨時換）')}</div>
+        <div class="yard-list">${YARD_ITEMS.map((y) => {
+          const has = own.includes(y.id);
+          const act = has
+            ? y.id === on
+              ? `<button type="button" data-yard="">${t('✅ 擺著中・收起來')}</button>`
+              : `<button type="button" data-yard="${y.id}">${t('擺出來')}</button>`
+            : `<button type="button" data-buy="yard_${y.id}" ${coins == null || coins < y.price ? 'disabled' : ''}>🌰 ${y.price}</button>`;
+          return `<div class="yard-row${y.id === on ? ' on' : ''}"><span class="yr-icon">${y.icon}</span><div class="yr-txt"><b>${t(y.zh)}</b><small>${t(y.note)}</small></div>${act}</div>`;
+        }).join('')}</div>`;
+      return;
+    }
     if (this.tab === 'look') {
       const owned = home.shapes ?? ['bell'];
       const cur = home.shape ?? 'bell';
@@ -218,15 +249,22 @@ export class ShopPanel {
     </div>`;
     const list = this.cat === 'all' ? FURNITURE : FURNITURE.filter((f) => f.cat === this.cat);
     const tag = (f) => (f.kind === 'small' ? t('可放桌上') : f.kind === 'mat' ? t('可墊底') : f.top ? t('上面可放') : '');
+    const color = this.color ?? 0;
+    const colors = `<div class="shop-colors"><span>${t('🎨 顏色')}</span>${FURNITURE_COLORS.map(
+      (c) => `<button type="button" data-color="${c.id}" class="${c.id === color ? 'on' : ''}">${c.icon} ${t(c.zh)}</button>`,
+    ).join('')}</div>`;
     this.body.innerHTML = `${tabs}
-      <div class="shop-sub">${t('買了會放進背包，回帳篷按「🛠️ 布置」擺出來')}</div>
+      <div class="shop-sub">${t('買了會放進背包，回帳篷按「🛠️ 布置」擺出來；買之前可以先選顏色')}</div>
       ${cats}
+      ${colors}
       <div class="shop-grid">
         ${list.map((f) => {
           const owned = home.inv?.[f.id] ?? 0;
           const tg = tag(f);
+          const c = hasColors(f) ? color : 0;
           return `
-          <button type="button" class="shop-item" data-buy="${f.id}" ${coins == null || coins < f.price || owned >= 20 ? 'disabled' : ''}>
+          <button type="button" class="shop-item" data-buy="${f.id}" ${c ? `data-c="${c}"` : ''} ${coins == null || coins < f.price || owned >= (f.kind === 'wall' ? 80 : 20) ? 'disabled' : ''}>
+            ${c ? `<span class="si-color">${FURNITURE_COLORS[c].icon}</span>` : ''}
             <span class="si-icon">${f.icon}</span>
             <span class="si-name">${f.name}</span>
             <span class="si-price">🌰 ${f.price}</span>

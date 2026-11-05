@@ -14,6 +14,8 @@ export const TENT_STYLES = [
   { id: 'redspot', icon: '🔴', name: t('紅點點'), canvas: '#d2453c', accent: '#f6efe2', floor: 0x8a6644, pattern: 'spots', ink: '#fbf4e6' },
   { id: 'rainbow', icon: '🌈', name: t('彩虹'), canvas: '#f4ead8', accent: '#7a5ab8', floor: 0x8a6644, pattern: 'rainbow', gift: true },
   { id: 'patch', icon: '🧵', name: t('拼布'), canvas: '#d9b98c', accent: '#8a5a3a', floor: 0x7d5a3e, pattern: 'patch' },
+  // 🪵 原木（雙層小木屋買下時自動換上，其他帳篷也能用）
+  { id: 'log', icon: '🪵', name: t('原木'), canvas: '#a0703f', accent: '#5a3a22', floor: 0x7a5434, pattern: 'logs', ink: '#6e4526' },
   // 🔥 營火月票限定：深咖啡底、橘色火花
   { id: 'ember', icon: '🔥', name: t('營火之夜'), canvas: '#4a2618', accent: '#f08a3c', floor: 0x6a4630, pattern: 'stars', ink: '#ffb46b', gift: true, pass: true },
 ];
@@ -54,6 +56,22 @@ export function tentTexture(style) {
         g.fill();
       }
     }
+  } else if (style.pattern === 'logs') {
+    // 四根橫躺的原木：每根上亮下暗，中間一條深色縫
+    for (let i = 0; i < 4; i++) {
+      const y = i * 32;
+      const grad = g.createLinearGradient(0, y, 0, y + 32);
+      grad.addColorStop(0, '#b98552');
+      grad.addColorStop(0.5, style.canvas);
+      grad.addColorStop(1, '#7c5230');
+      g.fillStyle = grad;
+      g.fillRect(0, y, 128, 32);
+      g.fillStyle = style.ink;
+      g.fillRect(0, y + 30, 128, 2);
+      g.globalAlpha = 0.25;
+      for (let k = 0; k < 3; k++) g.fillRect((i * 37 + k * 45) % 128, y + 8 + k * 7, 26, 1);
+      g.globalAlpha = 1;
+    }
   } else if (style.pattern === 'rainbow') {
     const bands = ['#e8615a', '#f2a14a', '#f2d35a', '#7cc46a', '#5aa4d8', '#8a6ad0'];
     bands.forEach((c, i) => {
@@ -88,7 +106,8 @@ export function tentTexture(style) {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(style.pattern === 'stripe' ? 14 : style.pattern === 'rainbow' ? 4 : style.pattern === 'spots' ? 18 : 22, style.pattern === 'stripe' || style.pattern === 'rainbow' ? 1 : 2);
+  if (style.pattern === 'logs') tex.repeat.set(1, 1);
+  else tex.repeat.set(style.pattern === 'stripe' ? 14 : style.pattern === 'rainbow' ? 4 : style.pattern === 'spots' ? 18 : 22, style.pattern === 'stripe' || style.pattern === 'rainbow' ? 1 : 2);
   cache.set(style.id, tex);
   return tex;
 }

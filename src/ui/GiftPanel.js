@@ -107,7 +107,7 @@ export class GiftPanel {
     const rows = [];
     if (o(info.daily)) rows.push(row(o(info.daily).icon, t(o(info.daily).zh), t('👒 今天的每日造型・今天分享一次（複製或分享連結都算）'), info.dailyGot));
     if (o(info.weekly)) rows.push(row(o(info.weekly).icon, t(o(info.weekly).zh), t('🌟 這週限定造型・朋友第一次透過你的連結來玩，待滿 {m} 分鐘', { m: info.stay }), info.weeklyGot));
-    if (o(info.dateNext)) rows.push(row(o(info.dateNext).icon, t(o(info.dateNext).zh), t('🔥 營火之約限定・晚上 9:30～10:00 朋友透過你的連結進來，兩個人都拿到'), false));
+    if (o(info.dateNext)) rows.push(row(o(info.dateNext).icon, t(o(info.dateNext).zh), t('🔥 營火之約限定・早上或晚上 9:30～10:00 朋友透過你的連結進來，兩個人都拿到'), false));
     const nameOf = (id) => {
       const f = GIFT_FURNITURE.find((x) => x.id === id);
       if (f) return { icon: f.icon, name: f.name, kind: t('家具') };

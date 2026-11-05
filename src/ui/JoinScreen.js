@@ -1,4 +1,5 @@
 import { FUR_PALETTES } from '../player/characters/furPalettes.js';
+import { BASE_FUR } from '../game/looks.js';
 import { SPECIES } from '../player/characters/species.js';
 import { languageRowHtml, bindLanguageRow } from './LanguagePicker.js';
 import { randomName } from '../social/names.js';
@@ -25,7 +26,7 @@ export function autoProfile(allowSpecies = true) {
   return {
     name: saved.custom && saved.name ? saved.name : randomName(),
     species: allowSpecies ? (saved.customLook && SPECIES[saved.species] ? saved.species : pick(SPECIES.length)) : 0,
-    fur: saved.customLook && Number.isInteger(saved.fur) ? saved.fur : pick(FUR_PALETTES.length),
+    fur: saved.customLook && Number.isInteger(saved.fur) ? saved.fur : pick(BASE_FUR),
     code: saved.code || '',
     custom: !!saved.custom,
     customLook: !!saved.customLook,
@@ -124,8 +125,10 @@ export class JoinScreen {
 
         <div class="join-label join-fur-label">${t('毛色')}</div>
         <div class="join-furs" id="join-furs">
-          ${FUR_PALETTES.map(
-            (p, i) => `
+          ${FUR_PALETTES.map((p, i) => [p, i])
+            .filter(([, i]) => i < BASE_FUR || i === startFur) // 特殊毛色在「👒 造型 → 🐾 外型」買、換
+            .map(
+            ([p, i]) => `
             <button type="button" class="fur-swatch${i === startFur ? ' selected' : ''}" data-fur="${i}">
               <span style="background:#${p.fur.toString(16).padStart(6, '0')}"></span>
               <small>${p.name}</small>

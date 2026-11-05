@@ -30,7 +30,8 @@ export class HUD {
 
       <div class="prompt" id="prompt"></div>
 
-      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="date-chip" id="date-chip" hidden>${t('🔥 約朋友')}</button><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="home-chip fire-chip" id="fire-chip" hidden>${t('🔥 回營火')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="look-chip" id="look-chip">${t('👒 造型')}</button><button type="button" class="pass-chip" id="pass-chip" hidden>${t('🎫 月票')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button></div>
+      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="date-chip" id="date-chip" hidden>${t('🔥 約朋友')}</button><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="go-chip" id="go-chip">${t('🧭 去哪裡')} ▾</button><button type="button" class="home-chip fire-chip" id="fire-chip" hidden>${t('🔥 回營火')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="look-chip" id="look-chip">${t('👒 造型')}</button><button type="button" class="pass-chip" id="pass-chip" hidden>${t('🎫 月票')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button></div>
+      <div class="go-menu" id="go-menu" hidden></div>
       <div class="today" id="today" hidden></div>
       <div class="event-line" id="event-line" hidden></div>
       <div class="mini-line" id="mini-line" hidden></div>
@@ -62,6 +63,8 @@ export class HUD {
       dateChip: root.querySelector('#date-chip'),
       lookChip: root.querySelector('#look-chip'),
       passChip: root.querySelector('#pass-chip'),
+      goChip: root.querySelector('#go-chip'),
+      goMenu: root.querySelector('#go-menu'),
       eventLine: root.querySelector('#event-line'),
       miniLine: root.querySelector('#mini-line'),
     };
@@ -86,6 +89,20 @@ export class HUD {
       el.addEventListener('pointerdown', (e) => e.stopPropagation());
       el.addEventListener('click', fn);
     }
+    // 🧭 去哪裡：回營火、回家、湖邊、迷霧森林⋯ 全部收在一個下拉選單
+    this.onGo = null;
+    this.goState = { room: 'forest_main', home: false };
+    this.el.goChip.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.el.goMenu.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.el.goChip.addEventListener('click', () => (this.el.goMenu.hidden ? this.#openGo() : this.closeGo()));
+    this.el.goMenu.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-go]');
+      if (!b || b.disabled) return;
+      this.closeGo();
+      this.onGo?.(b.dataset.go);
+    });
+    window.addEventListener('pointerdown', () => this.closeGo());
+    window.addEventListener('keydown', (e) => e.code === 'Escape' && this.closeGo());
     this.el.acctChip.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.acctChip.addEventListener('click', () => this.onMeClick?.({ focusAccount: true }));
     this.el.invite.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -168,6 +185,44 @@ export class HUD {
     this.el.acctChip.hidden = !v;
   }
 
+  /** 去哪裡選單：現在在哪、有沒有自己的帳篷 */
+  setGoState(st) {
+    Object.assign(this.goState, st);
+    if (!this.el.goMenu.hidden) this.#openGo();
+  }
+
+  #openGo() {
+    const { room, home } = this.goState;
+    const PLACES = [
+      ['forest_main', t('🔥 中央營火')],
+      ['lake_dock', t('🎣 湖畔碼頭')],
+      ['mist_forest', t('🍄 迷霧森林')],
+      ['campground', t('🏕️ 帳篷營地')],
+      ['home', t('🏠 我的帳篷')],
+      ['treehouse_music', t('🎵 森林樹屋')],
+      ['tent_social', t('☕ 交流帳篷')],
+      ['tent_focus', t('⛺ 專注帳篷')],
+    ];
+    this.el.goMenu.innerHTML = PLACES.map(([id, label]) => {
+      const here = id === room;
+      const off = id === 'home' && !home;
+      return `<button type="button" data-go="${id}" ${here ? 'disabled' : ''} class="${here ? 'here' : ''}${off ? ' off' : ''}">${label}${here ? `<small>${t('目前在這裡')}</small>` : off ? `<small>${t('先到小舖買帳篷')}</small>` : ''}</button>`;
+    }).join('');
+    const r = this.el.goChip.getBoundingClientRect();
+    const w = Math.min(300, innerWidth - 16);
+    this.el.goMenu.style.width = `${w}px`;
+    this.el.goMenu.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
+    this.el.goMenu.style.top = `${r.bottom + 6}px`;
+    this.el.goMenu.hidden = false;
+    this.el.goChip.classList.add('on');
+  }
+
+  closeGo() {
+    if (this.el.goMenu.hidden) return;
+    this.el.goMenu.hidden = true;
+    this.el.goChip.classList.remove('on');
+  }
+
   /** 「🔥 回營火」：不在營火區時才出現 */
   setFireVisible(v) {
     this.el.fireChip.hidden = !v;
@@ -204,11 +259,12 @@ export class HUD {
     } else if (ev.startsIn < 3 * 3600) {
       const h = Math.floor(ev.startsIn / 3600);
       const m = Math.ceil((ev.startsIn % 3600) / 60);
+      const when = ev.slot === 'am' ? t('早上 9:30') : t('晚上 9:30');
       el.textContent = h
-        ? t('🌙 今晚 9:30 營火時間・還有 {h} 小時 {m} 分', { h, m })
-        : t('🌙 今晚 9:30 營火時間・還有 {m} 分鐘', { m: Math.max(1, m) });
+        ? t('🌙 {when} 營火時間・還有 {h} 小時 {m} 分', { when, h, m })
+        : t('🌙 {when} 營火時間・還有 {m} 分鐘', { when, m: Math.max(1, m) });
     } else {
-      el.textContent = t('🌙 每晚 9:30 營火時間：流星雨、松果加倍');
+      el.textContent = t('🌙 每天早上、晚上 9:30 營火時間：流星雨、松果加倍');
     }
   }
 
@@ -250,7 +306,7 @@ export class HUD {
             : '';
       el.textContent = (RULE[m.kind] ?? '') + lead;
     } else if (m.startsIn > 2 * 3600) {
-      el.textContent = t('🌙 每晚 7 點～11 點，每半小時一場小活動（9:30 營火時間有魚王）');
+      el.textContent = t('🌙 每晚 7 點～11 點，每半小時一場小活動（早晚 9:30 營火時間有魚王）');
     } else {
       const mins = Math.max(1, Math.ceil(m.startsIn / 60));
       el.textContent = t('下一場 {name}：{time}（{m} 分鐘後）', { name: NAME[m.kind] ?? '', time: `${m.hour}:${String(m.minute ?? 0).padStart(2, '0')}`, m: mins });

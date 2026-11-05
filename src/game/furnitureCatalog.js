@@ -12,6 +12,7 @@
  *     kind: 'small'  小東西：可以直接放地上，也可以放在有 top 的家具上
  *     top: 高度      上面有平台（公尺），可以放「小東西」
  *   walk   可以踩上去（不擋路）
+ *   seat   可以坐（按 E），坐的高度；sleep＝躺下睡覺
  *   gift   分享禮物：拿到的方式（share / ref1 / ref5）
  *   craft  手作家具：小舖買不到，用採集籃的材料做（crafting.js）
  */
@@ -23,7 +24,23 @@ export const FURNITURE_CATS = [
   { id: 'plant', icon: '🪴', zh: '植物' },
   { id: 'toy', icon: '🧸', zh: '玩偶' },
   { id: 'deco', icon: '🍰', zh: '小物' },
+  { id: 'wall', icon: '🧱', zh: '隔間' },
 ];
+
+/**
+ * 🎨 家具配色：買的時候選顏色（不加價），存在家具上的 c（0＝原色）。
+ * 有 color: false 的家具（禮物、手作、隔間牆、魚缸⋯）沒有配色。
+ */
+export const FURNITURE_COLORS = [
+  { id: 0, icon: '⚪', zh: '原色' },
+  { id: 1, icon: '🌸', zh: '粉嫩', hue: 0.94, sat: 0.55, light: 0.12 },
+  { id: 2, icon: '🌿', zh: '森林', hue: 0.33, sat: 0.4, light: -0.02 },
+  { id: 3, icon: '🌊', zh: '海藍', hue: 0.58, sat: 0.5, light: 0 },
+  { id: 4, icon: '🌙', zh: '夜色', hue: 0.7, sat: 0.35, light: -0.12 },
+];
+/** 這種魚放得進這個魚缸嗎（魚王算 6 星） */
+export const fishFits = (tank, fish) => !!tank?.fish && !!fish && !fish.junk && (fish.legend ? 6 : fish.rarity) <= tank.fish;
+export const hasColors = (f) => !!f && !f.gift && !f.craft && f.color !== false;
 
 export const FURNITURE_CATALOG = [
   // ---- 地墊 ----
@@ -33,14 +50,14 @@ export const FURNITURE_CATALOG = [
   { id: 'heartrug', icon: '💗', zh: '愛心地墊', price: 9, cat: 'rug', kind: 'mat', top: 0.022, walk: true },
   { id: 'pawrug', icon: '🐾', zh: '貓掌地毯', price: 10, cat: 'rug', kind: 'mat', top: 0.022, walk: true },
   // ---- 坐臥 ----
-  { id: 'cushion', icon: '🟠', zh: '坐墊', price: 6, cat: 'sit', walk: true },
-  { id: 'pouf', icon: '🍩', zh: '甜甜圈坐墊', price: 8, cat: 'sit', walk: true },
-  { id: 'stool', icon: '🍄', zh: '蘑菇凳', price: 9, cat: 'sit', top: 0.32 },
-  { id: 'beanbag', icon: '🫘', zh: '懶骨頭', price: 14, cat: 'sit' },
-  { id: 'catbed', icon: '🐈', zh: '貓咪窩', price: 16, cat: 'sit' },
-  { id: 'rocking', icon: '🪑', zh: '小搖椅', price: 20, cat: 'sit' },
-  { id: 'sofa', icon: '🛋️', zh: '雙人小沙發', price: 28, cat: 'sit' },
-  { id: 'bed', icon: '🛏️', zh: '睡鋪', price: 30, cat: 'sit', top: 0.235 },
+  { id: 'cushion', icon: '🟠', zh: '坐墊', price: 6, cat: 'sit', walk: true, seat: 0.06 },
+  { id: 'pouf', icon: '🍩', zh: '甜甜圈坐墊', price: 8, cat: 'sit', walk: true, seat: 0.1 },
+  { id: 'stool', icon: '🍄', zh: '蘑菇凳', price: 9, cat: 'sit', top: 0.32, seat: 0.3 },
+  { id: 'beanbag', icon: '🫘', zh: '懶骨頭', price: 14, cat: 'sit', seat: 0.18 },
+  { id: 'catbed', icon: '🐈', zh: '貓咪窩', price: 16, cat: 'sit', seat: 0.1, sleep: true },
+  { id: 'rocking', icon: '🪑', zh: '小搖椅', price: 20, cat: 'sit', seat: 0.24 },
+  { id: 'sofa', icon: '🛋️', zh: '雙人小沙發', price: 28, cat: 'sit', seat: 0.24 },
+  { id: 'bed', icon: '🛏️', zh: '睡鋪', price: 30, cat: 'sit', top: 0.235, seat: 0.24, sleep: true, long: 0.6 }, // long：往後多佔半格（床比較長）
   // ---- 桌櫃 ----
   { id: 'crate', icon: '📦', zh: '木箱', price: 6, cat: 'table', top: 0.36 },
   { id: 'stump', icon: '🌲', zh: '樹墩邊桌', price: 8, cat: 'table', top: 0.33 },
@@ -50,6 +67,8 @@ export const FURNITURE_CATALOG = [
   { id: 'desk', icon: '✏️', zh: '小書桌', price: 20, cat: 'table', top: 0.56 },
   { id: 'bookshelf', icon: '📚', zh: '書架', price: 20, cat: 'table', top: 0.915 },
   { id: 'fridge', icon: '🧊', zh: '小冰箱', price: 25, cat: 'table', top: 0.66 },
+  // 🗄️ 展示櫃：三層架子，一格就能放 6 件小東西（不用全部攤在地上）
+  { id: 'showcase', icon: '🗄️', zh: '展示收納櫃', price: 35, cat: 'table', shelf: 6 },
   // ---- 燈光 ----
   { id: 'candles', icon: '🕯️', zh: '蠟燭組', price: 6, cat: 'light', kind: 'small' },
   { id: 'oillamp', icon: '🪔', zh: '煤油燈', price: 10, cat: 'light', kind: 'small' },
@@ -94,6 +113,18 @@ export const FURNITURE_CATALOG = [
   { id: 'guitar', icon: '🎸', zh: '木吉他', price: 20, cat: 'deco' },
   { id: 'stove', icon: '🔥', zh: '小暖爐', price: 22, cat: 'deco' },
   { id: 'hatrack', icon: '🧥', zh: '衣帽架', price: 15, cat: 'deco' }, // 展示收集到的造型
+  // 🐠 大魚缸：放一條自己釣過的魚進去游（魚王也可以，拿來炫耀）
+  // fish：最多放幾星的魚（魚王算 6）；same：同一種可以一個一個往上疊成魚缸牆
+  { id: 'tank_s', icon: '🫧', zh: '桌上小魚缸', price: 18, cat: 'deco', kind: 'small', color: false, fish: 2 },
+  { id: 'tank_round', icon: '🔵', zh: '圓形魚缸', price: 30, cat: 'deco', color: false, fish: 3 },
+  { id: 'aquarium', icon: '🐟', zh: '大魚缸', price: 45, cat: 'deco', color: false, fish: 4, top: 0.84, same: true },
+  { id: 'tank_l', icon: '🐋', zh: '巨型水族箱', price: 120, cat: 'deco', color: false, fish: 6, top: 1.3, same: true },
+  // ---- 🧱 隔間牆：貼在格子的一邊，可以轉方向，人走不過去（門牆可以穿過） ----
+  { id: 'wall_log', icon: '🪵', zh: '原木隔間牆', price: 10, cat: 'wall', kind: 'wall', color: false },
+  { id: 'wall_plank', icon: '🤍', zh: '白木板牆', price: 10, cat: 'wall', kind: 'wall' },
+  { id: 'wall_low', icon: '🟫', zh: '半高矮牆', price: 8, cat: 'wall', kind: 'wall' },
+  { id: 'wall_door', icon: '🚪', zh: '門洞牆', price: 12, cat: 'wall', kind: 'wall', walk: true },
+  { id: 'wall_glass', icon: '🪟', zh: '玻璃窗牆', price: 15, cat: 'wall', kind: 'wall', color: false },
   // ---- 🔨 手作家具（小舖買不到，用採集籃的東西做；材料在 crafting.js） ----
   { id: 'shellchime', icon: '🎐', zh: '貝殼風鈴', cat: 'deco', craft: true },
   { id: 'stonetower', icon: '🪨', zh: '小石塔', cat: 'deco', kind: 'small', craft: true },
@@ -119,6 +150,10 @@ export function canStackOn(belowId, id) {
   if (!f) return false;
   if (!belowId) return true;
   const b = CATALOG_BY_ID[belowId];
+  // 🧱 隔間牆貼在格子邊上：同一格還能再擺一件家具或小東西（不能再放牆或地墊）
+  if (b?.kind === 'wall') return f.kind !== 'mat' && f.kind !== 'wall';
+  if (f.kind === 'wall') return b?.kind === 'mat';
+  if (b?.same && belowId === id) return true; // 🐠 魚缸疊魚缸
   if (!b?.top) return false;
   if (b.kind === 'mat') return f.kind !== 'mat';
   return f.kind === 'small';
@@ -127,6 +162,31 @@ export function canStackOn(belowId, id) {
 /** 某一格的家具，從下到上排好（舊存檔沒有 l，當作 0） */
 export const stackAt = (items, x, z) =>
   (items ?? []).filter((it) => it.x === x && it.z === z).sort((a, b) => (a.l ?? 0) - (b.l ?? 0));
+
+/** 🗄️ 展示櫃上 6 個位置（相對櫃子中心）：三層、每層左右兩個 */
+export const SHELF_SLOTS = [
+  [-0.18, 0.1], [0.18, 0.1],
+  [-0.18, 0.55], [0.18, 0.55],
+  [-0.18, 1.0], [0.18, 1.0],
+];
+/** 這一疊還能不能再放 id（有展示櫃的話放在櫃子的格子裡） */
+export function canAddTo(stack, id) {
+  const f = CATALOG_BY_ID[id];
+  if (!f) return false;
+  const si = stack.findIndex((it) => CATALOG_BY_ID[it.i]?.shelf);
+  if (si >= 0) return f.kind === 'small' && stack.length < si + 1 + CATALOG_BY_ID[stack[si].i].shelf;
+  if (stack.length >= MAX_STACK) return false;
+  return canStackOn(stack.at(-1)?.i ?? null, id);
+}
+/** 第 level 層放在哪（相對格子中心）：一般往上疊；展示櫃裡的東西排在架子上 */
+export function stackOffset(stack, level) {
+  const si = stack.findIndex((it) => CATALOG_BY_ID[it.i]?.shelf);
+  if (si >= 0 && level > si) {
+    const [x, y] = SHELF_SLOTS[level - si - 1] ?? [0, 1.4];
+    return { x, y: stackY(stack, si) + y, z: 0.02 };
+  }
+  return { x: 0, y: stackY(stack, level), z: 0 };
+}
 
 /** 一疊家具裡，第 level 層的底部高度 */
 export function stackY(stack, level) {
@@ -146,8 +206,11 @@ export function moveStack(items, x, z, level, tx, tz) {
   const moving = from.slice(level);
   if (!moving.length) return 'empty';
   const to = stackAt(items, tx, tz);
-  if (to.length + moving.length > MAX_STACK) return 'stackFull';
-  if (!canStackOn(to.at(-1)?.i ?? null, moving[0].i)) return 'noStack';
+  const sim = [...to];
+  for (const m of moving) {
+    if (!canAddTo(sim, m.i)) return sim.length >= MAX_STACK && !sim.some((it) => CATALOG_BY_ID[it.i]?.shelf) ? 'stackFull' : 'noStack';
+    sim.push(m);
+  }
   moving.forEach((it, k) => {
     it.x = tx;
     it.z = tz;
@@ -156,16 +219,29 @@ export function moveStack(items, x, z, level, tx, tz) {
   return null;
 }
 
+// ---------- 🏡 小木屋二樓 ----------
+/** 二樓的格子用 z ≥ LOFT_Z 表示（z - LOFT_Z ＝ 從最後面數來第幾排，x 跟一樓一樣） */
+export const LOFT_Z = 100;
+/** 二樓前緣在哪（沒放大前的座標）；tentShapes.js 的 CABIN 也用這個 */
+export const LOFT_FRONT = 0.2;
+/** 二樓有幾排格子（帳篷越大，二樓也越大） */
+export const loftRows = (grid) => Math.floor(((LOFT_FRONT + 2.4) * grid) / 6 / 0.8 + 1e-6);
+export const isLoftCell = (z) => z >= LOFT_Z;
+/** 這頂帳篷有沒有二樓 */
+export const hasLoft = (home) => home?.shape === 'cabin';
+
 // ---------- 帳篷擴建 ----------
-/** 帳篷地板一開始 6×6 格，用松果一次擴一圈，最大 10×10 */
+/** 帳篷地板一開始 6×6 格，用松果一次擴一圈，最大 20×20 */
 export const GRID_BASE = 6;
-export const GRID_MAX = 10;
-/** 擴建到 N×N 要多少松果（一次比一次貴） */
-export const EXPAND_PRICES = { 7: 40, 8: 70, 9: 110, 10: 160 };
+export const GRID_MAX = 20;
+/** 擴建到 N×N 要多少松果（一次比一次貴；11 以後是要存很久的大目標） */
+export const EXPAND_PRICES = { 7: 40, 8: 70, 9: 110, 10: 160, 11: 220, 12: 260, 13: 300, 14: 350, 15: 400, 16: 460, 17: 520, 18: 590, 19: 660, 20: 740 };
 export const gridOf = (home) => Math.min(GRID_MAX, Math.max(GRID_BASE, Math.floor(Number(home?.grid) || GRID_BASE)));
 /** 下一次擴建的價格（已經最大了回傳 null） */
 export const expandPrice = (home) => EXPAND_PRICES[gridOf(home) + 1] ?? null;
 /** 帳篷裡最多擺幾件（格子數＋疊放的額外空間） */
-export const maxItems = (grid) => grid * grid + 24;
+export const maxItems = (grid, loft = false) => Math.min(ITEMS_CAP, grid * grid + 24 + (loft ? grid * loftRows(grid) : 0));
+/** 不管帳篷多大，最多擺幾件（太多手機會卡） */
+export const ITEMS_CAP = 260;
 /** 每一格最多疊幾層（地墊＋家具＋小東西） */
 export const MAX_STACK = 3;

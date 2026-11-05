@@ -15,7 +15,7 @@ import { MixerPanel } from './ui/MixerPanel.js';
 import { PomodoroPanel } from './ui/PomodoroPanel.js';
 import { JukeboxPanel } from './ui/JukeboxPanel.js';
 import { NetworkClient } from './network/NetworkClient.js';
-import { RemotePlayers } from './network/RemotePlayers.js';
+import { RemotePlayers, setRemoteHeight, setCharScale } from './network/RemotePlayers.js';
 import { AudioEngine } from './audio/AudioEngine.js';
 import { SONGS } from './audio/music.js';
 import { RoomManager } from './rooms/RoomManager.js';
@@ -29,6 +29,10 @@ import { ShopPanel } from './ui/ShopPanel.js';
 import { BuildPanel } from './ui/BuildPanel.js';
 import { createDemoHome } from './game/demoHome.js';
 import { WelcomeCard } from './ui/WelcomeCard.js';
+import { UpdateNews } from './ui/UpdateNews.js';
+import { YARD_BY_ID } from './game/yardCatalog.js';
+import { FUR_PALETTES } from './player/characters/furPalettes.js';
+import { BASE_FUR, PREMIUM_FUR, TAILS, EARS, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from './game/looks.js';
 import { GuestPanel } from './ui/GuestPanel.js';
 import { translateChat, translateEnabled, setTranslateEnabled } from './network/chatTranslate.js';
 import { GiftPanel } from './ui/GiftPanel.js';
@@ -87,9 +91,41 @@ async function init() {
   // ---------- Renderer ----------
   const container = document.getElementById('app');
   // 🔋 省電模式（手機自動開）：解析度低一點、不畫影子、每秒最多 30 張；掛機時再降到 12 張
-  const lowPower = (isTouchDevice() || params.has('lowpower')) && !params.has('hq');
+  // 🛟 當機保護：上次沒有正常關掉（平板記憶體不夠，瀏覽器把分頁關掉重開），這次自動用最省的畫質
+  let crashCount = 0;
+  try {
+    crashCount = Number(localStorage.getItem('cozy-boot') || 0);
+    localStorage.setItem('cozy-boot', String(crashCount + 1));
+  } catch {
+    /* 無痕模式 */
+  }
+  const bootOk = () => {
+    try {
+      localStorage.setItem('cozy-boot', '0');
+    } catch {
+      /* 無痕模式 */
+    }
+  };
+  addEventListener('pagehide', bootOk); // 正常關掉、換頁：不算當機
+  setTimeout(bootOk, 5 * 60000); // 穩穩玩了 5 分鐘也不算
+  const ua = navigator.userAgent;
+  // 平板（iPad 接鍵盤觸控板時也算）：一律省電，避免記憶體不夠被關掉
+  const tablet = (/iPad|Macintosh/.test(ua) && navigator.maxTouchPoints > 1) || (/Android/.test(ua) && !/Mobile/.test(ua));
+  const safeMode = (crashCount >= 1 || params.has('safe')) && !params.has('hq');
+  const lowPower = (isTouchDevice() || tablet || safeMode || params.has('lowpower')) && !params.has('hq');
   const renderer = new THREE.WebGLRenderer({ antialias: !lowPower, powerPreference: lowPower ? 'low-power' : 'high-performance' });
-  const pixelRatio = Math.min(window.devicePixelRatio, lowPower ? 1.25 : 2);
+  const pixelRatio = Math.min(window.devicePixelRatio, safeMode ? 1 : lowPower ? 1.25 : 2);
+  // 畫面資源被瀏覽器收回（記憶體不夠）：重新整理一次，下次會自動用省電畫質
+  renderer.domElement.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    removeEventListener('pagehide', bootOk);
+    try {
+      localStorage.setItem('cozy-boot', '1');
+    } catch {
+      /* 無痕模式 */
+    }
+    setTimeout(() => location.reload(), 300);
+  });
   renderer.setPixelRatio(pixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -136,6 +172,7 @@ async function init() {
 
   // ---------- UI、聲音、動作 ----------
   const hud = new HUD();
+  if (safeMode && crashCount >= 1) setTimeout(() => hud.toast(t('🛟 上次好像沒有順利載入，這次先用省電畫質，比較不會被關掉'), 6000), 4000);
   const mobile = isTouchDevice() ? new MobileControls(input) : null;
 
   const audio = new AudioEngine();
@@ -352,7 +389,7 @@ async function init() {
     });
   };
 
-  // ---------- 每晚的營火時間（21:00～21:30） ----------
+  // ---------- 營火時間（早上、晚上 9:30～10:00） ----------
   let eventState = null; // { active, endsIn/startsIn, at }
   const currentEvent = () => {
     if (!eventState) return null;
@@ -366,8 +403,8 @@ async function init() {
     eventState = { ...ev, at: performance.now() };
     world.eventShower = !!ev.active;
     hud.setEvent(currentEvent());
-    if (announce && ev.active && !was) hud.toast(t('🌠 營火時間開始了！流星雨、松果加倍，限定「流星吊飾」只到 10 點'), 6000);
-    if (announce && !ev.active && was) hud.toast(t('🌙 今晚的營火時間結束了，明晚 9:30 見'), 4000);
+    if (announce && ev.active && !was) hud.toast(t('🌠 營火時間開始了！流星雨、松果加倍，限定「流星吊飾」只有這 30 分鐘'), 6000);
+    if (announce && !ev.active && was) hud.toast(t('🌙 這場營火時間結束了，下次 {when} 見', { when: ev.slot === 'am' ? t('早上 9:30') : t('晚上 9:30') }), 4000);
     treePanel?.refresh();
   };
   net.on('event', (ev) => applyEvent(ev, true));
@@ -432,7 +469,7 @@ async function init() {
       const key = `ev-${Math.round((Date.now() / 1000 + ev.startsIn) / 60)}`;
       if (!warned.has(key)) {
         warned.add(key);
-        hud.toast(t('🐉 {m} 分鐘後 9:30 營火時間！魚王會在湖畔和營火河畔出現，還有流星雨、松果加倍', { m: Math.ceil(ev.startsIn / 60) }), 7000);
+        hud.toast(t('🐉 {m} 分鐘後營火時間！魚王會在湖畔和營火河畔出現，還有流星雨、松果加倍', { m: Math.ceil(ev.startsIn / 60) }), 7000);
         audio.sfx('bell');
       }
     }
@@ -650,7 +687,7 @@ async function init() {
         ritual?.event('hang');
         return true;
       }
-      if (res?.reason === 'eventOnly') hud.toast(t('🌠 流星吊飾只有每晚 9:30～10:00 的營火時間才能掛'));
+      if (res?.reason === 'eventOnly') hud.toast(t('🌠 流星吊飾只有早晚 9:30～10:00 的營火時間才能掛'));
       else if (res?.reason === 'poor') hud.toast(t('松果不夠喔，做小任務或釣魚可以撿到更多 🌰'));
       else if (res?.reason === 'tooFast') hud.toast(t('慢慢來，一個一個掛 ✨'));
       else hud.toast(t('沒掛上去，再試一次吧'));
@@ -664,6 +701,7 @@ async function init() {
     if (reason === 'sit') hud.toast(t('🌰 在營地待了一會兒，撿到 {n} 顆松果', { n: delta }));
     else if (reason === 'quest') hud.toast(t('🌰 完成任務，拿到 {n} 顆松果！可以去心願大樹換裝飾', { n: delta }), 3500);
     else if (reason === 'fish') hud.toast(t('🌰 釣到魚，撿到 {n} 顆松果', { n: delta }));
+    else if (reason === 'fishCap') hud.toast(t('🎣 今天前 30 條魚的松果拿滿了，之後每條 +1（稀有魚照算），明天再來！'), 5000);
     // dex（圖鑑收錄）的提示由 'dex' 事件負責
   });
   // 上方的「📖 圖鑑」：在哪裡都能打開（之後花、其他收集也放在這裡）
@@ -679,7 +717,7 @@ async function init() {
   const HOW = {
     daily: [t('每日造型：那天分享就拿到（大約一個月輪一次，錯過會再回來）'), t('那天分享就拿到')],
     weekly: [t('每週限定：朋友真的透過你的連結來玩才拿得到'), t('朋友透過連結來玩')],
-    date: [t('營火之約限定：朋友在晚上 9:30 營火時間透過你的連結進來，兩個人都拿到'), t('9:30 營火時間約朋友')],
+    date: [t('營火之約限定：朋友在早上或晚上 9:30 營火時間透過你的連結進來，兩個人都拿到'), t('9:30 營火時間約朋友')],
     eco: [t('垃圾圖鑑全部收集完就拿到'), t('垃圾圖鑑收集完')],
   };
   fishingUI.extraTabs.push({
@@ -687,6 +725,7 @@ async function init() {
     label: t('👒 造型'),
     title: () => t('👒 造型 {n}／{total}', { n: look.outfits.length, total: OUTFITS.length }),
     render: () => {
+      if (lookSlot === 'body') return renderBody();
       const owned = new Set(look.outfits);
       const today = look.daily ? OUTFIT_BY_ID[look.daily] : null;
       const week = look.weekly ? OUTFIT_BY_ID[look.weekly] : null;
@@ -707,24 +746,98 @@ async function init() {
           <br>${t('🔥 營火之約：朋友在 9:30 營火時間透過你的連結進來，兩個人都拿到限定造型')}
           ${!look.dailyGot && net.online ? `<br><button type="button" id="outfit-share">${t('🔥 約朋友今晚 9:30，順便領今天的造型')}</button>` : ''}
         </div>
-        <div class="outfit-slot-tabs">${OUTFIT_SLOTS.map((sl) => `<button type="button" data-slot="${sl.id}" class="${sl.id === lookSlot ? 'on' : ''}">${sl.icon} ${t(sl.zh)}</button>`).join('')}</div>
+        ${slotTabs()}
         <div class="dex-grid">${cards}</div>
         <div class="creel-total">${net.online ? t('造型可以同時戴帽子、背背包、圍圍巾，其他人都看得到 ✨') : t('單人模式：連上伺服器才能領造型')}</div>`;
     },
     bind: (body) => {
       for (const b of body.querySelectorAll('[data-slot]')) {
-        b.addEventListener('click', () => {
+        b.addEventListener('click', async () => {
           lookSlot = b.dataset.slot;
+          if (lookSlot === 'body') await refreshLooks();
           fishingUI.openCreel('outfit');
         });
       }
       for (const c of body.querySelectorAll('.dex-card.outfit')) c.addEventListener('click', () => wearOutfit(c.dataset.id));
+      for (const c of body.querySelectorAll('[data-look]')) c.addEventListener('click', () => pickLook(c.dataset.look, c.dataset.v));
       body.querySelector('#outfit-share')?.addEventListener('click', () => {
         fishingUI.el.modal.classList.remove('show');
         giftPanel.open();
       });
     },
   });
+  // ---------- 🐾 動物外型：特殊毛色、尾巴、耳朵（用松果買，買過的隨時換） ----------
+  let myLooks = {};
+  const slotTabs = () =>
+    `<div class="outfit-slot-tabs">${OUTFIT_SLOTS.map((sl) => `<button type="button" data-slot="${sl.id}" class="${sl.id === lookSlot ? 'on' : ''}">${sl.icon} ${t(sl.zh)}</button>`).join('')}<button type="button" data-slot="body" class="${lookSlot === 'body' ? 'on' : ''}">${t('🐾 外型')}</button></div>`;
+  const renderBody = () => {
+    const sp = profile?.species ?? 0;
+    const card = (kind, v, icon, name, price, has, on, swatch = '') =>
+      `<div class="dex-card outfit look-card${on ? ' worn' : ''}${has ? '' : ' locked'}" data-look="${kind}" data-v="${v}">${swatch || `<i class="dex-emoji">${icon}</i>`}<b>${name}</b><em>${on ? t('使用中') : has ? t('點一下換上') : `🌰 ${price}`}</em></div>`;
+    const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
+    const furs = FUR_PALETTES.map((p, i) => {
+      const prem = PREMIUM_FUR.find((x) => x.i === i);
+      const has = i < BASE_FUR || (myLooks.fur ?? []).includes(i);
+      const sw = `<i class="dex-emoji look-swatch" style="background:linear-gradient(135deg, ${hex(p.fur)} 60%, ${hex(p.dark)} 60%)"></i>`;
+      return card('fur', i, '', p.name, prem?.price ?? 0, has, (profile?.fur ?? 0) === i, sw);
+    }).join('');
+    const shapes = (kind, list, defs) =>
+      list
+        .map((x) => {
+          const isDef = defs[sp] === x.id;
+          const cur = (kind === 'tail' ? profile?.tail : profile?.ear) || defs[sp];
+          const has = isDef || (myLooks[kind] ?? []).includes(x.id);
+          return card(kind, x.id, x.icon, t(x.zh), x.price, has, cur === x.id);
+        })
+        .join('');
+    const panda = sp === 4;
+    return `
+      <div class="outfit-today">${t('🐾 買一次就能一直用，換別的動物也可以用（熊貓的黑白毛色固定，不能換毛色）')}</div>
+      ${slotTabs()}
+      <div class="look-sub">${t('🎨 毛色')}</div>
+      ${panda ? `<div class="creel-total">${t('熊貓的毛色是固定的黑白喔')}</div>` : `<div class="dex-grid">${furs}</div>`}
+      <div class="look-sub">${t('🐾 尾巴')}</div>
+      <div class="dex-grid">${shapes('tail', TAILS, SPECIES_TAIL)}</div>
+      <div class="look-sub">${t('👂 耳朵')}</div>
+      <div class="dex-grid">${shapes('ear', EARS, SPECIES_EARS)}</div>
+      <div class="creel-total">${net.online ? t('動物本來的尾巴、耳朵免費；其他形狀和特殊毛色用松果買') : t('單人模式：連上伺服器才能買')}</div>`;
+  };
+  const refreshLooks = async () => {
+    const res = await net.request('lookInfo');
+    if (res?.ok) myLooks = res.looks ?? {};
+  };
+  /** 換上（或先買）一個外型 */
+  async function pickLook(kind, v) {
+    const sp = profile?.species ?? 0;
+    const val = kind === 'fur' ? Number(v) : v;
+    const has =
+      kind === 'fur'
+        ? val < BASE_FUR || (myLooks.fur ?? []).includes(val)
+        : (kind === 'tail' ? SPECIES_TAIL : SPECIES_EARS)[sp] === val || (myLooks[kind] ?? []).includes(val);
+    if (!has) {
+      if (!net.online) return hud.toast(t('連上伺服器才能買'));
+      const item = kind === 'fur' ? PREMIUM_FUR.find((x) => x.i === val) : (kind === 'tail' ? TAIL_BY_ID : EAR_BY_ID)[val];
+      if (!item) return;
+      if (pinecones < item.price) return hud.toast(t('松果不夠喔 🌰'));
+      const res = await net.request('buyLook', { kind, id: val });
+      if (!res?.ok) return hud.toast(res?.reason === 'poor' ? t('松果不夠喔 🌰') : t('沒買成，再試一次吧'));
+      myLooks = res.looks ?? myLooks;
+      audio.sfx('bell');
+      hud.toast(t('🐾 買到了！已經幫你換上'));
+    }
+    // 換上：動物本來的形狀記成空的（換動物時跟著變）
+    const next = { ...profile };
+    if (kind === 'fur') next.fur = val;
+    else if (kind === 'tail') next.tail = SPECIES_TAIL[sp] === val ? '' : val;
+    else next.ear = SPECIES_EARS[sp] === val ? '' : val;
+    profile = { ...next, custom: true, customLook: true };
+    applyLook(profile);
+    saveProfile(profile);
+    net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '' });
+    net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
+    audio.sfx('tap');
+    if (fishingUI.el.modal.classList.contains('show')) fishingUI.openCreel('outfit');
+  }
   async function wearOutfit(id) {
     const o = OUTFIT_BY_ID[id];
     if (!o) return;
@@ -1625,8 +1738,13 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     }
     if (res.myHome) setMyHome(res.myHome);
     // 歡迎卡：老朋友一進來就打招呼；第一次來的人先直接玩小任務，完成後（或待滿 90 秒）才出現
-    if (!ritual?.newbie) setTimeout(() => welcome.maybeShow(), 1200);
-    else setTimeout(() => !welcome.visible && welcome.maybeShow(), 90000);
+    // 📰 重大更新公告：老朋友第一次看到才跳（這次就不跳歡迎卡）；新朋友直接記成看過
+    if (!ritual?.newbie && updNews.unseen) setTimeout(() => updNews.show(), 1500);
+    else if (!ritual?.newbie) setTimeout(() => welcome.maybeShow(), 1200);
+    else {
+      updNews.markSeen();
+      setTimeout(() => !welcome.visible && welcome.maybeShow(), 90000);
+    }
     // 伺服器判斷是不是贊助者：是的話頭上開一朵小花
     if (res.reward && res.reward !== myReward) {
       hud.toast(res.reward === 2 ? t('🍀 謝謝你的支持！頭上長出了一片四葉草') : t('🌼 謝謝你的支持！頭上開了一朵小黃花'), 5000);
@@ -1637,19 +1755,19 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       const w = res.wallet;
       // 👤 自己取過的名字和外型：伺服器記得，換裝置登入也會跟著回來
       if (profile.custom || profile.customLook) {
-        net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0 });
+        net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '' });
       } else if (!w.look?.name && accountName()) {
         // 有帳號但還沒存過名字：就算沒按過 ✏️，也把現在的名字固定下來
         profile = { ...profile, custom: true, customLook: true };
         saveProfile(profile);
-        net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0 });
+        net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '' });
       } else if (w.look?.name) {
         profile = { ...profile, ...w.look, custom: true, customLook: true };
         saveProfile(profile);
         myName = profile.name;
         applyLook(profile);
         hud.setMe(myName);
-        net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
+        net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
       }
       if (w.outfit) setLook(w.outfit); // 👒 造型：擁有的、穿著的、今天和這週的
       basket = w.basket ?? basket;
@@ -1678,31 +1796,38 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     player.character.setAccessory?.(myReward);
     applySnapshot(res);
   });
+  /** 「來了／離開了」提示不要太吵：同一個人 3 分鐘內只提示一次；離開等 10 秒，沒回來才說 */
+  const greeted = new Map();
+  const leaveTimers = new Map();
   net.on('playerJoined', (info) => {
     remotes.add(info);
     names.set(info.id, info.name);
     // 營地居民走來走去不用提示
-    if (!info.npc) hud.toast(t('{name} 來到了{place} 🦊', { name: info.name, place: t(placeName()) }));
+    if (!info.npc) {
+      // 剛剛才離開又回來（換地點、手機切出去再回來）：不用再提示一次
+      const pend = leaveTimers.get(info.name);
+      if (pend) {
+        clearTimeout(pend);
+        leaveTimers.delete(info.name);
+      } else if (Date.now() - (greeted.get(info.name) ?? 0) > 3 * 60000) {
+        greeted.set(info.name, Date.now());
+        hud.toast(t('{name} 來到了{place} 🦊', { name: info.name, place: t(placeName()) }));
+      }
+    }
     refreshOnline();
   });
-  /** 去了哪一區（離開提示用） */
-  const AREA_NAME = {
-    forest_main: '中央大營火',
-    tent_focus: '專注帳篷',
-    treehouse_music: '森林樹屋',
-    lake_dock: '湖畔碼頭',
-    tent_social: '交流帳篷',
-    campground: '帳篷營地',
-    home: '帳篷裡',
-    mist_forest: '迷霧森林',
-  };
   net.on('playerLeft', ({ id, to }) => {
     const wasNpc = remotes.isNpc(id);
     const name = names.get(id) ?? t('有人');
-    if (remotes.remove(id) && !wasNpc) {
-      if (to === 'channel') hud.toast(t('{name} 換到別的分流了 👋', { name }));
-      else if (to && AREA_NAME[to]) hud.toast(t('{name} 去了{place} 👣', { name, place: t(AREA_NAME[to]) }));
-      else hud.toast(t('{name} 離開了 🌙', { name }));
+    // 換地點、換分流：安靜就好（不跳提示）；真的離開：等 10 秒沒回來才說一聲
+    if (remotes.remove(id) && !wasNpc && !to && !leaveTimers.has(name)) {
+      leaveTimers.set(
+        name,
+        setTimeout(() => {
+          leaveTimers.delete(name);
+          hud.toast(t('{name} 離開了 🌙', { name }));
+        }, 10000),
+      );
     }
     names.delete(id);
     refreshOnline();
@@ -1811,6 +1936,11 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       if (room.id !== 'forest_main') forest.dropStone(player.character);
       cairnPanel.close();
       lakeNews.setRoom(room.id);
+      setRemoteHeight(room.id === 'home' ? rooms.home.heightAt : null);
+      // 🛋️ 帳篷裡角色縮小一點，跟家具（沙發、床）的比例才對
+      const cs = room.id === 'home' ? 0.78 : 1;
+      player.mesh.scale.setScalar(cs);
+      setCharScale(cs, remotes);
       treePanel.close();
       pomodoro.show(!!room.focusMode);
       mobile?.setRoom(room.id);
@@ -1865,6 +1995,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     }
     refreshOnline();
   };
+  const updNews = new UpdateNews();
   const welcome = new WelcomeCard({
     onSound: () => audio.start(),
     onFocus: () => {
@@ -1966,7 +2097,10 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   const homeReq = (ev, data) => (!net.online && demo ? Promise.resolve(demo.request(ev, data)) : net.request(ev, data));
   const homeRoom = rooms.home;
   const inHome = () => roomMgr?.current.id === 'home';
-  const refreshHomeChip = () => hud.setHomeVisible(!!myHome?.tent && (net.online || !!demo) && !inHome());
+  const refreshHomeChip = () => {
+    hud.setHomeVisible(!!myHome?.tent && (net.online || !!demo) && !inHome());
+    hud.setGoState({ room: inHome() ? 'home' : roomMgr?.current?.id ?? 'forest_main', home: !!myHome?.tent && (net.online || !!demo) });
+  };
   const setMyHome = (h) => {
     myHome = h;
     refreshAcctChip();
@@ -1990,6 +2124,14 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     roomMgr.switchTo('home', () => net.switchRoom('home', { x: 0, z: homeRoom.spawn.z, ry: Math.PI }));
   };
   hud.onHome = goHome;
+  /** 🧭 去哪裡：一鍵到各個地點 */
+  hud.onGo = (id) => {
+    if (id === 'home') return goHome();
+    if (roomMgr.current.id === id) return;
+    shopPanel.close();
+    stopBuild();
+    roomMgr.switchTo(id, switchOnServer);
+  };
   /** 一鍵回到中央營火（在哪裡都可以） */
   hud.onFire = () => {
     if (roomMgr.current.id === 'forest_main') return;
@@ -1999,8 +2141,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   };
 
   /** 在小舖買東西（布置面板的「擴建」也走這裡） */
-  const buyItem = async (id) => {
-    const res = await homeReq('buy', { id });
+  const buyItem = async (id, c = 0) => {
+    const res = await homeReq('buy', c ? { id, c } : { id });
     if (res?.ok) {
       if (!net.online) setCoins(res.pc, res.delta ?? 0);
       setMyHome(res.home);
@@ -2016,6 +2158,10 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       else if (id === 'expand') {
         const g = res.home?.grid ?? 0;
         hud.toast(t('📐 帳篷擴建成 {n}×{n} 了！多了 {m} 格可以擺', { n: g, m: g * g - (g - 1) * (g - 1) }), 4500);
+      }
+      else if (id.startsWith('yard_')) {
+        const y = YARD_BY_ID[id.slice(5)];
+        hud.toast(t('{icon} 「{name}」擺到你家門口了！去帳篷營地看看', { icon: y?.icon ?? '', name: t(y?.zh ?? '') }), 4500);
       }
       else hud.toast(t('{icon} 買了{name}，回帳篷按「🛠️ 布置」擺出來', { icon: FURNITURE_BY_ID[id]?.icon ?? '', name: FURNITURE_BY_ID[id]?.name ?? '' }));
       return true;
@@ -2034,7 +2180,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       if (res?.ok) setMyHome({ ...res.home });
       else if (res) hud.toast(t('沒換成，再試一次吧'));
     },
-    onBuy: (id) => buyItem(id),
+    onBuy: (id, c) => buyItem(id, c),
   });
   actions.onShop = () => shopPanel.open();
 
@@ -2089,10 +2235,25 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     }
     homeRoom.setBuild(false);
     homeRoom.select(null);
+    cameraRig.focusTarget = null;
     buildPanel.stop();
     if (inHome() && homeRoom.mine) buildPanel.showTools(true, myHome?.open !== false);
   };
   buildPanel.onEnter = startBuild;
+  // 🐠 大魚缸：釣過的魚（稀有的排前面）
+  buildPanel.getCaught = () =>
+    FISH.map((f, i) => ({ f, i }))
+      .filter(({ f, i }) => !f.junk && fishingUI.creel[i]?.count)
+      .sort((a, b) => (b.f.legend ? 9 : b.f.rarity) - (a.f.legend ? 9 : a.f.rarity))
+      .map(({ i }) => i);
+  buildPanel.onFloor = (f) => {
+    homeRoom.setBuildFloor(f);
+    homeRoom.select(null);
+    // 布置二樓：鏡頭移到二樓中間
+    const c = f === 2 ? homeRoom.loftCenter : null;
+    cameraRig.focusTarget = c ? new THREE.Vector3(c.x, c.y, c.z) : null;
+    cameraRig.focusMix = 1;
+  };
   buildPanel.onLeave = () => leaveHome();
   actions.onBuild = () => (buildPanel.active ? stopBuild() : startBuild());
   // 布置模式：點地板選格子（拖曳轉鏡頭不算）
@@ -2217,7 +2378,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       // 有帳號了：把目前的名字和外型固定下來，之後重新整理不會再變
       profile = { ...profile, custom: true, customLook: true };
       saveProfile(profile);
-      net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0 });
+      net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '' });
       hud.toast(t('👤 帳號建立好了！換手機時用「{user}」登入就能找回松果和帳篷', { user: res.user }), 5000);
       return null;
     },
@@ -2250,7 +2411,9 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const stack = document.createElement('div');
     stack.className = 'm-stack';
     document.getElementById('ui').appendChild(stack);
-    for (const id of ['sound-unlock', 'fire-meter', 'online', 'today', 'event-line', 'mini-line', 'ritual', 'pomodoro', 'lake-news']) {
+    // 營火火力條放到標題旁邊，按鈕列（人數、分流、名字、松果⋯）就能排到最上面
+    document.querySelector('.title')?.appendChild(document.getElementById('fire-meter'));
+    for (const id of ['online', 'lake-news', 'sound-unlock', 'today', 'event-line', 'mini-line', 'ritual', 'pomodoro']) {
       const el = document.getElementById(id);
       if (el) stack.appendChild(el);
     }
@@ -2271,7 +2434,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const dstack = document.createElement('div');
     dstack.className = 'd-stack';
     document.getElementById('ui').appendChild(dstack);
-    for (const id of ['online', 'today', 'event-line', 'mini-line']) {
+    for (const id of ['online', 'lake-news', 'today', 'event-line', 'mini-line']) {
       const el = document.getElementById(id);
       if (el) dstack.appendChild(el);
     }
@@ -2279,7 +2442,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const rstack = document.createElement('div');
     rstack.className = 'r-stack';
     document.getElementById('ui').appendChild(rstack);
-    for (const id of ['pomodoro', 'lake-news']) {
+    for (const id of ['pomodoro']) {
       const el = document.getElementById(id);
       if (el) rstack.appendChild(el);
     }
@@ -2493,9 +2656,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   let profile;
   // 內建角色才能選動物（用 .glb 模型時只有那一種）
   const isProcedural = character instanceof ProceduralFox;
-  const applyLook = ({ fur, species }) => {
-    if (isProcedural && player.character.speciesIndex !== species) {
-      player.setCharacter(new ProceduralFox({ fur, species }));
+  const applyLook = ({ fur, species, tail = '', ear = '' }) => {
+    const c = player.character;
+    if (isProcedural && (c.speciesIndex !== species || (c.tailId ?? '') !== tail || (c.earId ?? '') !== ear)) {
+      player.setCharacter(new ProceduralFox({ fur, species, tail, ears: ear }));
+      applyWear();
+      player.character.setAccessory?.(myReward);
     }
     player.character.setFur?.(fur);
     player.character.setProp?.('stone', forest.carrying);
@@ -2551,14 +2717,16 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     profile.custom = true;
     profile.customLook = true;
     saveProfile(profile);
-    net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0 });
-    net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
+    net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '' });
+    net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
     hud.toast(t('✨ 換好了，{name}', { name: myName }));
   };
   net.connect({
     name: profile.name,
     fur: profile.fur,
     species: isProcedural ? profile.species : 0,
+    tail: profile.tail || '',
+    ear: profile.ear || '',
     code: profile.code || '',
     vid: visitorId(),
     touch: !!mobile,

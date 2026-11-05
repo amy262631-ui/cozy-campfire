@@ -90,6 +90,13 @@ export class FishingUI {
       this.el.modal.classList.remove('show');
       document.activeElement?.blur?.();
     });
+    // ESC 關閉（圖鑑、排行、標本櫃、菜園、料理⋯ 都是這個視窗）；正在打字時不搶
+    window.addEventListener('keydown', (e) => {
+      if (e.code !== 'Escape' || !this.el.modal.classList.contains('show')) return;
+      if (e.target?.matches?.('input, textarea')) return;
+      this.el.modal.classList.remove('show');
+      document.activeElement?.blur?.();
+    });
   }
 
   /** 只在湖邊顯示魚簍／排行按鈕 */

@@ -5745,3 +5745,425 @@ body:not(.touch) .hint {
     font-size: 13px;
   }
 }
+
+/* ==========================================================
+   🧭 版面整理（2026/11/5）：按鈕列置頂、面板蓋在最上面、跑馬燈、去哪裡選單
+   ========================================================== */
+/* 左上資訊欄在面板下面（面板打開時不會被按鈕列擋住） */
+.m-stack,
+.d-stack {
+  z-index: 1;
+}
+
+.shrine,
+.jukebox {
+  z-index: 5;
+}
+
+/* 電腦：按鈕列放在標題右邊，小任務卡片移到標題下面 */
+body:not(.touch) .d-stack {
+  top: 16px;
+  left: 300px;
+  max-width: calc(100vw - 560px);
+}
+
+body:not(.touch) .ritual {
+  top: 104px;
+  left: 20px;
+  transform: none;
+  width: 270px;
+  animation: none;
+}
+
+body:not(.touch) .toasts {
+  top: 200px;
+}
+
+/* 手機、平板：火力條放到標題旁邊，按鈕列排在最上面 */
+body.touch .title {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+body.touch .title .fire-meter {
+  position: static;
+  font-size: 12px;
+}
+
+body.touch .title .fire-meter-track {
+  width: 64px;
+}
+
+body.touch .m-stack {
+  top: 44px;
+}
+
+/* 📣 即時動態：沒有框，滑進來停一下就淡掉 */
+.news-line {
+  max-width: 100%;
+  padding-left: 4px;
+  font-size: var(--info-fs);
+  color: #eaf4ff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.news-line[hidden] {
+  display: none !important;
+}
+
+.news-line b {
+  color: #ffe08a;
+}
+
+.news-line.go {
+  animation: newsIn 7s ease forwards;
+}
+
+@keyframes newsIn {
+  0% {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  8% {
+    opacity: 1;
+    transform: none;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.nl-star {
+  margin-left: 4px;
+  font-size: 0.85em;
+  color: #ffd27a;
+}
+
+.nl-star.rare {
+  color: #9fd0ff;
+}
+
+.nl-star.legend {
+  color: #ffb4f0;
+}
+
+/* 🧭 去哪裡 */
+#fire-chip,
+#home-chip {
+  display: none !important;
+}
+
+.go-chip {
+  border: 1px solid rgba(170, 230, 190, 0.5);
+  border-radius: 999px;
+  background: rgba(70, 130, 95, 0.38);
+  color: #e6ffee;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.go-chip.on {
+  background: rgba(70, 130, 95, 0.7);
+}
+
+.go-menu {
+  position: fixed;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 16px;
+  background: #241b15;
+  border: 1px solid rgba(255, 210, 150, 0.35);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+}
+
+.go-menu[hidden] {
+  display: none;
+}
+
+.go-menu button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 245, 230, 0.07);
+  color: #fff3e2;
+  font: inherit;
+  font-size: var(--chip-fs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.go-menu button:hover:not(:disabled) {
+  background: rgba(255, 200, 130, 0.2);
+}
+
+.go-menu button.here {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.go-menu button.off {
+  opacity: 0.6;
+}
+
+.go-menu small {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+/* 📰 重大更新公告 */
+.upd-news {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(5, 7, 13, 0.55);
+  pointer-events: auto;
+}
+
+.upd-news[hidden] {
+  display: none;
+}
+
+.upd-card {
+  width: min(440px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 18px 18px 16px;
+  border-radius: 22px;
+  background: rgba(40, 30, 24, 0.96);
+  border: 1px solid rgba(255, 200, 130, 0.45);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  color: #fff3e2;
+}
+
+.upd-title {
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.upd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upd-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 245, 230, 0.07);
+}
+
+.upd-pic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(160deg, rgba(255, 190, 110, 0.35), rgba(120, 90, 200, 0.3));
+  font-size: 30px;
+}
+
+.upd-item b {
+  font-size: 15px;
+}
+
+.upd-item p {
+  margin: 3px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.upd-ok {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 11px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffb46b, #f08a3c);
+  color: #3a2214;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* 🏡 小木屋：布置一樓／二樓 */
+.build-floor {
+  display: inline-flex;
+  gap: 4px;
+  margin: 0 8px;
+}
+
+.build-floor[hidden] {
+  display: none;
+}
+
+.build-floor button {
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 210, 140, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 245, 230, 0.08);
+  color: #ffe9c8;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.build-floor button.on {
+  background: rgba(240, 150, 70, 0.55);
+  color: #fff;
+}
+
+/* 🎨 小舖：家具配色 */
+.shop-colors {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 8px;
+  font-size: 13px;
+}
+
+.shop-colors button {
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 220, 180, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 245, 230, 0.06);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.shop-colors button.on {
+  background: rgba(240, 150, 70, 0.5);
+  border-color: rgba(255, 200, 130, 0.8);
+}
+
+.shop-item {
+  position: relative;
+}
+
+.si-color {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 12px;
+}
+
+.bi-color {
+  font-style: normal;
+  margin-left: 2px;
+  font-size: 0.85em;
+}
+
+/* 🚙 門口擺設 */
+.yard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.yard-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(255, 245, 230, 0.06);
+  border: 1px solid rgba(255, 220, 180, 0.12);
+}
+
+.yard-row.on {
+  border-color: rgba(255, 200, 120, 0.6);
+  background: rgba(240, 150, 70, 0.15);
+}
+
+.yr-icon {
+  font-size: 28px;
+}
+
+.yr-txt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.yr-txt small {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.yard-row button {
+  flex: none;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffb46b, #f08a3c);
+  color: #3a2214;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.yard-row button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* 🐾 動物外型 */
+.look-sub {
+  margin: 10px 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffd28a;
+}
+
+.look-swatch {
+  display: block;
+  width: 34px;
+  height: 34px;
+  margin: 2px auto 4px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+.look-card.locked {
+  opacity: 0.75;
+}
+
+.look-card {
+  cursor: pointer;
+}

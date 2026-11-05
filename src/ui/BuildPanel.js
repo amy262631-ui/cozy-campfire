@@ -2,7 +2,8 @@ import { t } from '../i18n/i18n.js';
 import { ALL_FURNITURE, FURNITURE_BY_ID } from '../game/furniture.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TENT_SHAPES } from '../game/tentShapes.js';
-import { CATALOG_BY_ID, canStackOn, stackAt, gridOf, expandPrice, MAX_STACK } from '../game/furnitureCatalog.js';
+import { CATALOG_BY_ID, canAddTo, fishFits, stackAt, gridOf, expandPrice, MAX_STACK, FURNITURE_COLORS } from '../game/furnitureCatalog.js';
+import { FISH } from '../fishing/fishData.js';
 
 /**
  * 布置帳篷：畫面下方的一條面板。
@@ -24,6 +25,7 @@ export class BuildPanel {
       <div class="build-bar" id="build-bar" hidden>
         <div class="build-head">
           <span id="build-title">${t('🛠️ 布置模式：點地板上的格子')}</span>
+          <span class="build-floor" id="build-floor" hidden><button type="button" data-floor="1" class="on">${t('1 樓')}</button><button type="button" data-floor="2">${t('2 樓')}</button></span>
           <button type="button" class="build-done" id="build-done">${t('完成')}</button>
         </div>
         <div class="build-body" id="build-body"></div>
@@ -43,6 +45,19 @@ export class BuildPanel {
     this.openBtn = $('#home-open');
     for (const el of [this.el, this.tools]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
     $('#build-done').addEventListener('click', () => this.onExit?.());
+    // 🏡 小木屋：切換布置一樓、二樓
+    this.floorEl = $('#build-floor');
+    this.floor = 1;
+    this.onFloor = null;
+    this.floorEl.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-floor]');
+      if (!b) return;
+      this.floor = Number(b.dataset.floor);
+      for (const x of this.floorEl.children) x.classList.toggle('on', x === b);
+      this.cell = null;
+      this.onFloor?.(this.floor);
+      this.render();
+    });
     $('#home-build').addEventListener('click', () => this.onEnter?.());
     $('#home-exit').addEventListener('click', () => this.onLeave?.());
     this.openBtn.addEventListener('click', () => this.onToggleOpen?.());
@@ -75,8 +90,19 @@ export class BuildPanel {
         this.render();
         return;
       }
+      if (b.dataset.op === 'fishpick') {
+        this.fishPick = Number(b.dataset.l);
+        this.render();
+        return;
+      }
       this.busy = true;
-      await this.onEdit?.(b.dataset.op, { ...this.cell, i: b.dataset.i, l: b.dataset.l != null ? Number(b.dataset.l) : undefined });
+      const extra = {};
+      if (b.dataset.c) extra.c = Number(b.dataset.c);
+      if (b.dataset.fish != null) {
+        extra.fish = Number(b.dataset.fish);
+        this.fishPick = null;
+      }
+      await this.onEdit?.(b.dataset.op, { ...this.cell, i: b.dataset.i, l: b.dataset.l != null ? Number(b.dataset.l) : undefined, ...extra });
       this.busy = false;
       this.render();
     });
@@ -97,6 +123,8 @@ export class BuildPanel {
     this.el.hidden = false;
     this.tools.hidden = true;
     this.cell = null;
+    this.floor = 1;
+    for (const x of this.floorEl.children) x.classList.toggle('on', x.dataset.floor === '1');
     this.render();
   }
 
@@ -108,6 +136,7 @@ export class BuildPanel {
 
   select(cell) {
     this.cell = cell;
+    this.fishPick = null;
     this.render();
   }
 
@@ -133,6 +162,13 @@ export class BuildPanel {
   render() {
     if (!this.active) return;
     const home = this.getHome() ?? { inv: {}, items: [] };
+    const loft = home.shape === 'cabin';
+    this.floorEl.hidden = !loft;
+    if (!loft && this.floor !== 1) {
+      this.floor = 1;
+      for (const x of this.floorEl.children) x.classList.toggle('on', x.dataset.floor === '1');
+      this.onFloor?.(1);
+    }
     if (this.moving) {
       const f = FURNITURE_BY_ID[this.moving.i];
       const above = stackAt(home.items, this.moving.x, this.moving.z).length - 1 - this.moving.l;
@@ -168,14 +204,46 @@ export class BuildPanel {
     }
     const stack = stackAt(home.items, this.cell.x, this.cell.z).filter((it) => FURNITURE_BY_ID[it.i]);
     const top = stack.at(-1) ?? null;
-    const avail = ALL_FURNITURE.map((f) => ({ f, n: (home.inv?.[f.id] ?? 0) - home.items.filter((x) => x.i === f.id).length })).filter((x) => x.n > 0);
-    const fits = stack.length < MAX_STACK ? avail.filter(({ f }) => canStackOn(top?.i ?? null, f.id)) : [];
-    const list = fits.map(({ f, n }) => `<button type="button" class="build-item" data-op="place" data-i="${f.id}"><span>${f.icon}</span>${f.name}<small>×${n}</small></button>`).join('');
+    // 背包：同一件家具不同配色分開列
+    const avail = [];
+    for (const f of ALL_FURNITURE) {
+      const total = home.inv?.[f.id] ?? 0;
+      if (!total) continue;
+      let colored = 0;
+      for (const cv of FURNITURE_COLORS.slice(1)) {
+        const have = home.cinv?.[`${f.id}~${cv.id}`] ?? 0;
+        colored += have;
+        const n = have - home.items.filter((x) => x.i === f.id && x.c === cv.id).length;
+        if (n > 0) avail.push({ f, n, c: cv.id });
+      }
+      const n0 = total - colored - home.items.filter((x) => x.i === f.id && !x.c).length;
+      if (n0 > 0) avail.unshift({ f, n: n0, c: 0 });
+    }
+    const fits = avail.filter(({ f }) => canAddTo(stack, f.id));
+    const list = fits
+      .map(({ f, n, c }) => `<button type="button" class="build-item" data-op="place" data-i="${f.id}" ${c ? `data-c="${c}"` : ''}><span>${f.icon}</span>${f.name}${c ? `<em class="bi-color">${FURNITURE_COLORS[c].icon}</em>` : ''}<small>×${n}</small></button>`)
+      .join('');
     if (!stack.length) {
       this.title.textContent = t('要在這格放什麼？');
       this.body.innerHTML = list || `<div class="build-tip">${t('背包裡的家具都擺出來了，到「🏪 營地小舖」買更多吧')}</div>`;
       return;
     }
+    // 🐠 大魚缸：選一條自己釣過的魚放進去
+    if (this.fishPick != null && stack[this.fishPick] && CATALOG_BY_ID[stack[this.fishPick].i]?.fish) {
+      const tank = CATALOG_BY_ID[stack[this.fishPick].i];
+      const caught = (this.getCaught?.() ?? []).filter((i) => fishFits(tank, FISH[i]));
+      this.title.textContent = t('🐠 放哪一條魚進去？');
+      this.body.innerHTML =
+        (caught.length
+          ? caught
+              .map((i) => `<button type="button" class="build-item" data-op="fish" data-l="${this.fishPick}" data-fish="${i}"><span>${FISH[i].legend ? '🐉' : FISH[i].rarity >= 4 ? '🐠' : '🐟'}</span>${FISH[i].name}<small>${'★'.repeat(FISH[i].rarity)}</small></button>`)
+              .join('')
+          : `<div class="build-tip">${t('還沒有釣過放得進這個魚缸的魚，去湖邊釣一條吧')}</div>`) +
+        `<div class="build-tip">${tank.fish >= 6 ? t('什麼魚都放得下，魚王也可以 🐉') : t('最多放 {n} 星的魚；大魚、魚王要用巨型水族箱', { n: tank.fish })}</div>` +
+        `<button type="button" class="build-act" data-op="fish" data-l="${this.fishPick}" data-fish="-1">${t('把魚拿出來')}</button>`;
+      return;
+    }
+    this.fishPick = null;
     const f0 = FURNITURE_BY_ID[top.i];
     this.title.textContent = stack.length > 1 ? t('這一格疊了 {n} 層', { n: stack.length }) : `${f0?.icon ?? ''} ${f0?.name ?? ''}`;
     // 每一層（上面的排前面）：轉向、收起
@@ -187,6 +255,7 @@ export class BuildPanel {
           <span class="bl-name">${f.icon} ${f.name}</span>
           <button type="button" class="build-act" data-op="move" data-l="${lv}">${t('✋ 移動')}</button>
           <button type="button" class="build-act" data-op="rotate" data-l="${lv}">${t('🔄 轉向')}</button>
+          ${CATALOG_BY_ID[it.i]?.fish ? `<button type="button" class="build-act" data-op="fishpick" data-l="${lv}">${t('🐠 放魚')}</button>` : ''}
           <button type="button" class="build-act" data-op="remove" data-l="${lv}" ${above ? `title="${t('上面的東西也會一起收回')}"` : ''}>${t('📦 收起')}${above ? ' ⤴' : ''}</button>
         </div>`;
       })
