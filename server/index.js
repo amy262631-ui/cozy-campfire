@@ -22,7 +22,7 @@ import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
 import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM } from '../src/fishing/fishData.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
-import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateOutfit } from '../src/game/outfits.js';
+import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateOutfit, sponsorOutfits } from '../src/game/outfits.js';
 import { GATHER_SPOTS, GATHER_ITEMS, regrowMs, GATHER_FIRST_GAIN, GATHER_DEX_BONUS, gatherItemAt, isNight, GATHER_R, NET_PRICE, BUG_WANDER, BUG_CATCH_R } from '../src/game/gathering.js';
 import { SOURCES, cleanSource, sourceFrom } from '../src/game/sources.js';
 import { GATHER_BY_ID, treasureTime, TREASURE_MAX } from '../src/game/gathering.js';
@@ -33,7 +33,7 @@ import { DISH_BY_ID, dishFirstGain } from '../src/game/cooking.js';
 import { MUSEUM_BY_ID, DONATE_PER_DAY } from '../src/game/museum.js';
 import { TRASH, TRASH_BY_ID, TRASH_MAX, TRASH_ROOM, RECYCLE_GAIN, RECYCLE_DAILY_CAP, TRASH_FIRST_GAIN, TRASH_DEX_OUTFIT, pickTrash } from '../src/game/trash.js';
 import { LAYOUT as CAMP_LAYOUT } from '../src/rooms/campLayout.js';
-import { PASS } from '../src/game/pass.js';
+import { PASS, SPONSOR } from '../src/game/pass.js';
 import crypto from 'node:crypto';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack, hasLoft } from './homes.js';
 import { hasColors, FURNITURE_COLORS, fishFits } from '../src/game/furnitureCatalog.js';
@@ -515,7 +515,7 @@ function creditReferral(refVid, friendName) {
 }
 
 // ---------- 👒 造型收集 ----------
-const OUTFIT_SLOTS = ['head', 'back', 'neck'];
+const OUTFIT_SLOTS = ['head', 'back', 'neck', 'hair'];
 /** 身上穿的造型 → 線上同步用的代號 [頭, 背, 脖子]（0＝沒穿） */
 const wearCodes = (w) => OUTFIT_SLOTS.map((k) => outfitCode(w?.wear?.[k]));
 /** 送一款造型（不一定在線上；在線上的話通知他）；已經有了回傳 null */
@@ -536,7 +536,7 @@ function syncRack(vid) {
   const h = homes[vid];
   if (!w || !h) return;
   const owned = w.outfits ?? [];
-  const rack = OUTFIT_SLOTS.map((slot) => {
+  const rack = ['head', 'back', 'neck'].map((slot) => {
     const mine = owned.filter((id) => OUTFIT_BY_ID[id]?.slot === slot);
     return [...mine].reverse().find((id) => id !== w.wear?.[slot]) ?? mine[mine.length - 1] ?? null;
   }).filter(Boolean);
@@ -681,6 +681,19 @@ const taipeiTime = (d = new Date()) => {
   return `${p.year}/${p.month}/${p.day} ${p.hour}:${p.minute}:${p.second}`;
 };
 /** 付款成功：開通（或延長）30 天，先送一份松果、送月票限定花色 */
+/** ☕ 贊助付款成功：送這個月的假髮（付款那個月，台北時間） */
+function activateSponsor(vid, order) {
+  const w = players[vid];
+  if (!w) return;
+  w.spons = (w.spons ?? 0) + (order?.amt ?? 0);
+  // 送他選的那一款（要是付款那個月的）；沒選或對不上就送那個月的第一款
+  const list = sponsorOutfits(dayKey(new Date(order.paidAt ?? Date.now())).slice(0, 7));
+  const wig = order.amt >= SPONSOR.min ? list.find((o) => o.id === order.wig) ?? list[0] : null;
+  saveJson('players.json', players);
+  const got = wig ? grantOutfit(vid, wig.id, 'sponsor') : null;
+  for (const s of io.sockets.sockets.values()) if (s.data.vid === vid) s.emit('sponsored', { amt: order.amt, wig: wig?.id ?? null, got: !!got });
+  console.log(`[贊助] ${order.name} NT$${order.amt}${wig ? ` → ${wig.zh}` : ''}`);
+}
 function activatePass(vid, order) {
   const w = players[vid];
   if (!w) return false;
@@ -844,12 +857,12 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   const month = dayKey().slice(0, 7);
   const paid = Object.entries(orders).filter(([, o]) => o.status === 'paid' && !o.sim && dayKey(new Date(o.paidAt)).startsWith(month));
   const revenue = paid.reduce((a, [, o]) => a + o.amt, 0);
-  const passTable = `<h3>🎫 營火月票（${month}）</h3><p class="me">${ECPAY.prod ? '綠界正式模式' : '⚠️ 綠界測試模式（不會真的收錢）'}・這個月 ${paid.length} 筆、收入 <b>NT$ ${revenue.toLocaleString()}</b>（個人網路銷售服務類大約每月 4 萬元以下，可以先不用辦稅籍，以國稅局最新規定為準）</p>${
+  const passTable = `<h3>🎫 月票＋☕ 贊助（${month}）</h3><p class="me">${ECPAY.prod ? '綠界正式模式' : '⚠️ 綠界測試模式（不會真的收錢）'}・這個月 ${paid.length} 筆、收入 <b>NT$ ${revenue.toLocaleString()}</b>（個人網路銷售服務類大約每月 4 萬元以下，可以先不用辦稅籍，以國稅局最新規定為準）</p>${
     paid.length
-      ? `<div class="wrap"><table><tr><th>付款時間</th><th>名字</th><th>金額</th><th>付款方式</th><th>訂單編號</th></tr>${paid
+      ? `<div class="wrap"><table><tr><th>付款時間</th><th>名字</th><th>項目</th><th>金額</th><th>付款方式</th><th>訂單編號</th></tr>${paid
           .sort((a, b) => b[1].paidAt - a[1].paidAt)
           .slice(0, 50)
-          .map(([no, o]) => `<tr><td>${new Date(o.paidAt).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td>${String(o.name).replace(/[<>&]/g, '')}</td><td>${o.amt}</td><td>${o.pay ?? ''}</td><td>${no}</td></tr>`)
+          .map(([no, o]) => `<tr><td>${new Date(o.paidAt).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td>${String(o.name).replace(/[<>&]/g, '')}</td><td>${o.kind === 'sponsor' ? '☕ 贊助' : '🎫 月票'}</td><td>${o.amt}</td><td>${o.pay ?? ''}</td><td>${no}</td></tr>`)
           .join('')}</table></div>`
       : ''
   }`;
@@ -935,8 +948,8 @@ app.get('/api/pay/go/:no', (req, res) => {
     MerchantTradeDate: taipeiTime(new Date(o.at)),
     PaymentType: 'aio',
     TotalAmount: String(o.amt),
-    TradeDesc: 'CozyCampfire monthly pass',
-    ItemName: PASS.item,
+    TradeDesc: o.kind === 'sponsor' ? 'CozyCampfire support' : 'CozyCampfire monthly pass',
+    ItemName: o.kind === 'sponsor' ? SPONSOR.item : PASS.item,
     ReturnURL: `${base}/api/pay/notify`,
     ChoosePayment: 'ALL',
     EncryptType: '1',
@@ -973,7 +986,7 @@ app.post('/api/pay/notify', express.urlencoded({ extended: false }), (req, res) 
     o.ecpay = String(b.TradeNo ?? '').slice(0, 40);
     o.sim = b.SimulatePaid === '1'; // 綠界後台的「模擬付款」
     saveJson('orders.json', orders);
-    if (!o.sim || !ECPAY.prod) activatePass(o.vid, o);
+    if (!o.sim || !ECPAY.prod) (o.kind === 'sponsor' ? activateSponsor : activatePass)(o.vid, o);
   } else if (b.RtnCode !== '1') {
     o.last = `${b.RtnCode}:${String(b.RtnMsg ?? '').slice(0, 60)}`; // ATM、超商代碼取號成功，還沒付款
     saveJson('orders.json', orders);
@@ -1846,6 +1859,28 @@ io.on('connection', (socket) => {
   const hasAccount = () => !!player?.vid && Object.values(accounts).some((a) => a.vid === player.vid);
   socket.on('passInfo', (data, ack) => ack?.(wal ? { ok: true, ...passView(wal), account: hasAccount(), price: PASS.price, test: !ECPAY.prod, on: PASS_ON } : { ok: false }));
   let lastOrder = 0;
+  // ☕ 贊助：這個月的假髮、能不能付款
+  socket.on('sponsorInfo', (data, ack) => {
+    const wigs = sponsorOutfits(dayKey().slice(0, 7)).map((o) => o.id);
+    ack?.({ ok: true, on: PASS_ON, test: !ECPAY.prod, amounts: SPONSOR.amounts, min: SPONSOR.min, wigs, owned: wigs.filter((id) => wal?.outfits?.includes(id)), account: hasAccount(), total: wal?.spons ?? 0 });
+  });
+  socket.on('sponsorOrder', (data = {}, ack) => {
+    if (!wal || !player?.vid) return ack?.({ ok: false });
+    if (!PASS_ON) return ack?.({ ok: false, reason: 'off' });
+    if (!hasAccount()) return ack?.({ ok: false, reason: 'account' });
+    const amt = Number(data.amt);
+    if (!SPONSOR.amounts.includes(amt)) return ack?.({ ok: false, reason: 'amt' });
+    const now = Date.now();
+    if (now - lastOrder < 5000) return ack?.({ ok: false, reason: 'tooFast' });
+    lastOrder = now;
+    const no = `CS${now.toString(36)}${crypto.randomBytes(3).toString('hex')}`.slice(0, 20).toUpperCase();
+    const wigs = sponsorOutfits(dayKey().slice(0, 7)).map((o) => o.id);
+    const wig = wigs.includes(data.wig) ? data.wig : wigs[0];
+    orders[no] = { vid: player.vid, name: player.name, amt, at: now, status: 'new', kind: 'sponsor', wig };
+    saveJson('orders.json', orders);
+    const proto = socket.handshake.headers['x-forwarded-proto']?.split(',')[0] || 'http';
+    ack?.({ ok: true, no, url: `${proto}://${socket.handshake.headers.host}/api/pay/go/${no}` });
+  });
   socket.on('passOrder', (data, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
     if (!PASS_ON) return ack?.({ ok: false, reason: 'off' });

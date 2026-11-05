@@ -98,6 +98,13 @@ export class ShopPanel {
       }
       const btn = e.target.closest('[data-buy]');
       if (!btn || btn.disabled || this.busy) return;
+      // 🛒 先看預覽、按「確定購買」才買
+      if (this.onConfirm) {
+        this.busy = true;
+        const ok = await this.onConfirm(btn.dataset.buy, btn.dataset.c ? Number(btn.dataset.c) : 0);
+        this.busy = false;
+        if (!ok) return;
+      }
       this.busy = true;
       this.body.classList.add('busy');
       await this.onBuy?.(btn.dataset.buy, btn.dataset.c ? Number(btn.dataset.c) : 0);

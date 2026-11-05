@@ -12,3 +12,13 @@ export const PASS = {
   style: 'ember', // 月票限定帳篷花色
   item: '營火月票 30 天',
 };
+
+/**
+ * ☕ 贊助（請作者喝咖啡）：NT$100 以上自動拿到「這個月的贊助限定假髮」（outfits.js 的 sponsor 造型，每月一款）。
+ * 小黃花、四葉草是作者親友團的心意，不是贊助贈品（還是手動寫在 server/data/sponsors.json）。
+ */
+export const SPONSOR = {
+  amounts: [100, 200, 500], // 可以選的金額（新台幣）
+  min: 100, // 這個金額以上送假髮
+  item: '請作者喝咖啡（迷霧森林露營地）',
+};

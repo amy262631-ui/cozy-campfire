@@ -77,6 +77,7 @@ export class NoticePanel {
 
           <div class="notice-page" data-page="support" hidden>
             <div class="notice-support">
+              <div class="support-wig" id="support-wig" hidden></div>
               <div class="support-cup">☕</div>
               <p>${t('這座小營地是一個人慢慢做出來的。')}<br />${t('伺服器和網址都需要一點費用。')}</p>
               <p>${t('如果你喜歡在這裡坐一下，可以請我喝杯熱可可，讓這團營火繼續燒下去 🔥')}</p>
@@ -178,6 +179,7 @@ export class NoticePanel {
 
   #setTab(tab) {
     this.tab = tab;
+    if (tab === 'support') this.onSupport?.(this.el.querySelector('#support-wig'));
     this.el.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
     this.el.querySelectorAll('[data-page]').forEach((p) => (p.hidden = p.dataset.page !== tab));
   }

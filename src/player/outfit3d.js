@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OUTFIT_BY_ID } from '../game/outfits.js';
+import { buildHair } from './hair3d.js';
 
 /**
  * 造型的 3D 模型（簡單幾何組合，跟角色一樣霧面可愛風）。
@@ -25,7 +26,8 @@ function mat(color, glow = false) {
   return mats.get(k);
 }
 
-export function buildOutfit(id) {
+/** opts（頭髮用）：{ hat, back, neck } 同時戴了哪些，頭髮會自己讓開（不會跟帽子、背包、圍巾卡在一起） */
+export function buildOutfit(id, opts = {}) {
   const o = OUTFIT_BY_ID[id];
   if (!o) return null;
   const g = new THREE.Group();
@@ -51,6 +53,11 @@ export function buildOutfit(id) {
   };
 
   switch (o.kind) {
+    // ---------------- 💇 頭髮（贊助限定假髮，模型在 hair3d.js） ----------------
+    case 'hair':
+      g.add(buildHair(o.hair, o.c1, o.c2, opts));
+      break;
+
     // ---------------- 頭 ----------------
     case 'beanie': {
       dome(0.36, m1, 0.12, 0.85, 1.12);

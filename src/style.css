@@ -6233,3 +6233,233 @@ body.stage-2 .idea-chip {
   color: #fff3e2;
   border: 1px solid rgba(255, 210, 150, 0.4);
 }
+
+/* ☕ 贊助限定假髮 */
+.support-wig {
+  margin: 0 0 14px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(240, 150, 70, 0.1);
+  border: 1px solid rgba(200, 130, 70, 0.35);
+  text-align: center;
+}
+
+.support-wig[hidden] {
+  display: none;
+}
+
+.sw-title {
+  font-weight: 700;
+  color: #b5652a;
+}
+
+.sw-pic {
+  display: block;
+  width: 150px;
+  height: 150px;
+  margin: 6px auto 0;
+}
+
+.sw-emoji {
+  font-size: 56px;
+}
+
+.sw-name {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 4px 0;
+}
+
+.sw-amts {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.sw-amts button {
+  padding: 9px 14px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffb46b, #f08a3c);
+  color: #3a2214;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sw-has {
+  margin: 8px 0;
+  color: #3f7a3a;
+  font-weight: 700;
+}
+
+.sw-cards {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.sw-card {
+  flex: 1;
+  max-width: 170px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border: 2px solid rgba(200, 130, 70, 0.25);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.5);
+  color: #5a3a22;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sw-card.on {
+  border-color: #f08a3c;
+  background: rgba(255, 200, 140, 0.35);
+}
+
+.sw-card .sw-pic {
+  width: 120px;
+  height: 120px;
+  margin: 0;
+}
+
+.sw-card .sw-name {
+  font-size: 14px;
+  margin: 2px 0 0;
+}
+
+.sw-card small {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.sw-pics {
+  display: flex;
+  gap: 2px;
+}
+
+.sw-card .sw-pic {
+  width: 78px;
+  height: 78px;
+}
+
+.sw-card {
+  max-width: 190px;
+}
+
+/* 🛒 購買確認 */
+.cbuy {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(5, 7, 13, 0.5);
+  pointer-events: auto;
+}
+
+.cbuy[hidden] {
+  display: none;
+}
+
+.cbuy-card {
+  width: min(320px, 100%);
+  padding: 18px 16px 14px;
+  border-radius: 20px;
+  background: rgba(40, 30, 24, 0.97);
+  border: 1px solid rgba(255, 200, 130, 0.45);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  color: #fff3e2;
+  text-align: center;
+}
+
+.cbuy-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffd28a;
+}
+
+.cbuy-img {
+  display: block;
+  width: 170px;
+  height: 170px;
+  margin: 8px auto 2px;
+  border-radius: 16px;
+  background: #f3e6d3;
+}
+
+.cbuy-icon {
+  font-size: 54px;
+  margin: 8px 0;
+}
+
+.cbuy-name {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.cbuy-desc {
+  margin: 4px 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.cbuy-price {
+  margin: 8px 0 4px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffd28a;
+}
+
+.cbuy-price small {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #fff3e2;
+  opacity: 0.7;
+}
+
+.cbuy-poor {
+  font-size: 13px;
+  color: #ffb4a0;
+}
+
+.cbuy-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cbuy-btns button {
+  flex: 1;
+  padding: 11px;
+  border: none;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cbuy-no {
+  background: rgba(255, 245, 230, 0.12);
+  color: #fff3e2;
+}
+
+.cbuy-yes {
+  background: linear-gradient(180deg, #ffb46b, #f08a3c);
+  color: #3a2214;
+}
+
+.cbuy-yes:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

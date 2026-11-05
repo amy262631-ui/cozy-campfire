@@ -2,11 +2,11 @@
  * 造型收集（前端、伺服器共用；只放資料，3D 模型在 src/player/outfit3d.js）。
  *
  *   id     代號（存檔用，不能改）
- *   slot   部位：head 頭、back 背、neck 脖子（三個部位可以同時穿戴）
+ *   slot   部位：head 頭、back 背、neck 脖子、hair 頭髮（可以同時穿戴）
  *   kind   3D 形狀（見 outfit3d.js）
  *   c1/c2  主色、副色
  *   glow   會微微發光
- *   src    拿到的方式：daily 每日造型（分享就送）、weekly 每週限定（朋友透過連結來玩）、date 營火之約限定、eco 垃圾圖鑑收集完
+ *   src    拿到的方式：daily 每日造型（分享就送）、weekly 每週限定（朋友透過連結來玩）、date 營火之約限定、eco 垃圾圖鑑收集完、sponsor 贊助限定假髮
  *
  * ⚠️ 只能往後加，不能刪、不能改順序：線上同步用「第幾個」當代號。
  * 小黃花、四葉草是作者專屬（贊助回饋），不在這裡，也不當獎勵。
@@ -15,6 +15,7 @@ export const OUTFIT_SLOTS = [
   { id: 'head', icon: '👒', zh: '頭' },
   { id: 'back', icon: '🎒', zh: '背' },
   { id: 'neck', icon: '🧣', zh: '脖子' },
+  { id: 'hair', icon: '💇', zh: '頭髮' }, // 💇 贊助限定假髮（可以跟帽子一起戴）
 ];
 
 export const OUTFITS = [
@@ -67,6 +68,21 @@ export const OUTFITS = [
 
   // ---- ♻️ 垃圾圖鑑全部收集完 ----
   { id: 'eco_bandana', slot: 'neck', kind: 'bandana', c1: 0x5fae4a, c2: 0xffffff, icon: '♻️', zh: '淨灘小隊領巾', src: 'eco' },
+
+  // ---- 💇 贊助限定假髮：每個月一款女生、一款男生（誰都可以挑），那個月贊助 NT$100 以上二選一（month＝哪個月的） ----
+  { id: 'wig_curly', slot: 'hair', kind: 'hair', hair: 'cloudcurl', sex: 'f', c1: 0xc68a5a, c2: 0xf3a6c0, icon: '☁️', zh: 'QQ 雲朵捲', src: 'sponsor', month: '2026-11' },
+  { id: 'wig_twin', slot: 'hair', kind: 'hair', hair: 'twin', sex: 'f', c1: 0xf2cf6b, c2: 0xd2453c, icon: '🎀', zh: '聖誕雙馬尾', src: 'sponsor', month: '2026-12' },
+  { id: 'wig_bun', slot: 'hair', kind: 'hair', hair: 'bun', sex: 'f', c1: 0x4a3428, c2: 0xd2453c, icon: '🍡', zh: '新年包包頭', src: 'sponsor', month: '2027-01' },
+  { id: 'wig_wavy', slot: 'hair', kind: 'hair', hair: 'wavy', sex: 'f', c1: 0xe58a9a, c2: 0xfff3e2, icon: '🌊', zh: '粉紅波浪長髮', src: 'sponsor', month: '2027-02' },
+  { id: 'wig_bob', slot: 'hair', kind: 'hair', hair: 'bob', sex: 'f', c1: 0x8a5634, c2: 0xf2c14e, icon: '💇', zh: '齊瀏海妹妹頭', src: 'sponsor', month: '2027-03' },
+  { id: 'wig_pony', slot: 'hair', kind: 'hair', hair: 'pony', sex: 'f', c1: 0xa58ad8, c2: 0xffe08a, icon: '🎐', zh: '薰衣草高馬尾', src: 'sponsor', month: '2027-04' },
+  { id: 'wig_cloudshort', slot: 'hair', kind: 'hair', hair: 'cloudshort', sex: 'm', c1: 0x8a5a3a, c2: 0x8a5a3a, icon: '⛅', zh: '雲朵微捲短髮', src: 'sponsor', month: '2026-11' },
+  { id: 'wig_spiky', slot: 'hair', kind: 'hair', hair: 'spiky', sex: 'm', c1: 0xe0a050, c2: 0xe0a050, icon: '⚡', zh: '軟軟刺刺頭', src: 'sponsor', month: '2026-12' },
+  { id: 'wig_manbun', slot: 'hair', kind: 'hair', hair: 'manbun', sex: 'm', c1: 0x3a2c28, c2: 0x8a5a3a, icon: '🥢', zh: '小揪揪', src: 'sponsor', month: '2027-01' },
+  { id: 'wig_quiff', slot: 'hair', kind: 'hair', hair: 'quiff', sex: 'm', c1: 0x5a6478, c2: 0x5a6478, icon: '😎', zh: '側分油頭', src: 'sponsor', month: '2027-02' },
+  { id: 'wig_bowl', slot: 'hair', kind: 'hair', hair: 'bowl', sex: 'm', c1: 0x7a4a2a, c2: 0x7a4a2a, icon: '🍉', zh: '西瓜頭', src: 'sponsor', month: '2027-03' },
+  { id: 'wig_fluffy', slot: 'hair', kind: 'hair', hair: 'fluffy', sex: 'm', c1: 0x4a3a6a, c2: 0x4a3a6a, icon: '🌬️', zh: '蓬鬆短髮', src: 'sponsor', month: '2027-04' },
+  { id: 'wig_braids', slot: 'hair', kind: 'hair', hair: 'braids', sex: 'f', c1: 0x6a4030, c2: 0xd2453c, icon: '🧶', zh: '麻花雙辮', src: 'sponsor', month: '2027-05' },
 ];
 
 export const OUTFIT_BY_ID = Object.fromEntries(OUTFITS.map((o) => [o.id, o]));
@@ -77,6 +93,16 @@ export const outfitOfCode = (n) => OUTFITS[n - 1] ?? null;
 export const DAILY_OUTFITS = OUTFITS.filter((o) => o.src === 'daily');
 export const WEEKLY_OUTFITS = OUTFITS.filter((o) => o.src === 'weekly');
 export const DATE_OUTFITS = OUTFITS.filter((o) => o.src === 'date');
+export const SPONSOR_OUTFITS = OUTFITS.filter((o) => o.src === 'sponsor');
+/** 這個月（'YYYY-MM'）可以挑的贊助假髮（女生款在前）；還沒排到的月份就用最後排好的那個月 */
+export const sponsorOutfits = (month) => {
+  let list = SPONSOR_OUTFITS.filter((o) => o.month === month);
+  if (!list.length) {
+    const last = SPONSOR_OUTFITS.map((o) => o.month).sort().at(-1);
+    list = SPONSOR_OUTFITS.filter((o) => o.month === last);
+  }
+  return list.sort((a, b) => (a.sex === 'f' ? 0 : 1) - (b.sex === 'f' ? 0 : 1));
+};
 
 /** 'YYYY-MM-DD' → 從 1970-01-01 算第幾天 */
 const dayNum = (dayKey) => Math.floor(Date.parse(`${dayKey}T00:00:00Z`) / 86400000);

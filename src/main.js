@@ -30,6 +30,9 @@ import { BuildPanel } from './ui/BuildPanel.js';
 import { createDemoHome } from './game/demoHome.js';
 import { WelcomeCard } from './ui/WelcomeCard.js';
 import { UpdateNews } from './ui/UpdateNews.js';
+import { ConfirmBuy } from './ui/ConfirmBuy.js';
+import { buildYard } from './rooms/yardModels.js';
+import { FURNITURE_COLORS, gridOf, expandPrice } from './game/furnitureCatalog.js';
 import { YARD_BY_ID } from './game/yardCatalog.js';
 import { FUR_PALETTES } from './player/characters/furPalettes.js';
 import { BASE_FUR, PREMIUM_FUR, TAILS, EARS, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from './game/looks.js';
@@ -41,7 +44,7 @@ import { TENT_STYLE_BY_ID } from './game/tentStyles.js';
 import { createCampgroundRoom } from './rooms/campgroundRoom.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN } from './game/miniSpots.js';
 import { TENT_SHAPE_BY_ID } from './game/tentShapes.js';
-import { FURNITURE_BY_ID } from './game/furniture.js';
+import { FURNITURE_BY_ID, TENT_PRICE, buildFurniture } from './game/furniture.js';
 import { SpeechBubbles } from './fx/SpeechBubbles.js';
 import { SocialPanel } from './ui/SocialPanel.js';
 import { ShrinePanel } from './ui/ShrinePanel.js';
@@ -173,6 +176,8 @@ async function init() {
   // ---------- UI、聲音、動作 ----------
   const hud = new HUD();
   let myAge = 99;
+  /** 🎫 月票、☕ 贊助假髮：伺服器開了（PASS_ON=1）才顯示 */
+  let payOn = false;
   let myStreak = 1;
   // ---------- 🌱 新手：功能慢慢打開（老玩家一進來就全部都有） ----------
   //   0 第一次來：只留人數、名字、松果、去哪裡　1 疊完石頭：📖 圖鑑、👤 存檔
@@ -753,6 +758,8 @@ async function init() {
     getItems: () => forest.wishTree.items,
     getCoins: () => (net.online ? pinecones : null),
     onHang: async (id) => {
+      const o0 = ORNAMENT_BY_ID[id];
+      if (!(await confirmBuy.ask({ icon: o0?.icon, name: o0?.name, price: o0?.price ?? 0, desc: t('買了會直接掛上心願大樹'), coins: pinecones }))) return;
       const res = await net.hang(id);
       if (res?.ok) {
         const o = ORNAMENT_BY_ID[id];
@@ -793,11 +800,12 @@ async function init() {
     weekly: [t('每週限定：朋友真的透過你的連結來玩才拿得到'), t('朋友透過連結來玩')],
     date: [t('營火之約限定：朋友在早上或晚上 9:30 營火時間透過你的連結進來，兩個人都拿到'), t('9:30 營火時間約朋友')],
     eco: [t('垃圾圖鑑全部收集完就拿到'), t('垃圾圖鑑收集完')],
+    sponsor: [t('贊助限定：那個月贊助 NT$100 以上自動拿到（告示牌 → ☕ 支持營地）'), t('贊助限定')],
   };
   fishingUI.extraTabs.push({
     id: 'outfit',
     label: t('👒 造型'),
-    title: () => t('👒 造型 {n}／{total}', { n: look.outfits.length, total: OUTFITS.length }),
+    title: () => t('👒 造型 {n}／{total}', { n: look.outfits.length, total: OUTFITS.filter((o) => payOn || o.src !== 'sponsor').length }),
     render: () => {
       if (lookSlot === 'body') return renderBody();
       const owned = new Set(look.outfits);
@@ -807,7 +815,7 @@ async function init() {
         .map((o) => {
           const has = owned.has(o.id);
           const worn = look.wear?.[o.slot] === o.id;
-          const tag = o.src === 'weekly' ? t('每週限定') : o.src === 'date' ? t('營火之約') : o.src === 'eco' ? t('淨灘小隊') : o.id === look.daily ? t('今天的') : t('每日');
+          const tag = o.src === 'weekly' ? t('每週限定') : o.src === 'date' ? t('營火之約') : o.src === 'eco' ? t('淨灘小隊') : o.src === 'sponsor' ? t('{m} 贊助限定', { m: o.month }) : o.id === look.daily ? t('今天的') : t('每日');
           return has
             ? `<div class="dex-card outfit${worn ? ' worn' : ''}" data-id="${o.id}"><i class="dex-emoji">${o.icon}</i><b>${t(o.zh)}</b><small>${tag}</small><em>${worn ? t('穿著中・點一下脫掉') : t('點一下穿上')}</em></div>`
             : `<div class="dex-card unknown" title="${HOW[o.src][0]}"><i class="dex-emoji">${o.icon}</i><b>${t('？？？')}</b><small>${tag}</small><em>${HOW[o.src][1]}</em></div>`;
@@ -843,7 +851,7 @@ async function init() {
   // ---------- 🐾 動物外型：特殊毛色、尾巴、耳朵（用松果買，買過的隨時換） ----------
   let myLooks = {};
   const slotTabs = () =>
-    `<div class="outfit-slot-tabs">${OUTFIT_SLOTS.map((sl) => `<button type="button" data-slot="${sl.id}" class="${sl.id === lookSlot ? 'on' : ''}">${sl.icon} ${t(sl.zh)}</button>`).join('')}<button type="button" data-slot="body" class="${lookSlot === 'body' ? 'on' : ''}">${t('🐾 外型')}</button></div>`;
+    `<div class="outfit-slot-tabs">${OUTFIT_SLOTS.filter((sl) => sl.id !== 'hair' || payOn || look.outfits.some((id) => OUTFIT_BY_ID[id]?.slot === 'hair')).map((sl) => `<button type="button" data-slot="${sl.id}" class="${sl.id === lookSlot ? 'on' : ''}">${sl.icon} ${t(sl.zh)}</button>`).join('')}<button type="button" data-slot="body" class="${lookSlot === 'body' ? 'on' : ''}">${t('🐾 外型')}</button></div>`;
   const renderBody = () => {
     const sp = profile?.species ?? 0;
     const card = (kind, v, icon, name, price, has, on, swatch = '') =>
@@ -892,7 +900,15 @@ async function init() {
       if (!net.online) return hud.toast(t('連上伺服器才能買'));
       const item = kind === 'fur' ? PREMIUM_FUR.find((x) => x.i === val) : (kind === 'tail' ? TAIL_BY_ID : EAR_BY_ID)[val];
       if (!item) return;
-      if (pinecones < item.price) return hud.toast(t('松果不夠喔 🌰'));
+      // 先換上去看看（預覽），確定了才買；取消就換回原本的樣子
+      const preview = { ...profile };
+      if (kind === 'fur') preview.fur = val;
+      else if (kind === 'tail') preview.tail = val;
+      else preview.ear = val;
+      applyLook(preview);
+      const name = kind === 'fur' ? FUR_PALETTES[val]?.name : t(item.zh);
+      const ok = await confirmBuy.ask({ icon: item.icon, name, price: item.price, desc: t('已經先幫你換上看看了（看身上）'), coins: pinecones });
+      if (!ok) return applyLook(profile);
       const res = await net.request('buyLook', { kind, id: val });
       if (!res?.ok) return hud.toast(res?.reason === 'poor' ? t('松果不夠喔 🌰') : t('沒買成，再試一次吧'));
       myLooks = res.looks ?? myLooks;
@@ -941,7 +957,9 @@ async function init() {
     if (why === 'date') look.dateNext = null;
     audio.sfx('bell');
     const msg =
-      why === 'weekly'
+      why === 'sponsor'
+        ? t('💇 拿到贊助限定假髮：{name}', { name: outfitName(id) })
+        : why === 'weekly'
         ? t('🌟 朋友透過你的連結來玩了！拿到每週限定造型：{name}', { name: outfitName(id) })
         : why === 'date'
           ? t('🔥 營火之約成立！拿到限定造型：{name}', { name: outfitName(id) })
@@ -1041,6 +1059,7 @@ async function init() {
     for (const id of gatherRooms) rooms[id].gather.hasNet = netOwned;
   };
   async function buyNet() {
+    if (!(await confirmBuy.ask({ icon: '🦋', name: t('捕蟲網'), price: NET_PRICE, desc: t('買了就能捕捉空中飛的蟲蟲'), coins: pinecones }))) return;
     const res = await net.request('buyNet');
     if (res?.ok) {
       setNet(true);
@@ -1300,6 +1319,7 @@ async function init() {
       (body) => {
         const hid = plot.tent.hid;
         body.querySelector('#garden-expand')?.addEventListener('click', async () => {
+          if (!(await confirmBuy.ask({ icon: '🌱', name: t('開墾第 {n} 格菜園', { n: res.slots.length + 1 }), price: res.next, coins: pinecones }))) return;
           const r = await net.request('gardenExpand');
           if (r?.ok) {
             audio.sfx('bell');
@@ -1506,6 +1526,110 @@ async function init() {
     );
   }
   hud.onPass = () => openPass();
+
+  // ---------- ☕ 贊助：NT$100 以上自動拿到這個月的限定假髮 ----------
+  const wigPics = new Map();
+  /** 假髮的樣子：用一隻小貓戴著拍一張照（只畫一次，存成圖片） */
+  const wigPicture = (id, yaw = 0.45) => {
+    const pk = `${id}|${yaw}`;
+    if (wigPics.has(pk)) return wigPics.get(pk);
+    let url = '';
+    try {
+      const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+      r.setSize(220, 220, false);
+      r.outputColorSpace = THREE.SRGBColorSpace;
+      r.toneMapping = THREE.ACESFilmicToneMapping;
+      const sc = new THREE.Scene();
+      sc.add(new THREE.HemisphereLight(0xfff6ea, 0x8a7060, 1.5));
+      const key = new THREE.DirectionalLight(0xfff0dc, 2.2);
+      key.position.set(2, 3, 3);
+      sc.add(key);
+      const rim = new THREE.DirectionalLight(0xffe0c0, 1.0);
+      rim.position.set(-2, 2, -2);
+      sc.add(rim);
+      const c = new ProceduralFox({ fur: 2, species: 1 });
+      c.setOutfit({ hair: id });
+      c.update(0.016, 0, 0);
+      sc.add(c.root);
+      const cam = new THREE.PerspectiveCamera(28, 1, 0.1, 20);
+      cam.position.set(Math.sin(yaw) * 2.5, 1.3, Math.cos(yaw) * 2.5);
+      cam.lookAt(0, 0.85, 0);
+      r.render(sc, cam);
+      url = r.domElement.toDataURL('image/png');
+      r.dispose();
+      r.forceContextLoss?.();
+    } catch {
+      /* 畫不出來就只顯示文字 */
+    }
+    wigPics.set(pk, url);
+    return url;
+  };
+  let wigPick = null;
+  noticePanel.onSupport = async (el) => {
+    if (!el || !net.online) return;
+    const info = await net.request('sponsorInfo');
+    if (!info?.ok || !info.wigs?.length || !info.on) return void (el.hidden = true); // 還沒開放：先不顯示假髮
+    if (!info.wigs.includes(wigPick)) wigPick = info.wigs.find((id) => !info.owned.includes(id)) ?? info.wigs[0];
+    const allOwned = info.wigs.every((id) => info.owned.includes(id));
+    const card = (id) => {
+      const o = OUTFIT_BY_ID[id];
+      const pic = wigPicture(id);
+      const picB = wigPicture(id, 2.6);
+      const has = info.owned.includes(id);
+      return `<button type="button" class="sw-card${id === wigPick ? ' on' : ''}${has ? ' has' : ''}" data-wig="${id}">
+        ${pic ? `<span class="sw-pics"><img class="sw-pic" src="${pic}" alt=""><img class="sw-pic" src="${picB}" alt=""></span><small>${t('正面　　背面')}</small>` : `<div class="sw-emoji">${o.icon}</div>`}
+        <span class="sw-name">${o.icon} ${t(o.zh)}</span>
+        <small>${has ? t('✅ 已經有了') : o.sex === 'm' ? t('短髮款') : t('長髮款')}</small>
+      </button>`;
+    };
+    el.hidden = false;
+    el.innerHTML = `
+      <div class="sw-title">${t('💇 這個月的贊助限定假髮（二選一）')}</div>
+      <div class="sw-cards">${info.wigs.map(card).join('')}</div>
+      <p>${t('先點選喜歡的那一款，贊助 NT${n} 以上，付款完成自動拿到，戴在頭上大家都看得到。每個月換新的兩款，男生女生都可以挑。', { n: info.min })}</p>
+      ${
+        allOwned
+          ? `<div class="sw-has">${t('✅ 這個月的兩款你都有了，謝謝你的支持 💛')}</div>`
+          : info.on
+            ? `<div class="sw-amts">${info.amounts.map((a) => `<button type="button" data-amt="${a}">☕ NT$${a}</button>`).join('')}</div>
+               ${info.test ? `<div class="notice-hint">${t('⚠️ 測試模式：用綠界測試卡，不會真的扣款')}</div>` : ''}
+               ${info.account ? '' : `<div class="notice-hint">${t('贊助前要先建立帳號（👤 存檔），假髮才不會不見')}</div>`}`
+            : `<div class="sw-has">${t('☕ 贊助功能即將推出，敬請期待！')}</div>`
+      }`;
+    for (const b of el.querySelectorAll('[data-wig]')) {
+      b.addEventListener('click', () => {
+        wigPick = b.dataset.wig;
+        for (const x of el.querySelectorAll('[data-wig]')) x.classList.toggle('on', x === b);
+      });
+    }
+    for (const b of el.querySelectorAll('[data-amt]')) {
+      b.addEventListener('click', async () => {
+        if (!info.account) {
+          noticePanel.close();
+          return hud.onMeClick?.({ focusAccount: true });
+        }
+        if (info.owned.includes(wigPick)) return hud.toast(t('這一款你已經有了，選另一款吧'));
+        let win = null;
+        try {
+          win = window.open('', '_blank');
+        } catch {
+          /* 被擋就在同一頁開 */
+        }
+        const res = await net.request('sponsorOrder', { amt: Number(b.dataset.amt), wig: wigPick });
+        if (!res?.ok) {
+          win?.close();
+          return hud.toast(res?.reason === 'account' ? t('贊助前要先建立帳號（👤 存檔）') : t('現在不能贊助，等一下再試'));
+        }
+        if (win) win.location.href = res.url;
+        else location.href = res.url;
+        hud.toast(t('☕ 已經打開綠界付款頁，付款完成後回到遊戲就會自動拿到假髮'), 6000);
+      });
+    }
+  };
+  net.on('sponsored', ({ wig, got }) => {
+    audio.sfx('bell');
+    hud.toast(wig && got ? t('💛 謝謝你的贊助！拿到這個月的限定假髮「{name}」（到「👒 造型 → 💇 頭髮」戴上）', { name: t(OUTFIT_BY_ID[wig]?.zh ?? '') }) : t('💛 謝謝你的贊助！營火會一直燒下去 🔥'), 8000);
+  });
   net.on('pass', (p) => {
     setPass(p);
     audio.sfx('bell');
@@ -1807,6 +1931,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     }
     hud.setInviteVisible(true);
     hud.el.passChip.hidden = !res.passOn; // 🎫 月票：伺服器開了才顯示
+    payOn = !!res.passOn; // ☕ 贊助假髮也一樣：開了才顯示
     myCode = res.code ?? null;
     // 伺服器更新過、自己的畫面還是舊版：提醒重新整理
     const mine = document.querySelector('script[src*="assets/index-"]')?.getAttribute('src')?.match(/index-([\w-]+)\.js/)?.[1];
@@ -2254,6 +2379,66 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     hud.toast(why[res?.reason] ?? t('沒買成，再試一次吧'));
     return false;
   };
+  // ---------- 🛒 買東西前先確認（點商品是預覽，按「確定購買」才買） ----------
+  const confirmBuy = new ConfirmBuy();
+  const snapCache = new Map();
+  /** 幫一個 3D 物件拍張照（奶油色背景），存成圖片給確認視窗用 */
+  const snapshot = (key, makeObj) => {
+    if (snapCache.has(key)) return snapCache.get(key);
+    let url = '';
+    try {
+      const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+      r.setSize(240, 240, false);
+      r.outputColorSpace = THREE.SRGBColorSpace;
+      r.toneMapping = THREE.ACESFilmicToneMapping;
+      const sc = new THREE.Scene();
+      sc.background = new THREE.Color(0xf3e6d3);
+      sc.add(new THREE.HemisphereLight(0xfff6ea, 0x8a7060, 1.6));
+      const key2 = new THREE.DirectionalLight(0xfff0dc, 2.0);
+      key2.position.set(2, 3, 3);
+      sc.add(key2);
+      const obj = makeObj();
+      sc.add(obj);
+      const box = new THREE.Box3().setFromObject(obj);
+      const size = box.getSize(new THREE.Vector3()).length() || 1;
+      const center = box.getCenter(new THREE.Vector3());
+      const cam = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
+      cam.position.set(center.x + size * 1.15, center.y + size * 0.75, center.z + size * 1.55);
+      cam.lookAt(center);
+      r.render(sc, cam);
+      url = r.domElement.toDataURL('image/png');
+      r.dispose();
+      r.forceContextLoss?.();
+    } catch {
+      /* 畫不出來就只顯示圖示 */
+    }
+    snapCache.set(key, url);
+    return url;
+  };
+  /** 小舖裡的東西：名字、圖示、價格、預覽圖 */
+  const shopItemInfo = (id, c) => {
+    if (id === 'tent') return { icon: '⛺', name: t('我的小帳篷'), price: TENT_PRICE, desc: t('買下來就是你的家，可以擺家具、換造型') };
+    if (id === 'expand') {
+      const g = gridOf(myHome) + 1;
+      return { icon: '📐', name: t('擴建成 {n}×{n}', { n: g }), price: expandPrice(myHome) ?? 0, desc: t('整頂帳篷會變大一圈，家具會挪到新地板的中間') };
+    }
+    if (id.startsWith('shape_')) {
+      const sh = TENT_SHAPE_BY_ID[id.slice(6)];
+      return { icon: sh?.icon, name: sh?.name, price: sh?.price ?? 0, desc: t('解鎖之後可以隨時換回其他造型') };
+    }
+    if (id.startsWith('yard_')) {
+      const y = YARD_BY_ID[id.slice(5)];
+      return { icon: y?.icon, name: t(y?.zh ?? ''), price: y?.price ?? 0, desc: t(y?.note ?? ''), img: snapshot(id, () => buildYard(id.slice(5))) };
+    }
+    const f = FURNITURE_BY_ID[id];
+    const cv = c ? FURNITURE_COLORS[c] : null;
+    return {
+      icon: f?.icon,
+      name: `${f?.name ?? ''}${cv ? `（${cv.icon} ${t(cv.zh)}）` : ''}`,
+      price: f?.price ?? 0,
+      img: snapshot(`${id}|${c || 0}`, () => buildFurniture(id, { color: c || 0 })),
+    };
+  };
   const shopPanel = new ShopPanel({
     getCoins: () => (net.online || demo ? pinecones : null),
     getHome: () => myHome,
@@ -2266,6 +2451,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     },
     onBuy: (id, c) => buyItem(id, c),
   });
+  shopPanel.onConfirm = (id, c) => confirmBuy.ask({ ...shopItemInfo(id, c), coins: net.online || demo ? pinecones : null });
   actions.onShop = () => shopPanel.open();
 
   const buildPanel = new BuildPanel({
@@ -2286,7 +2472,9 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       return false;
     },
     onExit: () => stopBuild(),
-    onExpand: () => buyItem('expand'),
+    onExpand: async () => {
+      if (await confirmBuy.ask({ ...shopItemInfo('expand'), coins: pinecones })) return buyItem('expand');
+    },
     onToggleOpen: async () => {
       const res = await homeReq('homeOpen', { open: !(myHome?.open !== false) });
       if (res?.ok) {

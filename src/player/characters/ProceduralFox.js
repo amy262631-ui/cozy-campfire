@@ -5,6 +5,8 @@ import { FUR_PALETTES } from './furPalettes.js';
 import { SPECIES } from './species.js';
 import { buildAccessory } from '../accessories.js';
 import { buildOutfit, animateOutfit } from '../outfit3d.js';
+import { OUTFIT_BY_ID } from '../../game/outfits.js';
+import { HAIR_VOLUME } from '../hair3d.js';
 import { createFishMesh, fishScale } from '../../fishing/fishModel.js';
 
 /**
@@ -482,6 +484,7 @@ export class ProceduralFox {
       this.blanket.body.visible = this.blanket.hood.visible = visible;
       if (this.outfit?.back) this.outfit.back.visible = !visible;
       if (this.outfit?.head) this.outfit.head.visible = !visible;
+      if (this.outfit?.hair) this.outfit.hair.visible = !visible;
     }
   }
 
@@ -514,19 +517,31 @@ export class ProceduralFox {
 
   /** 造型：{ head, back, neck }（造型代號，沒穿是 null） */
   setOutfit(wear = {}) {
-    const key = `${wear.head ?? ''}|${wear.back ?? ''}|${wear.neck ?? ''}`;
+    const key = `${wear.head ?? ''}|${wear.back ?? ''}|${wear.neck ?? ''}|${wear.hair ?? ''}`;
     if (this._outfitKey === key) return;
     this._outfitKey = key;
     this.outfit ??= {};
-    for (const slot of ['head', 'back', 'neck']) {
+    // 💇 頭髮會看同時戴了什麼：戴帽子就收起頭頂的丸子、刺刺；背背包、圍圍巾就把長髮收短一點
+    const fit = { hat: !!wear.head, back: !!wear.back, neck: !!wear.neck };
+    for (const slot of ['head', 'back', 'neck', 'hair']) {
       const old = this.outfit[slot];
       if (old) old.parent?.remove(old);
-      const g = wear[slot] ? buildOutfit(wear[slot]) : null;
+      const g = wear[slot] ? buildOutfit(wear[slot], slot === 'hair' ? fit : undefined) : null;
       this.outfit[slot] = g;
-      if (g) (slot === 'head' ? this.head : this.torso).add(g);
+      if (g) (slot === 'head' || slot === 'hair' ? this.head : this.torso).add(g);
     }
     // 耳朵太長（兔耳）時帽子稍微往上
     if (this.outfit.head && this.species.ears === 'long') this.outfit.head.position.y = 0.03;
+    // 🎒 背了背包、翅膀、披風：尾巴往後下方翹開，不會插進背上的東西
+    const backOn = !!this.outfit.back;
+    this.tail.rotation.x = backOn ? -0.75 : 0;
+    this.tail.position.set(0, backOn ? 0.2 : 0.28, backOn ? -0.34 : -0.3);
+    // 有頭髮的時候，帽子跟著頭髮的蓬度放大、往上一點，戴在頭髮上面（不會陷進頭髮裡）
+    const vol = this.outfit.hair ? (HAIR_VOLUME[OUTFIT_BY_ID[wear.hair]?.hair] ?? 0.04) : 0;
+    if (this.outfit.head && vol) {
+      this.outfit.head.scale.setScalar(1 + vol * 1.5);
+      this.outfit.head.position.y += vol * 0.6;
+    }
     this.#placeAccessory();
   }
 
