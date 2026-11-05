@@ -172,6 +172,43 @@ async function init() {
 
   // ---------- UI、聲音、動作 ----------
   const hud = new HUD();
+  let myAge = 99;
+  let myStreak = 1;
+  // ---------- 🌱 新手：功能慢慢打開（老玩家一進來就全部都有） ----------
+  //   0 第一次來：只留人數、名字、松果、去哪裡　1 疊完石頭：📖 圖鑑、👤 存檔
+  //   2 釣到魚或玩滿 10 分鐘：👒 造型、🔥 約朋友　3 第二天：💡 今日小靈感　4 第三天：全部
+  const STAGE_KEY = 'cozy-stage';
+  let stage = (() => {
+    try {
+      const v = localStorage.getItem(STAGE_KEY);
+      if (v != null) return Number(v);
+    } catch {
+      /* 無痕模式 */
+    }
+    return RitualGuide.isNewbie() ? 0 : 4;
+  })();
+  const applyStage = () => {
+    for (let i = 0; i <= 4; i++) document.body.classList.toggle(`stage-${i}`, i === stage);
+  };
+  const STAGE_MSG = {
+    1: () => t('📖 上面多了「圖鑑」：釣到的魚、採到的東西都會收在這裡'),
+    2: () => t('👒 「造型」和「🔥 約朋友」打開了：分享一次就能拿到今天的造型'),
+    3: () => t('💡 歡迎回來！多了「今日小靈感」，每天都有新的小任務'),
+    4: () => t('🎉 營地全部打開了：到「🏪 營地小舖」買帳篷，也可以用「🧭 去哪裡」到迷霧森林採集'),
+  };
+  const setStage = (n, quiet = false) => {
+    if (n <= stage) return;
+    stage = n;
+    try {
+      localStorage.setItem(STAGE_KEY, String(n));
+    } catch {
+      /* 無痕模式 */
+    }
+    applyStage();
+    if (!quiet && STAGE_MSG[n]) setTimeout(() => hud.toast(STAGE_MSG[n](), 6500), 1200);
+  };
+  applyStage();
+  setTimeout(() => setStage(2), 10 * 60000); // 玩滿 10 分鐘
   if (safeMode && crashCount >= 1) setTimeout(() => hud.toast(t('🛟 上次好像沒有順利載入，這次先用省電畫質，比較不會被關掉'), 6000), 4000);
   const mobile = isTouchDevice() ? new MobileControls(input) : null;
 
@@ -250,6 +287,7 @@ async function init() {
     audio,
     cameraRig,
     onCatch: (index, size) => {
+      setStage(2); // 🌱 第一次釣到魚：造型、約朋友打開
       ritual?.event('fish', { junk: !!FISH[index]?.junk });
       if (!FISH[index]?.junk && size > (todayLog.size ?? 0)) logToday({ fish: index, size }); // 分享文案用：今天最大的魚
       const rec = fishingUI.record(index, size);
@@ -1583,8 +1621,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     // 完成小任務：問伺服器「今天第幾位完成」（單人模式沒有數字）
     onDone: async (id) => (net.online ? ((await net.quest(id))?.n ?? null) : null),
     // 第一次來的人做完第一個任務，才跳出歡迎卡（一進來先讓人直接玩，不用先讀一大段字）
+    onIntroDone: () => setTimeout(showSeeYou, 6000),
     onComplete: (_task, firstTime) => {
-      if (firstTime) setTimeout(() => !welcome.visible && welcome.maybeShow(), 6000);
+      if (firstTime) {
+        setStage(1);
+        setTimeout(() => !welcome.visible && welcome.maybeShow(), 6000);
+      }
     },
   });
   const garden = forest.cairnGarden;
@@ -1770,6 +1812,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
         net.rejoin({ name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
       }
       if (w.outfit) setLook(w.outfit); // 👒 造型：擁有的、穿著的、今天和這週的
+      // 🌱 來了幾天：第二天開「今日小靈感」，第三天全部打開（老玩家直接全開，不跳提示）
+      myAge = w.age ?? 99;
+      if (myAge >= 99) setStage(4, true);
+      else if (myAge >= 2) setStage(4);
+      else if (myAge >= 1) setStage(3);
+      myStreak = w.streak ?? 1;
       basket = w.basket ?? basket;
       gdex = new Set(w.gdex ?? []);
       setTrash(w);
@@ -2340,6 +2388,41 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     if (b.dataset.n === 'go') hud.onMeClick({ focusAccount: true });
     else hud.toast(t('之後想存檔，按上方的「👤 存檔」就可以'), 4000);
   });
+  /**
+   * 🌙 新朋友的「明天見」卡片：告訴他明天回來有什麼，順便請他建帳號存檔（換手機、清瀏覽器也找得回來）
+   * 前兩天各出現一次（教學做完，或玩滿 15 分鐘）
+   */
+  function showSeeYou() {
+    if (myAge >= 2 || !net.online) return;
+    const today = new Date().toDateString();
+    try {
+      if (localStorage.getItem('cozy-seeyou') === today) return;
+      localStorage.setItem('cozy-seeyou', today);
+    } catch {
+      return;
+    }
+    const next = Math.min(9, 2 + Math.min(myStreak + 1, 7));
+    const saved = hasAccount();
+    modal.open(t('🌙 明天見！'), `
+      <div class="seeyou">
+        <p>${t('營地每天都有新東西，明天記得回來看看：')}</p>
+        <ul>
+          <li>${t('🌰 明天一進來就送 {n} 顆松果（連續來越多）', { n: next })}</li>
+          <li>${t('🌅 早上 9:30、晚上 9:30 營火時間：魚王、流星雨、松果加倍')}</li>
+          <li>${t('👒 每天都有新的每日造型，分享一次就拿到')}</li>
+          <li>${t('🌙 晚上 7～11 點每半小時一場小活動')}</li>
+        </ul>
+        ${saved ? `<p class="seeyou-ok">${t('✅ 你已經有帳號了，換手機登入也找得回來')}</p>` : `<p class="seeyou-warn">${t('⚠️ 還沒建帳號：松果、帳篷只存在這台裝置，清掉瀏覽器資料或換手機就找不回來')}</p>
+        <button type="button" class="seeyou-save" id="seeyou-save">${t('👤 建立帳號存檔（30 秒）')}</button>`}
+        <p class="seeyou-tip">${t('💡 把這個網頁加到主畫面或書籤，下次一點就到')}</p>
+      </div>`, (body) => {
+      body.querySelector('#seeyou-save')?.addEventListener('click', () => {
+        modal.close();
+        hud.onMeClick?.({ focusAccount: true });
+      });
+    });
+  }
+  setTimeout(() => showSeeYou(), 15 * 60000);
   function showSaveNudge() {
     shopPanel.close();
     nudgeEl.hidden = false;

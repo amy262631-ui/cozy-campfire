@@ -451,6 +451,12 @@ const miniPublic = () => {
   const same = m.active && miniNow() && miniRun.id === m.id;
   return { ...m, top: same ? miniTop() : [], spots: same && m.kind === 'hunt' ? miniRun.spots.map((p) => ({ x: p.x, z: p.z, by: p.by })) : [] };
 };
+/** 🌱 來了幾天（第一次來那天算 0；以前的老玩家沒記錄，當作很久了），新手功能慢慢打開用 */
+const walletAge = (w) => {
+  if (!w.fd) return 99;
+  if ((w.tot ?? 0) > 150) return 99; // 已經玩很多了
+  return Math.max(0, Math.round((Date.parse(`${dayKey()}T00:00:00Z`) - Date.parse(`${w.fd}T00:00:00Z`)) / 86400000));
+};
 /** 發松果給某人（不一定在線上；在線上的話通知他） */
 function giveTo(vid, n, reason) {
   const w = players[vid];
@@ -1302,7 +1308,7 @@ io.on('connection', (socket) => {
       ok: true,
       id: socket.id,
       reward: player.rw,
-      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, dex: dexView(wal), look: wal.look ?? null, outfit: outfitView(wal), basket: wal.bk ?? {}, gdex: gdexOf(wal), ...trashView(wal), dishes: wal.dish ?? {}, cooked: Object.keys(wal.cooked ?? {}), net: !!wal.net, pass: passView(wal) } : null,
+      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, age: walletAge(wal), dex: dexView(wal), look: wal.look ?? null, outfit: outfitView(wal), basket: wal.bk ?? {}, gdex: gdexOf(wal), ...trashView(wal), dishes: wal.dish ?? {}, cooked: Object.keys(wal.cooked ?? {}), net: !!wal.net, pass: passView(wal) } : null,
       myHome: publicHome(homes[player.vid]),
       code: player.vid ? homeId(player.vid) : null, // 邀請連結用的公開代號
       passOn: PASS_ON, // 🎫 月票要不要顯示

@@ -5,6 +5,9 @@ const FIRST_KEY = 'cozy-campfire-first-quest';
 const LAST_KEY = 'cozy-campfire-last-quest';
 /** 按過 ✕：這台裝置之後不再自動跳出任務卡（改按「💡 今日小靈感」） */
 const QUIET_KEY = 'cozy-campfire-quest-quiet';
+/** 🌱 新手前三個任務：疊石頭 → 烤棉花糖（在火邊坐下）→ 釣魚 */
+const INTRO = ['stone', 'roast', 'fish'];
+const INTRO_KEY = 'cozy-intro-done';
 const store = (k, v) => {
   try {
     if (v === undefined) return localStorage.getItem(k);
@@ -174,7 +177,8 @@ export class RitualGuide {
    * @param {{ scene, hud, touch?: boolean, onDone?: (id) => Promise<number|null> }} opts
    *   onDone：任務完成時呼叫，回傳「今天第幾位完成」（單人模式回傳 null）
    */
-  constructor({ scene, hud, touch = false, onDone, canPick, onShare, onComplete, root = document.getElementById('ui') }) {
+  constructor({ scene, hud, touch = false, onDone, canPick, onShare, onComplete, onIntroDone, root = document.getElementById('ui') }) {
+    this.onIntroDone = onIntroDone;
     this.hud = hud;
     /** 任務完成時通知 main.js（第一次來的人完成第一個任務後，才跳出歡迎卡） */
     this.onComplete = onComplete;
@@ -276,8 +280,22 @@ export class RitualGuide {
     } catch {
       /* 無痕模式 */
     }
+    const intro = this.nextIntro();
+    if (intro) return intro;
     const ids = Object.keys(this.tasks).filter((id) => id !== last && this.canPick(id));
     return ids[Math.floor(Math.random() * ids.length)];
+  }
+
+  /** 新手還沒做完的教學任務（第一次來的那幾天才有） */
+  nextIntro() {
+    if (!this.newbie) return null;
+    let done = [];
+    try {
+      done = JSON.parse(localStorage.getItem(INTRO_KEY) || '[]');
+    } catch {
+      /* 無痕模式 */
+    }
+    return INTRO.find((id) => !done.includes(id) && this.tasks[id]) ?? null;
   }
 
   #start(id) {
@@ -361,6 +379,19 @@ export class RitualGuide {
     this.el.classList.remove('first');
     const firstTime = this.newbie && !this.completed;
     this.completed = true;
+    // 🌱 新手教學：記下做完的，接著自動帶下一個
+    if (this.newbie && INTRO.includes(this.id)) {
+      try {
+        const done = JSON.parse(localStorage.getItem(INTRO_KEY) || '[]');
+        if (!done.includes(this.id)) done.push(this.id);
+        localStorage.setItem(INTRO_KEY, JSON.stringify(done));
+      } catch {
+        /* 無痕模式 */
+      }
+      const next = this.nextIntro();
+      if (next) setTimeout(() => this.done && this.id !== next && this.#start(next), 4000);
+      else this.onIntroDone?.();
+    }
     this.onComplete?.(this.task, firstTime);
     try {
       localStorage.setItem(FIRST_KEY, '1');

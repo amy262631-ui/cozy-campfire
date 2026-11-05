@@ -6167,3 +6167,63 @@ body.touch .m-stack {
 .look-card {
   cursor: pointer;
 }
+
+/* 🌱 新手：功能慢慢打開（stage-0～3 先藏起一些按鈕） */
+body.stage-0 #date-chip,
+body.stage-0 #dex-chip,
+body.stage-0 #look-chip,
+body.stage-0 .idea-chip,
+body.stage-0 #acct-chip,
+body.stage-1 #date-chip,
+body.stage-1 #look-chip,
+body.stage-1 .idea-chip,
+body.stage-2 .idea-chip {
+  display: none !important;
+}
+
+/* 🌙 明天見 */
+.seeyou {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.seeyou ul {
+  margin: 6px 0 10px;
+  padding-left: 4px;
+  list-style: none;
+}
+
+.seeyou li {
+  margin: 4px 0;
+}
+
+.seeyou-warn {
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(240, 150, 70, 0.18);
+  color: #ffd9b0;
+}
+
+.seeyou-ok {
+  color: #b8f0c0;
+}
+
+.seeyou-save {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+  padding: 11px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffb46b, #f08a3c);
+  color: #3a2214;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.seeyou-tip {
+  font-size: 12px;
+  opacity: 0.7;
+}
