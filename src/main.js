@@ -1591,7 +1591,7 @@ async function init() {
         allOwned
           ? `<div class="sw-has">${t('✅ 這個月的兩款你都有了，謝謝你的支持 💛')}</div>`
           : info.on
-            ? `<div class="sw-amts">${info.amounts.map((a) => `<button type="button" data-amt="${a}">☕ NT$${a}</button>`).join('')}</div>
+            ? `<div class="sw-amts">${info.amounts.map((a) => `<button type="button" data-amt="${a}">☕ NT$${a}${a >= info.min ? ' 💇' : ''}</button>`).join('')}</div>
                ${info.test ? `<div class="notice-hint">${t('⚠️ 測試模式：用綠界測試卡，不會真的扣款')}</div>` : ''}
                ${info.account ? '' : `<div class="notice-hint">${t('贊助前要先建立帳號（👤 存檔），假髮才不會不見')}</div>`}`
             : `<div class="sw-has">${t('☕ 贊助功能即將推出，敬請期待！')}</div>`
@@ -1608,7 +1608,7 @@ async function init() {
           noticePanel.close();
           return hud.onMeClick?.({ focusAccount: true });
         }
-        if (info.owned.includes(wigPick)) return hud.toast(t('這一款你已經有了，選另一款吧'));
+        if (Number(b.dataset.amt) >= info.min && info.owned.includes(wigPick)) return hud.toast(t('這一款你已經有了，選另一款吧'));
         let win = null;
         try {
           win = window.open('', '_blank');

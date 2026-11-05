@@ -145,6 +145,7 @@ export class JoinScreen {
 
         <button type="submit" class="join-go">${this.edit ? t('好了') : t('進入營地')}</button>
         ${this.edit ? `<button type="button" class="join-cancel" id="join-cancel">${t('取消')}</button>` : ''}
+        ${this.edit ? '' : `<div class="join-shop">${t('聯絡我們')}：<a href="mailto:amy262631@gmail.com">amy262631@gmail.com</a><br><a href="/shop.html" target="_blank" rel="noopener">${t('商店資訊與退款說明')}</a></div>`}
       </form>
     `;
     document.body.appendChild(el);

@@ -6463,3 +6463,35 @@ body.stage-2 .idea-chip {
   opacity: 0.45;
   cursor: default;
 }
+
+/* 首頁底部的商店資訊（綠界審核要看得到聯絡方式） */
+.join-shop {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.7;
+  text-align: center;
+  color: rgba(243, 230, 214, 0.65);
+}
+.join-shop a {
+  color: #ffc27a;
+  text-decoration: none;
+}
+
+/* 遊戲畫面右下角的聯絡方式（綠界審核要看得到；手機畫面太擠就不顯示，改在登入畫面和 shop.html） */
+.shop-foot {
+  position: absolute;
+  right: 14px;
+  bottom: 10px;
+  font-size: 11px;
+  color: rgba(243, 230, 214, 0.55);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  pointer-events: auto;
+}
+.shop-foot a {
+  color: rgba(255, 194, 122, 0.85);
+  text-decoration: none;
+}
+@media (max-width: 900px) {
+  .shop-foot { display: none; }
+}
+body.touch .shop-foot { display: none; }

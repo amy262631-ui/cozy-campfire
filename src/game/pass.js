@@ -18,7 +18,7 @@ export const PASS = {
  * 小黃花、四葉草是作者親友團的心意，不是贊助贈品（還是手動寫在 server/data/sponsors.json）。
  */
 export const SPONSOR = {
-  amounts: [100, 200, 500], // 可以選的金額（新台幣）
+  amounts: [60, 100, 150, 200], // 可以選的金額（新台幣）；NT$60 只是請喝咖啡，沒有假髮
   min: 100, // 這個金額以上送假髮
   item: '請作者喝咖啡（迷霧森林露營地）',
 };
