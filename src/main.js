@@ -176,7 +176,7 @@ async function init() {
   let myStreak = 1;
   // ---------- 🌱 新手：功能慢慢打開（老玩家一進來就全部都有） ----------
   //   0 第一次來：只留人數、名字、松果、去哪裡　1 疊完石頭：📖 圖鑑、👤 存檔
-  //   2 釣到魚或玩滿 10 分鐘：👒 造型、🔥 約朋友　3 第二天：💡 今日小靈感　4 第三天：全部
+  //   2 釣到魚或玩滿 10 分鐘：👒 造型、🔥 約朋友　3 松果夠買帳篷：💡 今日小靈感　4 買了帳篷或第二天：全部
   const STAGE_KEY = 'cozy-stage';
   let stage = (() => {
     try {
@@ -711,7 +711,43 @@ async function init() {
     hud.setPinecones(n, delta);
     refreshAcctChip();
     treePanel.refresh();
+    // 🏕️ 松果夠買帳篷了：跳一次引導（去小舖買，或先去帳篷營地看看大家的家）
+    try {
+      if (n >= TENT_HINT_AT && net.online && myHome && !myHome.tent) setTimeout(showTentHint, 1500);
+    } catch {
+      /* 初始化還沒跑到 myHome 那裡 */
+    }
   };
+  const TENT_HINT_AT = 30;
+  function showTentHint() {
+    if (myHome?.tent || modal.isOpen) return;
+    try {
+      if (localStorage.getItem('cozy-tent-hint')) return;
+      localStorage.setItem('cozy-tent-hint', '1');
+    } catch {
+      return;
+    }
+    setStage(3);
+    modal.open(t('🏕️ 你可以有自己的帳篷了！'), `
+      <div class="seeyou">
+        <p>${t('你已經有 <b>🌰 {n}</b> 顆松果，夠買一頂自己的帳篷了。', { n: pinecones })}</p>
+        <ul>
+          <li>${t('⛺ 買下來就是你的家：擺家具、換造型，關掉網頁再來都還在')}</li>
+          <li>${t('🏕️ 先到帳篷營地逛逛，看看大家把家布置成什麼樣子')}</li>
+        </ul>
+        <button type="button" class="seeyou-save" id="th-shop">${t('🏪 去營地小舖買帳篷')}</button>
+        <button type="button" class="seeyou-save seeyou-alt" id="th-camp">${t('🏕️ 先去帳篷營地參觀')}</button>
+      </div>`, (body) => {
+      body.querySelector('#th-shop').addEventListener('click', () => {
+        modal.close();
+        shopPanel.open();
+      });
+      body.querySelector('#th-camp').addEventListener('click', () => {
+        modal.close();
+        hud.onGo?.('campground');
+      });
+    });
+  }
   const treePanel = new TreePanel({
     getEvent: () => currentEvent(),
     getItems: () => forest.wishTree.items,
@@ -1815,8 +1851,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       // 🌱 來了幾天：第二天開「今日小靈感」，第三天全部打開（老玩家直接全開，不跳提示）
       myAge = w.age ?? 99;
       if (myAge >= 99) setStage(4, true);
-      else if (myAge >= 2) setStage(4);
-      else if (myAge >= 1) setStage(3);
+      else if (myAge >= 1) setStage(4); // 第二天就全部打開
       myStreak = w.streak ?? 1;
       basket = w.basket ?? basket;
       gdex = new Set(w.gdex ?? []);
@@ -2196,7 +2231,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       setMyHome(res.home);
       audio.sfx('bell');
       if (id === 'tent') {
-        hud.toast(t('⛺ 你有自己的帳篷了！按「🏠 回家」進去看看'), 5000);
+        setStage(4, true);
+        hud.toast(t('⛺ 你有自己的帳篷了！按「🧭 去哪裡 → 🏠 我的帳篷」進去布置'), 5000);
         if (net.online && !hasAccount()) setTimeout(showSaveNudge, 1200);
       }
       else if (id.startsWith('shape_')) {
