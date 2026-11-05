@@ -875,7 +875,8 @@ app.get(['/stats', '/api/stats'], (req, res) => {
 });
 
 // 📍 網頁一打開就記一次（還沒載入遊戲）：算「載入完成前就離開」；遊戲畫出第一張畫面再記一次 loaded
-app.get('/api/hit', (req, res) => {
+// 瀏覽器的 sendBeacon 一律用 POST 送，所以 GET、POST 都要收（之前只收 GET，這兩欄一直是「-」）
+app.all('/api/hit', (req, res) => {
   res.set({ 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
   res.status(204).end();
   if (req.query.staff === '1') return;
