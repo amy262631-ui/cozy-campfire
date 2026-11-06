@@ -32,8 +32,6 @@ const SHRINE_R = 13.2;
 /** 營火告示牌：插在營火旁（兩張長椅之間），正面朝向營火 */
 const BOARD_ANGLE = 2.1;
 const BOARD_R = 4.4;
-const AREA_SIGN_ANGLE = 3.0; // 人數小木牌：回收桶旁、往帳篷營地的小路右邊空地（不擋走路，和告示牌、標本櫃隔開）
-const AREA_SIGN_R = 6.0;
 /** 便條紙顏色（與 NoticePanel 一致） */
 const NOTE_COLORS = ['#fff3b0', '#ffd6dc', '#d4f0d0', '#d6e6ff'];
 
@@ -490,7 +488,7 @@ export function createForestRoom() {
   });
   const shrinePos = polar(SHRINE_ANGLE, SHRINE_R);
   const world = createWorld(group, {
-    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING, WISH_TREE_CLEARING, SHOP_CLEARING, ...POND_CLEARINGS, ...EXTRA_CLEARINGS, { ...polar(AREA_SIGN_ANGLE, AREA_SIGN_R), r: 1.8 }],
+    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING, WISH_TREE_CLEARING, SHOP_CLEARING, ...POND_CLEARINGS, ...EXTRA_CLEARINGS],
   });
 
   const campfire = new Campfire();
@@ -571,14 +569,7 @@ export function createForestRoom() {
   // ---------- 石塔祈願（祈福處步道旁） ----------
   const cairnGarden = buildCairnGarden(world);
   group.add(cairnGarden.group);
-  // ---------- 營火旁的人數小木牌：各區現在有幾個人（「🧭 去哪裡」選單也看得到） ----------
-  const areaSign = buildAreaSign();
-  const areaPos = polar(AREA_SIGN_ANGLE, AREA_SIGN_R);
-  areaSign.group.position.set(areaPos.x, 0, areaPos.z);
-  areaSign.group.rotation.y = AREA_SIGN_ANGLE + Math.PI; // 正面朝向營火
-  group.add(areaSign.group);
-  world.colliders.push({ x: areaPos.x, z: areaPos.z, r: 0.55 });
-  occluders.push(areaSign.plank);
+  // （營火旁的人數小木牌 11/06 拿掉了：營火周邊太擠。各區人數看「🧭 去哪裡」選單）
 
   // ---------- 營火河畔：在營火旁就能釣魚 ----------
   const pond = buildPond(world, group);
@@ -637,7 +628,7 @@ export function createForestRoom() {
     pond,
     fishSpot: null, // 坐下釣魚時記錄（ActionStateMachine 用來固定位置與面向）
     fishing: null, // 由 main.js 放入 FishingGame（和湖畔共用）
-    setAreas: (a) => areaSign.draw(a),
+    setAreas: () => {}, // 人數小木牌拿掉了（各區人數在「🧭 去哪裡」選單）
     drawMuseum: extras.drawMuseum,
     nearPot: extras.nearPot,
     treasures,

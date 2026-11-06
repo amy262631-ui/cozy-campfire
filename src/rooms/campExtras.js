@@ -5,12 +5,13 @@ import { t } from '../i18n/i18n.js';
 
 const polar = (a, r) => ({ x: Math.sin(a) * r, z: Math.cos(a) * r });
 
-/** 🏛️ 營地標本櫃：在營火告示牌和專注帳篷之間 */
-export const MUSEUM_POS = polar(2.45, 7.4);
+/** 🏛️ 營地標本櫃：在營火告示牌和專注帳篷之間，往外退一點（11/06：營火周邊太擠） */
+export const MUSEUM_R = 8.6;
+export const MUSEUM_POS = polar(2.3, MUSEUM_R); // 離往專注帳篷的小路（角度 2.6）遠一點，不擋路
 /** 🍲 營火料理鍋：營火旁兩張長椅之間 */
 export const POT_POS = polar(0.42, 3.05);
-/** ♻️ 回收桶：離料理鍋遠一點，放在往帳篷營地小路旁的空地（旁邊是人數小木牌），不擋走路 */
-export const BIN_POS = polar(2.8, 5.8);
+/** ♻️ 回收桶：離料理鍋遠一點，往帳篷營地的小路右手邊空地，離營火遠一點（11/06：營火周邊太擠） */
+export const BIN_POS = polar(3.02, 7.2);
 export const EXTRA_CLEARINGS = [
   { ...MUSEUM_POS, r: 2.4 },
   { ...POT_POS, r: 0.9 },
@@ -156,7 +157,7 @@ export function buildCampExtras(group, world) {
   const sign = makeSign(t('🏛️ 營地標本櫃'), { height: 0.26 });
   sign.position.set(MUSEUM_POS.x, 2.85, MUSEUM_POS.z);
   group.add(sign);
-  const museumFront = polar(2.45, 7.4 - 1.25);
+  const museumFront = polar(2.3, MUSEUM_R - 1.25);
 
   const pot = buildPot();
   pot.group.position.set(POT_POS.x, 0, POT_POS.z);

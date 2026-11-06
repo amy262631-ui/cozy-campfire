@@ -29,7 +29,7 @@ import { GATHER_BY_ID, treasureTime, TREASURE_MAX } from '../src/game/gathering.
 import { CROP_BY_ID, GARDEN_MAX, GARDEN_EXPAND, gardenSlotsOf, WATER_MAX, CROP_FIRST_GAIN, readyAtOf, stageOf } from '../src/game/garden.js';
 import { canMake, takeMaterials } from '../src/game/materials.js';
 import { RECIPE_BY_ID } from '../src/game/crafting.js';
-import { DISH_BY_ID, dishFirstGain } from '../src/game/cooking.js';
+import { DISH_BY_ID, dishFirstGain, BUFF_MS, DISH_FX, activeBuff } from '../src/game/cooking.js';
 import { MUSEUM_BY_ID, DONATE_PER_DAY } from '../src/game/museum.js';
 import { TRASH, TRASH_BY_ID, TRASH_MAX, TRASH_ROOM, RECYCLE_GAIN, RECYCLE_DAILY_CAP, TRASH_FIRST_GAIN, TRASH_DEX_OUTFIT, pickTrash } from '../src/game/trash.js';
 import { LAYOUT as CAMP_LAYOUT } from '../src/rooms/campLayout.js';
@@ -1693,7 +1693,9 @@ io.on('connection', (socket) => {
       sitTimer = setInterval(() => {
         if (!player || !wal) return;
         minutes++;
-        if (minutes % SIT_EVERY_MIN) return;
+        const ib = activeBuff(wal.buff);
+        if (minutes < (ib?.k === 'idle' ? ib.v : SIT_EVERY_MIN)) return; // 🌰 吃了「掛機加速」：間隔變短
+        minutes = 0;
         const d2 = dayKey();
         if (wal.sd !== d2) {
           wal.sd = d2;
@@ -1710,7 +1712,7 @@ io.on('connection', (socket) => {
       id: socket.id,
       name: player.name, // 隨機名字撞名時，伺服器換過的名字
       reward: player.rw,
-      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, age: walletAge(wal), dex: dexView(wal), look: wal.look ?? null, outfit: outfitView(wal), basket: wal.bk ?? {}, gdex: gdexOf(wal), ...trashView(wal), dishes: wal.dish ?? {}, cooked: Object.keys(wal.cooked ?? {}), net: !!wal.net, pass: passView(wal) } : null,
+      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, age: walletAge(wal), dex: dexView(wal), look: wal.look ?? null, outfit: outfitView(wal), basket: wal.bk ?? {}, gdex: gdexOf(wal), ...trashView(wal), dishes: wal.dish ?? {}, cooked: Object.keys(wal.cooked ?? {}), buff: activeBuff(wal.buff) ? wal.buff : null, net: !!wal.net, pass: passView(wal) } : null,
       myHome: publicHome(homes[player.vid]),
       code: player.vid ? homeId(player.vid) : null, // 邀請連結用的公開代號
       passOn: PASS_ON, // 🎫 月票要不要顯示
@@ -2357,7 +2359,10 @@ io.on('connection', (socket) => {
     const item = gatherItemAt(spot.type, isNight());
     wal.gat[i] = now + Math.round(regrowMs());
     wal.bk ??= {};
-    wal.bk[item.id] = (wal.bk[item.id] ?? 0) + 1;
+    // 🧺 吃了「採集達人」的料理：有機會多拿一個
+    const gb = activeBuff(wal.buff);
+    const extra = gb?.k === 'gather' && Math.random() < gb.v ? 1 : 0;
+    wal.bk[item.id] = (wal.bk[item.id] ?? 0) + 1 + extra;
     const first = discover(wal, item.id);
     let gain = 0;
     let bonus = 0;
@@ -2371,7 +2376,7 @@ io.on('connection', (socket) => {
     if (isBug) {
       if (item.rarity >= 2) chal('bug');
     } else chal('gather');
-    ack?.({ ok: true, id: item.id, count: wal.bk[item.id], first, gain, bonus, readyAt: wal.gat[i], now });
+    ack?.({ ok: true, id: item.id, count: wal.bk[item.id], first, gain, bonus, extra, readyAt: wal.gat[i], now });
   });
   socket.on('giftInfo', (data, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
@@ -2490,9 +2495,12 @@ io.on('connection', (socket) => {
     lastEat = now;
     wal.dish[d.id]--;
     if (!wal.dish[d.id]) delete wal.dish[d.id];
+    // 😋 飽飽小效果：10 分鐘，一次一種（吃新的換掉舊的）
+    const fx = DISH_FX[d.id];
+    if (fx) wal.buff = { k: fx[0], lv: fx[1], until: now + BUFF_MS, d: d.id };
     saveJson('players.json', players);
     io.to(rkey).emit('ate', { id: socket.id, dish: d.id });
-    ack?.({ ok: true, ...dishView() });
+    ack?.({ ok: true, buff: wal.buff ?? null, ...dishView() });
   });
   // 送料理給同一區的人
   socket.on('giftDish', (data = {}, ack) => {
@@ -2886,7 +2894,8 @@ io.on('connection', (socket) => {
     lastRoll = now;
     const place = roomId === 'lake_dock' ? 'lake' : 'pond';
     const m = miniNow();
-    const fish = rollFish({ place, event: !!eventInfo().active, contest: m?.kind === 'fish' });
+    const fb = activeBuff(wal?.buff);
+    const fish = rollFish({ place, event: !!eventInfo().active, contest: m?.kind === 'fish', luck: fb?.k === 'fish' ? fb.v : 1 }); // 🎣 吃了「釣魚好運」：稀有魚機率變高
     hooked = { fish, size: rollSize(fish), at: now };
     ack?.({ ok: true, fish, size: hooked.size });
   });

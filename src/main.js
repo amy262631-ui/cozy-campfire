@@ -69,7 +69,7 @@ import { GATHER_ITEMS, GATHER_BY_ID, GATHER_TYPES, GATHER_DEX_BONUS, NET_PRICE, 
 import { CROPS, CROP_BY_ID, WATER_MAX } from './game/garden.js';
 import { haveOf, canMake, specLabel } from './game/materials.js';
 import { RECIPES } from './game/crafting.js';
-import { DISHES, DISH_BY_ID } from './game/cooking.js';
+import { DISHES, DISH_BY_ID, activeBuff, DISH_FX, BUFFS } from './game/cooking.js';
 import { MUSEUM_ITEMS, MUSEUM_CATS, MUSEUM_BY_ID } from './game/museum.js';
 import { TRASH, TRASH_BY_ID, RECYCLE_DAILY_CAP } from './game/trash.js';
 import { PASS, PASS_TIERS, PASS_TIER_LIST, FREE } from './game/pass.js';
@@ -1033,7 +1033,7 @@ async function init() {
       hud.toast(t('📖 圖鑑新收錄：{icon} {name}！+{n} 🌰（{c}／{t}）', { icon: it.icon, name: t(it.zh), n: res.gain, c: n, t: GATHER_ITEMS.length }), 4500);
       if (res.bonus) setTimeout(() => hud.toast(t('🏆 採集圖鑑全部收集完成！再送你 {n} 顆松果', { n: res.bonus }), 6000), 2500);
     } else {
-      hud.toast(t('🧺 採到{icon} {name}（採集籃裡有 {n} 個）', { icon: it.icon, name: t(it.zh), n: res.count }), 2200);
+      hud.toast(res.extra ? t('🧺 採到{icon} {name}，採集達人多拿一個！（採集籃裡有 {n} 個）', { icon: it.icon, name: t(it.zh), n: res.count }) : t('🧺 採到{icon} {name}（採集籃裡有 {n} 個）', { icon: it.icon, name: t(it.zh), n: res.count }), 2200);
     }
     return res;
   };
@@ -1236,6 +1236,27 @@ async function init() {
   // ---------- 🍲 營火料理 ----------
   let dishes = {};
   let cooked = new Set();
+  let eatBusy = false;
+  /** 料理的效果小標籤：👟 腳步輕快 Lv2・走路變快 */
+  const fxTag = (id) => {
+    const fx = DISH_FX[id];
+    const b = fx && BUFFS[fx[0]];
+    return b ? `<small class="fx-tag">${b.icon} ${t(b.zh)}${fx[1] > 1 ? ' ★★' : ' ★'}・${t(b.desc)}・${t('10 分鐘')}</small>` : '';
+  };
+  // ---------- 😋 吃料理的小效果（10 分鐘） ----------
+  let buff = null;
+  const setBuff = (b) => {
+    buff = activeBuff(b) ? b : null;
+    const a = activeBuff(buff);
+    actions.buffSpeed = a?.k === 'speed' ? a.v : 1;
+    hud.setBuff?.(a ? { icon: a.icon, name: t(a.zh), desc: t(a.desc), until: a.until } : null);
+  };
+  setInterval(() => {
+    if (buff && !activeBuff(buff)) {
+      setBuff(null);
+      hud.toast(t('飽飽的效果結束了，再吃一道吧 😋'));
+    }
+  }, 5000);
   /** 在料理鍋旁邊才能煮 */
   const atPot = () => roomMgr?.current.id === 'forest_main' && forest.nearPot?.(player.position);
   /** 🍖 在自家門口的烤肉爐旁邊（從烤肉爐打開料理時設定，離開營地或走開就失效） */
@@ -1253,7 +1274,7 @@ async function init() {
       const myDishes = mine.length
         ? mine
             .map(
-              (d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${t(d.zh)} ×${dishes[d.id]}</b></div>
+              (d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${t(d.zh)} ×${dishes[d.id]}</b>${fxTag(d.id)}</div>
                 <button type="button" class="mini-btn" data-eat="${d.id}">${t('😋 吃')}</button>
                 ${others.length ? `<select class="mini-sel" data-gift="${d.id}"><option value="">${t('🎁 送給⋯')}</option>${others.map((r) => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('')}</select>` : ''}</div>`,
             )
@@ -1262,7 +1283,7 @@ async function init() {
       const recipes = DISHES.map((d) => {
         const ok = canMake(basket, d.need) && (!d.grill || grill);
         const tag = d.grill ? `<small class="grill-tag">${t('🍖 門口烤肉爐限定')}</small>` : '';
-        return `<div class="craft-row ${cooked.has(d.id) ? '' : 'new-dish'}"><i class="dex-emoji">${cooked.has(d.id) ? d.icon : '❔'}</i><div class="craft-info"><b>${cooked.has(d.id) ? t(d.zh) : t('？？？（還沒煮過）')}</b>${tag}<div class="needs">${needHtml(d.need)}</div></div><button type="button" class="mini-btn" data-cook="${d.id}" ${ok && here && net.online ? '' : 'disabled'}>${t('煮')}</button></div>`;
+        return `<div class="craft-row ${cooked.has(d.id) ? '' : 'new-dish'}"><i class="dex-emoji">${cooked.has(d.id) ? d.icon : '❔'}</i><div class="craft-info"><b>${cooked.has(d.id) ? t(d.zh) : t('？？？（還沒煮過）')}</b>${tag}${cooked.has(d.id) ? fxTag(d.id) : ''}<div class="needs">${needHtml(d.need)}</div></div><button type="button" class="mini-btn" data-cook="${d.id}" ${ok && here && net.online ? '' : 'disabled'}>${t('煮')}</button></div>`;
       }).join('');
       return `<div class="dex-note">${grill ? t('🍖 在自家門口的烤肉爐旁邊，可以開始煮了！（烤肉爐限定的料理也能做）') : here ? t('🔥 在料理鍋旁邊，可以開始煮了！') : t('到中央營火旁的「🍲 營火料理」鍋子才能煮（自家門口有烤肉爐的話，在家也能煮）。蔬菜在帳篷前的小菜園種。')}</div>
         <div class="dex-note">${t('🍱 我的料理')}</div>${myDishes}
@@ -1287,10 +1308,23 @@ async function init() {
       }
       for (const b of body.querySelectorAll('[data-eat]')) {
         b.addEventListener('click', async () => {
+          // 按下去馬上有反應：按鈕變暗、關掉圖鑑，讓大家看到你在吃
+          if (eatBusy) return;
+          eatBusy = true;
+          for (const x of body.querySelectorAll('[data-eat]')) x.disabled = true;
           const res = await net.request('eat', { id: b.dataset.eat });
+          setTimeout(() => (eatBusy = false), 1600); // 伺服器 1.5 秒冷卻
           if (res?.ok) {
             dishes = res.dishes;
-            fishingUI.openCreel('cook');
+            fishingUI.el.modal.classList.remove('show');
+            audio.sfx('tap');
+            setBuff(res.buff);
+            const bf = activeBuff(res.buff);
+            const d = DISH_BY_ID[b.dataset.eat];
+            hud.toast(bf ? t('😋 {icon} {name}：{bicon} {buff} 10 分鐘', { icon: d?.icon ?? '', name: t(d?.zh ?? ''), bicon: bf.icon, buff: t(bf.zh) }) : t('😋 好吃！{icon} {name}', { icon: d?.icon ?? '', name: t(d?.zh ?? '') }), 5000);
+          } else {
+            for (const x of body.querySelectorAll('[data-eat]')) x.disabled = false;
+            if (res?.reason === 'tooFast') hud.toast(t('慢慢吃，一口一口來 😋'));
           }
         });
       }
@@ -1313,8 +1347,7 @@ async function init() {
   net.on('ate', ({ id, dish }) => {
     const d = DISH_BY_ID[dish];
     if (!d) return;
-    bubbles.show(id === net.id ? 'self' : id, `${d.icon}😋`, { emoji: true });
-    if (id === net.id) hud.toast(t('😋 好吃！{icon} {name}', { icon: d.icon, name: t(d.zh) }));
+    bubbles.show(id === net.id ? 'self' : id, `${d.icon}😋💕`, { emoji: true });
   });
   net.on('cooked', ({ id, name, dish }) => {
     const d = DISH_BY_ID[dish];
@@ -2202,6 +2235,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       setTrash(w);
       dishes = w.dishes ?? {};
       cooked = new Set(w.cooked ?? []);
+      setBuff(w.buff);
       setNet(w.net);
       refreshGather();
       fishingUI.mergeDex(w.dex);

@@ -43,3 +43,57 @@ export const DISH_BY_ID = Object.fromEntries(DISHES.map((d) => [d.id, d]));
 /** 第一次煮出某道料理送的松果（大鍋菜特別多） */
 export const dishFirstGain = (d) => (d.big ? 10 : 3);
 for (const d of DISHES) for (const s of d.need) if (s.id && materialOf(s.id)?.type !== 'veg') RESERVED.add(s.id); // 蔬菜不保留：「任意蔬菜」都可以用
+
+/**
+ * 😋 吃料理的「飽飽」小效果（11/06 作者確認：10 分鐘）。一次只有一種，吃新的就換掉舊的。
+ *   v：[第 1 級, 第 2 級] 的數值（簡單的料理第 1 級，難的料理第 2 級）
+ *   speed 走路變快（倍數，騎腳踏車時取比較快的那個，不會疊加）
+ *   gather 採集時多拿一個的機率
+ *   fish 稀有魚（★★★ 以上）出現的機率倍數
+ *   idle 掛機撿松果的間隔（分鐘，原本 5 分鐘；每天上限不變）
+ */
+export const BUFF_MS = 10 * 60 * 1000;
+export const BUFFS = {
+  speed: { icon: '👟', zh: '腳步輕快', v: [1.2, 1.35], desc: '走路變快' },
+  gather: { icon: '🧺', zh: '採集達人', v: [0.3, 0.5], desc: '採集時有機會多拿一個' },
+  fish: { icon: '🎣', zh: '釣魚好運', v: [1.5, 2], desc: '比較容易釣到稀有魚' },
+  idle: { icon: '🌰', zh: '掛機加速', v: [4, 3], desc: '掛機撿松果變快' },
+};
+/** 每道料理的效果：[種類, 等級 1～2] */
+export const DISH_FX = {
+  roast_corn: ['speed', 1],
+  roast_sweetpotato: ['speed', 1],
+  veg_skewer: ['speed', 1],
+  onion_rings: ['speed', 1],
+  salted_edamame: ['speed', 1],
+  summer_salad: ['speed', 2],
+  melon_smoothie: ['speed', 2],
+  camp_skewer: ['speed', 2],
+  grill_platter: ['speed', 2],
+  spicy_pot: ['speed', 2],
+  flower_tea: ['gather', 1],
+  lavender_tea: ['gather', 1],
+  roast_chestnut: ['gather', 1],
+  honey_cookie: ['gather', 2],
+  petal_jelly: ['gather', 2],
+  berry_daifuku: ['gather', 2],
+  carrot_cake: ['gather', 2],
+  mush_soup: ['fish', 1],
+  pumpkin_soup: ['fish', 1],
+  tomato_stew: ['fish', 1],
+  mush_stirfry: ['fish', 1],
+  cabbage_roll: ['fish', 1],
+  roast_eggplant: ['fish', 1],
+  lions_mane_soup: ['fish', 2],
+  moon_soup: ['fish', 2],
+  forest_curry: ['fish', 2],
+  berry_pie: ['idle', 1],
+  star_pudding: ['idle', 2],
+  gold_tart: ['idle', 2],
+  big_pot: ['idle', 2],
+};
+/** 現在的效果（沒有或過期回傳 null）：{ k, lv, until, v, ...BUFFS[k] } */
+export function activeBuff(b, now = Date.now()) {
+  if (!b || !BUFFS[b.k] || !(b.until > now)) return null;
+  return { ...BUFFS[b.k], k: b.k, lv: b.lv, until: b.until, d: b.d, v: BUFFS[b.k].v[(b.lv ?? 1) - 1] };
+}

@@ -6709,3 +6709,10 @@ body.touch .online .shopinfo-chip {
   .social-buttons { gap: 6px; }
   .social-btn { padding: 6px 10px; }
 }
+/* 😋 吃料理的小效果：營火條旁邊的小圖示＋倒數 */
+.buff-chip { margin-left: 4px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(255, 210, 140, 0.45); background: rgba(240, 138, 60, 0.25); color: #ffe3b8; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; pointer-events: auto; font-variant-numeric: tabular-nums; }
+.fx-tag { display: block; font-size: 11px; color: #ffcf8a; opacity: 0.9; margin-top: 1px; }
+@media (max-width: 599px) {
+  /* 手機：營火條在標題列，右邊被按鈕蓋住 → 放到「去哪裡」那一列的右邊 */
+  .buff-chip { position: fixed; top: 84px; right: 14px; margin: 0; padding: 5px 10px; font-size: 13px; background: rgba(60, 34, 20, 0.85); z-index: 5; }
+}

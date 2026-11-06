@@ -86,7 +86,8 @@ export const fishAvailable = (f, ctx = {}) =>
  * @param {{ place?: 'pond' | 'lake', event?: boolean, contest?: boolean }} ctx 在哪裡釣、是不是營火時間或釣魚大賽
  */
 export function rollFish(ctx = {}) {
-  const ok = FISH.map((f) => (fishAvailable(f, ctx) ? f.weight : 0));
+  // luck：吃了「釣魚好運」料理時，★★★ 以上的魚權重乘上這個倍數
+  const ok = FISH.map((f) => (fishAvailable(f, ctx) ? f.weight * (f.rarity >= 3 ? ctx.luck ?? 1 : 1) : 0));
   const total = ok.reduce((s, w) => s + w, 0);
   let r = Math.random() * total;
   for (let i = 0; i < FISH.length; i++) {

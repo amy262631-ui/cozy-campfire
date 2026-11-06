@@ -14,6 +14,7 @@ export class HUD {
       <div class="fire-meter" id="fire-meter">
         <span class="fire-meter-label">${t('營火')}</span>
         <div class="fire-meter-track"><div class="fire-meter-fill" id="fire-fill"></div></div>
+        <button type="button" class="buff-chip" id="buff-chip" hidden></button>
       </div>
 
       <div class="toasts" id="toasts"></div>
@@ -344,6 +345,27 @@ export class HUD {
     if (blocked === this._soundBlocked) return;
     this._soundBlocked = blocked;
     this.el.soundUnlock.classList.toggle('show', blocked);
+  }
+
+  /** 😋 吃料理的小效果：營火條旁邊顯示圖示和剩下的時間（null＝沒有） */
+  setBuff(b) {
+    const el = this.root?.querySelector?.('#buff-chip') ?? document.getElementById('buff-chip');
+    if (!el) return;
+    clearInterval(this._buffTimer);
+    el.hidden = !b;
+    if (!b) return;
+    const draw = () => {
+      const s = Math.max(0, Math.round((b.until - Date.now()) / 1000));
+      el.textContent = `${b.icon} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      if (!s) {
+        clearInterval(this._buffTimer);
+        el.hidden = true;
+      }
+    };
+    el.title = `${b.name}・${b.desc}`;
+    el.onclick = () => this.toast(`${b.icon} ${b.name}：${b.desc}`, 3000);
+    draw();
+    this._buffTimer = setInterval(draw, 1000);
   }
 
   showRoast(visible) {
