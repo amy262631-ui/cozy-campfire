@@ -4,6 +4,13 @@
  */
 export const DICT = {
   en: {
+    "<kbd>E</kbd> 坐下　<kbd>F</kbd> 烤棉花糖": "<kbd>E</kbd> Sit　<kbd>F</kbd> Roast a marshmallow",
+    "起身": "Stand",
+    "這個位置有人坐了，找旁邊的圓木吧 🪵": "Someone's sitting here — try another log 🪵",
+    "<kbd>F</kbd> 烤棉花糖": "<kbd>F</kbd> Roast",
+    "<kbd>F</kbd> 烤棉花糖　·　<kbd>E</kbd> 或移動＝起身": "<kbd>F</kbd> Roast a marshmallow · <kbd>E</kbd> or move to stand up",
+    "👣 現在各區人數": "👣 Who's where now",
+    "{n} 人": "{n} here",
     "👒 朋友點了你的連結！拿到今天的每日造型：{name}": "👒 A friend came through your link! You got today's outfit: {name}",
     "📤 分享出去了！朋友點你的連結進來玩 1 分鐘，就送你今天的每日造型": "📤 Shared! When a friend opens your link and plays for 1 minute, you get today's outfit",
     "聯絡我們": "Contact us",
@@ -1650,6 +1657,13 @@ export const DICT = {
     "確定購買": "Buy",
   },
   ja: {
+    "<kbd>E</kbd> 坐下　<kbd>F</kbd> 烤棉花糖": "<kbd>E</kbd> 座る　<kbd>F</kbd> マシュマロを焼く",
+    "起身": "立つ",
+    "這個位置有人坐了，找旁邊的圓木吧 🪵": "ここは誰かが座っています。となりの丸太へどうぞ 🪵",
+    "<kbd>F</kbd> 烤棉花糖": "<kbd>F</kbd> 焼く",
+    "<kbd>F</kbd> 烤棉花糖　·　<kbd>E</kbd> 或移動＝起身": "<kbd>F</kbd> マシュマロを焼く　·　<kbd>E</kbd> か移動で立つ",
+    "👣 現在各區人數": "👣 いまの各エリアの人数",
+    "{n} 人": "{n}人",
     "👒 朋友點了你的連結！拿到今天的每日造型：{name}": "👒 友だちがリンクから来てくれた！今日のコーデ「{name}」をゲット",
     "📤 分享出去了！朋友點你的連結進來玩 1 分鐘，就送你今天的每日造型": "📤 シェアしました！友だちがリンクから来て1分遊ぶと、今日のコーデがもらえます",
     "聯絡我們": "お問い合わせ",
@@ -3296,6 +3310,13 @@ export const DICT = {
     "確定購買": "購入する",
   },
   ko: {
+    "<kbd>E</kbd> 坐下　<kbd>F</kbd> 烤棉花糖": "<kbd>E</kbd> 앉기　<kbd>F</kbd> 마시멜로 굽기",
+    "起身": "일어나기",
+    "這個位置有人坐了，找旁邊的圓木吧 🪵": "누가 앉아 있어요. 옆 통나무에 앉아 봐요 🪵",
+    "<kbd>F</kbd> 烤棉花糖": "<kbd>F</kbd> 굽기",
+    "<kbd>F</kbd> 烤棉花糖　·　<kbd>E</kbd> 或移動＝起身": "<kbd>F</kbd> 마시멜로 굽기 · <kbd>E</kbd> 또는 이동하면 일어나기",
+    "👣 現在各區人數": "👣 지금 구역별 인원",
+    "{n} 人": "{n}명",
     "👒 朋友點了你的連結！拿到今天的每日造型：{name}": "👒 친구가 내 링크로 왔어요! 오늘의 코디 {name} 획득",
     "📤 分享出去了！朋友點你的連結進來玩 1 分鐘，就送你今天的每日造型": "📤 공유했어요! 친구가 내 링크로 들어와 1분 놀면 오늘의 코디를 받아요",
     "聯絡我們": "문의하기",

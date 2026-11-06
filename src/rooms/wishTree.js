@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GlowLight } from '../scene/GlowLight.js'; // 裝飾小燈用光暈代替真的光源（效能）
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeSign, lowpoly, shadowAll } from './shared.js';
 import { ORNAMENTS, ORNAMENT_BY_ID } from '../game/ornaments.js';
@@ -172,7 +173,7 @@ export function buildWishTree(world) {
   shadowAll(group);
 
   // 裝飾越多、發光的越多，樹越亮
-  const glowLight = new THREE.PointLight(0xffc98a, 0, 9, 1.6);
+  const glowLight = new GlowLight(0xffc98a, 0, 9);
   glowLight.position.set(0, 3.0, 0);
   group.add(glowLight);
 

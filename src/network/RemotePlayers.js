@@ -22,7 +22,7 @@ const SNAP_DIST = 4; // 一次跳太遠（例如重連）就直接瞬移
 
 /** 遠端玩家的動作狀態 → 角色姿勢 */
 const POSE_OF = {
-  addWood: 'throw', roast: 'roast', blanket: 'blanket', stargaze: 'lookUp', fish: 'roast', reel: 'reel', showFish: 'showOff',
+  addWood: 'throw', roast: 'roast', eat: 'eat', blanket: 'blanket', stargaze: 'lookUp', fish: 'roast', reel: 'reel', showFish: 'showOff',
   wave: 'wave', salute: 'salute', bye: 'bye', pray: 'pray', // 表情動作
   pick: 'pick', catch: 'catch', plant: 'plant', water: 'water', // 採摘、揮網、種菜、澆水
   sofa: 'sit', sleep: 'sleep', // 🛋️ 坐沙發、躺床
@@ -143,6 +143,11 @@ class RemotePlayer {
     c.setProp('stone', t.a !== 'showFish' && t.e === STONE_FLAG); // 頭上頂著石頭
     c.setProp('log', t.a === 'addWood' && this.stateTime < 0.95);
     if (t.a === 'roast') c.stick.setDoneness(t.d);
+    if (t.a === 'eat' && this._eatD !== t.d) {
+      this._eatD = t.d;
+      c.setEat?.(t.d); // 🍡 依熟度的吃東西反應
+    }
+    if (t.a !== 'eat') this._eatD = null;
     c.update(dt, elapsed, this.speed);
 
     if (t.a === 'blanket') {
@@ -253,6 +258,12 @@ export class RemotePlayers {
   }
 
   /** 讓本地玩家不會跟其他小動物重疊（輕微推開） */
+  /** 某個位置附近有沒有其他玩家（營火圓木有沒有人坐） */
+  anyNear(x, z, r) {
+    for (const p of this.players.values()) if (Math.hypot(p.pos.x - x, p.pos.z - z) < r) return true;
+    return false;
+  }
+
   pushOut(pos, radius) {
     for (const p of this.players.values()) {
       if (p.npc) continue; // 營地居民會自己讓路，不推人

@@ -599,13 +599,17 @@ export function createCampgroundRoom() {
     const name = tent.mine ? t('⭐ 我的帳篷') : tent.demo ? tent.name : tent.name ? t('{name} 的帳篷', { name: tent.name }) : t('旅人的帳篷');
     const label = makeSign(name, { height: 0.3 });
     signs.push(label);
-    label.position.y = 3.3;
+    // 名牌放在屋頂上方：依帳篷實際高度（雙層小木屋比較高，以前固定 3.3 會被屋頂蓋住）
+    g.updateWorldMatrix(true, false);
+    const top = new THREE.Box3().setFromObject(shell).max.y - new THREE.Vector3().setFromMatrixPosition(g.matrixWorld).y;
+    const labelY = Math.max(3.3, top + 0.55);
+    label.position.y = labelY;
     label.userData.own = true;
     g.add(label);
     const info = [tent.open ? t('🚪 開放參觀') : t('🔒 休息中'), `❤️ ${tent.likes}`];
     if (tent.n) info.push(t('👣 {n} 人在裡面', { n: tent.n }));
     const status = makeSign(info.join('　'), { height: 0.22, bg: 'rgba(30,20,14,0.5)' });
-    status.position.y = 2.92;
+    status.position.y = labelY - 0.38;
     status.userData.own = true;
     g.add(status);
     signs.push(status);

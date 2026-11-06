@@ -1,6 +1,7 @@
 import { t } from '../i18n/i18n.js';
 import { trButton, bindTranslate } from '../network/chatTranslate.js';
 import { localPage, pagerHtml, bindPager } from './pager.js';
+import { addCloseX } from './CloseX.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -56,6 +57,7 @@ export class ShrinePanel {
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.addEventListener('keydown', (e) => e.stopPropagation());
     root.querySelector('#shrine-close').addEventListener('click', () => this.close());
+    addCloseX(root.querySelector('#shrine-close'), '.shrine-card'); // 右上角 ✕
     window.addEventListener('keydown', (e) => {
       if (this.isOpen && e.code === 'Escape') this.close();
     });

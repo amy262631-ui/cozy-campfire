@@ -18,14 +18,14 @@ export class HUD {
 
       <div class="toasts" id="toasts"></div>
 
-      <div class="roast" id="roast">
-        <div class="roast-label" id="roast-label">${t('烤棉花糖中⋯')}</div>
+      <div class="roast" id="roast" title="${t('烤棉花糖中⋯')}">
+        <span class="roast-icon">🍡</span>
         <div class="roast-track">
           <div class="roast-zone"></div>
           <div class="roast-fill" id="roast-fill"></div>
           <div class="roast-marker" id="roast-marker"></div>
         </div>
-        <div class="roast-scale"><span>${t('生')}</span><span>${t('金黃 ✨')}</span><span>${t('焦')}</span></div>
+        <span class="roast-state" id="roast-label">🤍</span>
       </div>
 
       <div class="prompt" id="prompt"></div>
@@ -206,7 +206,10 @@ export class HUD {
     this.el.goMenu.innerHTML = PLACES.map(([id, label]) => {
       const here = id === room;
       const off = id === 'home' && !home;
-      return `<button type="button" data-go="${id}" ${here ? 'disabled' : ''} class="${here ? 'here' : ''}${off ? ' off' : ''}">${label}${here ? `<small>${t('目前在這裡')}</small>` : off ? `<small>${t('先到小舖買帳篷')}</small>` : ''}</button>`;
+      // 👣 各區現在幾個人（伺服器的 areas；我的帳篷不顯示）
+      const n = id !== 'home' && this.areas ? this.areas[id] ?? 0 : null;
+      const cnt = n == null ? '' : `<span class="go-n${n ? '' : ' zero'}">${t('{n} 人', { n })}</span>`;
+      return `<button type="button" data-go="${id}" ${here ? 'disabled' : ''} class="${here ? 'here' : ''}${off ? ' off' : ''}">${cnt}${label}${here ? `<small>${t('目前在這裡')}</small>` : off ? `<small>${t('先到小舖買帳篷')}</small>` : ''}</button>`;
     }).join('');
     const r = this.el.goChip.getBoundingClientRect();
     const w = Math.min(300, innerWidth - 16);
@@ -215,6 +218,12 @@ export class HUD {
     this.el.goMenu.style.top = `${r.bottom + 6}px`;
     this.el.goMenu.hidden = false;
     this.el.goChip.classList.add('on');
+  }
+
+  /** 各區人數（選單開著的話馬上更新） */
+  setAreas(a) {
+    this.areas = a;
+    if (!this.el.goMenu.hidden) this.#openGo();
   }
 
   closeGo() {
@@ -339,20 +348,27 @@ export class HUD {
 
   showRoast(visible) {
     this.el.roast.classList.toggle('show', visible);
+    if (visible) this.#placeRoast();
+  }
+
+  /** 火候條放在互動提示正上方（電腦、平板、手機的提示位置都不一樣，直接量） */
+  #placeRoast() {
+    const pr = this.el.prompt?.getBoundingClientRect();
+    if (pr && pr.height > 0) this.el.roast.style.bottom = `${Math.round(innerHeight - pr.top + 8)}px`;
+    else this.el.roast.style.bottom = '';
   }
 
   setRoast(doneness) {
     const p = Math.min(doneness, 1.1) / 1.1; // 條長 = 0 ~ 1.1（多一點空間顯示焦黑）
     this.el.roastFill.style.width = `${p * 100}%`;
     this.el.roastMarker.style.left = `${p * 100}%`;
-    let label;
-    if (doneness < 0.35) label = t('烤棉花糖中⋯ 還是白白的');
-    else if (doneness < 0.75) label = t('✨ 金黃微焦！現在按 F 收回最好吃');
-    else if (doneness < 1.0) label = t('有點焦了⋯ 快收回！');
-    else label = t('🔥 焦黑了！');
+    // 細細一條就好：右邊的小圖示代表火候（白白的 → 金黃 → 有點焦 → 焦黑）
+    const label = doneness < 0.35 ? '🤍' : doneness < 0.75 ? '✨' : doneness < 1.0 ? '⚠️' : '🔥';
     if (label !== this._roastLabel) {
       this._roastLabel = label;
       this.el.roastLabel.textContent = label;
+      this.el.roast.classList.toggle('golden', label === '✨');
+      this.#placeRoast();
     }
   }
 

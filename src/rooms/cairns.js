@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GlowLight } from '../scene/GlowLight.js'; // 裝飾小燈用光暈代替真的光源（效能）
 import { makeSign, lowpoly, shadowAll } from './shared.js';
 import { t } from '../i18n/i18n.js';
 
@@ -123,7 +124,7 @@ export function buildCairnGarden(world) {
     const crown = new THREE.Mesh(new THREE.OctahedronGeometry(0.13, 0), new THREE.MeshBasicMaterial({ color: 0xffd98a }));
     crown.visible = false;
     g.add(crown);
-    const halo = new THREE.PointLight(0xffc870, 0, 5, 1.6);
+    const halo = new GlowLight(0xffc870, 0, 5);
     g.add(halo);
     return { group: g, mesh, stones: [], heights: [], drop: null, spot, crown, halo, done: false };
   });

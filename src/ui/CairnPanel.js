@@ -1,5 +1,6 @@
 import { t } from '../i18n/i18n.js';
 import { CAIRN_MAX, cairnStats } from '../rooms/cairns.js';
+import { addCloseX } from './CloseX.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -39,6 +40,7 @@ export class CairnPanel {
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.addEventListener('click', (e) => e.target === this.el && this.close());
     root.querySelector('#cairn-close').addEventListener('click', () => this.close());
+    addCloseX(root.querySelector('#cairn-close'), '.cairn-card'); // 右上角 ✕
     window.addEventListener('keydown', (e) => {
       if (this.isOpen && e.code === 'Escape') this.close();
     });

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GlowLight } from '../scene/GlowLight.js'; // 裝飾小燈用光暈代替真的光源（效能）
 import { createWorld } from '../scene/World.js';
 import { Campfire } from '../scene/Campfire.js';
 import { makeSign, lowpoly, shadowAll } from './shared.js';
@@ -11,6 +12,7 @@ import { POND_CLEARINGS } from '../game/pondShape.js';
 import { buildWishTree, WISH_TREE_CLEARING } from './wishTree.js';
 import { buildShop, nearShop, SHOP_FRONT, SHOP_CLEARING } from './shop.js';
 import { buildCampExtras, createTreasures, EXTRA_CLEARINGS } from './campExtras.js';
+import { buildFireSeats } from './fireSeats.js';
 import { createTrashLayer } from './trashLayer.js';
 import { EMOTE_IDS } from '../social/emotes.js';
 import { t } from '../i18n/i18n.js';
@@ -30,6 +32,8 @@ const SHRINE_R = 13.2;
 /** 營火告示牌：插在營火旁（兩張長椅之間），正面朝向營火 */
 const BOARD_ANGLE = 2.1;
 const BOARD_R = 4.4;
+const AREA_SIGN_ANGLE = 3.0; // 人數小木牌：回收桶旁、往帳篷營地的小路右邊空地（不擋走路，和告示牌、標本櫃隔開）
+const AREA_SIGN_R = 6.0;
 /** 便條紙顏色（與 NoticePanel 一致） */
 const NOTE_COLORS = ['#fff3b0', '#ffd6dc', '#d4f0d0', '#d6e6ff'];
 
@@ -65,7 +69,7 @@ function buildNoticeBoard() {
     f.position.set(x, 0.12, 0.12);
     g.add(f);
   }
-  const lamp = new THREE.PointLight(0xffc27a, 1.6, 3.5, 1.6);
+  const lamp = new GlowLight(0xffc27a, 1.6, 3.5);
   lamp.position.set(0, 1.5, 0.45);
   g.add(lamp);
   shadowAll(g);
@@ -185,7 +189,7 @@ function buildTent() {
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = 0.02;
   g.add(floor);
-  const lamp = new THREE.PointLight(0xffb066, 5, 7, 1.6);
+  const lamp = new GlowLight(0xffb066, 5, 7);
   lamp.position.set(0, 1.1, 0);
   g.add(lamp);
   const glow = new THREE.Mesh(
@@ -227,7 +231,7 @@ function buildTreehouse() {
   const win = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.45), new THREE.MeshBasicMaterial({ color: 0xffc777 }));
   win.position.set(0, 4.05, 0.66);
   g.add(win);
-  const light = new THREE.PointLight(0xffc477, 4, 8, 1.6);
+  const light = new GlowLight(0xffc477, 4, 8);
   light.position.set(0, 4.0, 1.2);
   g.add(light);
   // 樹冠
@@ -281,7 +285,7 @@ function buildLakePath() {
   const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.26, 0.2), new THREE.MeshBasicMaterial({ color: 0xffcf86 }));
   lantern.position.set(0.9, 1.6, 0.2);
   g.add(lantern);
-  const light = new THREE.PointLight(0xffc073, 3.5, 7, 1.6);
+  const light = new GlowLight(0xffc073, 3.5, 7);
   light.position.set(0.9, 1.6, 0.4);
   g.add(light);
   // 踏腳石
@@ -291,7 +295,7 @@ function buildLakePath() {
     g.add(stone);
   }
   // 遠方湖面的藍光（在霧裡暗示那邊有水）
-  const hint = new THREE.PointLight(0x6fa4ff, 3, 10, 1.4);
+  const hint = new GlowLight(0x6fa4ff, 3, 10);
   hint.position.set(0, 1.2, -5);
   g.add(hint);
   shadowAll(g);
@@ -319,7 +323,7 @@ function buildBellTent() {
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.0), new THREE.MeshBasicMaterial({ color: 0xffc27a }));
   glow.position.set(0, 0.5, 1.5);
   g.add(glow);
-  const light = new THREE.PointLight(0xffb870, 5, 8, 1.6);
+  const light = new GlowLight(0xffb870, 5, 8);
   light.position.set(0, 0.9, 2.2);
   g.add(light);
   // 門口兩側的燈串
@@ -335,54 +339,74 @@ function buildBellTent() {
   return { group: g, colliderR: 1.9 };
 }
 
-/** 營火上方的人數看板（一直面向鏡頭） */
-function buildAreaBoard() {
+/**
+ * 營火旁的「各區人數」小木牌（人高，不會擋到天空）：兩排三格，寫各區現在幾個人
+ * 以前是飄在營火上方 3.7 公尺的大看板，抬頭看星星會擋住
+ */
+function buildAreaSign() {
+  const g = new THREE.Group();
+  const wood = lowpoly(0x6d4a2e);
+  for (const sx of [-0.78, 0.78]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 1.9, 6), wood);
+    post.position.set(sx, 0.95, 0);
+    g.add(post);
+  }
+  const plank = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.98, 0.07), lowpoly(0x8a6240));
+  plank.position.set(0, 1.42, 0);
+  g.add(plank);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.07, 0.26), wood);
+  roof.position.set(0, 1.97, 0.02);
+  roof.rotation.x = 0.1;
+  g.add(roof);
   const c = document.createElement('canvas');
-  c.width = 860;
-  c.height = 150;
-  const g = c.getContext('2d');
+  c.width = 560;
+  c.height = 310;
+  const ctx = c.getContext('2d');
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
-  sprite.scale.set(6.4, 1.12, 1);
-  sprite.renderOrder = 6;
-  sprite.visible = false;
+  tex.anisotropy = 4;
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(1.62, 0.9), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+  face.position.set(0, 1.42, 0.04);
+  g.add(face);
   const AREAS = [
     ['lake_dock', '🎣', t('湖畔')],
-    ['tent_focus', '📚', t('專注')],
     ['campground', '🏕️', t('營地')],
+    ['mist_forest', '🍄', t('迷霧')],
     ['treehouse_music', '🎵', t('樹屋')],
     ['tent_social', '☕', t('交流')],
-    ['mist_forest', '🍄', t('迷霧')],
+    ['tent_focus', '📚', t('專注')],
   ];
-  function draw(a) {
-    if (!a) return;
-    sprite.visible = true;
-    g.clearRect(0, 0, c.width, c.height);
-    g.fillStyle = 'rgba(28, 20, 14, 0.62)';
-    g.beginPath();
-    g.roundRect(4, 4, c.width - 8, c.height - 8, 36);
-    g.fill();
-    g.strokeStyle = 'rgba(255, 200, 140, 0.4)';
-    g.lineWidth = 3;
-    g.stroke();
-    const font = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    const w = (c.width - 40) / AREAS.length;
+  const font = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
+  function draw(a = {}) {
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.fillStyle = 'rgba(30, 20, 12, 0.55)';
+    ctx.beginPath();
+    ctx.roundRect(6, 6, c.width - 12, c.height - 12, 22);
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `700 30px ${font}`;
+    ctx.fillStyle = '#ffd28a';
+    ctx.fillText(t('👣 現在各區人數'), c.width / 2, 42);
     AREAS.forEach(([id, icon, name], i) => {
-      const x = 20 + w * i + w / 2;
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const x = 30 + ((c.width - 60) / 3) * (col + 0.5);
+      const y = 112 + row * 108;
       const n = a[id] ?? 0;
-      g.font = `700 34px ${font}`;
-      g.fillStyle = '#ffe9c8';
-      g.fillText(`${icon} ${n}`, x, 56);
-      g.font = `500 24px ${font}`;
-      g.fillStyle = n ? '#ffd28a' : 'rgba(255, 233, 200, 0.55)';
-      g.fillText(name, x, 104);
+      ctx.font = `700 38px ${font}`;
+      ctx.fillStyle = n ? '#fff1d6' : 'rgba(255, 233, 200, 0.5)';
+      ctx.fillText(`${icon} ${n}`, x, y);
+      ctx.font = `500 24px ${font}`;
+      ctx.fillStyle = n ? '#ffd28a' : 'rgba(255, 233, 200, 0.45)';
+      ctx.fillText(name, x, y + 40);
     });
     tex.needsUpdate = true;
   }
-  return { sprite, draw };
+  draw();
+  shadowAll(g);
+  face.castShadow = false;
+  return { group: g, draw, plank };
 }
 
 /** 帳篷營地的入口：木頭拱門＋兩頂迷你帳篷 */
@@ -410,7 +434,7 @@ function buildCampGate() {
     tent.position.set(x, 0.55, z);
     g.add(tent);
   }
-  const light = new THREE.PointLight(0xffc073, 3, 7, 1.6);
+  const light = new GlowLight(0xffc073, 3, 7);
   light.position.set(0, 2.2, 0.6);
   g.add(light);
   return { group: g, colliderR: 0.6 };
@@ -466,12 +490,20 @@ export function createForestRoom() {
   });
   const shrinePos = polar(SHRINE_ANGLE, SHRINE_R);
   const world = createWorld(group, {
-    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING, WISH_TREE_CLEARING, SHOP_CLEARING, ...POND_CLEARINGS, ...EXTRA_CLEARINGS],
+    clearings: [...defs.map((d) => ({ x: d.build.x, z: d.build.z, r: 3.2 })), { x: shrinePos.x, z: shrinePos.z, r: 4.2 }, CAIRN_GARDEN_CLEARING, WISH_TREE_CLEARING, SHOP_CLEARING, ...POND_CLEARINGS, ...EXTRA_CLEARINGS, { ...polar(AREA_SIGN_ANGLE, AREA_SIGN_R), r: 1.8 }],
   });
 
   const campfire = new Campfire();
   group.add(campfire.group);
   world.colliders.push({ x: 0, z: 0, r: campfire.radius });
+  // 🪵 營火旁的圓木座位（按 E 坐下，坐著按 F 烤棉花糖）
+  const fireSeats = buildFireSeats(world);
+  group.add(fireSeats.group);
+  let lastActions = null; // 坐著的時候，位置固定在座位上（resolveCollision 用）
+  const seatedOn = () => {
+    const a = lastActions;
+    return a?.seat && (a.state === 'sofa' || a.state === 'roast' || a.state === 'eat') ? a.seat : null;
+  };
 
   const occluders = [...world.occluders];
   const entrances = [];
@@ -539,11 +571,14 @@ export function createForestRoom() {
   // ---------- 石塔祈願（祈福處步道旁） ----------
   const cairnGarden = buildCairnGarden(world);
   group.add(cairnGarden.group);
-  // ---------- 營火上方的人數看板：各區現在有幾個人，一眼就知道哪裡熱鬧 ----------
-  const areaBoard = buildAreaBoard();
-  const areaNdc = new THREE.Vector3();
-  areaBoard.sprite.position.set(0, 3.7, 0);
-  group.add(areaBoard.sprite);
+  // ---------- 營火旁的人數小木牌：各區現在有幾個人（「🧭 去哪裡」選單也看得到） ----------
+  const areaSign = buildAreaSign();
+  const areaPos = polar(AREA_SIGN_ANGLE, AREA_SIGN_R);
+  areaSign.group.position.set(areaPos.x, 0, areaPos.z);
+  areaSign.group.rotation.y = AREA_SIGN_ANGLE + Math.PI; // 正面朝向營火
+  group.add(areaSign.group);
+  world.colliders.push({ x: areaPos.x, z: areaPos.z, r: 0.55 });
+  occluders.push(areaSign.plank);
 
   // ---------- 營火河畔：在營火旁就能釣魚 ----------
   const pond = buildPond(world, group);
@@ -580,7 +615,18 @@ export function createForestRoom() {
     returnSpawn,
     cameraDistance: 7,
     audio: { fire: 1, wind: 1, ambient: 1, water: 0, music: 0.55, song: 0 },
-    resolveCollision: world.resolveCollision,
+    resolveCollision(pos, r) {
+      const s = seatedOn();
+      if (s) {
+        // 坐在圓木上：固定在座位；烤棉花糖的姿勢比較低，高度少一點
+        pos.set(s.x, lastActions.state === 'sofa' ? s.h : s.h * 0.6, s.z);
+        return;
+      }
+      world.resolveCollision(pos, r);
+      pos.y = 0;
+    },
+    /** 這個座位有沒有別人坐（main.js 用其他玩家的位置判斷） */
+    seatTaken: null,
     shrine,
     shrineFront,
     noticeBoard,
@@ -591,7 +637,7 @@ export function createForestRoom() {
     pond,
     fishSpot: null, // 坐下釣魚時記錄（ActionStateMachine 用來固定位置與面向）
     fishing: null, // 由 main.js 放入 FishingGame（和湖畔共用）
-    setAreas: (a) => areaBoard.draw(a),
+    setAreas: (a) => areaSign.draw(a),
     drawMuseum: extras.drawMuseum,
     nearPot: extras.nearPot,
     treasures,
@@ -610,6 +656,18 @@ export function createForestRoom() {
     },
 
     onAction(name, actions) {
+      lastActions = actions;
+      // 🪵 坐在圓木上：E＝起身、F＝直接在座位上烤棉花糖（不用再走到火邊）
+      if (seatedOn()) {
+        if (name === 'interact') {
+          actions.stop();
+          return true;
+        }
+        if (name === 'roast' && actions.state === 'sofa') {
+          actions.start('roast');
+          return true;
+        }
+      }
       // 營火河畔釣魚：F＝拉竿、E＝收竿；在水邊按 F 坐下
       if (actions.state === 'fish') {
         if (name === 'roast') {
@@ -659,6 +717,15 @@ export function createForestRoom() {
           return true;
         }
       }
+      // 走到空的圓木旁按 E：坐下（比添柴火優先；離座位遠一點按 E 才是添柴）
+      if (name === 'interact' && actions.state === 'free' && !carrying) {
+        const s = fireSeats.near(actions.player.position, 0.75);
+        if (s) {
+          if (this.seatTaken?.(s)) actions.hud.toast(t('這個位置有人坐了，找旁邊的圓木吧 🪵'));
+          else actions.sit(s);
+          return true;
+        }
+      }
       if (name === 'interact' && actions.state === 'free' && !carrying && nearShop(actions.player.position)) {
         actions.onShop?.();
         return true;
@@ -704,7 +771,10 @@ export function createForestRoom() {
 
     /** 手機的互動按鈕要顯示什麼（null ＝預設的「添柴」） */
     interactHint(actions) {
+      lastActions = actions;
       const p0 = actions.player.position;
+      if (seatedOn()) return ['🧍', t('起身')];
+      if (!carrying && fireSeats.near(p0, 0.75)) return ['🪵', t('坐下')];
       if (!carrying && treasures.near(p0)) return ['✨', t('撿寶藏')];
       if (!carrying && trash.near(p0)) return ['♻️', t('撿起來')];
       if (extras.nearBin(p0)) return ['♻️', t('回收')];
@@ -733,6 +803,7 @@ export function createForestRoom() {
       if (extras.nearBin(p0)) return t('<kbd>E</kbd> ♻️ 把垃圾丟進回收桶');
       if (extras.nearMuseum(p0)) return t('<kbd>E</kbd> 🏛️ 營地標本櫃・捐出採集到的東西');
       if (extras.nearPot(p0)) return t('<kbd>E</kbd> 🍲 營火料理');
+      if (!carrying && fireSeats.near(p0, 0.75)) return t('<kbd>E</kbd> 坐下　<kbd>F</kbd> 烤棉花糖');
       if (nearShrine(actions)) return t('<kbd>E</kbd> 參拜・擲筊・抽籤・寫繪馬');
       if (nearBoard(actions)) return t('<kbd>E</kbd> 看告示牌・留言　<kbd>F</kbd> 烤棉花糖');
       const pos = actions.player.position;
@@ -751,6 +822,7 @@ export function createForestRoom() {
     },
 
     update(dt, t, camera, actions) {
+      if (actions) lastActions = actions;
       extras.update(dt, t);
       treasures.update(dt, t, actions?.player?.position);
       shrine.update(dt, t);
@@ -763,9 +835,6 @@ export function createForestRoom() {
         if (actions?.state !== 'fish' && this.fishing.active) this.fishing.stop();
         this.fishing.update(dt, t);
       }
-      // 人數看板跑到畫面最上方（會跟左上的資訊疊在一起）時淡出
-      areaNdc.copy(areaBoard.sprite.position).project(camera);
-      areaBoard.sprite.material.opacity = Math.min(1, Math.max(0, (0.62 - areaNdc.y) / 0.2));
       // world / campfire 由 RoomManager 另外更新（星空與火勢要持續運作）
       // 招牌離鏡頭太近時淡出，避免擋住畫面
       for (const sgn of signs) {

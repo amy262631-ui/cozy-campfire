@@ -21,15 +21,23 @@ const jitter = (p, r = 0.4) => ({ x: p.x + rand(-r, r), z: p.z + rand(-r, r) });
 
 /** 各地點的位置（與前端各房間的配置對應） */
 const FIRE = { x: 0, z: 0 };
+const DOCK_ROOT = { x: 0, z: 3.0 }; // 湖畔碼頭：碼頭和岸邊接起來的地方（前端 lakeRoom.js 碼頭從 z=2.6 伸到 -6.2）
 const PLACES = {
   forest_main: {
-    fireSeat: () => polar(rand(0, Math.PI * 2), 1.95),
-    fireRest: () => polar(rand(0, Math.PI * 2), rand(2.5, 3.1)),
+    // 添柴火：只在火邊待一下下（挑沒有玩家的位置），添完就回自己的地方
+    fireSeat: () => polar(rand(0, Math.PI * 2), 2.6),
+    // 每個居民在外圍有自己的固定位置（不佔玩家的座位、不擠在營火邊）
+    own: {
+      oak: polar(0.11, 5.6), // 撿柴的小橡：往祈福處的小路旁
+      pudding: polar(-0.89, 5.5), // 愛睡的布丁：石塔花園前的草地打盹
+      lulu: polar(-0.44, 5.6), // 看星星的露露
+      song: polar(-2.69, 5.6), // 守林人阿松
+    },
     shrine: () => jitter(polar(-0.15, 11.2), 0.5),
-    board: () => jitter(polar(2.1, 3.3), 0.3),
+    board: () => jitter(polar(2.35, 3.6), 0.2),
     tree: () => jitter(polar(0.5, 6.7), 0.6),
     cairns: () => jitter(polar(-0.66, 8.4), 0.6),
-    meadow: () => pick([polar(-0.7, 5.8), polar(2.9, 6.2), polar(0.9, 5.4), polar(-3.0, 6.4)]),
+    meadow: () => pick([polar(-0.44, 5.6), polar(-2.74, 7), polar(2.06, 7), polar(-0.99, 6.2), polar(0.11, 5.6)]),
     // 入口前 0.5 公尺（入口位置和前端共用 entrances.js）
     gate: {
       lake_dock: ENTRANCE_POS.lake_dock(-0.5),
@@ -109,12 +117,26 @@ export function createResidents(api) {
       step: null,
       wait: rand(0, 4),
     };
-    const start = def.home === 'forest_main' ? PLACES.forest_main.fireRest() : PLACES[def.home].spawn;
+    const start = def.home === 'forest_main' ? PLACES.forest_main.own[def.key] ?? PLACES.forest_main.meadow() : PLACES[def.home].spawn;
     n.x = start.x;
     n.z = start.z;
     api.room(n.room).npcs.set(n.id, n);
     return n;
   });
+
+  /** 自己的固定位置（在外圍）；沒有的話挑一個草地 */
+  const ownSpot = (n) => jitter(PLACES.forest_main.own[n.def.key] ?? PLACES.forest_main.meadow(), 0.25);
+  /** 挑一個 2 公尺內沒有玩家的位置（試幾次都有人就用最後一個） */
+  function freeSpot(n, make) {
+    let p = make();
+    for (let i = 0; i < 8; i++) {
+      let near = false;
+      for (const h of api.room(n.room).players.values()) if (Math.hypot(h.x - p.x, h.z - p.z) < 2) near = true;
+      if (!near) return p;
+      p = make();
+    }
+    return p;
+  }
 
   /** 從 A 走到 B：在森林裡，路線會繞過營火 */
   function route(n, to) {
@@ -129,6 +151,11 @@ export function createResidents(api) {
         const a = Math.atan2(ax, az) + (Math.atan2(to.x, to.z) - Math.atan2(ax, az) > 0 ? 1.2 : -1.2);
         pts.push(polar(a, 2.9));
       }
+    }
+    // 湖畔碼頭：碼頭伸進湖裡，碼頭上和岸上之間一定要先走到碼頭根部，不能斜斜穿過湖面
+    if (n.room === 'lake_dock') {
+      const onDock = (p) => p.z < 2.0 && Math.abs(p.x) < 1.3;
+      if (onDock(n) !== onDock(to)) pts.push({ x: DOCK_ROOT.x, z: DOCK_ROOT.z });
     }
     pts.push(to);
     return pts.map((p) => ({ type: 'go', to: p }));
@@ -191,19 +218,18 @@ export function createResidents(api) {
     if (n.room === 'forest_main') {
       switch (like) {
         case 'wood': {
-          const seat = F.fireSeat();
-          return [...route(n, seat), { type: 'face', to: FIRE }, act('addWood', 1.8, 1.8, { wood: true }), act('idle', 2, 5)];
+          // 走到火邊（沒人的位置）丟一根柴，馬上回自己的地方
+          const seat = freeSpot(n, F.fireSeat);
+          return [...route(n, seat), { type: 'face', to: FIRE }, act('addWood', 1.8, 1.8, { wood: true }), ...route(n, ownSpot(n)), { type: 'face', to: FIRE }, act('idle', 8, 20)];
         }
-        case 'roast': {
-          const seat = F.fireSeat();
-          return [...route(n, seat), { type: 'face', to: FIRE }, act('roast', 15, 35, { roast: true })];
-        }
+        case 'roast':
         case 'nap': {
-          const p = F.fireRest();
-          return [...route(n, p), { type: 'face', to: FIRE }, act('blanket', 40, 120)];
+          // 不再坐到營火邊（會擋到玩家）：在自己的位置裹毯子發呆
+          const p = freeSpot(n, () => ownSpot(n));
+          return [...route(n, p), { type: 'face', to: FIRE }, act(like === 'nap' ? 'blanket' : 'idle', 30, 90)];
         }
         case 'stars': {
-          const p = F.meadow();
+          const p = freeSpot(n, F.meadow);
           return [...route(n, p), act('stargaze', 25, 60)];
         }
         case 'pray': {
@@ -212,7 +238,7 @@ export function createResidents(api) {
         }
         case 'board': {
           const p = F.board();
-          return [...route(n, p), { type: 'face', to: polar(2.1, 4.4) }, act('idle', 6, 14)];
+          return [...route(n, p), { type: 'face', to: polar(2.1, 4.4) }, act('idle', 3, 6), ...route(n, ownSpot(n))];
         }
         case 'tree': {
           const p = F.tree();
@@ -231,7 +257,7 @@ export function createResidents(api) {
         default: {
           // 在子房間才會做的事（釣魚、樹屋聽歌⋯）：回到自己的家
           if (n.def.home !== 'forest_main') return travel(n, n.def.home);
-          return [...route(n, F.fireRest()), act('idle', 4, 10)];
+          return [...route(n, ownSpot(n)), { type: 'face', to: FIRE }, act('idle', 8, 20)];
         }
       }
     }
@@ -270,7 +296,7 @@ export function createResidents(api) {
     const from = n.room;
     api.room(from).npcs.delete(n.id);
     api.emit(from, 'playerLeft', { id: n.id });
-    const p = to === 'forest_main' ? FOREST_RETURN[from] ?? PLACES.forest_main.fireRest() : PLACES[to].spawn;
+    const p = to === 'forest_main' ? FOREST_RETURN[from] ?? PLACES.forest_main.meadow() : PLACES[to].spawn;
     n.room = to;
     n.x = p.x + rand(-0.3, 0.3);
     n.z = p.z + rand(-0.3, 0.3);
@@ -340,9 +366,14 @@ export function createResidents(api) {
           setAction(n, 'idle');
           if (n.blocked > 1.5) {
             n.blocked = 0;
+            // 往旁邊繞一步；繞的那一步不能踩進營火河畔、不能走出碼頭（碼頭上就乖乖等）
             const side = Math.random() < 0.5 ? 1 : -1;
-            n.plan.unshift(s); // 繞完再繼續原本的目標
-            n.step = { type: 'go', to: { x: n.x + uz * side * 1.1 + ux * 0.3, z: n.z - ux * side * 1.1 + uz * 0.3 } };
+            const cands = [side, -side].map((sd) => ({ x: n.x + uz * sd * 1.1 + ux * 0.3, z: n.z - ux * sd * 1.1 + uz * 0.3 }));
+            const ok = cands.find((q) => (n.room === 'forest_main' ? pondQ(q.x, q.z, 0.5) >= 1 && Math.hypot(q.x, q.z) > 2.2 : n.room === 'lake_dock' ? n.z > DOCK_ROOT.z && q.z > DOCK_ROOT.z - 0.2 : true));
+            if (ok) {
+              n.plan.unshift(s); // 繞完再繼續原本的目標
+              n.step = { type: 'go', to: ok, direct: true };
+            }
           }
           continue;
         }

@@ -2,6 +2,7 @@ import { t } from '../i18n/i18n.js';
 import { SPONSOR_URL } from '../config.js';
 import { trButton, bindTranslate } from '../network/chatTranslate.js';
 import { localPage, pagerHtml, bindPager } from './pager.js';
+import { addCloseX } from './CloseX.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 /** 便條紙的顏色（與木牌上畫的一致） */
@@ -105,6 +106,7 @@ export class NoticePanel {
     // 點背景關閉
     this.el.addEventListener('click', (e) => e.target === this.el && this.close());
     $('#notice-close').addEventListener('click', () => this.close());
+    addCloseX($('#notice-close'), '.notice-card'); // 右上角 ✕
 
     this.el.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => this.#setTab(b.dataset.tab)));
     this.el.querySelectorAll('[data-color]').forEach((b) =>

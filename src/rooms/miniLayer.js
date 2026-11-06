@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GlowLight } from '../scene/GlowLight.js'; // 裝飾小燈用光暈代替真的光源（效能）
 import { makeSign } from './shared.js';
 import { RACE_LANTERNS, TOUCH_R } from '../game/miniSpots.js';
 
@@ -40,7 +41,7 @@ export function buildMiniLayer() {
   });
   // 只用一盞光、而且永遠留在場景裡（亮度 0 代表關燈）：
   // 光源數量一變，手機就要重新編譯整個場景的著色器，會卡一下
-  const raceLight = new THREE.PointLight(0xffb45a, 0, 6, 1.6);
+  const raceLight = new GlowLight(0xffb45a, 0, 6);
   group.add(raceLight);
 
   // ---- 金松果 ----

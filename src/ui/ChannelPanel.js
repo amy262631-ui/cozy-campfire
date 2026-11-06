@@ -1,4 +1,5 @@
 import { t } from '../i18n/i18n.js';
+import { addCloseX } from './CloseX.js';
 
 /** 分流的熱鬧程度：顏色＋文字 */
 export function crowd(count, max) {
@@ -61,6 +62,7 @@ export class ChannelPanel {
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.addEventListener('click', (e) => e.target === this.el && this.close());
     root.querySelector('#chpanel-close').addEventListener('click', () => this.close());
+    addCloseX(root.querySelector('#chpanel-close'), '.chpanel-card'); // 右上角 ✕
     this.grid.addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-ch]');
       if (!btn || btn.disabled) return;

@@ -5,6 +5,7 @@ import { TENT_SHAPES, TENT_SHAPE_BY_ID } from '../game/tentShapes.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TentPreview } from './TentPreview.js';
 import { YARD_ITEMS } from '../game/yardCatalog.js';
+import { addCloseX } from './CloseX.js';
 
 /**
  * 營地小舖：用松果買帳篷、家具。
@@ -46,6 +47,7 @@ export class ShopPanel {
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.addEventListener('click', (e) => e.target === this.el && this.close());
     $('#shop-close').addEventListener('click', () => this.close());
+    addCloseX($('#shop-close'), '.shop-card'); // 右上角 ✕
     this.homeBtn.addEventListener('click', () => {
       this.close();
       this.onGoHome?.();

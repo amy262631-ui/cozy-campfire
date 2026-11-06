@@ -1,5 +1,6 @@
 import { t } from '../i18n/i18n.js';
 import { ORNAMENTS, ORNAMENT_BY_ID } from '../game/ornaments.js';
+import { addCloseX } from './CloseX.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -56,6 +57,7 @@ export class TreePanel {
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.addEventListener('click', (e) => e.target === this.el && this.close());
     $('#tree-close').addEventListener('click', () => this.close());
+    addCloseX($('#tree-close'), '.tree-card'); // 右上角 ✕
     this.grid.addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-o]');
       if (!btn || btn.disabled || this.busy) return;

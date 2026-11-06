@@ -1,4 +1,5 @@
 import { t } from '../i18n/i18n.js';
+import { addCloseX } from './CloseX.js';
 
 /**
  * 帳篷裡的「按讚」「留言本」：拜訪別人的帳篷時可以按讚、留一句話；主人看得到大家的留言。
@@ -60,6 +61,10 @@ export class GuestPanel {
     this.bookBtn.addEventListener('click', () => this.open());
     root.querySelector('#guest-exit').addEventListener('click', () => this.onLeave?.());
     $('#guest-close').addEventListener('click', () => this.close());
+    addCloseX($('#guest-close'), '.guest-card'); // 右上角 ✕
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && this.panel.classList.contains('show')) this.close(); // 電腦版按 Esc 關閉
+    });
     this.panel.addEventListener('click', (e) => e.target === this.panel && this.close());
     $('#guest-form').addEventListener('submit', async (e) => {
       e.preventDefault();

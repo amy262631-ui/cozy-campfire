@@ -1,5 +1,6 @@
 import { SONGS } from '../audio/music.js';
 import { t } from '../i18n/i18n.js';
+import { addCloseX } from './CloseX.js';
 
 /**
  * 樹屋點唱機的選歌面板。onPick(index) 由主程式決定要送給伺服器或直接播放。
@@ -43,6 +44,7 @@ export class JukeboxPanel {
       }),
     );
     this.el.querySelector('#jukebox-close').addEventListener('click', () => this.close());
+    addCloseX(this.el.querySelector('#jukebox-close'), '.jukebox-card'); // 右上角 ✕
     window.addEventListener('keydown', (e) => {
       if (this.isOpen && e.code === 'Escape') this.close();
     });

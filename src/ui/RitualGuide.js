@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GlowLight } from '../scene/GlowLight.js'; // 裝飾小燈用光暈代替真的光源（效能）
 import { t } from '../i18n/i18n.js';
 
 const FIRST_KEY = 'cozy-campfire-first-quest';
@@ -251,7 +252,7 @@ export class RitualGuide {
     this.beacon.add(pillar);
     this.orb = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffe6a8 }));
     this.beacon.add(this.orb);
-    const glow = new THREE.PointLight(0xffc77a, 1.4, 4, 1.8);
+    const glow = new GlowLight(0xffc77a, 1.4, 4);
     glow.position.y = 1.2;
     this.beacon.add(glow);
     this.beacon.visible = false;

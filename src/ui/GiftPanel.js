@@ -2,6 +2,7 @@ import { t } from '../i18n/i18n.js';
 import { GIFT_FURNITURE } from '../game/furniture.js';
 import { TENT_STYLE_BY_ID } from '../game/tentStyles.js';
 import { OUTFIT_BY_ID } from '../game/outfits.js';
+import { addCloseX } from './CloseX.js';
 
 /**
  * 🔥 約朋友・分享送禮（同一個地方）：
@@ -58,6 +59,10 @@ export class GiftPanel {
     this.el.addEventListener('click', (e) => e.target === this.el && this.close());
     this.urlEl.addEventListener('focus', () => this.urlEl.select());
     $('#gift-close').addEventListener('click', () => this.close());
+    addCloseX($('#gift-close'), '.shop-card'); // 右上角 ✕
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && this.isOpen) this.close(); // 電腦版按 Esc 關閉
+    });
     const run = (fn) => async () => {
       if (this.busy) return;
       this.busy = true;

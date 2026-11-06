@@ -1,5 +1,6 @@
 import qrcode from 'qrcode-generator';
 import { t } from '../i18n/i18n.js';
+import { addCloseX } from './CloseX.js';
 
 /** 在畫布上畫 QR Code（白底、深色方塊） */
 function drawQr(g, text, x, y, size) {
@@ -75,6 +76,10 @@ export class ShareCard {
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.addEventListener('click', (e) => e.target === this.el && this.close());
     $('#share-close').addEventListener('click', () => this.close());
+    addCloseX($('#share-close'), '.share-inner'); // 右上角 ✕
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && this.el.classList.contains('show')) this.close(); // 電腦版按 Esc 關閉
+    });
     $('#share-go').addEventListener('click', () => this.#share());
     $('#share-copy').addEventListener('click', () => {
       this.#copy(this.#caption());

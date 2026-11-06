@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GlowLight } from '../scene/GlowLight.js'; // 裝飾小燈用光暈代替真的光源（效能）
 import { makeSign, lowpoly } from './shared.js';
 import { POND, POND_U, POND_V, pondQ, pondLocal, pondWorld } from '../game/pondShape.js';
 import { t } from '../i18n/i18n.js';
@@ -91,7 +92,7 @@ export function buildPond(world, forestGroup) {
   // 只放幾顆真的光源（省效能），其他蠟燭靠火焰發光
   const candleLights = [0.5, 2.1, 3.7, 5.3].map((th) => {
     const [x, z] = edge(th, 1.15);
-    const l = new THREE.PointLight(0xffb565, 1.6, 4.5, 1.7);
+    const l = new GlowLight(0xffb565, 1.6, 4.5);
     l.position.set(x, 0.4, z);
     group.add(l);
     return l;

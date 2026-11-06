@@ -137,6 +137,7 @@ async function init() {
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = !lowPower; // 營火的點光源影子要畫 6 次，手機最吃電
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false; // 影子隔一幀重畫（見 frame()）
   container.appendChild(renderer.domElement);
 
   // ---------- Scene & Camera ----------
@@ -333,6 +334,7 @@ async function init() {
   });
   rooms.lake_dock.fishing = fishing;
   forest.fishing = fishing; // 營火河畔也用同一個釣魚遊戲
+  forest.seatTaken = (seat) => remotes.anyNear(seat.x, seat.z, 0.45); // 🪵 圓木有沒有人坐
   // 特殊魚的出現條件：營火時間、整點釣魚大賽
   fishing.roll = () => (net.online ? net.request('fishRoll') : null); // 🎣 這一竿的魚由伺服器決定
   fishing.context = () => ({ event: !!currentEvent()?.active, contest: !!(miniState?.active && miniState.kind === 'fish') });
@@ -528,7 +530,10 @@ async function init() {
     }
   };
   setInterval(warnSoon, 15000);
-  net.on('areas', (a) => forest.setAreas(a));
+  net.on('areas', (a) => {
+    forest.setAreas(a);
+    hud.setAreas(a);
+  });
   net.on('miniBoard', ({ top }) => {
     if (!miniState?.active) return;
     const before = miniState.top?.[0];
@@ -1904,7 +1909,10 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     if (res.lakeNews) lakeNews.setAll(res.lakeNews);
     if (res.event) applyEvent(res.event);
     if (res.mini) applyMini(res.mini);
-    if (res.areas) forest.setAreas(res.areas);
+    if (res.areas) {
+      forest.setAreas(res.areas);
+      hud.setAreas(res.areas);
+    }
     if (res.museum) setMuseum(res.museum);
     if (res.treasures) applyTreasures(res.treasures);
     if (res.trash) trashRoom(res.room)?.setList(res.trash);
@@ -2303,7 +2311,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     return {
       ...player.getNetworkState(),
       actionState: actionState ?? ((actions.state === 'fish' && fishing.netAction) || player.actionState), // 拉竿、舉魚
-      doneness: actions.state === 'roast' ? actions.doneness : 0,
+      doneness: actions.state === 'roast' ? actions.doneness : actions.state === 'eat' ? actions.eatDone : 0, // 吃棉花糖：讓別人看到烤得怎樣的反應
       // 舉起來的魚（魚種＋公分）：釣魚中舉著、或舉著到處走；不然就是頭上頂著石頭
       extra: fishing.netExtra || (trophy ? packFish(trophy.index, trophy.size) : 0) || (forest.carrying ? STONE_FLAG : 0),
     };
@@ -2327,7 +2335,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     shopPanel.refresh();
     refreshHomeChip();
     if (inHome() && homeRoom.mine) {
-      homeRoom.setHome(h, true);
+      homeRoom.setHome(h, true, true);
       if (buildPanel.active) cameraRig.target.distance = buildDistance();
       // 換了造型，門口位置可能變了：站太靠門就往裡面挪，免得被送回營火
       if (player.position.z > homeRoom.doorZ - 0.95) player.position.z = homeRoom.doorZ - 1.15;
@@ -2597,7 +2605,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   }
   net.on('homeUpdate', ({ home }) => {
     if (inHome()) {
-      homeRoom.setHome(home, homeRoom.mine);
+      homeRoom.setHome(home, homeRoom.mine, true); // 同一個帳篷更新：留在幾樓、坐著的就繼續坐
       guestPanel.update(home);
     }
     if (homeRoom.mine) myHome = home;
@@ -2858,6 +2866,16 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   };
 
   let lastFrame = 0;
+  let frameNo = 0;
+  // ?fps：畫面左下角顯示每秒張數（比對效能用）
+  let fpsEl = null;
+  let fpsN = 0;
+  let fpsT = performance.now();
+  if (params.has('fps')) {
+    fpsEl = document.createElement('div');
+    fpsEl.style.cssText = 'position:fixed;left:8px;bottom:60px;z-index:50;padding:3px 8px;border-radius:6px;background:rgba(0,0,0,.6);color:#9f9;font:12px monospace;pointer-events:none';
+    document.body.appendChild(fpsEl);
+  }
   let booted = false;
   let wasFishing = false;
   renderer.setAnimationLoop((now) => {
@@ -2887,7 +2905,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
 
     const action = actions.update(dt, input.hasMoveInput);
     player.update(dt, input, cameraRig.yaw, room, elapsed, action);
-    remotes.pushOut(player.position, player.radius);
+    if (!actions.seat) remotes.pushOut(player.position, player.radius); // 坐在圓木上不要被旁邊的人推走
     remotes.update(dt, elapsed);
     net.update(dt, netState());
     cameraRig.showOff = fishing.showingOff;
@@ -2923,7 +2941,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     hud.setSoundBlocked(joined && !audio.running); // 聲音還沒被瀏覽器放行時，顯示「點一下開啟聲音」
     if (mobile) {
       // 手機：互動按鈕跟著位置換（祈福處、告示牌），提示裡的按鍵換成按鈕圖示
-      mobile.setInteract(actions.state === 'free' ? (roomMgr.current.interactHint?.(actions) ?? null) : null);
+      mobile.setInteract(actions.state === 'free' || actions.seat ? (roomMgr.current.interactHint?.(actions) ?? null) : null); // 坐在圓木上：互動按鈕變成「起身」
       mobile.setRoast(roomMgr.current.roastHint?.(actions) ?? null);
       const p = actions.prompt;
       hud.setPrompt(p && p.replace(/<kbd>([^<]*)<\/kbd>/g, (_, k) => {
@@ -2934,7 +2952,20 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     ritual?.update(dt, elapsed, ritualState);
     document.body.classList.toggle('in-action', actions.state !== 'free');
 
+    // 營火的點光源影子每次要把整個場景多畫 6 次：隔一幀才重畫一次（角色影子幾乎看不出差別）
+    if (renderer.shadowMap.enabled) renderer.shadowMap.needsUpdate = (frameNo & 1) === 0;
+    frameNo++;
     renderer.render(scene, camera);
+    if (fpsEl) {
+      fpsN++;
+      const now = performance.now();
+      if (now - fpsT >= 1000) {
+        const info = renderer.info.render;
+        fpsEl.textContent = `${Math.round((fpsN * 1000) / (now - fpsT))} fps · ${info.calls} calls · ${Math.round(info.triangles / 1000)}k △`;
+        fpsN = 0;
+        fpsT = now;
+      }
+    }
   }
 
   /**

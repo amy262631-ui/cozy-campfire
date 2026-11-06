@@ -307,7 +307,12 @@ export function createHomeRoom() {
     floorMat.color.setHex(st.floor);
   }
 
-  function setHome(h, isMine) {
+  /**
+   * @param keep 同一個帳篷重新整理（有人按讚、訪客進出、家具更新）：保留在幾樓、坐／躺的位置。
+   *             以前會把 level 設回 0，在二樓躺床的人會掉到一樓（還維持躺姿）
+   */
+  function setHome(h, isMine, keep = false) {
+    const prev = keep ? { level, rest, shape: loftShape?.id ?? null } : null;
     home = h ?? { items: [] };
     mine = !!isMine;
     level = 0;
@@ -370,6 +375,16 @@ export function createHomeRoom() {
         if (!L) continue;
         const a = (it.r ?? 0) * (Math.PI / 2);
         list.push({ x: c.x - L * Math.sin(a), z: c.z - L * Math.cos(a), r: 0.3 });
+      }
+    }
+    if (prev) {
+      if (loftShape && prev.shape === loftShape.id) level = prev.level;
+      const r = prev.rest;
+      if (r && r.actions.state === r.kind) {
+        // 找回同一個座位重新接上；那件家具被收掉了才起身
+        const s = seats.find((q) => Math.abs(q.x - r.sx) < 0.02 && Math.abs(q.z - r.sz) < 0.02 && Math.abs(q.y - r.y) < 0.02 && (q.sleep ? 'sleep' : 'sofa') === r.kind);
+        if (s) rest = r;
+        else r.actions.stop();
       }
     }
   }
@@ -494,7 +509,7 @@ export function createHomeRoom() {
           // 坐下：坐在家具中間；躺下：腳在床尾、頭朝床頭（家具的後面）
           const kind = s.sleep ? 'sleep' : 'sofa';
           const off = s.sleep ? 0.3 : 0.06;
-          rest = { x: s.x + Math.sin(s.a) * off, y: s.y, z: s.z + Math.cos(s.a) * off, kind, actions };
+          rest = { x: s.x + Math.sin(s.a) * off, y: s.y, z: s.z + Math.cos(s.a) * off, sx: s.x, sz: s.z, kind, actions };
           actions.rest(kind, s.a);
           return true;
         }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createCarriedStone } from '../../rooms/cairns.js';
-import { createRoastStick, createLogProp, createBlanket, createFishingRod } from '../props.js';
+import { createRoastStick, createLogProp, createBlanket, createFishingRod, donenessColor } from '../props.js';
 import { FUR_PALETTES } from './furPalettes.js';
 import { SPECIES } from './species.js';
 import { buildAccessory } from '../accessories.js';
@@ -23,7 +23,8 @@ import { createFishMesh, fishScale } from '../../fishing/fishModel.js';
  *   update(dt, elapsed, speed)
  */
 
-const SIT_POSES = new Set(['sit', 'roast', 'blanket', 'lookUp', 'reel', 'sleep']);
+const UP_Y = new THREE.Vector3(0, 1, 0);
+const SIT_POSES = new Set(['sit', 'roast', 'blanket', 'lookUp', 'reel', 'sleep', 'eat']);
 
 // 兩隻腳（像小人一樣站著，手是另外兩顆小丸子）
 const FEET_STAND = [[-0.13, 0.07, 0.04], [0.13, 0.07, 0.04]];
@@ -266,6 +267,7 @@ export class ProceduralFox {
     this.stick.group.rotation.x = -0.3; // 往前上方伸向火堆
     this.stick.group.visible = false;
     torso.add(this.stick.group);
+    this.#buildEat(torso, head);
 
     // 釣竿（湖畔碼頭）：往前上方翹起
     this.rod = createFishingRod();
@@ -468,6 +470,41 @@ export class ProceduralFox {
     this.furDarkMat.color.setHex(palette.dark);
   }
 
+  /** 🍡 吃棉花糖用的小道具：手上的棉花糖、金黃的小星星、焦黑的黑煙、生的牽絲 */
+  #buildEat(torso, head) {
+    this.eatMallow = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.05, 6, 12), new THREE.MeshStandardMaterial({ color: 0xfff8ee, roughness: 0.7 }));
+    this.eatMallow.visible = false;
+    torso.add(this.eatMallow);
+    this.eatString = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 1, 6), new THREE.MeshBasicMaterial({ color: 0xfff6e6 }));
+    this.eatString.visible = false;
+    torso.add(this.eatString);
+    const starMat = new THREE.MeshBasicMaterial({ color: 0xffd84a, transparent: true, fog: false, toneMapped: false });
+    this.eatStars = Array.from({ length: 5 }, (_, i) => {
+      const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.06, 0), starMat);
+      m.userData.a = (i / 5) * Math.PI * 2;
+      m.visible = false;
+      head.add(m);
+      return m;
+    });
+    const smokeMat = new THREE.MeshBasicMaterial({ color: 0x5a5250, transparent: true, depthWrite: false, fog: false });
+    this.eatSmoke = Array.from({ length: 3 }, (_, i) => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.11 + i * 0.03, 8, 6), smokeMat);
+      m.visible = false;
+      head.add(m);
+      return m;
+    });
+    this.eatKind = 1;
+  }
+
+  /**
+   * 吃棉花糖：依烤的程度有不同反應（d＝熟度）
+   *   生的（< 0.35）牽絲拉長、金黃（< 0.75）冒星星＋開心轉圈、有點焦（< 1）點頭讚、黑炭 冒黑煙＋搖頭
+   */
+  setEat(d) {
+    this.eatKind = d < 0.35 ? 0 : d < 0.75 ? 1 : d < 1 ? 2 : 3;
+    donenessColor(Math.min(d, 1.2), this.eatMallow.material.color);
+  }
+
   setPose(name) {
     if (name === this.pose) return;
     this.pose = name;
@@ -561,6 +598,58 @@ export class ProceduralFox {
     return this.log.getWorldPosition(target);
   }
 
+  #updateEat(P, armsT, t) {
+    const on = P === 'eat';
+    const pt = this.poseTime;
+    const kind = this.eatKind;
+    // 手上的棉花糖：咬一口小一點，咬第二口就吃完了
+    const left = !on ? 0 : pt < 0.5 ? 1 : pt < 0.9 ? 0.62 : pt < (kind === 0 ? 1.25 : 1.15) ? 0.4 : 0;
+    this.eatMallow.visible = left > 0;
+    if (left > 0) {
+      this.eatMallow.position.copy(this.arms[1].position).add(this._eatOff ?? (this._eatOff = new THREE.Vector3(-0.02, 0.07, 0.05)));
+      this.eatMallow.scale.setScalar(left);
+    }
+    // 生的：嘴巴和手之間牽一條白白的絲
+    const str = on && kind === 0 && pt > 0.55 && pt < 1.25;
+    this.eatString.visible = str;
+    if (str) {
+      const a = this._eatMouth ?? (this._eatMouth = new THREE.Vector3(0.02, 0.7, 0.4));
+      const b = this.eatMallow.visible ? this.eatMallow.position : this.arms[1].position;
+      const mid = this._eatMid ?? (this._eatMid = new THREE.Vector3());
+      mid.copy(a).add(b).multiplyScalar(0.5);
+      this.eatString.position.copy(mid);
+      const len = a.distanceTo(b);
+      this.eatString.scale.set(1, Math.max(0.01, len), 1);
+      const dir = (this._eatDir ?? (this._eatDir = new THREE.Vector3())).copy(b).sub(a).normalize();
+      this.eatString.quaternion.setFromUnitVectors(UP_Y, dir);
+    }
+    // 金黃：頭上冒出小星星，整個人開心轉一圈
+    const r = pt - 1.4;
+    const stars = on && kind === 1 && r > 0 && r < 1.1;
+    for (const m of this.eatStars) {
+      m.visible = stars;
+      if (!stars) continue;
+      const a = m.userData.a + r * 2.5;
+      const rad = 0.3 + r * 0.25;
+      m.position.set(Math.cos(a) * rad, 0.3 + r * 0.35, Math.sin(a) * rad);
+      m.rotation.y = t * 6;
+      m.material.opacity = Math.max(0, 1 - r / 1.1);
+    }
+    const spin = on && kind === 1 && r > 0.05 && r < 0.75 ? ((r - 0.05) / 0.7) * Math.PI * 2 : 0;
+    this.root.rotation.y = spin;
+    // 黑炭：頭上冒一小團黑煙，搖搖頭
+    const smoke = on && kind === 3 && pt > 1.0 && pt < 2.5;
+    this.eatSmoke.forEach((m, i) => {
+      m.visible = smoke;
+      if (!smoke) return;
+      const s = pt - 1.0 - i * 0.15;
+      m.position.set((i - 1) * 0.1, 0.32 + Math.max(0, s) * 0.35, 0.05);
+      m.scale.setScalar(Math.max(0.01, Math.min(1, s * 2.2)) * (1 + Math.max(0, s) * 0.5));
+      m.material.opacity = Math.max(0, 0.8 - Math.max(0, s) * 0.55);
+    });
+    this.head.rotation.y = on && kind === 3 && r > 0 && r < 1.0 ? Math.sin(r * 16) * 0.35 * (1 - r) : 0;
+  }
+
   update(dt, t, speed) {
     this.poseTime += dt;
     if (this.outfit?.back) animateOutfit(this.outfit.back, t);
@@ -636,6 +725,34 @@ export class ProceduralFox {
         torsoRX = -0.22;
         headRX = -0.55;
         tailWag = Math.sin(t * 1.0) * 0.2;
+      } else if (P === 'eat') {
+        // 🍡 拿到嘴邊（0～0.45 秒）→ 小口咬兩下（0.5、0.9 秒）→ 依熟度的反應（1.4 秒之後）
+        const pt = this.poseTime;
+        const kind = this.eatKind;
+        const reacting = pt > 1.4;
+        armsT[0].set(-0.12, 0.5, 0.3);
+        const pull = kind === 0 && pt > 0.55 && pt < 1.25 ? Math.min(1, (pt - 0.55) / 0.4) : 0; // 生的：咬了往外拉，牽出一條絲
+        armsT[1].set(0.07 + pull * 0.26, reacting ? 0.42 : 0.64 - pull * 0.16, reacting ? 0.3 : 0.38 + pull * 0.12);
+        const bite = (at) => Math.max(0, 1 - Math.abs(pt - at) / 0.12);
+        headRX = 0.1 + (bite(0.5) + bite(0.9)) * 0.12 + (pt > 0.5 && pt < 1.4 ? Math.sin(pt * 22) * 0.025 : 0); // 咬＋嚼嚼
+        if (reacting) {
+          const r = pt - 1.4;
+          if (kind === 1) {
+            eyesOpen = 0.12; // 開心瞇眼
+            tailWag = Math.sin(t * 12) * 0.6;
+            torsoY = -0.1 + Math.abs(Math.sin(r * 9)) * 0.03;
+          } else if (kind === 0) {
+            eyesOpen = 0.12;
+            torsoRZ = Math.sin(r * 8) * 0.1; // 軟綿綿地晃一晃
+            tailWag = Math.sin(t * 8) * 0.4;
+          } else if (kind === 2) {
+            headRX = 0.1 + Math.max(0, Math.sin(r * 9)) * 0.28; // 點頭讚
+            eyesOpen = 0.12;
+          } else {
+            headRZ = 0;
+            tailWag = Math.sin(t * 3) * 0.1;
+          }
+        }
       }
     } else if (P === 'wave') {
       // 打招呼：右手高高舉起快速揮動、開心瞇眼
@@ -768,6 +885,7 @@ export class ProceduralFox {
       headRZ = Math.sin(t * 0.7) * 0.06; // idle 歪頭晃晃
     }
 
+    this.#updateEat(P, armsT, t);
     this.netProp.visible = P === 'catch';
     this.canProp.visible = P === 'water';
 

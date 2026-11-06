@@ -9,8 +9,8 @@ const polar = (a, r) => ({ x: Math.sin(a) * r, z: Math.cos(a) * r });
 export const MUSEUM_POS = polar(2.45, 7.4);
 /** 🍲 營火料理鍋：營火旁兩張長椅之間 */
 export const POT_POS = polar(0.42, 3.05);
-/** ♻️ 回收桶：料理鍋後面一點 */
-export const BIN_POS = polar(0.5, 4.25);
+/** ♻️ 回收桶：離料理鍋遠一點，放在往帳篷營地小路旁的空地（旁邊是人數小木牌），不擋走路 */
+export const BIN_POS = polar(2.8, 5.8);
 export const EXTRA_CLEARINGS = [
   { ...MUSEUM_POS, r: 2.4 },
   { ...POT_POS, r: 0.9 },

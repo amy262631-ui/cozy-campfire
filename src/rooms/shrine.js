@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GlowLight } from '../scene/GlowLight.js'; // 裝飾小燈用光暈代替真的光源（效能）
 import { makeSign, lowpoly, shadowAll } from './shared.js';
 import { t } from '../i18n/i18n.js';
 
@@ -155,7 +156,7 @@ function buildLantern() {
   const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), stone);
   knob.position.y = 1.3;
   g.add(knob);
-  const pl = new THREE.PointLight(0xffb866, 2.6, 6, 1.6);
+  const pl = new GlowLight(0xffb866, 2.6, 6);
   pl.position.y = 0.95;
   g.add(pl);
   return { group: g, light: pl };

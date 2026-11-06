@@ -243,31 +243,7 @@ export function createWorld(scene, { clearings = [] } = {}) {
     scene.add(m);
   }
 
-  // ---------- 營火旁的木頭長椅 ----------
-  const benchMat = new THREE.MeshStandardMaterial({ color: 0x5b3d26, flatShading: true, roughness: 1 });
-  const ringMat = new THREE.MeshStandardMaterial({ color: 0x8a6a48, flatShading: true, roughness: 1 });
-  for (const angle of [Math.PI * 0.32, Math.PI, Math.PI * 1.68]) {
-    const r = 3.3;
-    const cx = Math.sin(angle) * r;
-    const cz = Math.cos(angle) * r;
-    const log = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.26, 1.9, 7), benchMat);
-    log.position.set(cx, 0.24, cz);
-    log.rotation.set(0, angle, Math.PI / 2);
-    log.castShadow = true;
-    log.receiveShadow = true;
-    scene.add(log);
-    // 年輪切面
-    for (const side of [-1, 1]) {
-      const cap = new THREE.Mesh(new THREE.CircleGeometry(0.24, 7), ringMat);
-      cap.position.set(0, side * 0.951, 0);
-      cap.rotation.x = side * -Math.PI / 2;
-      log.add(cap);
-    }
-    // 長椅碰撞：沿著切線方向放三個小圓
-    const tx = Math.cos(angle);
-    const tz = -Math.sin(angle);
-    for (const o of [-0.65, 0, 0.65]) colliders.push({ x: cx + tx * o, z: cz + tz * o, r: 0.32 });
-  }
+  // 營火旁的座位改成圓木座位（src/rooms/fireSeats.js，按 E 坐下、坐著就能烤棉花糖）
 
   // ---------- 零星石頭 ----------
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x55544f, flatShading: true, roughness: 1 });

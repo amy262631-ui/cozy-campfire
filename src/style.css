@@ -6495,3 +6495,87 @@ body.stage-2 .idea-chip {
   .shop-foot { display: none; }
 }
 body.touch .shop-foot { display: none; }
+
+/* ✕ 視窗右上角的關閉（src/ui/CloseX.js）：固定在卡片右上角，捲動時也看得到；不佔版面高度 */
+.x-close {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin: -10px -10px -24px auto;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 200, 140, 0.35);
+  background: rgba(36, 26, 22, 0.94);
+  color: #ffe2b8;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.x-close:hover {
+  background: rgba(70, 48, 34, 0.96);
+}
+
+/* 🧭 去哪裡選單：每個地點右上角顯示現在幾個人 */
+.go-menu button {
+  position: relative;
+}
+.go-n {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255, 200, 130, 0.22);
+  color: #ffd28a;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.go-n.zero {
+  background: transparent;
+  color: rgba(255, 243, 226, 0.4);
+  font-weight: 500;
+}
+
+/* 🍡 烤棉花糖火候：細細一條（以前是大框框，會擋到角色）；位置由 HUD.#placeRoast 放在互動提示正上方 */
+.roast {
+  top: auto;
+  bottom: 160px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: min(250px, 62vw);
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(30, 20, 14, 0.5);
+  pointer-events: none;
+}
+.roast .roast-track {
+  flex: 1;
+  height: 8px;
+}
+.roast .roast-marker {
+  top: -2px;
+  height: 12px;
+}
+.roast .roast-fill {
+  background-size: min(200px, 50vw) 100%;
+}
+.roast-icon,
+.roast-state {
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+  width: 1.2em;
+  text-align: center;
+}
+.roast.golden {
+  box-shadow: 0 0 10px rgba(255, 210, 110, 0.45);
+}

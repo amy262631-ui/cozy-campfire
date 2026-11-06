@@ -8,7 +8,8 @@ const ROAST_DIST = 1.9; // 烤棉花糖時自動站到的位置
 const ROAST_SECONDS = 7; // 從生到焦黑（doneness = 1）需要的秒數
 const WOOD_FUEL = 25;
 
-const SIT_STATES = new Set(['roast', 'blanket', 'stargaze', 'fish', 'sofa', 'sleep']);
+const SIT_STATES = new Set(['roast', 'blanket', 'stargaze', 'fish', 'sofa', 'sleep', 'eat']);
+const EAT_SECONDS = 2.6; // 🍡 吃棉花糖的動作長度
 /** 短短的動作：採摘、揮網、種菜、澆水 */
 const PERFORMS = new Set(['pick', 'catch', 'plant', 'water']);
 
@@ -20,6 +21,7 @@ const PROMPTS = {
   fish: t('盯著浮標：整個沉下去時按 <kbd>F</kbd> 拉竿　·　<kbd>E</kbd> 或移動就收竿'),
   sofa: t('坐著休息中　·　移動就起身'),
   sleep: t('躺著睡一下 💤　·　移動就起身'),
+  seat: t('<kbd>F</kbd> 烤棉花糖　·　<kbd>E</kbd> 或移動＝起身'),
 };
 /** 手機畫面小：提示短一點（按鍵會換成按鈕圖示） */
 const PROMPTS_SHORT = {
@@ -30,6 +32,7 @@ const PROMPTS_SHORT = {
   fish: t('浮標整個沉下去就按 <kbd>F</kbd>'),
   sofa: t('移動就起身'),
   sleep: t('💤 移動就起身'),
+  seat: t('<kbd>F</kbd> 烤棉花糖'),
 };
 
 /**
@@ -51,6 +54,8 @@ export class ActionStateMachine {
     /** 目前所在的房間（RoomManager 設定）；房間可以攔截動作、提供提示 */
     this.room = null;
     this.eaten = 0;
+    /** 🪵 坐在營火旁的圓木上（{ x, z, h, face }）；坐著烤棉花糖不會被挪到火邊，吃完繼續坐 */
+    this.seat = null;
     this._result = { locked: false, pose: null, faceAngle: null, state: 'free' };
 
     // 丟出去的木柴
@@ -123,6 +128,12 @@ export class ActionStateMachine {
     this._zzzTimer = 1.2;
   }
 
+  /** 🪵 坐到營火旁的圓木上 */
+  sit(seat) {
+    this.rest('sofa', seat.face);
+    this.seat = seat;
+  }
+
   /** 給房間用：結束目前動作 */
   stop() {
     if (this.state !== 'free') this.#exit(true);
@@ -166,7 +177,9 @@ export class ActionStateMachine {
   }
 
   #enter(state) {
+    const keepSeat = state === 'roast' ? this.seat : null; // 坐在圓木上烤棉花糖：還是坐在同一個位置
     if (this.state !== 'free') this.#exit(true);
+    this.seat = keepSeat;
     this.state = state;
     this.t = 0;
     const c = this.character;
@@ -204,6 +217,7 @@ export class ActionStateMachine {
     this.world.meteorMode = 'rare';
     if (this.state === 'roast' && !silent) this.hud.toast(t('先把棉花糖收起來了'));
     this.state = 'free';
+    this.seat = null;
     this.t = 0;
   }
 
@@ -219,7 +233,10 @@ export class ActionStateMachine {
     this.onRoastDone?.(d); // 每日任務「完美棉花糖」
     this.character.setProp('stick', false);
     this.hud.showRoast(false);
-    this.state = 'free'; // 不走 #exit，避免「收起來了」提示
+    // 🍡 吃棉花糖的動作（其他人也看得到）；吃完：坐在圓木上就繼續坐著，不然站起來
+    this.eatDone = d;
+    this.character.setEat?.(d);
+    this.state = 'eat'; // 不走 #exit，避免「收起來了」提示
     this.t = 0;
   }
 
@@ -284,17 +301,30 @@ export class ActionStateMachine {
         r.locked = true;
         r.pose = 'roast';
         r.faceAngle = faceFire;
-        // 自動挪到剛好的距離
-        const d = this.fireDistance || 1;
-        const target = THREE.MathUtils.lerp(d, ROAST_DIST, 1 - Math.exp(-6 * dt));
-        p.x *= target / d;
-        p.z *= target / d;
+        // 自動挪到剛好的距離（坐在圓木上就不動，竹籤伸得到火）
+        if (!this.seat) {
+          const d = this.fireDistance || 1;
+          const target = THREE.MathUtils.lerp(d, ROAST_DIST, 1 - Math.exp(-6 * dt));
+          p.x *= target / d;
+          p.z *= target / d;
+        }
         // 火越旺烤越快
         this.doneness += (dt / ROAST_SECONDS) * (0.6 + this.campfire.strength * 0.4);
         this.character.stick.setDoneness(this.doneness);
         this.hud.setRoast(this.doneness);
         break;
       }
+
+      case 'eat':
+        r.locked = true;
+        r.pose = 'eat';
+        r.faceAngle = this.seat ? this.seat.face : faceFire;
+        if (this.t > EAT_SECONDS) {
+          this.state = this.seat ? 'sofa' : 'free';
+          if (this.seat) this.restFace = this.seat.face;
+          this.t = 0;
+        }
+        break;
 
       case 'blanket':
         r.locked = true;
@@ -378,6 +408,7 @@ export class ActionStateMachine {
     if (EMOTE_IDS.has(this.state)) return null;
     if (this.state === 'fish' && this.room?.fishing?.phase === 'show') return this.compact ? t('<kbd>F</kbd> 繼續釣　·　走開就舉著魚炫耀') : t('<kbd>F</kbd> 繼續釣魚　·　直接走開，就舉著魚到處炫耀 🐟');
     if (this.state === 'fish' && this.room?.fishing?.busy) return null;
+    if (this.state === 'sofa' && this.seat) return (this.compact ? PROMPTS_SHORT : PROMPTS).seat;
     if (this.state === 'free') {
       if (this.room?.prompt) return this.room.prompt(this);
       return this.nearFire ? PROMPTS.near : null;

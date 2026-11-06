@@ -69,7 +69,7 @@ const WOOD_COOLDOWN_MS = 1500;
 const FUR_COUNT = FUR_TOTAL; // 毛色數量（5 種一般＋特殊毛色）
 const SPECIES_COUNT = 6; // 狐狸、貓、熊、兔、熊貓、柴犬
 const ACTION_STATES = new Set([
-  'idle', 'walk', 'run', 'addWood', 'roast', 'blanket', 'stargaze', 'fish', 'reel', 'showFish',
+  'idle', 'walk', 'run', 'addWood', 'roast', 'eat', 'blanket', 'stargaze', 'fish', 'reel', 'showFish',
   'wave', 'salute', 'bye', 'pray', // 表情動作
   'pick', 'catch', 'plant', 'water', // 採摘、揮網捕蟲、種菜、澆水
   'sofa', 'sleep', // 🛋️ 坐沙發、躺床
