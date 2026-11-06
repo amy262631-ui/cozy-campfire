@@ -208,7 +208,8 @@ export class ProceduralFox {
     const cream = mat(0xfff6ea);
     const pink = mat(0xffc9c2);
 
-    const ball = (r) => new THREE.SphereGeometry(r, 32, 24);
+    // 球的細緻度依大小：頭、身體 28×20，手腳尾巴這些小球 16×12（畫面上看不出差別，三角形少很多，營火區人多時比較順）
+    const ball = (r) => (r >= 0.2 ? new THREE.SphereGeometry(r, 28, 20) : r >= 0.1 ? new THREE.SphereGeometry(r, 20, 14) : new THREE.SphereGeometry(r, 16, 12));
     const add = (parent, r, material, [x, y, z], [sx, sy, sz] = [1, 1, 1], shadow = true) => {
       const m = new THREE.Mesh(ball(r), material);
       m.position.set(x, y, z);
@@ -248,7 +249,7 @@ export class ProceduralFox {
     });
     // 只覆蓋臉部的一塊球面，半徑幾乎相同 → 完全貼合、沒有凸起
     const face = new THREE.Mesh(
-      new THREE.SphereGeometry(HEAD_R * 1.003, 48, 32, Math.PI / 2 - 0.85, 1.7, 0.95, 1.45),
+      new THREE.SphereGeometry(HEAD_R * 1.003, 36, 24, Math.PI / 2 - 0.85, 1.7, 0.95, 1.45),
       this.faceMat,
     );
     face.scale.set(...HEAD_SCALE);

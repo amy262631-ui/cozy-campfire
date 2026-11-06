@@ -6579,3 +6579,55 @@ body.touch .shop-foot { display: none; }
 .roast.golden {
   box-shadow: 0 0 10px rgba(255, 210, 110, 0.45);
 }
+
+/* ℹ️ 手機、平板：商店資訊・聯絡（電腦版在右下角）；手機收在「⋯」裡 */
+.shopinfo-chip {
+  display: none;
+}
+body.touch .online .shopinfo-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--chip-pad, 2px 9px);
+  border: 1px solid rgba(255, 220, 180, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 245, 230, 0.08);
+  color: inherit;
+  font-size: var(--chip-fs, 13px);
+  text-decoration: none;
+  pointer-events: auto;
+}
+@media (max-width: 599px), (orientation: landscape) and (max-height: 500px) {
+  body.touch:not(.m-more) .m-stack .shopinfo-chip {
+    display: none !important;
+  }
+}
+
+/* 🎫 兩種月票並排（手機窄的時候上下排） */
+.pass-tiers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+.pass-tier {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 200, 140, 0.22);
+  background: rgba(255, 245, 230, 0.05);
+}
+.pass-tier.pass-star {
+  border-color: rgba(190, 200, 255, 0.4);
+  background: linear-gradient(160deg, rgba(90, 100, 180, 0.18), rgba(255, 245, 230, 0.04));
+}
+.pass-tier.on {
+  box-shadow: 0 0 0 2px rgba(255, 210, 120, 0.6);
+}
+.pass-tier-name {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+.pass-tier .pass-list {
+  margin: 6px 0;
+  padding-left: 18px;
+  font-size: 13px;
+}

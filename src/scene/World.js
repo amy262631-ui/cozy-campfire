@@ -247,19 +247,31 @@ export function createWorld(scene, { clearings = [] } = {}) {
 
   // ---------- 零星石頭 ----------
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x55544f, flatShading: true, roughness: 1 });
+  // 26 顆石頭用 InstancedMesh 一次畫完（以前一顆一個網格，要畫 26 次）
+  const rockItems = [];
   for (let i = 0; i < 26; i++) {
     const a = rand() * Math.PI * 2;
     const r = 5 + rand() * 16;
     const s = 0.12 + rand() * 0.35;
     if (inClearing(Math.sin(a) * r, Math.cos(a) * r, 0.5)) continue;
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
-    rock.position.set(Math.sin(a) * r, s * 0.35, Math.cos(a) * r);
-    rock.rotation.set(rand() * 3, rand() * 3, rand() * 3);
-    rock.scale.y = 0.7;
-    rock.castShadow = true;
-    rock.receiveShadow = true;
-    scene.add(rock);
-    if (s > 0.25) colliders.push({ x: rock.position.x, z: rock.position.z, r: s * 0.9 });
+    const it = { x: Math.sin(a) * r, y: s * 0.35, z: Math.cos(a) * r, s, rx: rand() * 3, ry: rand() * 3, rz: rand() * 3 };
+    rockItems.push(it);
+    if (s > 0.25) colliders.push({ x: it.x, z: it.z, r: s * 0.9 });
+  }
+  {
+    const rocks = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), rockMat, Math.max(1, rockItems.length));
+    rocks.count = rockItems.length;
+    const o = new THREE.Object3D();
+    rockItems.forEach((it, i) => {
+      o.position.set(it.x, it.y, it.z);
+      o.rotation.set(it.rx, it.ry, it.rz);
+      o.scale.set(it.s, it.s * 0.7, it.s);
+      o.updateMatrix();
+      rocks.setMatrixAt(i, o.matrix);
+    });
+    rocks.castShadow = true;
+    rocks.receiveShadow = true;
+    scene.add(rocks);
   }
 
   // ---------- 地面低空霧片（模擬高度霧） ----------

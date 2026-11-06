@@ -83,7 +83,7 @@ class RemotePlayer {
     this.group.add(this.character.root);
 
     // 🔥 營火月票的支持者：名字前面一個小營火
-    this.tag = makeNameTag(npc ? npcName(name) : pb ? `🔥 ${name}` : name, npc);
+    this.tag = makeNameTag(npc ? npcName(name) : pb === 2 ? `✨ ${name}` : pb ? `🔥 ${name}` : name, npc); // 月票徽章：🔥 小營火、✨ 星空
     this.tag.position.y = 1.55;
     this.group.add(this.tag);
 

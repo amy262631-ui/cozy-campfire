@@ -71,7 +71,7 @@ import { RECIPES } from './game/crafting.js';
 import { DISHES, DISH_BY_ID } from './game/cooking.js';
 import { MUSEUM_ITEMS, MUSEUM_CATS, MUSEUM_BY_ID } from './game/museum.js';
 import { TRASH, TRASH_BY_ID, RECYCLE_DAILY_CAP } from './game/trash.js';
-import { PASS } from './game/pass.js';
+import { PASS, PASS_TIERS, PASS_TIER_LIST, FREE } from './game/pass.js';
 import { detectSource } from './game/sources.js';
 
 // 網址參數（開發測試用）
@@ -334,6 +334,8 @@ async function init() {
   });
   rooms.lake_dock.fishing = fishing;
   forest.fishing = fishing; // 營火河畔也用同一個釣魚遊戲
+  // 🏃 電腦版 Shift 按一下切換跑步／走路
+  input.onRunToggle = (on) => hud.toast(on ? t('🏃 跑步模式（再按一次 Shift 變回走路）') : t('🚶 走路模式'), 1800);
   forest.seatTaken = (seat) => remotes.anyNear(seat.x, seat.z, 0.45); // 🪵 圓木有沒有人坐
   // 特殊魚的出現條件：營火時間、整點釣魚大賽
   fishing.roll = () => (net.online ? net.request('fishRoll') : null); // 🎣 這一竿的魚由伺服器決定
@@ -790,7 +792,7 @@ async function init() {
     if (reason === 'sit') hud.toast(t('🌰 在營地待了一會兒，撿到 {n} 顆松果', { n: delta }));
     else if (reason === 'quest') hud.toast(t('🌰 完成任務，拿到 {n} 顆松果！可以去心願大樹換裝飾', { n: delta }), 3500);
     else if (reason === 'fish') hud.toast(t('🌰 釣到魚，撿到 {n} 顆松果', { n: delta }));
-    else if (reason === 'fishCap') hud.toast(t('🎣 今天前 30 條魚的松果拿滿了，之後每條 +1（稀有魚照算），明天再來！'), 5000);
+    else if (reason === 'fishCap') hud.toast(t('🎣 今天前 {n} 條魚的松果拿滿了，之後每條 +1（稀有魚照算），明天再來！', { n: passState.active ? (PASS_TIERS[passState.tier] ?? PASS).fish : FREE.fish }), 5000);
     // dex（圖鑑收錄）的提示由 'dex' 事件負責
   });
   // 上方的「📖 圖鑑」：在哪裡都能打開（之後花、其他收集也放在這裡）
@@ -960,6 +962,13 @@ async function init() {
   net.on('outfit', ({ id, ot }) => id !== net.id && remotes.setOutfit(id, ot));
   net.on('outfitGift', ({ id, why, outfits }) => {
     look.outfits = outfits ?? [...look.outfits, id];
+    if (why === 'all') {
+      // 🎁 作者在 /stats 按了「拿到全部造型」
+      look.dailyGot = look.weeklyGot = true;
+      look.dateNext = null;
+      audio.sfx('bell');
+      return hud.toast(t('🎁 拿到全部造型了！按上方「👒 造型」挑一件穿'), 6000);
+    }
     if (id === look.daily) look.dailyGot = true;
     if (id === look.weekly) look.weeklyGot = true;
     if (why === 'date') look.dateNext = null;
@@ -1483,56 +1492,87 @@ async function init() {
   function setPass(p) {
     if (!p) return;
     passState = { ...passState, ...p };
-    hud.passBadge = !!passState.active; // 🔥 月票徽章
+    hud.passBadge = passState.active ? (PASS_TIERS[passState.tier] ?? PASS).icon : ''; // 🔥 小營火／✨ 星空徽章
     hud.setMe(myName);
   }
   const fmtDate = (ms) => new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric' }).format(new Date(ms));
   async function openPass() {
     const info = net.online ? await net.request('passInfo') : null;
     if (info?.ok) setPass(info);
-    const left = passState.active ? Math.max(1, Math.ceil((passState.until - Date.now()) / 86400000)) : 0;
-    const status = passState.active
-      ? t('✅ 月票使用中：到 {date}（還有 {n} 天）', { date: fmtDate(passState.until), n: left }) + '　' + (passState.today ? t('今天的 {n} 顆已經領了', { n: PASS.daily }) : '')
+    // 剩幾天：用台北的日期算（跟括號裡的「到 幾月幾日」一致），不用小時數無條件進位
+    const tpDay = (ms) => Date.parse(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date(ms)));
+    const left = passState.active ? Math.max(1, Math.round((tpDay(passState.until) - tpDay(Date.now())) / 86400000)) : 0;
+    const cur = passState.active ? PASS_TIERS[passState.tier] ?? PASS : null;
+    const status = cur
+      ? t('✅ {icon} {name}月票使用中：到 {date}（還有 {n} 天）', { icon: cur.icon, name: t(cur.zh), date: fmtDate(passState.until), n: left }) + '　' + (passState.today ? t('今天的 {n} 顆已經領了', { n: cur.daily }) : '')
       : t('目前沒有月票');
+    const off = info && !info.on;
+    // 兩種月票並排：買的當天、每天、釣魚照價算的條數、掛機上限（免費玩家：30 條、30 顆）
+    const tierCard = (T) => {
+      let btn;
+      if (cur?.id === 'star' && T.id === 'ember') btn = `<button type="button" disabled>${t('星空月票使用中')}</button>`;
+      else if (cur?.id === 'ember' && T.id === 'star' && passState.upgrade) btn = `<button type="button" data-buy="star" data-up="1">${t('⬆️ 升級星空（補差價 NT$ {p}）', { p: passState.upgrade })}</button>`;
+      else btn = `<button type="button" data-buy="${T.id}">${cur?.id === T.id ? t('再買一次（往後延 {n} 天）', { n: T.days }) : t('購買 NT$ {p}', { p: T.price })}</button>`;
+      return `<div class="pass-tier pass-${T.id}${cur?.id === T.id ? ' on' : ''}">
+        <div class="pass-tier-name">${T.icon} ${t(T.zh)}</div>
+        <div class="pass-price">NT$ ${T.price} <small>/ ${t('{n} 天', { n: T.days })}</small></div>
+        <ul class="pass-list">
+          <li>${t('🌰 買的當天 +{n}', { n: T.first })}</li>
+          <li>${t('🌰 每天第一次進來 +{n}', { n: T.daily })}</li>
+          <li>${t('🎣 釣魚照價算 每天 {n} 條', { n: T.fish })}</li>
+          <li>${t('💤 掛機每天上限 {n} 顆', { n: T.sit })}</li>
+          <li>${t('{icon} 名字前面的徽章', { icon: T.icon })}</li>
+        </ul>
+        <div class="outfit-today" ${off ? 'hidden' : ''}>${btn}</div>
+      </div>`;
+    };
     modal.open(
       t('🎫 營火月票'),
       `<div class="pass-card">
-        <div class="pass-price">NT$ ${PASS.price} <small>/ ${t('{n} 天', { n: PASS.days })}</small></div>
-        <ul class="pass-list">
-          <li>${t('🌰 買下當天先送 {n} 顆松果', { n: PASS.first })}</li>
-          <li>${t('🌰 之後 {d} 天，每天第一次進來多領 {n} 顆（當天沒來就領不到）', { d: PASS.days, n: PASS.daily })}</li>
-          <li>${t('🔥 名字前面的小營火徽章，大家都看得到')}</li>
-          <li>${t('⛺ 月票限定帳篷花色「營火之夜」（買過就一直留著）')}</li>
-        </ul>
+        <div class="pass-tiers">${PASS_TIER_LIST.map(tierCard).join('')}</div>
+        <div class="dex-note">${t('免費玩家：釣魚每天前 {f} 條照價算、掛機每天最多 {s} 顆。月票期間上限提高，越常玩多拿越多；到期後回到原本的上限，買過的東西都保留。⛺ 月票限定帳篷花色「營火之夜」買過就一直留著。', { f: FREE.fish, s: FREE.sit })}</div>
         <div class="outfit-today">${status}</div>
         ${info && !info.account ? `<div class="dex-note">${t('購買前要先建立帳號（👤 存檔），換手機登入月票才不會不見')}</div>` : ''}
         ${info?.test && info?.on ? `<div class="dex-note">${t('⚠️ 目前是綠界測試模式，不會真的扣款')}</div>` : ''}
-        ${info && !info.on ? `<div class="outfit-today">${t('🎫 月票即將推出，敬請期待！')}</div>` : ''}
-        <div class="outfit-today" ${info && !info.on ? 'hidden' : ''}><button type="button" id="pass-buy" ${net.online ? '' : 'disabled'}>${passState.active ? t('🔥 再買一次（往後延 {n} 天）', { n: PASS.days }) : t('🔥 購買營火月票 NT$ {p}', { p: PASS.price })}</button></div>
+        ${off ? `<div class="outfit-today">${t('🎫 月票即將推出，敬請期待！')}</div>` : ''}
         <div class="dex-note">${t('付款由綠界處理（信用卡、ATM、超商代碼），付款完成後自動開通，不用等人工。月票只會加快松果累積，遊戲裡所有東西不買也都拿得到。')}</div>
       </div>`,
-      (body) =>
-        body.querySelector('#pass-buy')?.addEventListener('click', async () => {
-          if (info && !info.account) {
-            modal.close();
-            return hud.onMeClick?.({ focusAccount: true });
-          }
-          // 先開好新分頁（手機上非同步之後才開會被擋）
-          let win = null;
-          try {
-            win = window.open('', '_blank');
-          } catch {
-            /* 被擋就在同一頁開 */
-          }
-          const res = await net.request('passOrder');
-          if (!res?.ok) {
-            win?.close();
-            return hud.toast(res?.reason === 'account' ? t('購買前要先建立帳號（👤 存檔）') : t('現在不能購買，等一下再試'));
-          }
-          if (win) win.location.href = res.url;
-          else location.href = res.url;
-          hud.toast(t('🎫 已經打開綠界付款頁，付款完成後回到遊戲就會自動開通'), 6000);
-        }),
+      (body) => {
+        for (const b of body.querySelectorAll('[data-buy]')) {
+          b.addEventListener('click', async () => {
+            if (info && !info.account) {
+              modal.close();
+              return hud.onMeClick?.({ focusAccount: true });
+            }
+            const T = PASS_TIERS[b.dataset.buy];
+            const up = b.dataset.up === '1';
+            const price = up ? passState.upgrade : T.price;
+            // 先跳確認（金額、內容），按確定才去付款
+            const ok = await confirmBuy.ask({
+              icon: T.icon,
+              name: up ? t('升級成星空月票') : t('{name}月票 {n} 天', { name: t(T.zh), n: T.days }),
+              money: `NT$ ${price}`,
+              desc: up ? t('剩下的天數不變，改成星空月票的待遇，並補送 {n} 顆松果', { n: PASS_TIERS.star.first - PASS_TIERS.ember.first }) : t('買的當天 +{a}、每天 +{b} 顆松果', { a: T.first, b: T.daily }),
+            });
+            if (!ok) return;
+            // 先開好新分頁（手機上非同步之後才開會被擋）
+            let win = null;
+            try {
+              win = window.open('', '_blank');
+            } catch {
+              /* 被擋就在同一頁開 */
+            }
+            const res = await net.request('passOrder', { tier: T.id, upgrade: up });
+            if (!res?.ok) {
+              win?.close();
+              return hud.toast(res?.reason === 'account' ? t('購買前要先建立帳號（👤 存檔）') : t('現在不能購買，等一下再試'));
+            }
+            if (win) win.location.href = res.url;
+            else location.href = res.url;
+            hud.toast(t('🎫 已經打開綠界付款頁，付款完成後回到遊戲就會自動開通'), 6000);
+          });
+        }
+      },
     );
   }
   hud.onPass = () => openPass();
@@ -1643,7 +1683,8 @@ async function init() {
   net.on('pass', (p) => {
     setPass(p);
     audio.sfx('bell');
-    hud.toast(t('🔥 營火月票開通了！到 {date}，先送你 {n} 顆松果，月票限定花色可以到小舖換上', { date: fmtDate(p.until), n: p.gain ?? PASS.first }), 7000);
+    const T = PASS_TIERS[p.tier] ?? PASS;
+    hud.toast(t('{icon} {name}月票開通了！到 {date}，先送你 {n} 顆松果，月票限定花色可以到小舖換上', { icon: T.icon, name: t(T.zh), date: fmtDate(p.until), n: p.gain ?? T.first }), 7000);
     if (modal.isOpen && fishingUI.el.modalTitle.textContent.startsWith('🎫')) openPass();
   });
   // 從綠界付款頁回來
@@ -2018,7 +2059,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
           5000,
         );
       }
-      if (w.daily?.pass) setTimeout(() => hud.toast(t('🎫 營火月票：今天多領 {n} 顆松果 🌰', { n: w.daily.pass }), 4500), 1500);
+      if (w.daily?.pass) setTimeout(() => hud.toast(t('{icon} 月票：今天多領 {n} 顆松果 🌰', { icon: (PASS_TIERS[w.daily.tier] ?? PASS).icon, n: w.daily.pass }), 4500), 1500);
       setPass(w.pass);
     }
     player.character.setAccessory?.(myReward);

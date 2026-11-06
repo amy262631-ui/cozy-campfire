@@ -33,7 +33,7 @@ import { DISH_BY_ID, dishFirstGain } from '../src/game/cooking.js';
 import { MUSEUM_BY_ID, DONATE_PER_DAY } from '../src/game/museum.js';
 import { TRASH, TRASH_BY_ID, TRASH_MAX, TRASH_ROOM, RECYCLE_GAIN, RECYCLE_DAILY_CAP, TRASH_FIRST_GAIN, TRASH_DEX_OUTFIT, pickTrash } from '../src/game/trash.js';
 import { LAYOUT as CAMP_LAYOUT } from '../src/rooms/campLayout.js';
-import { PASS, SPONSOR } from '../src/game/pass.js';
+import { PASS, PASS_TIERS, FREE, SPONSOR } from '../src/game/pass.js';
 import crypto from 'node:crypto';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack, hasLoft } from './homes.js';
 import { hasColors, FURNITURE_COLORS, fishFits } from '../src/game/furnitureCatalog.js';
@@ -417,14 +417,14 @@ const players = savedPlayers && typeof savedPlayers === 'object' && !Array.isArr
 const MAX_WALLETS = 30000;
 const SIT_EVERY_MIN = 5; // 在營地待滿幾分鐘撿一次松果
 const SIT_GAIN = 2;
-const SIT_DAILY_CAP = 30; // 每天靠「待著」最多撿幾顆
+const SIT_DAILY_CAP = FREE.sit; // 每天靠「待著」最多撿幾顆（免費玩家；月票更多，見 pass.js）
 const QUEST_GAIN = 5;
 const FISH_RARITY = FISH.map((f) => f.rarity);
 const POS_MAX = 45; // 座標上限（帳篷營地到 ±37；以前限制 ±20，營地外圍的垃圾撿不到）
 const MAX_SPEED = 7; // 每秒最多移動幾公尺（跑步大約 5.1）
 const FISH_ROLL_GAP = 4000; // 兩次拋竿（要魚）最少間隔
 const FISH_MIN_MS = 4500; // 要到魚之後，最快多久才能拉起來（浮標最快 4 秒才會沉＋拉竿）
-const FISH_DAILY_FULL = 30; // 每天前幾條魚的松果照算（之後每條 1 顆）
+const FISH_DAILY_FULL = FREE.fish; // 每天前幾條魚的松果照算（免費玩家；月票更多，見 pass.js）
 /** 給玩家看的圖鑑：伺服器紀錄＋以前存在瀏覽器裡的舊紀錄（舊紀錄只顯示，不送松果） */
 const dexView = (w) => {
   const out = { ...(w?.dexOld ?? {}) };
@@ -700,7 +700,17 @@ const publicCairnLog = () => ({ done: cairnLog.done, showMs: CAIRN_SHOW_MS, arch
 /** 訂單：{ 訂單編號: { vid, name, amt, at, status: 'new' | 'paid', paidAt, pay } } */
 const orders = asObject(savedOrders);
 const passActive = (w, now = Date.now()) => (w?.pass?.until ?? 0) > now;
-const passView = (w) => ({ until: w?.pass?.until ?? 0, active: passActive(w), today: w?.pd === dayKey() });
+/** 現在的月票等級（PASS_TIERS 的一項）；沒有月票＝null。以前買的月票沒有 tier，當作小營火 */
+const passTier = (w) => (passActive(w) ? PASS_TIERS[w.pass.tier] ?? PASS_TIERS.ember : null);
+/** 小營火升級星空的差價：(150−60)×剩下天數÷30，四捨五入，最少 NT$10 */
+const upgradePrice = (w, now = Date.now()) => {
+  const days = Math.ceil(Math.max(0, (w?.pass?.until ?? 0) - now) / 86400000);
+  return Math.max(10, Math.round(((PASS_TIERS.star.price - PASS_TIERS.ember.price) * days) / 30));
+};
+const passView = (w) => {
+  const tier = passTier(w);
+  return { until: w?.pass?.until ?? 0, active: !!tier, tier: tier?.id ?? null, today: w?.pd === dayKey(), upgrade: tier?.id === 'ember' ? upgradePrice(w) : null };
+};
 /** 綠界設定：Render 的環境變數；沒設定時用綠界公開的測試帳號（不會真的扣錢） */
 const ECPAY = {
   prod: process.env.ECPAY_MODE === 'prod',
@@ -757,21 +767,33 @@ function activatePass(vid, order) {
   const w = players[vid];
   if (!w) return false;
   const now = Date.now();
+  const tier = PASS_TIERS[order?.tier] ?? PASS_TIERS.ember;
+  const cur = passTier(w);
   w.pass ??= {};
-  w.pass.until = Math.max(now, w.pass.until ?? 0) + PASS.days * 86400000;
+  let gain;
+  if (order?.upgrade && cur?.id === 'ember') {
+    // ⬆️ 小營火升級星空：剩下的天數不變，改成星空的待遇；買的當天的松果補差額
+    w.pass.tier = 'star';
+    gain = PASS_TIERS.star.first - PASS_TIERS.ember.first;
+  } else {
+    w.pass.until = Math.max(now, w.pass.until ?? 0) + tier.days * 86400000;
+    // 兩種混著買：用比較好的那一種
+    w.pass.tier = cur && cur.rank > tier.rank ? cur.id : tier.id;
+    gain = tier.first;
+  }
   w.pass.bought = (w.pass.bought ?? 0) + 1;
   w.pd = dayKey(); // 今天已經用「先送的松果」領過了，今天不再加每日的份
-  w.pc += PASS.first;
-  w.tot += PASS.first;
+  w.pc += gain;
+  w.tot += gain;
   saveJson('players.json', players);
-  grantGift(vid, PASS.style);
+  grantGift(vid, tier.style);
   for (const s of io.sockets.sockets.values()) {
     if (s.data.vid !== vid) continue;
-    s.emit('wallet', { pc: w.pc, delta: PASS.first, reason: 'pass' });
-    s.emit('pass', { ...passView(w), gain: PASS.first, order: order?.no });
+    s.emit('wallet', { pc: w.pc, delta: gain, reason: 'pass' });
+    s.emit('pass', { ...passView(w), gain, order: order?.no });
     s.data.onPass?.();
   }
-  console.log(`[月票] ${order?.name ?? vid} 開通到 ${new Date(w.pass.until).toISOString()}`);
+  console.log(`[月票] ${order?.name ?? vid} ${order?.upgrade ? '升級星空' : tier.zh}，到 ${new Date(w.pass.until).toISOString()}`);
   return true;
 }
 
@@ -916,12 +938,14 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   const month = dayKey().slice(0, 7);
   const paid = Object.entries(orders).filter(([, o]) => o.status === 'paid' && !o.sim && dayKey(new Date(o.paidAt)).startsWith(month));
   const revenue = paid.reduce((a, [, o]) => a + o.amt, 0);
-  const passTable = `<h3>🎫 月票＋☕ 贊助（${month}）</h3><p class="me">${ECPAY.prod ? '綠界正式模式' : '⚠️ 綠界測試模式（不會真的收錢）'}・這個月 ${paid.length} 筆、收入 <b>NT$ ${revenue.toLocaleString()}</b>（個人網路銷售服務類大約每月 4 萬元以下，可以先不用辦稅籍，以國稅局最新規定為準）</p>${
+  const sumOf = (f) => paid.filter(([, o]) => f(o)).reduce((a, [, o]) => a + o.amt, 0);
+  const split = `🔥 小營火 NT$ ${sumOf((o) => o.kind !== 'sponsor' && o.tier !== 'star' && !o.upgrade).toLocaleString()}・✨ 星空 NT$ ${sumOf((o) => o.kind !== 'sponsor' && (o.tier === 'star' || o.upgrade)).toLocaleString()}・☕ 贊助 NT$ ${sumOf((o) => o.kind === 'sponsor').toLocaleString()}`;
+  const passTable = `<h3>🎫 月票＋☕ 贊助（${month}）</h3><p class="me">${ECPAY.prod ? '綠界正式模式' : '⚠️ 綠界測試模式（不會真的收錢）'}・這個月 ${paid.length} 筆、收入 <b>NT$ ${revenue.toLocaleString()}</b>（${split}）（個人網路銷售服務類大約每月 4 萬元以下，可以先不用辦稅籍，以國稅局最新規定為準）</p>${
     paid.length
       ? `<div class="wrap"><table><tr><th>付款時間</th><th>名字</th><th>項目</th><th>金額</th><th>付款方式</th><th>訂單編號</th></tr>${paid
           .sort((a, b) => b[1].paidAt - a[1].paidAt)
           .slice(0, 50)
-          .map(([no, o]) => `<tr><td>${new Date(o.paidAt).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td>${String(o.name).replace(/[<>&]/g, '')}</td><td>${o.kind === 'sponsor' ? '☕ 贊助' : '🎫 月票'}</td><td>${o.amt}</td><td>${o.pay ?? ''}</td><td>${no}</td></tr>`)
+          .map(([no, o]) => `<tr><td>${new Date(o.paidAt).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td>${String(o.name).replace(/[<>&]/g, '')}</td><td>${o.kind === 'sponsor' ? '☕ 贊助' : o.upgrade ? '⬆️ 升級星空' : o.tier === 'star' ? '✨ 星空月票' : '🔥 小營火月票'}</td><td>${o.amt}</td><td>${o.pay ?? ''}</td><td>${no}</td></tr>`)
           .join('')}</table></div>`
       : ''
   }`;
@@ -948,6 +972,21 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   btn.onclick = function () { try { if (get()) localStorage.removeItem(K); else localStorage.setItem(K, '1'); } catch (e) {} draw(); };
   draw();
 })();
+</script>
+<p class="me">🎁 作者專用：<button id="all-btn" type="button">這台裝置拿到全部造型</button> <span id="all-st"></span><br><small>用你平常玩的那個瀏覽器打開這頁再按（有登入帳號的話，就送到那個帳號）。會拿到全部造型（每日、每週、營火之約、淨灘、贊助假髮）和分享禮物家具。按完回遊戲重新整理就看得到。</small></p>
+<script>
+(function () {
+  var btn = document.getElementById('all-btn'), st = document.getElementById('all-st');
+  btn.onclick = function () {
+    var vid = ''; try { vid = localStorage.getItem('cozy-campfire-vid') || ''; } catch (e) {}
+    if (!vid) { st.textContent = '這台裝置還沒玩過遊戲，先進遊戲一次再回來按'; return; }
+    btn.disabled = true; st.textContent = '處理中⋯';
+    fetch('/api/allOutfits' + location.search, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vid: vid }) })
+      .then(function (r) { return r.json(); })
+      .then(function (r) { st.textContent = r.ok ? '✅ 新拿到 ' + r.outfits + ' 款造型、' + r.gifts + ' 件禮物家具（回遊戲重新整理）' : '❌ ' + (r.reason || '失敗'); btn.disabled = false; })
+      .catch(function () { st.textContent = '❌ 連不到伺服器'; btn.disabled = false; });
+  };
+})();
 </script><p>伺服器已經連續醒著 <b>${awakeText()}</b>（從 ${new Date(BOOT_AT).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })} 起；正常只有重新部署時才會歸零，如果常常歸零，代表定時叫醒沒有生效、伺服器睡著過）</p><p>現在在線：${online} 人 · 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好；「新旅人」是第一次來的人（從 11/3 開始統計）。</p>
 <div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="${head.length}">還沒有資料</td></tr>'}</table></div>${srcTable}${passTable}</body></html>`);
 });
@@ -966,6 +1005,29 @@ app.all('/api/hit', (req, res) => {
   d[field] ??= {};
   d[field][src] = (d[field][src] ?? 0) + 1;
   saveJson('stats.json', stats);
+});
+
+// 🎁 作者專用：這台裝置（vid）拿到全部造型＋分享禮物家具（從 /stats 的按鈕呼叫，要 STATS_KEY）
+// 不用名字判斷（別人改同名就能拿），只認 /stats 頁面送來的這台裝置代號
+app.post('/api/allOutfits', express.json(), (req, res) => {
+  if (process.env.STATS_KEY && req.query.key !== process.env.STATS_KEY) return res.status(403).json({ ok: false, reason: '密碼不對' });
+  const vid = String(req.body?.vid ?? '').slice(0, 24);
+  const w = players[vid];
+  if (!w) return res.json({ ok: false, reason: '找不到這台裝置的存檔，先進遊戲一次' });
+  w.outfits ??= [];
+  let n = 0;
+  for (const o of OUTFITS) {
+    if (!o?.id || w.outfits.includes(o.id)) continue;
+    w.outfits.push(o.id);
+    n++;
+  }
+  syncRack(vid);
+  saveJson('players.json', players);
+  let g = 0;
+  for (const id of ['postcard', ...REF_TIERS.map(([, gid]) => gid)]) if (grantGift(vid, id)) g++;
+  for (const so of io.sockets.sockets.values()) if (so.data.vid === vid) so.emit('outfitGift', { id: null, why: 'all', outfits: w.outfits });
+  console.log(`[作者] ${vid} 拿到全部造型：新增 ${n} 款、禮物 ${g} 件`);
+  res.json({ ok: true, outfits: n, gifts: g });
 });
 
 // 💡 玩家建議：/ideas（有設 STATS_KEY 時要帶 ?key=）
@@ -1008,7 +1070,7 @@ app.get('/api/pay/go/:no', (req, res) => {
     PaymentType: 'aio',
     TotalAmount: String(o.amt),
     TradeDesc: o.kind === 'sponsor' ? 'CozyCampfire support' : 'CozyCampfire monthly pass',
-    ItemName: o.kind === 'sponsor' ? SPONSOR.item : PASS.item,
+    ItemName: o.kind === 'sponsor' ? SPONSOR.item : o.upgrade ? '營火月票・升級星空（補差價）' : (PASS_TIERS[o.tier] ?? PASS).item,
     ReturnURL: `${base}/api/pay/notify`,
     ChoosePayment: 'ALL',
     EncryptType: '1',
@@ -1312,7 +1374,7 @@ io.on('connection', (socket) => {
       if (player.tl && player.tl !== SPECIES_TAIL[player.sp] && !(lk.tail ?? []).includes(player.tl)) player.tl = '';
       if (player.er && player.er !== SPECIES_EARS[player.sp] && !(lk.ear ?? []).includes(player.er)) player.er = '';
     }
-    if (wal) player.pb = passActive(wal) ? 1 : 0; // 🔥 月票徽章
+    if (wal) player.pb = passTier(wal)?.rank ?? 0; // 月票徽章：1＝🔥 小營火、2＝✨ 星空
     // 第一次來：記住是從哪裡來的（算隔天回來的比例用）
     if (firstVisit && wal) {
       wal.src = src;
@@ -1362,12 +1424,13 @@ io.on('connection', (socket) => {
         daily = { gain, streak: wal.streak };
       }
       // 🔥 營火月票：每天第一次進來多領松果
-      if (passActive(wal) && wal.pd !== d) {
+      const tier = passTier(wal);
+      if (tier && wal.pd !== d) {
         wal.pd = d;
-        wal.pc += PASS.daily;
-        wal.tot += PASS.daily;
+        wal.pc += tier.daily;
+        wal.tot += tier.daily;
         saveJson('players.json', players);
-        daily = { ...(daily ?? { gain: 0, streak: wal.streak }), pass: PASS.daily };
+        daily = { ...(daily ?? { gain: 0, streak: wal.streak }), pass: tier.daily, tier: tier.id };
       }
       // 在營地待著，每 5 分鐘撿到松果（每天有上限）
       clearInterval(sitTimer);
@@ -1381,7 +1444,7 @@ io.on('connection', (socket) => {
           wal.sd = d2;
           wal.sit = 0;
         }
-        if (wal.sit >= SIT_DAILY_CAP) return;
+        if (wal.sit >= (passTier(wal)?.sit ?? FREE.sit)) return; // 掛機每天上限：免費 30、小營火 45、星空 60
         wal.sit += SIT_GAIN;
         award(SIT_GAIN, 'sit');
       }, 60000);
@@ -1952,7 +2015,7 @@ io.on('connection', (socket) => {
 
   // 🔥 營火月票
   const hasAccount = () => !!player?.vid && Object.values(accounts).some((a) => a.vid === player.vid);
-  socket.on('passInfo', (data, ack) => ack?.(wal ? { ok: true, ...passView(wal), account: hasAccount(), price: PASS.price, test: !ECPAY.prod, on: PASS_ON } : { ok: false }));
+  socket.on('passInfo', (data, ack) => ack?.(wal ? { ok: true, ...passView(wal), account: hasAccount(), test: !ECPAY.prod, on: PASS_ON } : { ok: false }));
   let lastOrder = 0;
   // ☕ 贊助：這個月的假髮、能不能付款
   socket.on('sponsorInfo', (data, ack) => {
@@ -1985,7 +2048,14 @@ io.on('connection', (socket) => {
     lastOrder = now;
     // 訂單編號：英數字 20 字以內，不能重複
     const no = `CF${now.toString(36)}${crypto.randomBytes(3).toString('hex')}`.slice(0, 20).toUpperCase();
-    orders[no] = { vid: player.vid, name: player.name, amt: PASS.price, at: now, status: 'new' };
+    // 🔥 小營火、✨ 星空；小營火還沒到期可以升級星空（補差價）
+    const tier = PASS_TIERS[data?.tier] ? PASS_TIERS[data.tier] : PASS_TIERS.ember;
+    const cur = passTier(wal);
+    const upgrade = !!data?.upgrade;
+    if (upgrade && cur?.id !== 'ember') return ack?.({ ok: false, reason: 'noUpgrade' });
+    if (!upgrade && cur?.id === 'star' && tier.id === 'ember') return ack?.({ ok: false, reason: 'hasStar' }); // 星空期間不用再買小營火
+    const amt = upgrade ? upgradePrice(wal, now) : tier.price;
+    orders[no] = { vid: player.vid, name: player.name, kind: 'pass', tier: upgrade ? 'star' : tier.id, upgrade, amt, at: now, status: 'new' };
     // 太舊、沒付款的訂單清掉
     for (const [k, o] of Object.entries(orders)) if (o.status === 'new' && now - o.at > 7 * 86400000) delete orders[k];
     saveJson('orders.json', orders);
@@ -2454,8 +2524,9 @@ io.on('connection', (socket) => {
         const d = dayKey();
         if (wal.fday !== d) [wal.fday, wal.fn] = [d, 0];
         wal.fn++;
-        if (wal.fn <= FISH_DAILY_FULL || FISH_RARITY[fish] >= 4) award(gain, 'fish');
-        else award(1, wal.fn === FISH_DAILY_FULL + 1 ? 'fishCap' : 'fish', true);
+        const full = passTier(wal)?.fish ?? FREE.fish; // 照價算的條數：免費 30、小營火 40、星空 50
+        if (wal.fn <= full || FISH_RARITY[fish] >= 4) award(gain, 'fish');
+        else award(1, wal.fn === full + 1 ? 'fishCap' : 'fish', true);
       }
     }
     // ♻️ 釣到垃圾：順手放進垃圾袋（湖裡會釣到的種類很多，不只漂流瓶和罐頭）

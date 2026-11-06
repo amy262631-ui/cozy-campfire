@@ -2,7 +2,7 @@ import { t } from '../i18n/i18n.js';
 
 /**
  * 🛒 買東西前的確認視窗：點商品先看預覽（圖片、名字、價格），按「確定購買」才真的買。
- *   ask({ icon, name, price, img?, desc?, coins? }) → Promise<boolean>
+ *   ask({ icon, name, price, img?, desc?, coins?, money? }) → Promise<boolean>（money：真錢的金額文字，例如「NT$ 60」）
  */
 export class ConfirmBuy {
   constructor(root = document.getElementById('ui')) {
@@ -28,7 +28,7 @@ export class ConfirmBuy {
     return !this.el.hidden;
   }
 
-  ask({ icon = '', name = '', price = 0, img = '', desc = '', coins = null }) {
+  ask({ icon = '', name = '', price = 0, img = '', desc = '', coins = null, money = '' }) {
     this.#done(false); // 前一個還開著就當取消
     const poor = coins != null && coins < price;
     this.card.innerHTML = `
@@ -36,11 +36,11 @@ export class ConfirmBuy {
       ${img ? `<img class="cbuy-img" src="${img}" alt="">` : `<div class="cbuy-icon">${icon}</div>`}
       <div class="cbuy-name">${icon && img ? `${icon} ` : ''}${name}</div>
       ${desc ? `<div class="cbuy-desc">${desc}</div>` : ''}
-      <div class="cbuy-price">🌰 ${price}${coins != null ? `<small>${t('（你有 {n} 顆）', { n: coins })}</small>` : ''}</div>
+      <div class="cbuy-price">${money ? `💳 ${money}` : `🌰 ${price}`}${!money && coins != null ? `<small>${t('（你有 {n} 顆）', { n: coins })}</small>` : ''}</div>
       ${poor ? `<div class="cbuy-poor">${t('松果還差 {n} 顆', { n: price - coins })}</div>` : ''}
       <div class="cbuy-btns">
         <button type="button" data-cb="no" class="cbuy-no">${t('再想想')}</button>
-        <button type="button" data-cb="yes" class="cbuy-yes" ${poor ? 'disabled' : ''}>${t('確定購買')}</button>
+        <button type="button" data-cb="yes" class="cbuy-yes" ${poor ? 'disabled' : ''}>${money ? t('前往付款') : t('確定購買')}</button>
       </div>`;
     this.el.hidden = false;
     return new Promise((resolve) => (this.resolve = resolve));

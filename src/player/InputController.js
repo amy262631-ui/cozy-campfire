@@ -11,9 +11,9 @@ const MOVE_KEYS = {
   ArrowLeft: 'left',
   KeyD: 'right',
   ArrowRight: 'right',
-  ShiftLeft: 'run',
-  ShiftRight: 'run',
 };
+/** 電腦版：Shift 按一下切換跑步／走路（很多人不知道要「按住」，手機搖桿推到底本來就會跑） */
+const RUN_KEYS = new Set(['ShiftLeft', 'ShiftRight']);
 
 /** 單次觸發的動作鍵 */
 const ACTION_KEYS = {
@@ -52,6 +52,15 @@ export class InputController {
     if (action) {
       e.preventDefault();
       if (pressed && !e.repeat) this.emitAction(action);
+      return;
+    }
+
+    if (RUN_KEYS.has(e.code)) {
+      if (pressed && !e.repeat) {
+        this.runToggle = !this.runToggle;
+        this.onRunToggle?.(this.runToggle);
+      }
+      this.markActive();
       return;
     }
 
@@ -98,7 +107,7 @@ export class InputController {
   }
 
   get isRunning() {
-    return this.state.run || Math.hypot(this.virtualMove.x, this.virtualMove.y) > 0.95;
+    return !!this.runToggle || Math.hypot(this.virtualMove.x, this.virtualMove.y) > 0.95;
   }
 
   /** 是否有移動輸入（用來取消坐著的動作） */
