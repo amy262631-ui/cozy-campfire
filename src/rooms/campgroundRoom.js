@@ -11,6 +11,9 @@ import { buildSoil, buildCrop } from './gardenModels.js';
 import { slotLocal } from '../game/garden.js';
 import { createTrashLayer } from './trashLayer.js';
 import { buildYard, yardRadius } from './yardModels.js';
+import { YARD_USES, YARD_BY_ID } from '../game/yardCatalog.js';
+const YARD_ICON = Object.fromEntries(Object.entries(YARD_BY_ID).map(([k, v]) => [k, v.icon]));
+const YARD_NAME = Object.fromEntries(Object.entries(YARD_BY_ID).map(([k, v]) => [k, v.zh]));
 
 /**
  * 🏕️ 帳篷營地：一條彎彎曲曲的環形小路繞著中央的小營火，
@@ -18,6 +21,11 @@ import { buildYard, yardRadius } from './yardModels.js';
  * 帳篷清單由伺服器給（setTents），最多 32 頂；沒人住的空地插一支小木牌。
  */
 const SCALE = 0.55; // 營地裡的帳篷縮小一點，才排得下
+// 門口擺設的大小：椅子、吊床、腳踏車這些要能坐，跟角色比例要對（0.8）；露營車、拖車屋太大會擋住帳篷，小一點
+const YARD_SCALE_OF = { camper: 0.6, airstream: 0.6, jeep: 0.7 };
+const yardScale = (id) => YARD_SCALE_OF[id] ?? 0.8;
+// 🪑 門口桌椅那一格的位置（帳篷自己的座標；x 跟著菜園的另一邊）
+const SEAT_SPOT = { x: -2.1, z: 4.4, ry: 0 };
 export const CAMP_PLOTS = CAMP_SIZE;
 const PLOTS = LAYOUT.plots;
 
@@ -545,7 +553,7 @@ export function createCampgroundRoom() {
   const patchOther = lowpoly(0x3a5230);
   let plots = PLOTS.map((p, i) => ({ ...p, door: spots[i].door, out: spots[i].out, garden: spots[i].garden, tent: null, key: null, g: null, collider: null }));
 
-  const tentKey = (tent) => (tent ? [tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.open, tent.likes, tent.n, tent.yard ?? '', JSON.stringify(tent.garden ?? null)].join('|') : 'empty');
+  const tentKey = (tent) => (tent ? [tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.open, tent.likes, tent.n, tent.yard ?? '', tent.seat ?? '', JSON.stringify(tent.garden ?? null)].join('|') : 'empty');
   const trash = createTrashLayer(group);
   /** 🥕 小菜園的作物（世界座標，跟帳篷分開放） */
   const gardensGroup = new THREE.Group();
@@ -584,7 +592,7 @@ export function createCampgroundRoom() {
       s.userData.own = true;
       g.add(s);
       const sp = doorAt(0.7);
-      return { g, door: sp.door, out: sp.out, collider: null, yardCol: null };
+      return { g, door: sp.door, out: sp.out, collider: null, yards: [] };
     }
     const shell = tentShell(tent.shape, tent.style);
     shell.scale.setScalar(SCALE);
@@ -631,20 +639,29 @@ export function createCampgroundRoom() {
       crop.traverse((o) => o.userData.spin && spinners.push(o));
     });
     // 🚙 門口擺設：帳篷前面、菜園的另一邊
-    let yardCol = null;
-    if (tent.yard) {
-      const y = buildYard(tent.yard);
+    //    🪑 門口桌椅另外一格：擺在大型擺設的前面一點（兩格可以同時有）
+    const yards = [];
+    const side = p.gardenSide || 1;
+    for (const [id, lx, lz, ry] of [[tent.yard, -2.4 * side, 2.3, -Math.PI / 2], [tent.seat, SEAT_SPOT.x * side, SEAT_SPOT.z, SEAT_SPOT.ry * side]]) {
+      if (!id) continue;
+      const y = buildYard(id);
       y.traverse((o) => o.isMesh && (o.userData.ownGeo = true));
-      y.scale.setScalar(SCALE);
-      const lx = -2.4 * (p.gardenSide || 1);
-      const lz = 2.3;
+      y.scale.setScalar(yardScale(id)); // 門口擺設比帳篷大一點：可以坐、躺，跟角色的比例才對
       y.position.set(lx, 0, lz);
-      y.rotation.y = -Math.PI / 2;
+      y.rotation.y = ry;
       g.add(y);
+      if (y.userData.glow) {
+        // 🔥 小火爐：暖暖的光暈（貼圖，不用真的燈）
+        const gl = new THREE.Sprite(tentGlow);
+        const o = y.userData.glow;
+        gl.position.set(o.x, o.y, o.z);
+        gl.scale.setScalar(2.2);
+        y.add(gl);
+      }
       const f = frame(p.ry);
-      yardCol = { x: p.x + f.fx * lz + f.rx * lx, z: p.z + f.fz * lz + f.rz * lx, r: yardRadius(tent.yard) * SCALE };
+      yards.push({ id, obj: y, col: { x: p.x + f.fx * lz + f.rx * lx, z: p.z + f.fz * lz + f.rz * lx, r: yardRadius(id) * yardScale(id) } });
     }
-    return { g, gg, door: sp.door, out: sp.out, collider: { x: p.x, z: p.z, r: front * 0.92 }, yardCol };
+    return { g, gg, door: sp.door, out: sp.out, collider: { x: p.x, z: p.z, r: front * 0.92 }, yards };
   }
 
   function setTents(list = []) {
@@ -678,11 +695,69 @@ export function createCampgroundRoom() {
     });
     if (!changed) return;
     colliders.length = 0;
-    colliders.push(...staticColliders, ...plots.flatMap((p) => [p.collider, p.yardCol]).filter(Boolean));
+    colliders.push(...staticColliders, ...plots.flatMap((p) => [p.collider, ...(p.yards ?? []).map((y) => y.col)]).filter(Boolean));
   }
   setTents([]);
 
-  const resolveCollision = makeResolver(colliders, { type: 'rect', ...BOUNDS });
+  const baseResolve = makeResolver(colliders, { type: 'rect', ...BOUNDS });
+  // ---------- 🚙 門口擺設：可以坐、躺的位置（世界座標） ----------
+  const UP = new THREE.Vector3();
+  /** 某一格門口擺設的座位（世界座標＋面向） */
+  function yardSeats(p, y) {
+    const u = y && YARD_USES[y.id];
+    if (!u?.seats || !y.obj) return [];
+    y.obj.updateMatrixWorld(true);
+    return u.seats.map((st, i) => {
+      const w = y.obj.localToWorld(new THREE.Vector3(st.x, st.y, st.z));
+      const dir = UP.set(Math.sin(st.face), 0, Math.cos(st.face)).transformDirection(y.obj.matrixWorld);
+      return { i, x: w.x, y: w.y, z: w.z, face: Math.atan2(dir.x, dir.z), sleep: !!st.sleep, driver: !!st.driver, inside: !!st.inside, swing: !!st.swing, hid: p.tent.hid, item: y.id };
+    });
+  }
+  /** 站在哪一格的門口擺設旁邊 */
+  function yardAt(pos) {
+    let best = null;
+    let bd = Infinity;
+    let by = null;
+    for (const p of plots) {
+      if (!p.yards?.length || p.tent?.demo) continue;
+      for (const y of p.yards) {
+        const d = Math.hypot(pos.x - y.col.x, pos.z - y.col.z) - y.col.r;
+        if (d < 1.0 && d < bd) [best, by, bd] = [p, y, d];
+      }
+    }
+    return best ? { plot: best, yard: by, d: bd } : null;
+  }
+  /** 按 E 會用到門口擺設嗎（擺設比門口、菜園近才算） */
+  function pickYard(pos) {
+    const yd = yardAt(pos);
+    if (!yd) return null;
+    const tg = targetAt(pos);
+    const dT = tg?.door ? Math.hypot(pos.x - tg.door.door.x, pos.z - tg.door.door.z) : tg?.garden ? Math.hypot(pos.x - tg.garden.garden.x, pos.z - tg.garden.garden.z) : Infinity;
+    return yd.d + 0.6 < dT ? yd : null;
+  }
+  let lastActions = null;
+  const seatedOn = () => {
+    const a = lastActions;
+    return a?.seat?.yard && (a.state === 'sofa' || a.state === 'sleep') ? a.seat : null;
+  };
+  function resolveCollision(pos, r) {
+    const st = seatedOn();
+    if (st) {
+      pos.set(st.x, st.y, st.z);
+      return;
+    }
+    baseResolve(pos, r);
+    pos.y = 0;
+  }
+  /** 其他玩家坐在門口擺設上的高度（遠端角色用；坐、躺本身會再加一點） */
+  function heightAt(x, z) {
+    for (const p of plots) for (const y of p.yards ?? []) {
+      if (!YARD_USES[y.id]?.seats) continue;
+      if (Math.hypot(x - y.col.x, z - y.col.z) > y.col.r + 0.5) continue;
+      for (const st of yardSeats(p, y)) if (Math.hypot(x - st.x, z - st.z) < 0.15) return Math.max(0, st.y - (st.sleep ? 0.26 : 0.2));
+    }
+    return 0;
+  }
 
   /** 站在哪一格的門口（1.6 公尺內） */
   function plotAt(pos) {
@@ -836,6 +911,12 @@ export function createCampgroundRoom() {
     cameraDistance: 8,
     audio: { fire: 0.15, wind: 0.9, ambient: 1, water: 0, music: 0.5, song: 0 },
     resolveCollision,
+    heightAt,
+    yardSeats,
+    /** 目前的營位（除錯、測試用） */
+    get plots() {
+      return plots;
+    },
     setTents,
     plotAt,
     trash,
@@ -890,6 +971,17 @@ export function createCampgroundRoom() {
       }
     },
     onAction(name, actions) {
+      lastActions = actions;
+      // 坐在門口擺設上：E 起身
+      if (name === 'interact' && seatedOn()) {
+        actions.stop();
+        return true;
+      }
+      // 🚲 騎腳踏車中：E 下車
+      if (name === 'interact' && actions.state === 'ride') {
+        actions.stop();
+        return true;
+      }
       if (name !== 'interact' || actions.state !== 'free') return false;
       const tb = trash.near(actions.player.position);
       if (tb) {
@@ -897,14 +989,23 @@ export function createCampgroundRoom() {
         return true;
       }
       const tg = targetAt(actions.player.position);
+      // 🚙 門口擺設比門口、菜園近的話：打開擺設的選單
+      const yd = pickYard(actions.player.position);
+      if (yd) {
+        actions.onYard?.(yd.plot, yardSeats(yd.plot, yd.yard), yd.yard);
+        return true;
+      }
       if (!tg) return false;
       if (tg.garden) actions.onGarden?.(tg.garden);
       else actions.onVisit?.(tg.door);
       return true;
     },
     prompt(actions) {
+      lastActions = actions;
       if (trash.near(actions.player.position)) return t('<kbd>E</kbd> ♻️ 撿起垃圾');
       const tg = targetAt(actions.player.position);
+      const yd = pickYard(actions.player.position);
+      if (yd) return t('<kbd>E</kbd> {icon} {name}', { icon: YARD_ICON[yd.yard.id] ?? '🚙', name: t(YARD_NAME[yd.yard.id] ?? '') });
       if (tg?.garden) return tg.garden.tent.mine ? t('<kbd>E</kbd> 🥕 我的小菜園') : t('<kbd>E</kbd> 💧 看看「{name}」的菜園', { name: tg.garden.tent.name || t('旅人') });
       const p = tg?.door;
       if (!p) return null;
@@ -914,7 +1015,11 @@ export function createCampgroundRoom() {
       return t('<kbd>E</kbd> 拜訪「{name}」', { name: p.tent.name || t('旅人的帳篷') });
     },
     interactHint(actions) {
+      lastActions = actions;
+      if (seatedOn() || actions.state === 'ride') return ['🧍', t('起身')];
       if (trash.near(actions.player.position)) return ['♻️', t('撿起來')];
+      const yd0 = pickYard(actions.player.position);
+      if (yd0) return [YARD_ICON[yd0.yard.id] ?? '🚙', t('使用')];
       const tg = targetAt(actions.player.position);
       if (tg?.garden) return ['🥕', t('菜園')];
       return tg ? ['🚪', t('拜訪')] : null;

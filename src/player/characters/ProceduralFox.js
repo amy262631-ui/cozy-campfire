@@ -8,6 +8,7 @@ import { buildOutfit, animateOutfit } from '../outfit3d.js';
 import { OUTFIT_BY_ID } from '../../game/outfits.js';
 import { HAIR_VOLUME } from '../hair3d.js';
 import { createFishMesh, fishScale } from '../../fishing/fishModel.js';
+import { buildYard } from '../../rooms/yardModels.js';
 
 /**
  * 內建角色：用平滑球體拼成的圓滾滾 Q 版小狐狸（大頭、短身、短腳），五官是平面畫上去的。
@@ -24,7 +25,7 @@ import { createFishMesh, fishScale } from '../../fishing/fishModel.js';
  */
 
 const UP_Y = new THREE.Vector3(0, 1, 0);
-const SIT_POSES = new Set(['sit', 'roast', 'blanket', 'lookUp', 'reel', 'sleep', 'eat']);
+const SIT_POSES = new Set(['sit', 'roast', 'blanket', 'lookUp', 'reel', 'sleep', 'eat', 'ride']);
 
 // 兩隻腳（像小人一樣站著，手是另外兩顆小丸子）
 const FEET_STAND = [[-0.13, 0.07, 0.04], [0.13, 0.07, 0.04]];
@@ -513,6 +514,18 @@ export class ProceduralFox {
   }
 
   setProp(name, visible) {
+    if (name === 'bike') {
+      // 🚲 騎門口的腳踏車：腳踏車放在腳下（角色整個抬高坐在座墊上）
+      if (visible && !this.bike) {
+        this.bike = buildYard('bike');
+        this.bike.scale.setScalar(0.8);
+        this.bike.rotation.y = -Math.PI / 2;
+        this.bike.position.set(0, -0.4, 0.06);
+        this.root.add(this.bike);
+      }
+      if (this.bike) this.bike.visible = visible;
+      return;
+    }
     if (name === 'stick') this.stick.group.visible = visible;
     else if (name === 'rod') this.rod.group.visible = visible;
     else if (name === 'fish') this.heldFish.visible = visible;
@@ -726,6 +739,11 @@ export class ProceduralFox {
         torsoRX = -0.22;
         headRX = -0.55;
         tailWag = Math.sin(t * 1.0) * 0.2;
+      } else if (P === 'ride') {
+        armsT[0].set(-0.16, 0.5, 0.32);
+        armsT[1].set(0.16, 0.5, 0.32);
+        torsoRX = 0.12;
+        headRX = -0.05;
       } else if (P === 'eat') {
         // 🍡 拿到嘴邊（0～0.45 秒）→ 小口咬兩下（0.5、0.9 秒）→ 依熟度的反應（1.4 秒之後）
         const pt = this.poseTime;
@@ -912,7 +930,14 @@ export class ProceduralFox {
     // 🛏️ 躺平：整個人往後倒，頭朝後面（床頭）
     const lie = P === 'sleep';
     this.root.rotation.x += ((lie ? -Math.PI / 2 : 0) - this.root.rotation.x) * k;
-    this.root.position.y += ((lie ? 0.2 : 0) - this.root.position.y) * k;
+    const riding = P === 'ride';
+    this.root.position.y += ((lie ? 0.2 : riding ? 0.4 : 0) - this.root.position.y) * k;
+    if (riding) {
+      // 踩腳踏車：腳一上一下（手握把手在上面的姿勢裡）
+      const ph = t * 9 * Math.min(1, speed / 2);
+      this.feet[0].position.y = 0.12 + Math.max(0, Math.sin(ph)) * 0.08;
+      this.feet[1].position.y = 0.12 + Math.max(0, Math.sin(ph + Math.PI)) * 0.08;
+    }
 
     // 眨眼（裹毯時閉眼）：直接換成閉眼貼圖
     this._blinkTimer -= dt;

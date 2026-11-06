@@ -89,7 +89,7 @@ export class ShopPanel {
       const yd = e.target.closest('[data-yard]');
       if (yd && !this.busy) {
         this.busy = true;
-        await this.onEdit?.('yard', { s: yd.dataset.yard });
+        await this.onEdit?.('yard', { s: yd.dataset.yard, slot: yd.dataset.slot });
         this.busy = false;
         return this.render();
       }
@@ -123,7 +123,9 @@ export class ShopPanel {
     return this.el.classList.contains('show');
   }
 
-  open() {
+  /** @param {string} [tab] 從哪裡打開就跳到相關分頁：帳篷布置→furn（家具）、營火區攤位→照舊 */
+  open(tab) {
+    if (tab) this.tab = tab;
     this.el.classList.add('show');
     this.pick = null;
     this.render();
@@ -174,18 +176,22 @@ export class ShopPanel {
     if (this.tab === 'yard') {
       this.preview.stop();
       const own = home.yard?.own ?? [];
-      const on = home.yard?.on ?? null;
+      const row = (y, on, slot) => {
+        const has = own.includes(y.id);
+        const act = has
+          ? y.id === on
+            ? `<button type="button" data-yard="" data-slot="${slot}">${t('✅ 擺著中・收起來')}</button>`
+            : `<button type="button" data-yard="${y.id}">${t('擺出來')}</button>`
+          : `<button type="button" data-buy="yard_${y.id}" ${coins == null || coins < y.price ? 'disabled' : ''}>🌰 ${y.price}</button>`;
+        return `<div class="yard-row${y.id === on ? ' on' : ''}"><span class="yr-icon">${y.icon}</span><div class="yr-txt"><b>${t(y.zh)}</b><small>${t(y.note)}</small></div>${act}</div>`;
+      };
+      // 兩格分開：大型擺設一次一樣、🪑 門口桌椅另外一樣（可以同時擺）
       this.body.innerHTML = `${tabs}
-        <div class="shop-sub">${t('擺在帳篷營地裡、你家門口旁邊，大家經過都看得到（一次擺一樣，買過的可以隨時換）')}</div>
-        <div class="yard-list">${YARD_ITEMS.map((y) => {
-          const has = own.includes(y.id);
-          const act = has
-            ? y.id === on
-              ? `<button type="button" data-yard="">${t('✅ 擺著中・收起來')}</button>`
-              : `<button type="button" data-yard="${y.id}">${t('擺出來')}</button>`
-            : `<button type="button" data-buy="yard_${y.id}" ${coins == null || coins < y.price ? 'disabled' : ''}>🌰 ${y.price}</button>`;
-          return `<div class="yard-row${y.id === on ? ' on' : ''}"><span class="yr-icon">${y.icon}</span><div class="yr-txt"><b>${t(y.zh)}</b><small>${t(y.note)}</small></div>${act}</div>`;
-        }).join('')}</div>`;
+        <div class="shop-sub">${t('擺在帳篷營地裡、你家門口旁邊，大家經過都看得到。大型擺設和門口桌椅各可以擺一樣，買過的可以隨時換')}</div>
+        <div class="yard-sec">${t('🪑 門口桌椅')}</div>
+        <div class="yard-list">${YARD_ITEMS.filter((y) => y.slot === 'seat').map((y) => row(y, home.yard?.seat ?? null, 'seat')).join('')}</div>
+        <div class="yard-sec">${t('🚙 大型擺設')}</div>
+        <div class="yard-list">${YARD_ITEMS.filter((y) => y.slot !== 'seat').map((y) => row(y, home.yard?.on ?? null, 'on')).join('')}</div>`;
       return;
     }
     if (this.tab === 'look') {

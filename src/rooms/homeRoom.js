@@ -20,6 +20,12 @@ export const cellCenter = (gx, gz, grid = GRID_BASE) => {
   return { x: -half + CELL / 2 + gx * CELL, z: -half + CELL / 2 + gz * CELL };
 };
 
+const GADGET_HINT = {
+  radio: ['📻', '換歌', '轉收音機換一首歌'],
+  guitar: ['🎸', '彈奏', '彈一段木吉他'],
+  telescope: ['🔭', '看星星', '用望遠鏡看星星'],
+  fridge: ['🧊', '冰箱', '打開小冰箱'],
+};
 export function createHomeRoom() {
   const group = new THREE.Group();
   group.name = 'home';
@@ -152,6 +158,27 @@ export function createHomeRoom() {
   let rest = null;
   let lastPos = { x: 0, y: 0, z: 0 };
   /** 離自己最近、按 E 可以坐的家具 */
+  /** 🎵 有小功能的家具（按 E）：收音機、木吉他、望遠鏡、小冰箱；小暖爐坐在旁邊會暖暖的 */
+  const GADGETS = { radio: 1, guitar: 1, telescope: 1, fridge: 1 };
+  const gadgets = [];
+  const stoves = [];
+  const nearGadget = () => {
+    let best = null;
+    let bd = 0.95;
+    for (const s of gadgets) {
+      if (s.loft !== level >= 2) continue;
+      const d = Math.hypot(lastPos.x - s.x, lastPos.z - s.z);
+      if (d < bd) [best, bd] = [s, d];
+    }
+    return best ? { ...best, d: bd } : null;
+  };
+  /** 先看座位，再看小功能家具（哪個近用哪個） */
+  const nearUse = () => {
+    const s = nearSeat();
+    const g = nearGadget();
+    if (s && (!g || Math.hypot(lastPos.x - s.x, lastPos.z - s.z) <= g.d)) return { seat: s };
+    return g ? { gadget: g } : null;
+  };
   const nearSeat = () => {
     let best = null;
     let bd = 0.95;
@@ -177,6 +204,9 @@ export function createHomeRoom() {
 
   // 燈：帳篷頂一顆暖黃燈＋淡淡的環境光
   const light = new THREE.PointLight(0xffd9a0, 9, 9, 1.4);
+  const lightColor = light.color.clone();
+  const WARM = new THREE.Color(0xff9a50);
+  let warmK = 0;
   light.position.set(0, 3.0, 0);
   group.add(light);
   const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffe2b0 }));
@@ -325,6 +355,8 @@ export function createHomeRoom() {
     colliders2.length = 0;
     swimmers.length = 0;
     seats.length = 0;
+    gadgets.length = 0;
+    stoves.length = 0;
     rest = null;
     const rows2 = loftShape && hasLoft(home) ? loftRows(grid) : 0;
     for (const it of home.items ?? []) {
@@ -350,6 +382,10 @@ export function createHomeRoom() {
       });
       // 門口那條走道（最前排中間）的家具不擋路，免得把門堵住出不去
       // 🛋️ 可以坐、躺的家具（按 E）
+      stack.forEach((it) => {
+        if (GADGETS[it.i]) gadgets.push({ id: it.i, x: c.x, z: c.z, loft: isLoftCell(z) });
+        if (it.i === 'stove') stoves.push({ x: c.x, z: c.z, loft: isLoftCell(z) });
+      });
       stack.forEach((it, lv) => {
         const f = CATALOG_BY_ID[it.i];
         if (f?.seat == null) return;
@@ -497,6 +533,13 @@ export function createHomeRoom() {
     get scale() {
       return scale;
     },
+    /** 有小功能的家具、可以坐的位置（測試用） */
+    get gadgets() {
+      return gadgets;
+    },
+    get seats() {
+      return seats;
+    },
 
     onAction(name, actions) {
       if (name === 'stargaze' && actions.state !== 'stargaze') {
@@ -504,13 +547,20 @@ export function createHomeRoom() {
         return true;
       }
       if (actions.state === 'free' && name === 'interact') {
-        const s = nearSeat();
+        const u = nearUse();
+        if (u?.gadget) {
+          actions.onGadget?.(u.gadget.id, mine);
+          return true;
+        }
+        const s = u?.seat;
         if (s) {
           // 坐下：坐在家具中間；躺下：腳在床尾、頭朝床頭（家具的後面）
           const kind = s.sleep ? 'sleep' : 'sofa';
           const off = s.sleep ? 0.3 : 0.06;
           rest = { x: s.x + Math.sin(s.a) * off, y: s.y, z: s.z + Math.cos(s.a) * off, sx: s.x, sz: s.z, kind, actions };
           actions.rest(kind, s.a);
+          // 🔥 小暖爐在旁邊：坐著暖呼呼
+          if (stoves.some((q) => q.loft === s.loft && Math.hypot(q.x - s.x, q.z - s.z) < 1.8)) actions.onWarm?.();
           return true;
         }
         if (mine) actions.onBuild?.();
@@ -523,17 +573,25 @@ export function createHomeRoom() {
       return false;
     },
     interactHint() {
-      const s = nearSeat();
+      const u = nearUse();
+      if (u?.gadget) return [GADGET_HINT[u.gadget.id][0], t(GADGET_HINT[u.gadget.id][1])];
+      const s = u?.seat;
       if (s) return s.sleep ? ['🛏️', t('躺下')] : ['🛋️', t('坐下')];
       return mine ? ['🛠️', t('布置')] : null;
     },
     prompt() {
-      const s = nearSeat();
+      const u = nearUse();
+      if (u?.gadget) return t('<kbd>E</kbd> {icon} {name}', { icon: GADGET_HINT[u.gadget.id][0], name: t(GADGET_HINT[u.gadget.id][2]) });
+      const s = u?.seat;
       if (s) return s.sleep ? t('<kbd>E</kbd> 躺下睡一下') : t('<kbd>E</kbd> 坐下');
       return mine ? t('<kbd>E</kbd> 布置帳篷') : null;
     },
     update(dt, time) {
-      light.intensity = lightBase * (0.96 + Math.sin(time * 1.7) * 0.03);
+      // 🔥 坐在小暖爐旁邊：燈光暖一點、亮一點（火光一閃一閃）
+      const warm = rest && rest.actions.state === rest.kind && stoves.some((q) => Math.hypot(q.x - rest.sx, q.z - rest.sz) < 1.8);
+      warmK += ((warm ? 1 : 0) - warmK) * Math.min(1, dt * 2);
+      light.intensity = lightBase * (0.96 + Math.sin(time * 1.7) * 0.03 + warmK * (0.22 + Math.sin(time * 9) * 0.04));
+      light.color.copy(lightColor).lerp(WARM, warmK * 0.6);
       // 🐠 魚缸裡的魚游來游去
       for (const f of swimmers) {
         const u = time * 0.7 + f.parent.position.x;

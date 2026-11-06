@@ -43,7 +43,7 @@ export class Player {
     const dirZ = -move.x * sin - move.y * cos;
 
     const running = input.isRunning;
-    const speed = WALK_SPEED * (running ? RUN_MULTIPLIER : 1);
+    const speed = WALK_SPEED * (running ? RUN_MULTIPLIER : 1) * (action.speedMul ?? 1); // 🚲 騎腳踏車比較快
     const k = 1 - Math.exp(-ACCEL * dt);
     this.velocity.x += (dirX * speed - this.velocity.x) * k;
     this.velocity.z += (dirZ * speed - this.velocity.z) * k;

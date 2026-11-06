@@ -16,8 +16,8 @@ import { FISH } from '../fishing/fishData.js';
  *   onToggleOpen()   開放／關閉參觀
  */
 export class BuildPanel {
-  constructor({ getHome, onEdit, onExit, onToggleOpen, onExpand, root = document.getElementById('ui') }) {
-    Object.assign(this, { getHome, onEdit, onExit, onToggleOpen, onExpand });
+  constructor({ getHome, onEdit, onExit, onToggleOpen, onExpand, onShop, root = document.getElementById('ui') }) {
+    Object.assign(this, { getHome, onEdit, onExit, onToggleOpen, onExpand, onShop });
     this.cell = null;
     root.insertAdjacentHTML(
       'beforeend',
@@ -26,6 +26,7 @@ export class BuildPanel {
         <div class="build-head">
           <span id="build-title">${t('🛠️ 布置模式：點地板上的格子')}</span>
           <span class="build-floor" id="build-floor" hidden><button type="button" data-floor="1" class="on">${t('1 樓')}</button><button type="button" data-floor="2">${t('2 樓')}</button></span>
+          <button type="button" class="build-shop" id="build-shop">${t('🛒 買家具')}</button>
           <button type="button" class="build-done" id="build-done">${t('完成')}</button>
         </div>
         <div class="build-body" id="build-body"></div>
@@ -45,6 +46,7 @@ export class BuildPanel {
     this.openBtn = $('#home-open');
     for (const el of [this.el, this.tools]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
     $('#build-done').addEventListener('click', () => this.onExit?.());
+    $('#build-shop').addEventListener('click', () => this.onShop?.()); // 🛒 在帳篷裡直接打開小舖的家具分頁
     // 🏡 小木屋：切換布置一樓、二樓
     this.floorEl = $('#build-floor');
     this.floor = 1;
@@ -186,7 +188,7 @@ export class BuildPanel {
       this.body.innerHTML =
         (total
           ? `<div class="build-tip">${t('點一格放家具；桌子、櫃子上還能再疊小東西')}</div>`
-          : `<div class="build-tip">${t('背包是空的，先到營火旁的「🏪 營地小舖」買家具吧')}</div>`) +
+          : `<div class="build-tip">${t('背包是空的，按上面的「🛒 買家具」挑幾件吧')}</div>`) +
         `<div class="build-styles"><span class="build-styles-label">${t('📐 地板 {n}×{n}', { n: g })}</span>${
           price
             ? `<button type="button" class="build-style build-expand" data-expand="1">${t('擴建成 {n}×{n}', { n: g + 1 })} 🌰 ${price}</button>`

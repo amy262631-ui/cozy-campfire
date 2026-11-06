@@ -678,6 +678,13 @@ export class AudioEngine {
         noise(now, 0.2, 900, 0.35);
         tone(392, now, 0.15, { type: 'triangle', amp: 0.12 });
         break;
+      case 'strum': {
+        // 🎸 木吉他：隨機一組和弦，由低到高輕輕刷過去，再刷一次
+        const CH = [[196, 247, 294, 392, 494], [220, 262, 330, 440, 523], [175, 220, 262, 349, 440], [262, 330, 392, 523, 659]];
+        const c = CH[Math.floor(Math.random() * CH.length)];
+        for (const [k, d0] of [[0, 0], [1, 0.55], [2, 0.85]]) c.forEach((f, i) => tone(f, now + d0 + i * 0.025, 1.4 - k * 0.3, { type: 'triangle', amp: 0.06 - k * 0.01 }));
+        break;
+      }
       case 'needle': // 點唱機：唱針落下的「喀滋」
         noise(now, 0.06, 3000, 0.3);
         noise(now + 0.07, 0.25, 1200, 0.12);

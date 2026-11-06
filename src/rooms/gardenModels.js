@@ -109,8 +109,61 @@ export function buildCrop(id, stage) {
       leaves(g, 5, s * 0.9, 0.09);
       break;
     }
+    case 'watermelon': {
+      // 西瓜：地上爬的藤＋圓滾滾、有條紋的大瓜
+      leaves(g, 5, 0.08, 0.09);
+      const s = ready ? 0.13 : 0.06;
+      const w = new THREE.Mesh(new THREE.SphereGeometry(s, 14, 10), veg);
+      w.position.set(0.02, 0.07 + s * 0.85, 0);
+      w.scale.set(1.15, 0.9, 1);
+      g.add(w);
+      if (ready) {
+        for (let k = 0; k < 4; k++) {
+          const st = new THREE.Mesh(new THREE.TorusGeometry(s * 0.99, 0.006, 4, 18, Math.PI), m(0x1f4a1c));
+          st.position.copy(w.position);
+          st.rotation.set(0, (k / 4) * Math.PI, 0);
+          st.scale.set(1.15, 0.9, 1);
+          g.add(st);
+        }
+      }
+      break;
+    }
+    case 'onion':
+    case 'moon_radish': {
+      // 洋蔥、月光白蘿蔔：細長的葉子＋土上露出圓圓的頭（月光白蘿蔔會微微發光）
+      for (let k = 0; k < 5; k++) {
+        const l = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.012, ready ? 0.26 : 0.18, 4), m(id === 'onion' ? 0x6aa84a : 0x8ac9a0));
+        l.position.set(Math.sin(k * 1.3) * 0.02, ready ? 0.22 : 0.18, Math.cos(k * 1.3) * 0.02);
+        l.rotation.set(Math.sin(k) * 0.3, 0, Math.cos(k) * 0.3);
+        g.add(l);
+      }
+      if (ready) {
+        const glow = id === 'moon_radish' ? m(c.color, { emissive: 0x9fd8ff, emissiveIntensity: 0.6, roughness: 0.4 }) : veg;
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), glow);
+        head.position.y = 0.1;
+        head.scale.set(1, id === 'moon_radish' ? 1.3 : 0.9, 1);
+        g.add(head);
+      }
+      break;
+    }
+    case 'garden_strawberry':
+    case 'edamame': {
+      // 草莓、毛豆：矮矮一叢，果實／豆莢垂在葉子旁邊
+      leaves(g, 6, ready ? 0.07 : 0.05, 0.13);
+      if (ready) {
+        for (let k = 0; k < 4; k++) {
+          const a = (k / 4) * Math.PI * 2 + 0.4;
+          const f = new THREE.Mesh(id === 'edamame' ? new THREE.CapsuleGeometry(0.014, 0.05, 4, 6) : new THREE.ConeGeometry(0.028, 0.05, 8), veg);
+          f.position.set(Math.sin(a) * 0.09, 0.1, Math.cos(a) * 0.09);
+          if (id === 'garden_strawberry') f.rotation.x = Math.PI;
+          else f.rotation.set(0.6, a, 0.3);
+          g.add(f);
+        }
+      }
+      break;
+    }
     default: {
-      // 番茄、甜椒：小支架上掛著果實
+      // 番茄、甜椒、小黃瓜、茄子、辣椒：小支架上掛著果實
       const st = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.42, 5), m(0x8a6a3a));
       st.position.y = 0.27;
       g.add(st);
@@ -121,6 +174,9 @@ export function buildCrop(id, stage) {
         const f = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), veg);
         f.position.set(Math.sin(k * 2.1) * 0.07, 0.18 + k * 0.08, Math.cos(k * 2.1) * 0.07);
         if (id === 'pepper') f.scale.set(0.8, 1.3, 0.8);
+        else if (id === 'cucumber') f.scale.set(0.6, 2.2, 0.6);
+        else if (id === 'eggplant') f.scale.set(0.8, 1.8, 0.8);
+        else if (id === 'chili') f.scale.set(0.45, 1.7, 0.45);
         g.add(f);
       }
     }

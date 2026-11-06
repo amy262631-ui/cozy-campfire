@@ -9,8 +9,8 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
  *  - 💬 聊天：輸入框（電腦按 Enter 開啟）、左下角聊天紀錄
  */
 export class SocialPanel {
-  constructor({ onEmote, onEmoji, onChat, root = document.getElementById('ui') }) {
-    Object.assign(this, { onEmote, onEmoji, onChat });
+  constructor({ onEmote, onEmoji, onChat, onFriends, root = document.getElementById('ui') }) {
+    Object.assign(this, { onEmote, onEmoji, onChat, onFriends });
     this.chatEnabled = true;
 
     root.insertAdjacentHTML(
@@ -21,6 +21,7 @@ export class SocialPanel {
         <div class="social-buttons">
           <button type="button" class="social-btn" id="emote-btn">😊<small>${t('表情')}</small></button>
           <button type="button" class="social-btn" id="chat-btn">💬<small>${t('聊天')}</small></button>
+          <button type="button" class="social-btn" id="friend-btn">👫<small>${t('好友')}</small><i class="social-badge" id="friend-badge" hidden></i></button>
         </div>
       </div>
 
@@ -66,6 +67,12 @@ export class SocialPanel {
     // 點這些介面時不要觸發遊戲（轉鏡頭等）
     for (const el of [this.el.root, this.el.menu, this.el.form]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
 
+    this.badgeEl = $('#friend-badge');
+    $('#friend-btn').addEventListener('click', () => {
+      this.closeChat();
+      this.el.menu.classList.remove('show');
+      this.onFriends?.();
+    });
     $('#emote-btn').addEventListener('click', () => {
       this.closeChat();
       this.el.menu.classList.toggle('show');
@@ -115,6 +122,12 @@ export class SocialPanel {
     this.chatEnabled = enabled;
     this.el.chatBtn.classList.toggle('disabled', !enabled);
     if (!enabled) this.closeChat();
+  }
+
+  /** 👫 好友按鈕上的紅點：未讀密頻＋好友邀請＋作者回覆 */
+  setBadge(n) {
+    this.badgeEl.hidden = !n;
+    this.badgeEl.textContent = n > 9 ? '9+' : String(n);
   }
 
   openChat() {

@@ -6631,3 +6631,81 @@ body.touch .online .shopinfo-chip {
   padding-left: 18px;
   font-size: 13px;
 }
+
+/* 🚙 門口擺設的選單 */
+.yard-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.yard-opts .mini-btn {
+  padding: 10px 12px;
+  font-size: 15px;
+  text-align: left;
+}
+.grill-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* 🛒 布置模式：直接打開小舖的家具分頁 */
+.build-shop {
+  margin-left: auto;
+  margin-right: 6px;
+  padding: 5px 12px;
+  border: 1px solid rgba(255, 200, 140, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 245, 230, 0.1);
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+/* 🪑 門口擺設分成兩格：小標題 */
+.yard-sec { font-weight: 700; font-size: 13px; margin: 10px 2px 4px; opacity: 0.85; }
+/* 🎯 今日挑戰（邀朋友視窗裡） */
+.chal-box { margin: 4px 0 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 210, 140, 0.08); border: 1px dashed rgba(255, 190, 120, 0.35); }
+.chal-title { font-size: 12px; font-weight: 700; margin-bottom: 4px; opacity: 0.9; }
+.chal-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 2px 0; }
+.chal-row.ok { opacity: 0.6; }
+.gift-id { margin-top: 6px; font-weight: 700; user-select: all; }
+/* 📜 邀請規則 */
+.gift-rules { margin: 8px 0; padding: 8px 12px; border-radius: 12px; background: rgba(255, 210, 140, 0.08); font-size: 13px; }
+.gift-rules summary { cursor: pointer; font-weight: 700; color: #ffcf8a; }
+.gift-rules ul { margin: 6px 0 2px; padding-left: 18px; }
+.gift-rules li { margin: 4px 0; line-height: 1.45; }
+.gift-contact { margin-right: auto; }
+/* 👫 好友、💌 密頻、✉️ 聯絡作者 */
+.social-btn { position: relative; }
+.social-badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #e8503c; color: #fff; font-size: 11px; font-style: normal; font-weight: 700; line-height: 18px; text-align: center; box-sizing: border-box; }
+.social-badge.in { position: static; display: inline-block; margin-left: 4px; vertical-align: middle; }
+.mini-btn.ghost { background: transparent; border: 1px solid rgba(255, 220, 180, 0.3); color: inherit; }
+.fr-row { cursor: pointer; }
+.fr-row:hover { background: rgba(255, 210, 140, 0.08); }
+.fr-go { opacity: 0.5; font-size: 20px; padding: 0 4px; }
+.fr-here { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.fr-add { display: flex; gap: 6px; align-items: center; margin: 6px 0; }
+.fr-add .join-input { flex: 1; min-width: 0; margin: 0; }
+.gift-id-inline { user-select: all; color: #ffcf8a; }
+.dm-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dm-top small { opacity: 0.7; }
+.dm-list { max-height: min(46vh, 360px); overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 6px 2px; }
+.dm-msg { align-self: flex-start; max-width: 80%; display: flex; flex-direction: column; }
+.dm-msg span { padding: 7px 11px; border-radius: 14px 14px 14px 4px; background: rgba(255, 255, 255, 0.1); white-space: pre-wrap; word-break: break-word; }
+.dm-msg.me { align-self: flex-end; align-items: flex-end; }
+.dm-msg.me span { border-radius: 14px 14px 4px 14px; background: rgba(240, 138, 60, 0.85); color: #2a1608; }
+.dm-msg small { font-size: 10px; opacity: 0.55; margin: 2px 4px 0; }
+.dm-tools { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; opacity: 0.8; }
+.sup-text { width: 100%; box-sizing: border-box; resize: vertical; min-height: 80px; }
+.sup-item { padding: 8px 10px; margin: 6px 0; border-radius: 10px; background: rgba(255, 255, 255, 0.05); font-size: 13px; }
+.sup-item small { display: block; font-size: 10px; opacity: 0.55; }
+.sup-re { margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: rgba(255, 210, 140, 0.12); }
+.sup-wait { margin-top: 4px; opacity: 0.6; font-size: 12px; }
+/* 手機：左下三顆按鈕（表情、聊天、好友）字不要折行 */
+.social-btn small { white-space: nowrap; }
+@media (max-width: 599px) {
+  .social-buttons { gap: 6px; }
+  .social-btn { padding: 6px 10px; }
+}

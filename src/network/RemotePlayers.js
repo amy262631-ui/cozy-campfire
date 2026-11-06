@@ -22,7 +22,7 @@ const SNAP_DIST = 4; // 一次跳太遠（例如重連）就直接瞬移
 
 /** 遠端玩家的動作狀態 → 角色姿勢 */
 const POSE_OF = {
-  addWood: 'throw', roast: 'roast', eat: 'eat', blanket: 'blanket', stargaze: 'lookUp', fish: 'roast', reel: 'reel', showFish: 'showOff',
+  addWood: 'throw', roast: 'roast', eat: 'eat', ride: 'ride', blanket: 'blanket', stargaze: 'lookUp', fish: 'roast', reel: 'reel', showFish: 'showOff',
   wave: 'wave', salute: 'salute', bye: 'bye', pray: 'pray', // 表情動作
   pick: 'pick', catch: 'catch', plant: 'plant', water: 'water', // 採摘、揮網、種菜、澆水
   sofa: 'sit', sleep: 'sleep', // 🛋️ 坐沙發、躺床
@@ -133,6 +133,7 @@ class RemotePlayer {
     c.setProp('stick', t.a === 'roast');
     c.setProp('blanket', t.a === 'blanket');
     c.setProp('rod', t.a === 'fish' || t.a === 'reel');
+    c.setProp?.('bike', t.a === 'ride'); // 🚲 騎門口的腳踏車
     // 舉著魚：坐著炫耀（showFish），或舉著魚到處走（走路、站著時也帶著魚的代碼）
     const holdsFish = !!t.e && t.e !== STONE_FLAG;
     if (holdsFish) {

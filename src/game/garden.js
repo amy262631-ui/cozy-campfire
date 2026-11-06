@@ -6,6 +6,8 @@
  * - 朋友路過可以幫忙澆水：每次澆水少等 30 分鐘（每格最多 3 位朋友）
  * - 收成的蔬菜放進採集籃，拿到營火旁煮料理、或當手作家具的材料
  *
+ * - night：只能晚上收成（晚上的定義跟採集一樣，gathering.js 的 isNight）
+ *
  * ⚠️ id 存檔用，不能改。
  */
 export const CROPS = [
@@ -17,6 +19,15 @@ export const CROPS = [
   { id: 'cabbage', icon: '🥬', zh: '高麗菜', hours: 4, seed: 2, yield: [1, 2], color: 0x8ac96a },
   { id: 'sweetpotato', icon: '🍠', zh: '地瓜', hours: 5, seed: 3, yield: [2, 3], color: 0xa8506a },
   { id: 'pumpkin', icon: '🎃', zh: '南瓜', hours: 6, seed: 3, yield: [1, 2], color: 0xe0782a },
+  // ---- 11/06 擴充（加在最後面）----
+  { id: 'garden_strawberry', icon: '🍓', zh: '草莓', hours: 3, seed: 2, yield: [3, 5], color: 0xe0443c }, // 不能和採集的「野草莓 strawberry」撞名
+  { id: 'watermelon', icon: '🍉', zh: '西瓜', hours: 8, seed: 4, yield: [1, 2], color: 0x3f8f3a }, // 種最久的
+  { id: 'onion', icon: '🧅', zh: '洋蔥', hours: 3, seed: 2, yield: [2, 3], color: 0xd8a868 },
+  { id: 'edamame', icon: '🫛', zh: '毛豆', hours: 2, seed: 1, yield: [2, 4], color: 0x7ac95a },
+  { id: 'cucumber', icon: '🥒', zh: '小黃瓜', hours: 2, seed: 1, yield: [2, 3], color: 0x4a8a3a },
+  { id: 'eggplant', icon: '🍆', zh: '茄子', hours: 4, seed: 2, yield: [2, 3], color: 0x5a2a6a },
+  { id: 'chili', icon: '🌶️', zh: '辣椒', hours: 4, seed: 2, yield: [3, 5], color: 0xd2282a },
+  { id: 'moon_radish', icon: '🌙', zh: '月光白蘿蔔', hours: 6, seed: 3, yield: [1, 2], color: 0xeef6ff, night: true }, // 只能晚上收成
 ];
 export const CROP_BY_ID = Object.fromEntries(CROPS.map((c) => [c.id, c]));
 /** 菜園的格數：一開始 3 格，可以用松果開墾到 6 格 */

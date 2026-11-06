@@ -22,6 +22,7 @@ const PROMPTS = {
   sofa: t('坐著休息中　·　移動就起身'),
   sleep: t('躺著睡一下 💤　·　移動就起身'),
   seat: t('<kbd>F</kbd> 烤棉花糖　·　<kbd>E</kbd> 或移動＝起身'),
+  ride: t('🚲 騎腳踏車中　·　<kbd>E</kbd> 下車'),
 };
 /** 手機畫面小：提示短一點（按鍵會換成按鈕圖示） */
 const PROMPTS_SHORT = {
@@ -33,6 +34,7 @@ const PROMPTS_SHORT = {
   sofa: t('移動就起身'),
   sleep: t('💤 移動就起身'),
   seat: t('<kbd>F</kbd> 烤棉花糖'),
+  ride: t('<kbd>E</kbd> 下車'),
 };
 
 /**
@@ -130,8 +132,16 @@ export class ActionStateMachine {
 
   /** 🪵 坐到營火旁的圓木上 */
   sit(seat) {
-    this.rest('sofa', seat.face);
+    this.rest(seat.sleep ? 'sleep' : 'sofa', seat.face);
     this.seat = seat;
+  }
+
+  /** 🚲 騎上門口的腳踏車（帳篷營地裡跑比較快；E、換房間或做別的事就下車） */
+  ride() {
+    if (this.state !== 'free') this.#exit(true);
+    this.state = 'ride';
+    this.t = 0;
+    this.character.setProp?.('bike', true);
   }
 
   /** 給房間用：結束目前動作 */
@@ -212,6 +222,7 @@ export class ActionStateMachine {
     c.setProp('stick', false);
     c.setProp('blanket', false);
     c.setProp('rod', false);
+    c.setProp?.('bike', false);
     this.hud.showRoast(false);
     this.cameraRig.lookUp = false;
     this.world.meteorMode = 'rare';
@@ -254,6 +265,7 @@ export class ActionStateMachine {
     r.locked = false;
     r.pose = null;
     r.faceAngle = null;
+    r.speedMul = 1;
 
     // 坐著時一移動就起身
     const fishingLocked = this.state === 'fish' && this.room?.fishing?.lockMove;
@@ -314,6 +326,11 @@ export class ActionStateMachine {
         this.hud.setRoast(this.doneness);
         break;
       }
+
+      case 'ride':
+        r.pose = 'ride';
+        r.speedMul = 1.35;
+        break;
 
       case 'eat':
         r.locked = true;
@@ -408,7 +425,7 @@ export class ActionStateMachine {
     if (EMOTE_IDS.has(this.state)) return null;
     if (this.state === 'fish' && this.room?.fishing?.phase === 'show') return this.compact ? t('<kbd>F</kbd> 繼續釣　·　走開就舉著魚炫耀') : t('<kbd>F</kbd> 繼續釣魚　·　直接走開，就舉著魚到處炫耀 🐟');
     if (this.state === 'fish' && this.room?.fishing?.busy) return null;
-    if (this.state === 'sofa' && this.seat) return (this.compact ? PROMPTS_SHORT : PROMPTS).seat;
+    if (this.state === 'sofa' && this.seat && !this.seat.yard) return (this.compact ? PROMPTS_SHORT : PROMPTS).seat;
     if (this.state === 'free') {
       if (this.room?.prompt) return this.room.prompt(this);
       return this.nearFire ? PROMPTS.near : null;

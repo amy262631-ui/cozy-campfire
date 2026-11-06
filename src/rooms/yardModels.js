@@ -202,11 +202,70 @@ export function buildYard(id) {
       box(0.7, 1.45, 0.05, mat(0xe8eef4), 0.6, 1.2, 0.86);
       for (const z of [0.7, -0.7]) wheel(0, z, 0.38);
       box(0.9, 0.08, 0.08, mat(0x3a3a3a), 2.75, 0.55); // 拖桿
+      // 門口燈串下的小折疊椅（可以坐）
+      box(0.5, 0.05, 0.45, mat(0xc9483c), -1.1, 0.42, 1.65);
+      box(0.5, 0.45, 0.05, mat(0xc9483c), -1.1, 0.66, 1.43).rotation.x = -0.2;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(0.02, 0.42, mat(0x2a2522), -1.1 + sx * 0.22, 0.21, 1.65 + sz * 0.2, 5);
       // 燈串
       for (let i = 0; i < 9; i++) {
         const x = -2 + i * 0.5;
         add(new THREE.IcosahedronGeometry(0.06, 0), glowMat([0xffd98a, 0xff9a8a, 0x9ad8ff][i % 3]), x, 2.4 - Math.sin((i / 8) * Math.PI) * 0.25, 1.05);
       }
+      break;
+    }
+    // ---- 🪑 門口桌椅 ----
+    case 'bench': {
+      // 剖半的圓木：圓的那面朝下、切面朝上
+      const log = add(new THREE.CylinderGeometry(0.22, 0.22, 1.3, 12, 1, false, Math.PI, Math.PI), wood, 0, 0.4, 0);
+      log.rotation.z = Math.PI / 2;
+      box(1.3, 0.02, 0.44, mat(0xd8b48a), 0, 0.4, 0); // 切面
+      for (const x of [-0.5, 0.5]) cyl(0.12, 0.22, dark, x, 0.11, 0, 8);
+      break;
+    }
+    case 'bistro': {
+      const white = mat(0xf4f0e8);
+      cyl(0.36, 0.04, white, 0, 0.74, 0, 16);
+      cyl(0.04, 0.72, mat(0x3a3a3a), 0, 0.36, 0, 6);
+      cyl(0.2, 0.03, mat(0x3a3a3a), 0, 0.015, 0, 10);
+      cyl(0.06, 0.1, mat(0xc9483c), 0.1, 0.81, 0.05, 8); // 茶杯
+      cyl(0.06, 0.1, mat(0x5f8a5a), -0.12, 0.81, -0.06, 8);
+      for (const s of [-1, 1]) {
+        const x = s * 0.6;
+        box(0.42, 0.04, 0.42, white, x, 0.44, 0);
+        box(0.04, 0.42, 0.42, white, x + s * 0.2, 0.66, 0);
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(0.018, 0.44, mat(0x3a3a3a), x + sx * 0.18, 0.22, sz * 0.18, 5);
+      }
+      break;
+    }
+    case 'firestool': {
+      const iron = mat(0x3a3330);
+      add(new THREE.CylinderGeometry(0.28, 0.2, 0.32, 12, 1, true), iron, 0, 0.36, 0).material.side = THREE.DoubleSide;
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2;
+        cyl(0.025, 0.22, iron, Math.cos(a) * 0.17, 0.11, Math.sin(a) * 0.17, 5);
+      }
+      const fire = add(new THREE.ConeGeometry(0.13, 0.3, 7), glowMat(0xffa040), 0, 0.6, 0);
+      fire.name = 'flame';
+      add(new THREE.ConeGeometry(0.07, 0.2, 6), glowMat(0xffe08a), 0, 0.58, 0);
+      for (const s of [-1, 1]) {
+        cyl(0.2, 0.34, wood, s * 0.6, 0.17, 0.1, 12);
+        cyl(0.17, 0.01, mat(0xd8b48a), s * 0.6, 0.345, 0.1, 12);
+      }
+      g.userData.glow = { x: 0, y: 0.7, z: 0, color: 0xffa050 };
+      break;
+    }
+    case 'swing': {
+      for (const s of [-1, 1]) {
+        for (const z of [-0.4, 0.4]) {
+          const post = cyl(0.05, 1.9, dark, s * 0.85, 0.92, z * 0.7, 6);
+          post.rotation.x = z > 0 ? -0.2 : 0.2;
+        }
+      }
+      cyl(0.05, 1.8, dark, 0, 1.82, 0, 6).rotation.z = Math.PI / 2;
+      for (const x of [-0.55, 0.55]) cyl(0.012, 1.3, mat(0xe8dcc0), x, 1.17, 0, 4);
+      box(1.2, 0.06, 0.45, wood, 0, 0.5, 0);
+      box(1.2, 0.4, 0.05, wood, 0, 0.72, -0.22).rotation.x = -0.15;
+      box(1.1, 0.06, 0.4, mat(0xe0a83a), 0, 0.55, 0.02); // 軟墊
       break;
     }
     default:
@@ -217,4 +276,4 @@ export function buildYard(id) {
 }
 
 /** 擺設佔多大（營地裡擋路用，原尺寸的半徑） */
-export const yardRadius = (id) => ({ jeep: 1.6, camper: 2.2, airstream: 2.4, tarp: 1.6, hammock: 1.4, canoe: 1.3, picnic: 1.0 })[id] ?? 0.6;
+export const yardRadius = (id) => ({ jeep: 1.6, camper: 2.2, airstream: 2.4, tarp: 1.6, hammock: 1.4, canoe: 1.3, picnic: 1.0, bench: 0.8, bistro: 1.0, firestool: 0.9, swing: 1.1 })[id] ?? 0.6;
