@@ -9,6 +9,8 @@
  */
 import { seededRandom } from '../scene/textures.js';
 
+/** 區的名字：A～Z，超過 26 區接著 A2、B2⋯（11/07：之後人多也不會亂） */
+export const zoneName = (z) => String.fromCharCode(65 + (z % 26)) + (z >= 26 ? String(Math.floor(z / 26) + 1) : '');
 export const CAMP_SIZE = 24; // 11/07：每區 24 頂（營位放大，門口擺得下大型 1 個＋小型 3 個）
 export const ENTRY_Z = 31;
 export const BOUNDS = { minX: -37, maxX: 37, minZ: -36, maxZ: ENTRY_Z + 0.6 };

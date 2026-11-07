@@ -57,6 +57,7 @@ import { LanguagePicker } from './ui/LanguagePicker.js';
 import { NoticePanel } from './ui/NoticePanel.js';
 import { ChannelPanel } from './ui/ChannelPanel.js';
 import { CairnPanel } from './ui/CairnPanel.js';
+import { zoneName } from './rooms/campLayout.js';
 import { RitualGuide } from './ui/RitualGuide.js';
 import { HelpPanel } from './ui/HelpPanel.js';
 import { GIFT_CATS, giftInfo, basketCat, GIFT_DAILY_CAP, GIFT_MIN_DAYS } from './game/gifts.js';
@@ -2622,7 +2623,6 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   let prevRoomId = null;
   let forceZone = null; // 從「去哪裡」直接選某一區
   let campInfo = { zones: [], tents: [] };
-  const zoneName = (z) => String.fromCharCode(65 + z);
   const plotName = (p) => (p ? t('{z} 區 {n} 號', { z: zoneName(p.z), n: p.n }) : '');
   document.getElementById('ui').insertAdjacentHTML(
     'beforeend',
@@ -2659,13 +2659,18 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const zs = campInfo.zones ?? [];
     const mine = myHome?.plot;
     const count = Math.max(zs.length + 1, (mine?.z ?? 0) + 1, campZone + 1);
-    const rows = Array.from({ length: count }, (_, z) => {
-      const tags = [z === campZone ? t('（你在這裡）') : '', mine?.z === z ? t('⭐ 我家 {n} 號', { n: mine.n }) : ''].filter(Boolean).join(' ');
-      return `<button type="button" class="mini-btn" data-zone="${z}" ${z === campZone ? 'disabled' : ''}>${t('{z} 區', { z: zoneName(z) })}　${t('住了 {n}／24 頂', { n: zs[z] ?? 0 })} ${tags}</button>`;
+    // 11/07：區會越來越多（A～Z 之後還有 A2⋯），改成一格一格的小方塊，一眼看完、不會太長
+    const chips = Array.from({ length: count }, (_, z) => {
+      const cls = [z === campZone ? 'here' : '', mine?.z === z ? 'mine' : ''].filter(Boolean).join(' ');
+      return `<button type="button" class="zone-chip ${cls}" data-zone="${z}" ${z === campZone ? 'disabled' : ''}><b>${mine?.z === z ? '⭐' : ''}${zoneName(z)}</b><small>${zs[z] ?? 0}/24</small></button>`;
     });
     modal.open(
       t('🏕️ 帳篷營地・換區'),
-      `<div class="dex-note">${mine ? t('⭐ 我家：{p}', { p: plotName(mine) }) : t('還沒有帳篷，到營火旁的小舖買一頂就有自己的營位')}</div><div class="yard-opts">${rows.join('')}${myHome?.tent ? `<button type="button" class="mini-btn" id="go-move">${t('🚚 搬家（挑一個空營位）')}</button>` : ''}</div>`,
+      `<div class="dex-note">${mine ? t('⭐ 我家：{p}', { p: plotName(mine) }) : t('還沒有帳篷，到營火旁的小舖買一頂就有自己的營位')}</div>
+      ${mine && mine.z !== campZone ? `<button type="button" class="help-manual-btn" data-zone="${mine.z}">${t('🏠 回我家那一區（{z} 區）', { z: zoneName(mine.z) })}</button>` : ''}
+      <div class="zone-grid">${chips.join('')}</div>
+      <div class="dex-note">${t('點一區就過去；也可以走過營地中間的木頭拱門，到隔壁區')}</div>
+      ${myHome?.tent ? `<button type="button" class="mini-btn" id="go-move">${t('🚚 搬家（挑一個空營位）')}</button>` : ''}`,
       (body) => {
         for (const b of body.querySelectorAll('[data-zone]')) b.addEventListener('click', () => (modal.close(), switchZone(Number(b.dataset.zone))));
         body.querySelector('#go-move')?.addEventListener('click', () => (modal.close(), openMoveMap(campZone)));
@@ -3137,7 +3142,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const msgs = r.msgs.map((m) => `<div class="dm-msg${m.me ? ' me' : ''}"><span>${escapeHtml(m.t)}</span><small>${fmtTime(m.at)}</small></div>`).join('');
     modal.open(
       `💌 ${r.name}`,
-      `<div class="dm-top"><button type="button" class="mini-btn ghost" id="dm-back">‹ ${t('好友')}</button><small>${r.online ? t('🟢 在線上') : t('⚪ 不在線上，下次上線會看到')}・${r.hid}</small></div>
+      `<div class="dm-top"><button type="button" class="mini-btn ghost" id="dm-back">‹ ${t('好友')}</button><small>${r.online ? t('🟢 在線上') : t('⚪ 不在線上，下次上線會看到')}・${r.hid}</small>${r.plot ? `<button type="button" class="mini-btn" id="dm-visit">${t('🏕️ 去他家（{p}）', { p: plotName(r.plot) })}</button>` : ''}</div>
       <div class="dm-list" id="dm-list">${msgs || `<div class="dex-note">${r.mutual ? t('打聲招呼吧 👋') : t('⏳ 對方還沒同意好友邀請，同意後才能密頻')}</div>`}</div>
       ${r.mutual ? `<div class="fr-add"><input class="join-input" id="dm-text" maxlength="200" placeholder="${t('想說的話（200 字內）')}" enterkeyhint="send" /><button type="button" class="mini-btn" id="dm-send">${t('送出')}</button><button type="button" class="mini-btn" id="dm-gift">${t('🎁 送禮')}</button></div>
 ` : ''}
@@ -3161,6 +3166,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
         });
         body.querySelector('#dm-send')?.addEventListener('click', send);
         body.querySelector('#dm-gift')?.addEventListener('click', () => openGiftPick(hid, r.name));
+        body.querySelector('#dm-visit')?.addEventListener('click', () => (modal.close(), hud.onGo(`camp:${r.plot.z}`)));
         const drop = async (block) => {
           if (!confirm(block ? t('封鎖 {name}？封鎖後他不能再加你好友、密你', { name: r.name }) : t('刪除好友 {name}？', { name: r.name }))) return;
           await net.request('friendRemove', { hid, block });
@@ -3905,6 +3911,14 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       }));
     } else hud.setPrompt(actions.prompt);
     ritual?.update(dt, elapsed, ritualState);
+    // 🪨 累計旅人・石頭那一行：只在石塔、石頭堆附近顯示
+    if (roomMgr?.current.id === 'forest_main') {
+      const p = player.position;
+      const nc = garden.nearestCairn(p);
+      const c = nc >= 0 ? garden.cairns[nc]?.spot : null;
+      const d = Math.min(c ? Math.hypot(p.x - c.x, p.z - c.z) : 99, garden.pile ? Math.hypot(p.x - garden.pile.x, p.z - garden.pile.z) : 99);
+      hud.setTodayNear(d < 4);
+    } else hud.setTodayNear(false);
     document.body.classList.toggle('in-action', actions.state !== 'free');
 
     // 營火的點光源影子每次要把整個場景多畫 6 次：隔一幀才重畫一次（角色影子幾乎看不出差別）

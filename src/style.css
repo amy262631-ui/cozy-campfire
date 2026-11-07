@@ -6814,3 +6814,12 @@ body .idea-chip.kid-chip:not([hidden]) { display: inline-block !important; backg
 .bag-item i { font-style: normal; font-size: 18px; }
 .bag-item b { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bag-item em { font-style: normal; opacity: 0.8; }
+
+/* 🏕️ 換區：一格一格的小方塊（區很多也排得下） */
+.zone-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px; margin: 8px 0; max-height: 260px; overflow: auto; }
+.zone-chip { display: flex; flex-direction: column; align-items: center; padding: 6px 2px; border-radius: 10px; border: 1px solid rgba(255, 220, 170, 0.25); background: rgba(255, 240, 220, 0.07); color: inherit; font: inherit; cursor: pointer; }
+.zone-chip b { font-size: 17px; }
+.zone-chip small { font-size: 11px; opacity: 0.75; }
+.zone-chip.mine { border-color: rgba(255, 210, 120, 0.8); background: rgba(255, 210, 120, 0.16); }
+.zone-chip.here { opacity: 0.5; outline: 2px solid rgba(160, 220, 255, 0.6); }
+.go-sub { display: block; font-size: 11px; opacity: 0.75; }

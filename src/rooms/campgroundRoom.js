@@ -6,7 +6,7 @@ import { seededRandom, makeRadialTexture } from '../scene/textures.js';
 import { buildTentShell, shapeOf } from '../game/tentShapes.js';
 import { styleOf, tentTexture } from '../game/tentStyles.js';
 import { t } from '../i18n/i18n.js';
-import { LAYOUT, CAMP_SIZE, ENTRY_Z, BOUNDS, LOOP_CENTER, plotSpots, frame } from './campLayout.js';
+import { LAYOUT, CAMP_SIZE, ENTRY_Z, BOUNDS, LOOP_CENTER, plotSpots, frame, zoneName } from './campLayout.js';
 import { buildSoil, buildCrop } from './gardenModels.js';
 import { slotLocal } from '../game/garden.js';
 import { createTrashLayer } from './trashLayer.js';
@@ -565,7 +565,7 @@ export function createCampgroundRoom() {
   let plots = PLOTS.map((p, i) => ({ ...p, i, door: spots[i].door, out: spots[i].out, garden: spots[i].garden, tent: null, key: null, g: null, collider: null }));
 
   let zoneNow = 0; // 🏕️ 現在顯示哪一區（門牌寫「A 區 7 號」用）
-  const plotTitle = (i) => t('{z} 區 {n} 號', { z: String.fromCharCode(65 + zoneNow), n: i + 1 });
+  const plotTitle = (i) => t('{z} 區 {n} 號', { z: zoneName(zoneNow), n: i + 1 });
   const tentKey = (tent) => (tent ? [zoneNow, tent.sign ?? '', tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.open, tent.likes, tent.n, tent.yard ?? '', (tent.sm ?? []).join(','), JSON.stringify(tent.garden ?? null)].join('|') : `empty:${zoneNow}`);
   const trash = createTrashLayer(group);
   const ridePicked = new Set(); // 騎車自動撿過的垃圾（避免同一件一直送）
@@ -965,7 +965,7 @@ export function createCampgroundRoom() {
     }
     entrances.length = 0;
     entrances.push(MAIN_GATE);
-    const L = (k) => String.fromCharCode(65 + k);
+    const L = (k) => zoneName(k);
     const add = (pos, to, text) => {
       const g = buildZoneGate(text);
       g.position.set(pos.x, 0, pos.z);

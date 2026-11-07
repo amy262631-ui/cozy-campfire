@@ -244,7 +244,7 @@ const CAMP_PLOTS = 24;
 const campMeta = asObject(await storage.load('camp.json')); // { author: vid, migrated: 時間 }
 const saveCamp = () => saveJson('camp.json', campMeta);
 const RELEASE_MS = 15 * 864e5;
-const zoneName = (z) => String.fromCharCode(65 + z);
+const zoneName = (z) => String.fromCharCode(65 + (z % 26)) + (z >= 26 ? String(Math.floor(z / 26) + 1) : '');
 const MOVE_PRICE = 100;
 const STAR_FREE_MOVES = 2;
 /** 這次搬家要多少松果：第一次免費；星空月票每個月前 2 次免費；其他 100 */
@@ -1156,7 +1156,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
     .map(([v, n]) => {
       const h = homes[v];
       const nm = String(h?.name ?? '').replace(/[<>&]/g, '') || '（沒帳篷）';
-      return `<tr><td>${nm}</td><td>${n} 天</td><td>${players[v]?.streak ?? '-'} 天</td><td>${h?.tent ? (h.plot ? `${String.fromCharCode(65 + h.plot.z)} 區 ${h.plot.n} 號` : '有') : '-'}</td><td>${prev.get(v) ?? 0} 天</td></tr>`;
+      return `<tr><td>${nm}</td><td>${n} 天</td><td>${players[v]?.streak ?? '-'} 天</td><td>${h?.tent ? (h.plot ? `${zoneName(h.plot.z)} 區 ${h.plot.n} 號` : '有') : '-'}</td><td>${prev.get(v) ?? 0} 天</td></tr>`;
     })
     .join('');
   const regTable = `<h3>👥 固定玩家（最近 7 天）</h3>
@@ -3462,7 +3462,7 @@ io.on('connection', (socket) => {
     players[me].dmr ??= {};
     players[me].dmr[f] = Date.now();
     saveJson('players.json', players);
-    ack?.({ ok: true, name: nameOfVid(f), hid: homeId(f), mutual: isFriend(me, f), online: socketsOf(f).length > 0, msgs: list.map((m) => ({ me: m.f === me, t: m.t, at: m.at })), badge: socialBadge(me) });
+    ack?.({ ok: true, name: nameOfVid(f), hid: homeId(f), plot: homes[f]?.tent ? homes[f].plot ?? null : null, mutual: isFriend(me, f), online: socketsOf(f).length > 0, msgs: list.map((m) => ({ me: m.f === me, t: m.t, at: m.at })), badge: socialBadge(me) });
   });
   let lastDm = 0;
   socket.on('dmSend', (data = {}, ack) => {

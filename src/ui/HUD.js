@@ -1,3 +1,4 @@
+import { zoneName } from '../rooms/campLayout.js';
 import { t } from '../i18n/i18n.js';
 
 /**
@@ -204,17 +205,12 @@ export class HUD {
       ['tent_social', t('☕ 交流帳篷')],
       ['tent_focus', t('⛺ 專注帳篷')],
     ];
-    // 🏕️ 帳篷營地：每一區各一行（A 區、B 區…，標出我家在哪一區）
+    // 🏕️ 帳篷營地：只放一行（11/07 作者：區變多選單會太長）。有帳篷就到我家那一區，換區在營地裡右邊的「🏕️ A 區 ▾」
     const zi = this.zoneInfo?.() ?? { zones: [], mine: null, cur: -1 };
-    const nZones = Math.max(1, zi.zones.length, (zi.mine?.z ?? 0) + 1);
     const ci = PLACES.findIndex(([id]) => id === 'campground');
-    PLACES.splice(
-      ci,
-      1,
-      ...Array.from({ length: nZones }, (_, z) => [`camp:${z}`, `${t('🏕️ 帳篷營地・{z} 區', { z: String.fromCharCode(65 + z) })}${zi.mine?.z === z ? ' ⭐' : ''}`]),
-    );
+    PLACES[ci] = [`camp:${zi.mine?.z ?? 0}`, zi.mine ? `${t('🏕️ 帳篷營地')}<small class="go-sub">${t('⭐ 我家 {z} 區', { z: zoneName(zi.mine.z) })}</small>` : t('🏕️ 帳篷營地')];
     this.el.goMenu.innerHTML = PLACES.map(([id, label]) => {
-      const here = id === room || (id.startsWith('camp:') && Number(id.slice(5)) === zi.cur);
+      const here = id === room || (id.startsWith('camp:') && zi.cur >= 0);
       const off = id === 'home' && !home;
       // 👣 各區現在幾個人（伺服器的 areas；我的帳篷不顯示）
       const n = id !== 'home' && !id.startsWith('camp:') && this.areas ? this.areas[id] ?? 0 : null;
@@ -336,11 +332,19 @@ export class HUD {
   setToday({ visitors = 0, stones = 0, allVisitors = 0, allStones = 0 } = {}) {
     const all = Math.max(allVisitors, visitors);
     const st = Math.max(allStones, stones);
-    this.el.today.hidden = !all;
+    this._hasToday = !!all;
+    this.el.today.hidden = !(all && this._todayNear);
     const fmt = (n) => n.toLocaleString();
     this.el.today.textContent = st
       ? t('累計 {n} 位旅人來過 · 疊了 {s} 顆石頭（今天 {d} 位）', { n: fmt(all), s: fmt(st), d: visitors })
       : t('累計 {n} 位旅人來過（今天 {d} 位）', { n: fmt(all), d: visitors });
+  }
+
+  /** 11/07 作者：累計旅人・石頭那一行有點煩，只有走到石塔、石頭堆旁邊才顯示 */
+  setTodayNear(near) {
+    if (near === this._todayNear) return;
+    this._todayNear = near;
+    this.el.today.hidden = !(this._hasToday && near);
   }
 
   /** 顯示目前分流（0 ＝單人模式，不顯示） */
