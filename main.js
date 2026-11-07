@@ -19,6 +19,7 @@ import { NetworkClient } from './network/NetworkClient.js';
 import { RemotePlayers, setRemoteHeight, setCharScale } from './network/RemotePlayers.js';
 import { AudioEngine } from './audio/AudioEngine.js';
 import { SONGS } from './audio/music.js';
+import { CHALLENGE_BY_ID } from './game/dailyChallenge.js';
 import { RoomManager } from './rooms/RoomManager.js';
 import { createForestRoom } from './rooms/forestRoom.js';
 import { createTentRoom } from './rooms/tentRoom.js';
@@ -68,7 +69,7 @@ import { GATHER_ITEMS, GATHER_BY_ID, GATHER_TYPES, GATHER_DEX_BONUS, NET_PRICE, 
 import { CROPS, CROP_BY_ID, WATER_MAX } from './game/garden.js';
 import { haveOf, canMake, specLabel } from './game/materials.js';
 import { RECIPES } from './game/crafting.js';
-import { DISHES, DISH_BY_ID } from './game/cooking.js';
+import { DISHES, DISH_BY_ID, activeBuff, DISH_FX, BUFFS } from './game/cooking.js';
 import { MUSEUM_ITEMS, MUSEUM_CATS, MUSEUM_BY_ID } from './game/museum.js';
 import { TRASH, TRASH_BY_ID, RECYCLE_DAILY_CAP } from './game/trash.js';
 import { PASS, PASS_TIERS, PASS_TIER_LIST, FREE } from './game/pass.js';
@@ -368,6 +369,7 @@ async function init() {
     },
   });
   social.onDisabled = () => hud.toast(t('專注帳篷裡不能聊天，專心一下吧 📖'));
+  social.onFriends = () => openFriends();
 
   // ---------- 地藏祈福處 ----------
   /** 翻看以前的留言／繪馬（沒連線時回傳 null，面板自己用手上的清單分頁） */
@@ -673,6 +675,10 @@ async function init() {
     onCopy: copyInvite,
     onShareLink: shareInvite,
     onShareImage: () => openDateInvite(),
+    onContact: () => {
+      giftPanel.close();
+      openSupport();
+    },
   });
   // 「🔥 約朋友」和「🎁 邀朋友送禮」合成同一個地方
   hud.onInvite = () => giftPanel.open();
@@ -792,6 +798,7 @@ async function init() {
     if (reason === 'sit') hud.toast(t('🌰 在營地待了一會兒，撿到 {n} 顆松果', { n: delta }));
     else if (reason === 'quest') hud.toast(t('🌰 完成任務，拿到 {n} 顆松果！可以去心願大樹換裝飾', { n: delta }), 3500);
     else if (reason === 'fish') hud.toast(t('🌰 釣到魚，撿到 {n} 顆松果', { n: delta }));
+    else if (reason === 'staff') hud.toast(t('🎁 營地作者送你 {n} 顆松果！', { n: delta }), 5000);
     else if (reason === 'fishCap') hud.toast(t('🎣 今天前 {n} 條魚的松果拿滿了，之後每條 +1（稀有魚照算），明天再來！', { n: passState.active ? (PASS_TIERS[passState.tier] ?? PASS).fish : FREE.fish }), 5000);
     // dex（圖鑑收錄）的提示由 'dex' 事件負責
   });
@@ -982,11 +989,29 @@ async function init() {
           ? t('🔥 營火之約成立！拿到限定造型：{name}', { name: outfitName(id) })
           : why === 'daily'
             ? t('👒 朋友點了你的連結！拿到今天的每日造型：{name}', { name: outfitName(id) })
+            : why === 'chal'
+            ? t('🎯 今日挑戰全部完成！拿到今天的每日造型：{name}', { name: outfitName(id) })
+            : why === 'staff'
+            ? t('🎁 營地作者送你一款造型：{name}', { name: outfitName(id) })
             : t('👒 拿到今天的每日造型：{name}', { name: outfitName(id) });
     hud.toast(`${msg}${t('（按上方「👒 造型」穿上）')}`, 6500);
     // 還沒穿這個部位：直接幫他穿上，馬上看得到
     const o = OUTFIT_BY_ID[id];
     if (o && !look.wear?.[o.slot]) wearOutfit(id);
+  });
+  // 🎯 今日挑戰的進度（做完一題跳一下）
+  net.on('chal', ({ list, id, done }) => {
+    const c = list?.find((x) => x.id === id);
+    if (!c || done) return giftPanel.refresh();
+    const d = CHALLENGE_BY_ID[id];
+    if (c.have >= c.need) hud.toast(t('🎯 今日挑戰：{icon} {name} 完成！（{k}/{n} 題）', { icon: d.icon, name: t(d.zh), k: list.filter((x) => x.have >= x.need).length, n: list.length }), 4000);
+    giftPanel.refresh();
+  });
+  // 🎁 作者在管理頁送的家具
+  net.on('staffGift', ({ kind, id, home }) => {
+    if (home) setMyHome(home);
+    audio.sfx('bell');
+    if (kind === 'furn') hud.toast(t('🎁 營地作者送你一件家具：{icon} {name}！回帳篷按「🛠️ 布置」擺出來', { icon: FURNITURE_BY_ID[id]?.icon ?? '', name: FURNITURE_BY_ID[id]?.name ?? '' }), 6000);
   });
   net.on('dateFriend', ({ name }) => hud.toast(t('🔥 {name} 赴約了！一起在營火旁坐坐吧', { name }), 6000));
 
@@ -1008,7 +1033,7 @@ async function init() {
       hud.toast(t('📖 圖鑑新收錄：{icon} {name}！+{n} 🌰（{c}／{t}）', { icon: it.icon, name: t(it.zh), n: res.gain, c: n, t: GATHER_ITEMS.length }), 4500);
       if (res.bonus) setTimeout(() => hud.toast(t('🏆 採集圖鑑全部收集完成！再送你 {n} 顆松果', { n: res.bonus }), 6000), 2500);
     } else {
-      hud.toast(t('🧺 採到{icon} {name}（採集籃裡有 {n} 個）', { icon: it.icon, name: t(it.zh), n: res.count }), 2200);
+      hud.toast(res.extra ? t('🧺 採到{icon} {name}，採集達人多拿一個！（採集籃裡有 {n} 個）', { icon: it.icon, name: t(it.zh), n: res.count }) : t('🧺 採到{icon} {name}（採集籃裡有 {n} 個）', { icon: it.icon, name: t(it.zh), n: res.count }), 2200);
     }
     return res;
   };
@@ -1211,6 +1236,27 @@ async function init() {
   // ---------- 🍲 營火料理 ----------
   let dishes = {};
   let cooked = new Set();
+  let eatBusy = false;
+  /** 料理的效果小標籤：👟 腳步輕快 Lv2・走路變快 */
+  const fxTag = (id) => {
+    const fx = DISH_FX[id];
+    const b = fx && BUFFS[fx[0]];
+    return b ? `<small class="fx-tag">${b.icon} ${t(b.zh)}${fx[1] > 1 ? ' ★★' : ' ★'}・${t(b.desc)}・${t('10 分鐘')}</small>` : '';
+  };
+  // ---------- 😋 吃料理的小效果（10 分鐘） ----------
+  let buff = null;
+  const setBuff = (b) => {
+    buff = activeBuff(b) ? b : null;
+    const a = activeBuff(buff);
+    actions.buffSpeed = a?.k === 'speed' ? a.v : 1;
+    hud.setBuff?.(a ? { icon: a.icon, name: t(a.zh), desc: t(a.desc), until: a.until } : null);
+  };
+  setInterval(() => {
+    if (buff && !activeBuff(buff)) {
+      setBuff(null);
+      hud.toast(t('飽飽的效果結束了，再吃一道吧 😋'));
+    }
+  }, 5000);
   /** 在料理鍋旁邊才能煮 */
   const atPot = () => roomMgr?.current.id === 'forest_main' && forest.nearPot?.(player.position);
   /** 🍖 在自家門口的烤肉爐旁邊（從烤肉爐打開料理時設定，離開營地或走開就失效） */
@@ -1228,7 +1274,7 @@ async function init() {
       const myDishes = mine.length
         ? mine
             .map(
-              (d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${t(d.zh)} ×${dishes[d.id]}</b></div>
+              (d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${t(d.zh)} ×${dishes[d.id]}</b>${fxTag(d.id)}</div>
                 <button type="button" class="mini-btn" data-eat="${d.id}">${t('😋 吃')}</button>
                 ${others.length ? `<select class="mini-sel" data-gift="${d.id}"><option value="">${t('🎁 送給⋯')}</option>${others.map((r) => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('')}</select>` : ''}</div>`,
             )
@@ -1237,7 +1283,7 @@ async function init() {
       const recipes = DISHES.map((d) => {
         const ok = canMake(basket, d.need) && (!d.grill || grill);
         const tag = d.grill ? `<small class="grill-tag">${t('🍖 門口烤肉爐限定')}</small>` : '';
-        return `<div class="craft-row ${cooked.has(d.id) ? '' : 'new-dish'}"><i class="dex-emoji">${cooked.has(d.id) ? d.icon : '❔'}</i><div class="craft-info"><b>${cooked.has(d.id) ? t(d.zh) : t('？？？（還沒煮過）')}</b>${tag}<div class="needs">${needHtml(d.need)}</div></div><button type="button" class="mini-btn" data-cook="${d.id}" ${ok && here && net.online ? '' : 'disabled'}>${t('煮')}</button></div>`;
+        return `<div class="craft-row ${cooked.has(d.id) ? '' : 'new-dish'}"><i class="dex-emoji">${cooked.has(d.id) ? d.icon : '❔'}</i><div class="craft-info"><b>${cooked.has(d.id) ? t(d.zh) : t('？？？（還沒煮過）')}</b>${tag}${cooked.has(d.id) ? fxTag(d.id) : ''}<div class="needs">${needHtml(d.need)}</div></div><button type="button" class="mini-btn" data-cook="${d.id}" ${ok && here && net.online ? '' : 'disabled'}>${t('煮')}</button></div>`;
       }).join('');
       return `<div class="dex-note">${grill ? t('🍖 在自家門口的烤肉爐旁邊，可以開始煮了！（烤肉爐限定的料理也能做）') : here ? t('🔥 在料理鍋旁邊，可以開始煮了！') : t('到中央營火旁的「🍲 營火料理」鍋子才能煮（自家門口有烤肉爐的話，在家也能煮）。蔬菜在帳篷前的小菜園種。')}</div>
         <div class="dex-note">${t('🍱 我的料理')}</div>${myDishes}
@@ -1262,10 +1308,23 @@ async function init() {
       }
       for (const b of body.querySelectorAll('[data-eat]')) {
         b.addEventListener('click', async () => {
+          // 按下去馬上有反應：按鈕變暗、關掉圖鑑，讓大家看到你在吃
+          if (eatBusy) return;
+          eatBusy = true;
+          for (const x of body.querySelectorAll('[data-eat]')) x.disabled = true;
           const res = await net.request('eat', { id: b.dataset.eat });
+          setTimeout(() => (eatBusy = false), 1600); // 伺服器 1.5 秒冷卻
           if (res?.ok) {
             dishes = res.dishes;
-            fishingUI.openCreel('cook');
+            fishingUI.el.modal.classList.remove('show');
+            audio.sfx('tap');
+            setBuff(res.buff);
+            const bf = activeBuff(res.buff);
+            const d = DISH_BY_ID[b.dataset.eat];
+            hud.toast(bf ? t('😋 {icon} {name}：{bicon} {buff} 10 分鐘', { icon: d?.icon ?? '', name: t(d?.zh ?? ''), bicon: bf.icon, buff: t(bf.zh) }) : t('😋 好吃！{icon} {name}', { icon: d?.icon ?? '', name: t(d?.zh ?? '') }), 5000);
+          } else {
+            for (const x of body.querySelectorAll('[data-eat]')) x.disabled = false;
+            if (res?.reason === 'tooFast') hud.toast(t('慢慢吃，一口一口來 😋'));
           }
         });
       }
@@ -1288,8 +1347,7 @@ async function init() {
   net.on('ate', ({ id, dish }) => {
     const d = DISH_BY_ID[dish];
     if (!d) return;
-    bubbles.show(id === net.id ? 'self' : id, `${d.icon}😋`, { emoji: true });
-    if (id === net.id) hud.toast(t('😋 好吃！{icon} {name}', { icon: d.icon, name: t(d.zh) }));
+    bubbles.show(id === net.id ? 'self' : id, `${d.icon}😋💕`, { emoji: true });
   });
   net.on('cooked', ({ id, name, dish }) => {
     const d = DISH_BY_ID[dish];
@@ -1578,7 +1636,8 @@ async function init() {
   });
   actions.onTrash = async (tb) => {
     const face = Math.atan2(tb.x - player.position.x, tb.z - player.position.z);
-    if (!actions.perform('pick', 1.25, face)) return;
+    // 🚲 騎車中：不用停下來彎腰，直接撿進垃圾袋
+    if (actions.state !== 'ride' && !actions.perform('pick', 1.25, face)) return;
     const res = await net.request('pickTrash', { k: tb.k });
     if (!res?.ok) return hud.toast(res?.reason === 'gone' ? t('哎呀，被別人先撿走了') : t('再靠近一點'));
     setTrash(res);
@@ -2177,6 +2236,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       setTrash(w);
       dishes = w.dishes ?? {};
       cooked = new Set(w.cooked ?? []);
+      setBuff(w.buff);
       setNet(w.net);
       refreshGather();
       fishingUI.mergeDex(w.dex);
@@ -2647,6 +2707,152 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   });
   shopPanel.onConfirm = (id, c) => confirmBuy.ask({ ...shopItemInfo(id, c), coins: net.online || demo ? pinecones : null });
   actions.onShop = () => shopPanel.open();
+
+  // ---------- 👫 好友、💌 密頻、✉️ 聯絡作者 ----------
+  let friendView = null; // 'list' | { hid } | 'support'（收到新訊息時重畫用）
+  const fmtTime = (at) => new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(at));
+  const setFriendBadge = (b) => social.setBadge((b?.dm ?? 0) + (b?.req ?? 0) + (b?.sup ?? 0));
+  net.on('socialBadge', setFriendBadge);
+  const friendErr = (r) =>
+    ({ notFound: t('找不到這個玩家編號'), self: t('這是你自己喔'), already: t('你們已經是好友了'), full: t('好友已經滿 100 位了'), tooFast: t('慢慢來 🙂'), notFriend: t('要互相加好友才能密頻'), short: t('多寫幾個字吧'), tooMany: t('今天已經寄很多封了，作者看到會回你'), offline: t('還沒連上伺服器') })[r?.reason] ?? t('沒有成功，再試一次');
+  async function addFriend(data) {
+    if (!net.online) return hud.toast(t('還沒連上伺服器'));
+    const r = await net.request('friendAdd', data);
+    if (!r?.ok) return hud.toast(friendErr(r));
+    audio.sfx('bell');
+    hud.toast(r.now ? t('👫 你和 {name} 成為好友了！', { name: r.name ?? '' }) : t('👫 已經送出好友邀請，等對方同意'));
+    if (friendView === 'list') openFriends();
+  }
+  async function openFriends() {
+    if (!net.online) return hud.toast(t('連上伺服器才能用好友'));
+    const r = await net.request('friendList');
+    if (!r?.ok) return hud.toast(t('還沒連上伺服器'));
+    friendView = 'list';
+    setFriendBadge(r.badge);
+    const here = [...remotes.players.values()].filter((p) => !p.npc && p.name);
+    const reqs = r.reqs.map((q) => `<div class="craft-row"><div class="craft-info"><b>👋 ${escapeHtml(q.name)}</b><small>${t('想加你好友')}</small></div><button type="button" class="mini-btn" data-acc="${q.hid}">${t('同意')}</button><button type="button" class="mini-btn ghost" data-rej="${q.hid}">${t('拒絕')}</button></div>`).join('');
+    const fr = r.friends
+      .map(
+        (f) => `<div class="craft-row fr-row" data-chat="${f.hid}"><div class="craft-info"><b>${f.online ? '🟢' : '⚪'} ${escapeHtml(f.name)}${f.unread ? ` <i class="social-badge in">${f.unread}</i>` : ''}</b><small>${f.mutual ? (f.last ? `${f.last.me ? t('我：') : ''}${escapeHtml(f.last.t)}` : t('還沒聊過，點一下開始密頻')) : t('⏳ 等對方同意')}</small></div><span class="fr-go">›</span></div>`,
+      )
+      .join('');
+    modal.open(
+      t('👫 好友'),
+      `<div class="dex-note">${t('🆔 我的玩家編號：{id}', { id: `<b class="gift-id-inline">${r.code}</b>` })}</div>
+      ${reqs ? `<div class="dex-note">${t('📮 好友邀請')}</div>${reqs}` : ''}
+      <div class="dex-note">${t('💌 我的好友（互相加好友才能密頻，對方不在線上也會留著）')}</div>
+      ${fr || `<div class="dex-note">${t('還沒有好友，從下面加一位吧')}</div>`}
+      <div class="dex-note">${t('＋ 加好友')}</div>
+      ${here.length ? `<div class="fr-here">${here.map((p) => `<button type="button" class="mini-btn" data-add="${p.id}">＋ ${escapeHtml(p.name)}</button>`).join('')}</div>` : `<div class="dex-note">${t('這裡現在沒有別人，可以輸入對方的玩家編號')}</div>`}
+      <div class="fr-add"><input class="join-input" id="fr-hid" maxlength="24" placeholder="${t('輸入對方的玩家編號')}" /><button type="button" class="mini-btn" id="fr-hid-go">${t('加好友')}</button></div>
+      <div class="yard-opts"><button type="button" class="mini-btn" id="fr-support">${t('✉️ 聯絡作者')}</button></div>`,
+      (body) => {
+        const inp = body.querySelector('#fr-hid');
+        inp.addEventListener('keydown', (e) => e.stopPropagation());
+        body.querySelector('#fr-hid-go').addEventListener('click', () => inp.value.trim() && addFriend({ hid: inp.value.trim() }));
+        for (const b of body.querySelectorAll('[data-add]')) b.addEventListener('click', () => addFriend({ sid: b.dataset.add }));
+        for (const b of body.querySelectorAll('[data-acc]'))
+          b.addEventListener('click', async () => {
+            await net.request('friendAnswer', { hid: b.dataset.acc, ok: true });
+            audio.sfx('bell');
+            openFriends();
+          });
+        for (const b of body.querySelectorAll('[data-rej]'))
+          b.addEventListener('click', async () => {
+            await net.request('friendAnswer', { hid: b.dataset.rej, ok: false });
+            openFriends();
+          });
+        for (const row of body.querySelectorAll('[data-chat]')) row.addEventListener('click', () => openDm(row.dataset.chat));
+        body.querySelector('#fr-support').addEventListener('click', openSupport);
+      },
+    );
+  }
+  async function openDm(hid) {
+    const r = await net.request('dmHistory', { hid });
+    if (!r?.ok) return hud.toast(t('找不到這位好友'));
+    friendView = { hid };
+    setFriendBadge(r.badge);
+    const msgs = r.msgs.map((m) => `<div class="dm-msg${m.me ? ' me' : ''}"><span>${escapeHtml(m.t)}</span><small>${fmtTime(m.at)}</small></div>`).join('');
+    modal.open(
+      `💌 ${r.name}`,
+      `<div class="dm-top"><button type="button" class="mini-btn ghost" id="dm-back">‹ ${t('好友')}</button><small>${r.online ? t('🟢 在線上') : t('⚪ 不在線上，下次上線會看到')}・${r.hid}</small></div>
+      <div class="dm-list" id="dm-list">${msgs || `<div class="dex-note">${r.mutual ? t('打聲招呼吧 👋') : t('⏳ 對方還沒同意好友邀請，同意後才能密頻')}</div>`}</div>
+      ${r.mutual ? `<div class="fr-add"><input class="join-input" id="dm-text" maxlength="200" placeholder="${t('想說的話（200 字內）')}" enterkeyhint="send" /><button type="button" class="mini-btn" id="dm-send">${t('送出')}</button></div>` : ''}
+      <div class="dm-tools"><button type="button" class="mini-btn ghost" id="dm-del">${t('刪除好友')}</button><button type="button" class="mini-btn ghost" id="dm-block">${t('🚫 封鎖')}</button></div>`,
+      (body) => {
+        const list = body.querySelector('#dm-list');
+        list.scrollTop = list.scrollHeight;
+        body.querySelector('#dm-back').addEventListener('click', openFriends);
+        const inp = body.querySelector('#dm-text');
+        const send = async () => {
+          const text = inp.value.trim();
+          if (!text) return;
+          const res = await net.request('dmSend', { hid, text });
+          if (!res?.ok) return hud.toast(friendErr(res));
+          inp.value = '';
+          openDm(hid);
+        };
+        inp?.addEventListener('keydown', (e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter' && !e.isComposing) send();
+        });
+        body.querySelector('#dm-send')?.addEventListener('click', send);
+        const drop = async (block) => {
+          if (!confirm(block ? t('封鎖 {name}？封鎖後他不能再加你好友、密你', { name: r.name }) : t('刪除好友 {name}？', { name: r.name }))) return;
+          await net.request('friendRemove', { hid, block });
+          openFriends();
+        };
+        body.querySelector('#dm-del').addEventListener('click', () => drop(false));
+        body.querySelector('#dm-block').addEventListener('click', () => drop(true));
+      },
+    );
+  }
+  async function openSupport() {
+    if (!net.online) return hud.toast(t('連上伺服器才能聯絡作者'));
+    const r = await net.request('supportList');
+    if (!r?.ok) return hud.toast(t('還沒連上伺服器'));
+    friendView = 'support';
+    setFriendBadge(r.badge);
+    const past = r.list.map((x) => `<div class="sup-item"><div>🙋 ${escapeHtml(x.t)}<small>${fmtTime(x.at)}</small></div>${x.re ? `<div class="sup-re">🛠️ ${t('作者回覆：')}${escapeHtml(x.re)}<small>${fmtTime(x.reAt)}</small></div>` : `<div class="sup-wait">${t('⏳ 作者還沒回覆，回覆後你會收到通知')}</div>`}</div>`).join('');
+    modal.open(
+      t('✉️ 聯絡作者'),
+      `<div class="dex-note">${t('想對作者說的話、遊戲建議、遇到的 bug 寫在這裡，會自動附上你的玩家編號（{id}）。', { id: r.code })}</div>
+      <textarea class="join-input sup-text" id="sup-text" maxlength="300" rows="4" placeholder="${t('例：在湖邊釣魚時畫面卡住了')}"></textarea>
+      <div class="yard-opts"><button type="button" class="mini-btn" id="sup-send">${t('寄出')}</button><button type="button" class="mini-btn ghost" id="sup-back">‹ ${t('好友')}</button></div>
+      ${past ? `<div class="dex-note">${t('我寄過的')}</div>${past}` : ''}`,
+      (body) => {
+        const ta = body.querySelector('#sup-text');
+        ta.addEventListener('keydown', (e) => e.stopPropagation());
+        body.querySelector('#sup-back').addEventListener('click', openFriends);
+        body.querySelector('#sup-send').addEventListener('click', async () => {
+          const res = await net.request('supportSend', { text: ta.value });
+          if (!res?.ok) return hud.toast(res?.reason === 'tooFast' ? t('一分鐘只能寄一封，等一下再寄') : friendErr(res));
+          audio.sfx('bell');
+          hud.toast(t('✉️ 寄出了！作者回覆後你會收到通知'));
+          openSupport();
+        });
+      },
+    );
+  }
+  net.on('dm', ({ hid, name, t: text }) => {
+    if (modal.isOpen && friendView?.hid === hid) return openDm(hid);
+    audio.sfx('tap');
+    hud.toast(t('💌 {name}：{text}', { name, text: text.length > 30 ? `${text.slice(0, 30)}⋯` : text }), 5000);
+  });
+  net.on('friendReq', ({ name }) => {
+    hud.toast(t('👋 {name} 想加你好友，按左下角「👫 好友」看看', { name }), 6000);
+    if (modal.isOpen && friendView === 'list') openFriends();
+  });
+  net.on('friendNew', ({ name }) => {
+    audio.sfx('bell');
+    hud.toast(t('👫 你和 {name} 成為好友了！可以密頻囉', { name }), 5000);
+    if (modal.isOpen && friendView === 'list') openFriends();
+  });
+  net.on('supportReply', () => {
+    audio.sfx('bell');
+    hud.toast(t('🛠️ 作者回覆你的來信了！按左下角「👫 好友」→「✉️ 聯絡作者」看看'), 7000);
+    if (modal.isOpen && friendView === 'support') openSupport();
+  });
 
   // ---------- 🎵 帳篷裡的小功能家具（按 E） ----------
   const starTalk = () => { const a = [t('✨ 看到北斗七星了，像一支大勺子'), t('✨ 那顆最亮的是織女星'), t('✨ 獵戶座的三顆星排成一直線'), t('✨ 銀河像一條淡淡的牛奶河'), t('✨ 月亮旁邊有一顆好亮的星星'), t('✨ 好像看到一隻星星做的狐狸')]; return a[Math.floor(Math.random() * a.length)]; };

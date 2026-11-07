@@ -21,7 +21,8 @@ const PROMPTS = {
   fish: t('盯著浮標：整個沉下去時按 <kbd>F</kbd> 拉竿　·　<kbd>E</kbd> 或移動就收竿'),
   sofa: t('坐著休息中　·　移動就起身'),
   sleep: t('躺著睡一下 💤　·　移動就起身'),
-  seat: t('<kbd>F</kbd> 烤棉花糖　·　<kbd>E</kbd> 或移動＝起身'),
+  seat: t('<kbd>F</kbd> 烤棉花糖　<kbd>E</kbd> 添柴火　<kbd>Z</kbd> 裹毯　·　移動＝起身'),
+  seatBlanket: t('<kbd>Z</kbd> 拿掉毯子　<kbd>E</kbd> 添柴火　·　移動＝起身'),
   ride: t('🚲 騎腳踏車中　·　<kbd>E</kbd> 下車'),
 };
 /** 手機畫面小：提示短一點（按鍵會換成按鈕圖示） */
@@ -33,7 +34,8 @@ const PROMPTS_SHORT = {
   fish: t('浮標整個沉下去就按 <kbd>F</kbd>'),
   sofa: t('移動就起身'),
   sleep: t('💤 移動就起身'),
-  seat: t('<kbd>F</kbd> 烤棉花糖'),
+  seat: t('<kbd>F</kbd> 烤　<kbd>E</kbd> 添柴　<kbd>Z</kbd> 裹毯'),
+  seatBlanket: t('<kbd>Z</kbd> 拿掉毯子'),
   ride: t('<kbd>E</kbd> 下車'),
 };
 
@@ -175,7 +177,7 @@ export class ActionStateMachine {
         break;
 
       case 'blanket':
-        if (s === 'blanket') this.#exit();
+        if (s === 'blanket') this.#backToSeat();
         else this.#enter('blanket');
         break;
 
@@ -187,7 +189,8 @@ export class ActionStateMachine {
   }
 
   #enter(state) {
-    const keepSeat = state === 'roast' ? this.seat : null; // 坐在圓木上烤棉花糖：還是坐在同一個位置
+    // 坐在營火圓木上烤棉花糖、添柴火、裹毯子：還是坐在同一個位置（做完回到坐著）
+    const keepSeat = state === 'roast' || (this.seat?.fire && (state === 'addWood' || state === 'blanket')) ? this.seat : null;
     if (this.state !== 'free') this.#exit(true);
     this.seat = keepSeat;
     this.state = state;
@@ -230,6 +233,19 @@ export class ActionStateMachine {
     this.state = 'free';
     this.seat = null;
     this.t = 0;
+  }
+
+  /** 結束目前動作：坐在營火圓木上就回到坐著，不然站起來 */
+  #backToSeat() {
+    const seat = this.seat?.fire ? this.seat : null;
+    if (!seat) {
+      this.#exit(true);
+      return;
+    }
+    this.#exit(true);
+    this.state = 'sofa';
+    this.seat = seat;
+    this.restFace = seat.face;
   }
 
   #finishRoast() {
@@ -388,6 +404,8 @@ export class ActionStateMachine {
     }
 
     r.state = this.state;
+    // 👟 吃了「腳步輕快」的料理：走路變快（騎腳踏車時取比較快的那個，不疊加）
+    if (this.buffSpeed > 1) r.speedMul = Math.max(r.speedMul ?? 1, this.buffSpeed);
     return r;
   }
 
@@ -417,7 +435,7 @@ export class ActionStateMachine {
         this.hud.toast(t('劈啪！火燒得更旺了 🔥'));
       }
     }
-    if (time > 1.75) this.#exit(true);
+    if (time > 1.75) this.#backToSeat(); // 坐著丟的：丟完繼續坐
   }
 
   /** 目前該顯示的互動提示（HTML）或 null */
@@ -426,6 +444,7 @@ export class ActionStateMachine {
     if (this.state === 'fish' && this.room?.fishing?.phase === 'show') return this.compact ? t('<kbd>F</kbd> 繼續釣　·　走開就舉著魚炫耀') : t('<kbd>F</kbd> 繼續釣魚　·　直接走開，就舉著魚到處炫耀 🐟');
     if (this.state === 'fish' && this.room?.fishing?.busy) return null;
     if (this.state === 'sofa' && this.seat && !this.seat.yard) return (this.compact ? PROMPTS_SHORT : PROMPTS).seat;
+    if (this.state === 'blanket' && this.seat?.fire) return (this.compact ? PROMPTS_SHORT : PROMPTS).seatBlanket;
     if (this.state === 'free') {
       if (this.room?.prompt) return this.room.prompt(this);
       return this.nearFire ? PROMPTS.near : null;

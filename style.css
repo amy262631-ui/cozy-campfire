@@ -6665,3 +6665,73 @@ body.touch .online .shopinfo-chip {
 }
 /* 🪑 門口擺設分成兩格：小標題 */
 .yard-sec { font-weight: 700; font-size: 13px; margin: 10px 2px 4px; opacity: 0.85; }
+/* 🎯 今日挑戰（邀朋友視窗裡） */
+.chal-box { margin: 4px 0 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 210, 140, 0.08); border: 1px dashed rgba(255, 190, 120, 0.35); }
+.chal-title { font-size: 12px; font-weight: 700; margin-bottom: 4px; opacity: 0.9; }
+.chal-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 2px 0; }
+.chal-row.ok { opacity: 0.6; }
+.gift-id { margin-top: 6px; font-weight: 700; user-select: all; }
+/* 📜 邀請規則 */
+.gift-rules { margin: 8px 0; padding: 8px 12px; border-radius: 12px; background: rgba(255, 210, 140, 0.08); font-size: 13px; }
+.gift-rules summary { cursor: pointer; font-weight: 700; color: #ffcf8a; }
+.gift-rules ul { margin: 6px 0 2px; padding-left: 18px; }
+.gift-rules li { margin: 4px 0; line-height: 1.45; }
+.gift-contact { margin-right: auto; }
+/* 👫 好友、💌 密頻、✉️ 聯絡作者 */
+.social-btn { position: relative; }
+.social-badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #e8503c; color: #fff; font-size: 11px; font-style: normal; font-weight: 700; line-height: 18px; text-align: center; box-sizing: border-box; }
+.social-badge.in { position: static; display: inline-block; margin-left: 4px; vertical-align: middle; }
+.mini-btn.ghost { background: transparent; border: 1px solid rgba(255, 220, 180, 0.3); color: inherit; }
+.fr-row { cursor: pointer; }
+.fr-row:hover { background: rgba(255, 210, 140, 0.08); }
+.fr-go { opacity: 0.5; font-size: 20px; padding: 0 4px; }
+.fr-here { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.fr-add { display: flex; gap: 6px; align-items: center; margin: 6px 0; }
+.fr-add .join-input { flex: 1; min-width: 0; margin: 0; }
+.gift-id-inline { user-select: all; color: #ffcf8a; }
+.dm-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dm-top small { opacity: 0.7; }
+.dm-list { max-height: min(46vh, 360px); overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 6px 2px; }
+.dm-msg { align-self: flex-start; max-width: 80%; display: flex; flex-direction: column; }
+.dm-msg span { padding: 7px 11px; border-radius: 14px 14px 14px 4px; background: rgba(255, 255, 255, 0.1); white-space: pre-wrap; word-break: break-word; }
+.dm-msg.me { align-self: flex-end; align-items: flex-end; }
+.dm-msg.me span { border-radius: 14px 14px 4px 14px; background: rgba(240, 138, 60, 0.85); color: #2a1608; }
+.dm-msg small { font-size: 10px; opacity: 0.55; margin: 2px 4px 0; }
+.dm-tools { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; opacity: 0.8; }
+.sup-text { width: 100%; box-sizing: border-box; resize: vertical; min-height: 80px; }
+.sup-item { padding: 8px 10px; margin: 6px 0; border-radius: 10px; background: rgba(255, 255, 255, 0.05); font-size: 13px; }
+.sup-item small { display: block; font-size: 10px; opacity: 0.55; }
+.sup-re { margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: rgba(255, 210, 140, 0.12); }
+.sup-wait { margin-top: 4px; opacity: 0.6; font-size: 12px; }
+/* 手機：左下三顆按鈕（表情、聊天、好友）字不要折行 */
+.social-btn small { white-space: nowrap; }
+@media (max-width: 599px) {
+  .social-buttons { gap: 6px; }
+  .social-btn { padding: 6px 10px; }
+}
+/* 😋 吃料理的小效果：營火條旁邊的小圖示＋倒數 */
+.buff-chip { margin-left: 4px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(255, 210, 140, 0.45); background: rgba(240, 138, 60, 0.25); color: #ffe3b8; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; pointer-events: auto; font-variant-numeric: tabular-nums; }
+.fx-tag { display: block; font-size: 11px; color: #ffcf8a; opacity: 0.9; margin-top: 1px; }
+@media (max-width: 599px) {
+  /* 手機：營火條在標題列，右邊被按鈕蓋住 → 放到「去哪裡」那一列的右邊 */
+  .buff-chip { position: fixed; top: 84px; right: 14px; margin: 0; padding: 5px 10px; font-size: 13px; background: rgba(60, 34, 20, 0.85); z-index: 5; }
+}
+
+/* 👫 好友按鈕：有新的好友邀請、密頻、作者回覆時紅底閃爍（11/07） */
+.social-btn.alert { animation: friend-alert 1.2s ease-in-out infinite; border-color: #ff8a75; }
+@keyframes friend-alert {
+  0%, 100% { background: rgba(214, 64, 46, 0.92); box-shadow: 0 0 0 0 rgba(255, 110, 90, 0.7); }
+  50% { background: rgba(140, 40, 30, 0.75); box-shadow: 0 0 0 7px rgba(255, 110, 90, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .social-btn.alert { animation: none; background: rgba(214, 64, 46, 0.92); } }
+
+/* 😋 料理效果倒數：離開營火區（湖畔、帳篷、營地⋯）也要看得到（11/07）
+   火力表在其他地方是藏起來的，所以只留下倒數小圓牌 */
+body:not(.room-forest_main) .fire-meter { display: flex; }
+body:not(.room-forest_main) .fire-meter > :not(.buff-chip) { display: none; }
+@media (min-width: 600px) {
+  body:not(.room-forest_main) .buff-chip { position: fixed; top: 102px; left: 22px; margin: 0; padding: 4px 10px; font-size: 13px; background: rgba(60, 34, 20, 0.85); z-index: 5; }
+}
+
+/* 手機：提示太長時自動換行，不要超出畫面（11/07） */
+body.touch .toast { white-space: normal; max-width: 88vw; box-sizing: border-box; line-height: 1.4; }
