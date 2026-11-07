@@ -661,7 +661,14 @@ export function createCampgroundRoom() {
     const yards = [];
     const side = p.gardenSide || 1;
     const place = [];
-    if (tent.yard) place.push([tent.yard, BIG_SPOT.x * side, BIG_SPOT.z, -Math.PI / 2, side === 1]);
+    // 11/07 作者：遮陽棚、門那一側不要朝自己的房子；坐著的人要面向小路（不要背對步道）
+    //   拖車屋：整台轉半圈（露台、躺椅朝小路，遮陽棚朝外）；露營車：門和遮陽棚翻到外側；天幕：椅子面向小路
+    if (tent.yard) {
+      const y0 = tent.yard;
+      const ry = y0 === 'airstream' ? Math.PI / 2 : y0 === 'tarp' ? 0 : -Math.PI / 2;
+      const mirror = y0 === 'tarp' ? false : y0 === 'camper' ? side !== 1 : side === 1;
+      place.push([y0, BIG_SPOT.x * side, BIG_SPOT.z, ry, mirror]);
+    }
     (tent.sm ?? []).slice(0, SMALL_SPOTS.length).forEach((id, i) => place.push([id, SMALL_SPOTS[i].x * side, SMALL_SPOTS[i].z, SMALL_SPOTS[i].ry * side, false]));
     for (const [id, lx, lz, ry, mirror] of place) {
       if (!id) continue;

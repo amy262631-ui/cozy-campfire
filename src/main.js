@@ -208,7 +208,7 @@ async function init() {
   const STAGE_MSG = {
     1: () => t('📖 上面多了「圖鑑」：釣到的魚、採到的東西都會收在這裡'),
     2: () => t('👒 「造型」和「🔥 約朋友」打開了：朋友點你的連結進來玩 1 分鐘，就送你今天的造型'),
-    3: () => t('💡 歡迎回來！多了「今日小靈感」，每天都有新的小任務'),
+    3: () => t('📖 不知道怎麼玩？點上面的「❓ 問題」，有營地手冊'),
     4: () => t('🎉 營地全部打開了：到「🏪 營地小舖」買帳篷，也可以用「🧭 去哪裡」到迷霧森林採集'),
   };
   const setStage = (n, quiet = false) => {
@@ -1337,29 +1337,7 @@ async function init() {
           fishingUI.openCreel('cook');
         });
       }
-      for (const b of body.querySelectorAll('[data-eat]')) {
-        b.addEventListener('click', async () => {
-          // 按下去馬上有反應：按鈕變暗、關掉圖鑑，讓大家看到你在吃
-          if (eatBusy) return;
-          eatBusy = true;
-          for (const x of body.querySelectorAll('[data-eat]')) x.disabled = true;
-          const res = await net.request('eat', { id: b.dataset.eat });
-          setTimeout(() => (eatBusy = false), 1600); // 伺服器 1.5 秒冷卻
-          if (res?.ok) {
-            dishes = res.dishes;
-            fishingUI.el.modal.classList.remove('show');
-            audio.sfx('tap');
-            setBuff(res.buff);
-            const bf = activeBuff(res.buff);
-            const d = DISH_BY_ID[b.dataset.eat];
-            actions.eatDish(d?.color ?? 0xe8a050); // 🍲 捧著小碗吃的動作（大家看得到）
-            hud.toast(bf ? t('😋 {icon} {name}：{bicon} {buff} 10 分鐘', { icon: d?.icon ?? '', name: t(d?.zh ?? ''), bicon: bf.icon, buff: t(bf.zh) }) : t('😋 好吃！{icon} {name}', { icon: d?.icon ?? '', name: t(d?.zh ?? '') }), 5000);
-          } else {
-            for (const x of body.querySelectorAll('[data-eat]')) x.disabled = false;
-            if (res?.reason === 'tooFast') hud.toast(t('慢慢吃，一口一口來 😋'));
-          }
-        });
-      }
+      bindEat(body);
       for (const sel of body.querySelectorAll('[data-gift]')) {
         sel.addEventListener('change', async () => {
           if (!sel.value) return;
@@ -1376,6 +1354,68 @@ async function init() {
     },
   });
   actions.onCook = () => fishingUI.openCreel('cook');
+  /** 😋 吃料理（圖鑑的料理頁、🎒 背包共用） */
+  function bindEat(body) {
+    for (const b of body.querySelectorAll('[data-eat]')) {
+      b.addEventListener('click', async () => {
+        // 按下去馬上有反應：按鈕變暗、關掉視窗，讓大家看到你在吃
+        if (eatBusy) return;
+        eatBusy = true;
+        for (const x of body.querySelectorAll('[data-eat]')) x.disabled = true;
+        const res = await net.request('eat', { id: b.dataset.eat });
+        setTimeout(() => (eatBusy = false), 1600); // 伺服器 1.5 秒冷卻
+        if (res?.ok) {
+          dishes = res.dishes;
+          fishingUI.el.modal.classList.remove('show');
+          audio.sfx('tap');
+          setBuff(res.buff);
+          const bf = activeBuff(res.buff);
+          const d = DISH_BY_ID[b.dataset.eat];
+          actions.eatDish(d?.color ?? 0xe8a050); // 🍲 捧著小碗吃的動作（大家看得到）
+          hud.toast(bf ? t('😋 {icon} {name}：{bicon} {buff} 10 分鐘', { icon: d?.icon ?? '', name: t(d?.zh ?? ''), bicon: bf.icon, buff: t(bf.zh) }) : t('😋 好吃！{icon} {name}', { icon: d?.icon ?? '', name: t(d?.zh ?? '') }), 5000);
+        } else {
+          for (const x of body.querySelectorAll('[data-eat]')) x.disabled = false;
+          if (res?.reason === 'tooFast') hud.toast(t('慢慢吃，一口一口來 😋'));
+        }
+      });
+    }
+  }
+  /** 🎒 背包（11/07 作者：吃料理不用再進圖鑑或造型）：🍱 料理、🧺 採集籃、👒 造型 */
+  function openBag(tab = 'dish') {
+    if (!net.online) return hud.toast(t('連上伺服器才能打開背包'));
+    const tabs = [
+      ['dish', t('🍱 料理')],
+      ['basket', t('🧺 採集籃')],
+      ['look', t('👒 造型')],
+    ];
+    let html = '';
+    if (tab === 'dish') {
+      const mine = DISHES.filter((d) => dishes[d.id] > 0);
+      html = mine.length
+        ? mine.map((d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${t(d.zh)} ×${dishes[d.id]}</b>${fxTag(d.id)}</div><button type="button" class="mini-btn" data-eat="${d.id}">${t('😋 吃')}</button></div>`).join('')
+        : `<div class="dex-note">${t('還沒有料理。到營火旁的「🍲 營火料理」鍋子煮一道吧！')}</div>`;
+    } else if (tab === 'basket') {
+      const row = (icon, name, n) => `<div class="bag-item"><i>${icon}</i><b>${name}</b><em>×${n}</em></div>`;
+      const groups = [
+        ...GATHER_TYPES.map((ty) => [`${ty.icon} ${t(ty.zh)}`, GATHER_ITEMS.filter((x) => x.type === ty.id && basket[x.id] > 0)]),
+        [t('🥕 蔬菜'), CROPS.filter((c) => basket[c.id] > 0)],
+        [t('♻️ 回收材料'), TRASH.filter((x) => basket[x.id] > 0)],
+      ].filter(([, list]) => list.length);
+      html = groups.length
+        ? groups.map(([title, list]) => `<div class="dex-note">${title}</div><div class="bag-grid">${list.map((x) => row(x.icon, t(x.zh), basket[x.id])).join('')}</div>`).join('')
+        : `<div class="dex-note">${t('採集籃是空的。去迷霧森林、湖邊採採看吧 🍄')}</div>`;
+      html += `<div class="dex-note">${t('採集籃的東西可以煮料理（「🍲 營火料理」鍋子）、做家具（「📖 圖鑑 → 🔨 手作」）')}</div>`;
+    }
+    modal.open(
+      t('🎒 背包'),
+      `<div class="shop-cats bag-tabs">${tabs.map(([id, label]) => `<button type="button" data-bag="${id}" class="${id === tab ? 'on' : ''}">${label}</button>`).join('')}</div>${html}`,
+      (body) => {
+        for (const b of body.querySelectorAll('[data-bag]')) b.addEventListener('click', () => (b.dataset.bag === 'look' ? (modal.close(), fishingUI.openCreel('outfit')) : openBag(b.dataset.bag)));
+        bindEat(body);
+      },
+    );
+  }
+  document.getElementById('bag-btn').addEventListener('click', () => openBag());
   net.on('ate', ({ id, dish }) => {
     const d = DISH_BY_ID[dish];
     if (!d) return;
@@ -1389,8 +1429,8 @@ async function init() {
     dishes = all ?? dishes;
     const d = DISH_BY_ID[dish];
     audio.sfx('bell');
-    if (share) return hud.toast(t('🥢 {name} 煮了一大鍋{icon} {dish}，分你一份！到「📖 圖鑑 → 🍲 料理」可以吃', { name: from, icon: d?.icon ?? '', dish: t(d?.zh ?? '') }), 6000);
-    hud.toast(t('🎁 {name} 送你一份{icon} {dish}！到「📖 圖鑑 → 🍲 料理」可以吃', { name: from, icon: d?.icon ?? '', dish: t(d?.zh ?? '') }), 6000);
+    if (share) return hud.toast(t('🥢 {name} 煮了一大鍋{icon} {dish}，分你一份！點「🎒 背包」就能吃', { name: from, icon: d?.icon ?? '', dish: t(d?.zh ?? '') }), 6000);
+    hud.toast(t('🎁 {name} 送你一份{icon} {dish}！點「🎒 背包」就能吃', { name: from, icon: d?.icon ?? '', dish: t(d?.zh ?? '') }), 6000);
   });
 
   // ---------- 🥕 帳篷前的小菜園 ----------

@@ -583,7 +583,8 @@ export class RitualGuide {
     const kidLeft = this.task?.kid && !this.done;
     this.ideaBtn.textContent = kidLeft ? t('🌱 新手小任務') : t('💡 今日小靈感');
     this.ideaBtn.classList.toggle('kid-chip', !!kidLeft);
-    this.ideaBtn.hidden = false;
+    // 11/07 作者：「💡 今日小靈感」拿掉（有 ❓ 營地手冊就好）；只剩新手小任務做到一半時的「🌱 新手小任務」
+    this.ideaBtn.hidden = !kidLeft;
     this.beacon.visible = false;
     this.arrow.hidden = true;
   }

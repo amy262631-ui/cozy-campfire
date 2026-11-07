@@ -21,6 +21,7 @@ export class SocialPanel {
         <div class="social-buttons">
           <button type="button" class="social-btn" id="emote-btn">😊<small>${t('表情')}</small></button>
           <button type="button" class="social-btn" id="chat-btn">💬<small>${t('聊天')}</small></button>
+          <button type="button" class="social-btn" id="bag-btn">🎒<small>${t('背包')}</small></button>
           <button type="button" class="social-btn" id="friend-btn">👫<small>${t('好友')}</small><i class="social-badge" id="friend-badge" hidden></i></button>
         </div>
       </div>

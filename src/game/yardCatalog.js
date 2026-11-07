@@ -72,7 +72,7 @@ export const YARD_USES = {
   canoe: { use: ['canoe'] },
   tarp: { seats: [{ x: -0.62, y: 0.45, z: 0.2, face: 0 }, { x: 0.62, y: 0.45, z: 0.2, face: 0 }] },
   jeep: { use: ['drive'], seats: [{ x: 0.15, y: 0.7, z: 0.32, face: Math.PI / 2, driver: true }, { x: -0.95, y: 0.75, z: -0.3, face: Math.PI / 2 }] }, // 駕駛座在前、乘客坐後座（兩個人才不會疊在一起）
-  camper: { seats: [{ x: 1.2, y: 0.25, z: 1.25, face: 0 }, { x: -0.6, y: 1.0, z: 0, face: Math.PI / 2, sleep: true, inside: true }] },
+  camper: { seats: [{ x: 1.2, y: 0.25, z: 1.25, face: 0.75 }, { x: -0.6, y: 1.0, z: 0, face: Math.PI / 2, sleep: true, inside: true }] },
   airstream: { use: ['cooler'], seats: [{ x: -2.85, y: 0.42, z: -0.55, face: -Math.PI / 2 }, { x: -2.85, y: 0.42, z: 0.85, face: -Math.PI / 2 }] }, // 車尾露台的兩張躺椅
   bench: { seats: [{ x: -0.6, y: 0.42, z: 0, face: 0 }, { x: 0.6, y: 0.42, z: 0, face: 0 }] },
   bistro: { seats: [{ x: -0.55, y: 0.45, z: 0, face: Math.PI / 2 }, { x: 0.55, y: 0.45, z: 0, face: -Math.PI / 2 }] },

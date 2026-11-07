@@ -6806,3 +6806,11 @@ body .idea-chip.kid-chip:not([hidden]) { display: inline-block !important; backg
 .tank-fish.no { opacity: 0.35; filter: grayscale(1); }
 
 .fr-plot { font-size: 12px; font-weight: 400; opacity: 0.75; margin-left: 4px; }
+
+/* 🎒 背包 */
+.bag-tabs { margin-bottom: 8px; }
+.bag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-bottom: 6px; }
+.bag-item { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 10px; background: rgba(255, 240, 220, 0.07); font-size: 13px; }
+.bag-item i { font-style: normal; font-size: 18px; }
+.bag-item b { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bag-item em { font-style: normal; opacity: 0.8; }
