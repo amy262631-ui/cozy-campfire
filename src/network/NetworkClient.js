@@ -86,9 +86,19 @@ export class NetworkClient {
         this._last = null; // 重連後立刻送一次完整狀態
         this.#setStatus('online');
         this.#emit('joined', res);
+        // 剛連上時網頁就在背景（例如手機鎖螢幕後重連）：告訴伺服器先不用送別人的走動
+        if (typeof document !== 'undefined' && document.hidden) socket.emit('bg', true);
       });
       join();
     });
+
+    // 省流量：網頁切到背景時不收別人的走動（掛機照樣算松果），回來時伺服器補一次大家的位置
+    if (typeof document !== 'undefined' && !this._bgHooked) {
+      this._bgHooked = true;
+      document.addEventListener('visibilitychange', () => {
+        if (this.socket?.connected) this.socket.emit('bg', document.hidden);
+      });
+    }
 
     socket.on('disconnect', () => this.#setStatus('offline'));
     socket.on('connect_error', () => this.#setStatus('offline'));

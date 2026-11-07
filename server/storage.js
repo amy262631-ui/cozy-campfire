@@ -9,6 +9,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 
 const URL_ = process.env.UPSTASH_REDIS_REST_URL;
 const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -43,6 +44,13 @@ export async function init(dir) {
     console.error('[存檔] ❌ 請檢查 Render 的 UPSTASH_REDIS_REST_URL／TOKEN（不要用「只讀令牌」、不要有引號或空格）');
   }
 }
+
+/**
+ * 省流量（11/07）：存進 Upstash 前先 gzip 壓縮，再轉成文字（開頭加 gz:）。
+ * 讀的時候兩種都認得：舊的純 JSON、新的 gz: 壓縮版，所以不用搬資料。
+ */
+const pack = (data) => 'gz:' + zlib.gzipSync(JSON.stringify(data)).toString('base64');
+const unpack = (raw) => (typeof raw === 'string' && raw.startsWith('gz:') ? JSON.parse(zlib.gunzipSync(Buffer.from(raw.slice(3), 'base64')).toString('utf8')) : JSON.parse(raw));
 
 async function redis(args) {
   const res = await fetch(URL_.trim().replace(/^["']|["']$/g, ''), {
@@ -84,9 +92,9 @@ export async function load(file) {
   if (!remote) return local;
   try {
     const raw = await redis(['GET', PREFIX + file]);
-    if (raw != null) return JSON.parse(raw);
+    if (raw != null) return unpack(raw);
     if (local !== undefined) {
-      await redis(['SET', PREFIX + file, JSON.stringify(local)]);
+      await redis(['SET', PREFIX + file, pack(local)]);
       console.log(`[存檔] 已把 ${file} 匯入 Upstash`);
     }
     return local;
@@ -109,7 +117,7 @@ async function write(file) {
   writeLocal(file, data);
   if (!remote) return;
   try {
-    await redis(['SET', PREFIX + file, JSON.stringify(data)]);
+    await redis(['SET', PREFIX + file, pack(data)]);
     status.ok = true;
     status.lastSave = new Date().toISOString();
   } catch (err) {
@@ -126,8 +134,16 @@ async function write(file) {
 export function save(file, data, delay = 2000) {
   pending.set(file, data);
   clearTimeout(timers[file]);
-  timers[file] = setTimeout(() => write(file), delay);
+  // 一直有人在改（例如很多人在玩）時，最多等 MAX_WAIT 就一定寫一次，不會一直往後延
+  firstAt[file] ??= Date.now();
+  const wait = Math.max(0, Math.min(delay, firstAt[file] + MAX_WAIT - Date.now()));
+  timers[file] = setTimeout(() => {
+    delete firstAt[file];
+    write(file);
+  }, wait);
 }
+const firstAt = {};
+const MAX_WAIT = 120000;
 
 /** 立刻把所有還沒寫出去的資料寫完（重新部署、關機前呼叫） */
 export async function flush() {

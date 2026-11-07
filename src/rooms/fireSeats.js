@@ -16,7 +16,7 @@ export const FIRE_SEATS = [
   [-2.42, 1.56, 0.3, 0.19],
   [-1.62, 1.88, 0.31, 0.16],
   [-0.8, 1.6, 0.27, 0.18]
-].map(([a, r, rr, h], i) => ({ i, x: Math.sin(a) * r, z: Math.cos(a) * r, rr, h, face: Math.atan2(-Math.sin(a), -Math.cos(a)) }));
+].map(([a, r, rr, h], i) => ({ i, x: Math.sin(a) * r, z: Math.cos(a) * r, rr, h, fire: true, face: Math.atan2(-Math.sin(a), -Math.cos(a)) }));
 
 export function buildFireSeats(world) {
   const group = new THREE.Group();

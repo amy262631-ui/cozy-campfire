@@ -164,7 +164,7 @@ export function createMistForestRoom() {
       }
       if (name === 'interact') {
         if (gather.tryPick(actions) || gather.tryCatch(actions)) return true;
-        actions.hud.toast(t('地上有發光圈圈的蘑菇、果實、野花，走過去按 E 採摘；空中飛的蟲蟲用捕蟲網按 E 捕 🦋'));
+        actions.hud.toast(t('走到發光圈圈按 E 採摘 🧺　蟲蟲用捕蟲網 🦋'));
         return true;
       }
       return false;

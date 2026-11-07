@@ -75,13 +75,11 @@ const FOREST_RETURN = {
 };
 
 /** 居民名單：每個人有自己喜歡的地點和事情 */
+// 11/07 作者：居民有點煩，只留看星星和添柴火兩位，而且少走動（也省伺服器流量）。
+// 阿樂、布丁、咪咪、阿松先拿掉（翻譯和程式都還在，要加回來只要放回這個清單）。
 export const RESIDENTS = [
-  { key: 'oak', name: '撿柴的小橡', sp: 0, fur: 1, home: 'forest_main', likes: ['wood', 'roast', 'roast', 'tree', 'nap'] },
-  { key: 'le', name: '釣魚的阿樂', sp: 5, fur: 3, home: 'lake_dock', likes: ['fish', 'fish', 'fish', 'stroll', 'visitForest'] },
-  { key: 'pudding', name: '愛睡的布丁', sp: 4, fur: 0, home: 'forest_main', likes: ['nap', 'nap', 'roast', 'stars'] },
-  { key: 'mimi', name: '樹屋的咪咪', sp: 1, fur: 2, home: 'treehouse_music', likes: ['hang', 'hang', 'wave', 'visitTent'] },
-  { key: 'lulu', name: '看星星的露露', sp: 3, fur: 0, home: 'forest_main', likes: ['stars', 'stars', 'pray', 'board', 'cairns'] },
-  { key: 'song', name: '守林人阿松', sp: 2, fur: 4, home: 'forest_main', likes: ['wood', 'patrol', 'visitLake', 'visitTent', 'roast', 'pray'] },
+  { key: 'oak', name: '撿柴的小橡', sp: 0, fur: 1, home: 'forest_main', likes: ['wood', 'nap', 'nap'], calm: true },
+  { key: 'lulu', name: '看星星的露露', sp: 3, fur: 0, home: 'forest_main', likes: ['stars'], calm: true },
 ];
 
 const WALK_SPEED = 1.25;
@@ -220,15 +218,17 @@ export function createResidents(api) {
         case 'wood': {
           // 走到火邊（沒人的位置）丟一根柴，馬上回自己的地方
           const seat = freeSpot(n, F.fireSeat);
-          return [...route(n, seat), { type: 'face', to: FIRE }, act('addWood', 1.8, 1.8, { wood: true }), ...route(n, ownSpot(n)), { type: 'face', to: FIRE }, act('idle', 8, 20)];
+          return [...route(n, seat), { type: 'face', to: FIRE }, act('addWood', 1.8, 1.8, { wood: true }), ...route(n, ownSpot(n)), { type: 'face', to: FIRE }, act('idle', n.def.calm ? 40 : 8, n.def.calm ? 90 : 20)];
         }
         case 'roast':
         case 'nap': {
           // 不再坐到營火邊（會擋到玩家）：在自己的位置裹毯子發呆
           const p = freeSpot(n, () => ownSpot(n));
-          return [...route(n, p), { type: 'face', to: FIRE }, act(like === 'nap' ? 'blanket' : 'idle', 30, 90)];
+          return [...route(n, p), { type: 'face', to: FIRE }, act(like === 'nap' ? 'blanket' : 'idle', n.def.calm ? 90 : 30, n.def.calm ? 200 : 90)];
         }
         case 'stars': {
+          // 安靜型：就在自己的位置附近看星星，很久才換一次
+          if (n.def.calm) return [...route(n, freeSpot(n, () => ownSpot(n))), act('stargaze', 90, 240)];
           const p = freeSpot(n, F.meadow);
           return [...route(n, p), act('stargaze', 25, 60)];
         }
@@ -323,8 +323,8 @@ export function createResidents(api) {
       if (!n.step) {
         if (!n.plan.length) {
           n.plan = nextPlan(n);
-          // 偶爾跟附近的真人打招呼
-          if (humanNear(n) && Math.random() < 0.25) n.plan.unshift(act('wave', 2.4, 2.4));
+          // 偶爾跟附近的真人打招呼（安靜型很少打招呼）
+          if (humanNear(n) && Math.random() < (n.def.calm ? 0.08 : 0.25)) n.plan.unshift(act('wave', 2.4, 2.4));
           if (!n.plan.length) {
             n.wait = 2;
             continue;

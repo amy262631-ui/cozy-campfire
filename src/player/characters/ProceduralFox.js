@@ -593,6 +593,10 @@ export class ProceduralFox {
       this.outfit.head.scale.setScalar(1 + vol * 1.5);
       this.outfit.head.position.y += vol * 0.6;
     }
+    // 🪨 頂石頭：戴帽子時放在帽子頂上（不然石頭會陷在帽子裡、看起來像不見了）；有頭髮就放在頭髮上面
+    const hat = this.outfit.head;
+    const hatTop = hat?.userData.hatTop ?? 0;
+    this.headStone.position.y = hatTop ? hat.position.y + hatTop * hat.scale.y + 0.07 : 0.4 + vol;
     this.#placeAccessory();
   }
 

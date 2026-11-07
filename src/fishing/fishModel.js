@@ -83,7 +83,7 @@ export function createFishMesh(index) {
   // 尾巴（扁扁的三角）
   const finColor = new THREE.Color(f.color).multiplyScalar(0.85).getHex();
   const tail = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.34, 4), mat(finColor, glow));
-  tail.rotation.z = Math.PI / 2;
+  tail.rotation.z = -Math.PI / 2; // 尖的那頭接身體、寬的那頭在後面（11/07：原本反過來，看起來怪）
   tail.scale.set(1, 1, 0.22);
   tail.position.x = -0.6;
   g.add(tail);

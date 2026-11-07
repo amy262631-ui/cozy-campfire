@@ -1636,7 +1636,8 @@ async function init() {
   });
   actions.onTrash = async (tb) => {
     const face = Math.atan2(tb.x - player.position.x, tb.z - player.position.z);
-    if (!actions.perform('pick', 1.25, face)) return;
+    // 🚲 騎車中：不用停下來彎腰，直接撿進垃圾袋
+    if (actions.state !== 'ride' && !actions.perform('pick', 1.25, face)) return;
     const res = await net.request('pickTrash', { k: tb.k });
     if (!res?.ok) return hud.toast(res?.reason === 'gone' ? t('哎呀，被別人先撿走了') : t('再靠近一點'));
     setTrash(res);

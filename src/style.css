@@ -6716,3 +6716,22 @@ body.touch .online .shopinfo-chip {
   /* 手機：營火條在標題列，右邊被按鈕蓋住 → 放到「去哪裡」那一列的右邊 */
   .buff-chip { position: fixed; top: 84px; right: 14px; margin: 0; padding: 5px 10px; font-size: 13px; background: rgba(60, 34, 20, 0.85); z-index: 5; }
 }
+
+/* 👫 好友按鈕：有新的好友邀請、密頻、作者回覆時紅底閃爍（11/07） */
+.social-btn.alert { animation: friend-alert 1.2s ease-in-out infinite; border-color: #ff8a75; }
+@keyframes friend-alert {
+  0%, 100% { background: rgba(214, 64, 46, 0.92); box-shadow: 0 0 0 0 rgba(255, 110, 90, 0.7); }
+  50% { background: rgba(140, 40, 30, 0.75); box-shadow: 0 0 0 7px rgba(255, 110, 90, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .social-btn.alert { animation: none; background: rgba(214, 64, 46, 0.92); } }
+
+/* 😋 料理效果倒數：離開營火區（湖畔、帳篷、營地⋯）也要看得到（11/07）
+   火力表在其他地方是藏起來的，所以只留下倒數小圓牌 */
+body:not(.room-forest_main) .fire-meter { display: flex; }
+body:not(.room-forest_main) .fire-meter > :not(.buff-chip) { display: none; }
+@media (min-width: 600px) {
+  body:not(.room-forest_main) .buff-chip { position: fixed; top: 102px; left: 22px; margin: 0; padding: 4px 10px; font-size: 13px; background: rgba(60, 34, 20, 0.85); z-index: 5; }
+}
+
+/* 手機：提示太長時自動換行，不要超出畫面（11/07） */
+body.touch .toast { white-space: normal; max-width: 88vw; box-sizing: border-box; line-height: 1.4; }

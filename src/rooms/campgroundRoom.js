@@ -555,6 +555,7 @@ export function createCampgroundRoom() {
 
   const tentKey = (tent) => (tent ? [tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.open, tent.likes, tent.n, tent.yard ?? '', tent.seat ?? '', JSON.stringify(tent.garden ?? null)].join('|') : 'empty');
   const trash = createTrashLayer(group);
+  const ridePicked = new Set(); // 騎車自動撿過的垃圾（避免同一件一直送）
   /** 🥕 小菜園的作物（世界座標，跟帳篷分開放） */
   const gardensGroup = new THREE.Group();
   group.add(gardensGroup);
@@ -944,6 +945,16 @@ export function createCampgroundRoom() {
       returnSpawn.home = outSpot(plotSpots(PLOTS[0], front));
     },
     update(dt, time, camera) {
+      // 🚲 騎車經過垃圾：自動撿起來，不用停下來（同一件只送一次，等伺服器回覆）
+      const ra = lastActions;
+      if (ra?.state === 'ride') {
+        const tb = trash.near(ra.player.position);
+        if (tb && !ridePicked.has(tb.k)) {
+          ridePicked.add(tb.k);
+          if (ridePicked.size > 50) ridePicked.delete(ridePicked.values().next().value);
+          ra.onTrash?.(tb);
+        }
+      }
       for (const sg of signs) {
         sg.getWorldPosition(wp);
         sg.material.opacity = Math.min(1, Math.max(0, (camera.position.distanceTo(wp) - 2.5) / 3));
@@ -977,9 +988,11 @@ export function createCampgroundRoom() {
         actions.stop();
         return true;
       }
-      // 🚲 騎腳踏車中：E 下車
+      // 🚲 騎腳踏車中：旁邊有垃圾就直接撿（不用下車），不然 E＝下車
       if (name === 'interact' && actions.state === 'ride') {
-        actions.stop();
+        const tb = trash.near(actions.player.position);
+        if (tb) actions.onTrash?.(tb);
+        else actions.stop();
         return true;
       }
       if (name !== 'interact' || actions.state !== 'free') return false;
@@ -1016,6 +1029,7 @@ export function createCampgroundRoom() {
     },
     interactHint(actions) {
       lastActions = actions;
+      if (actions.state === 'ride' && trash.near(actions.player.position)) return ['♻️', t('撿起來')];
       if (seatedOn() || actions.state === 'ride') return ['🧍', t('起身')];
       if (trash.near(actions.player.position)) return ['♻️', t('撿起來')];
       const yd0 = pickYard(actions.player.position);

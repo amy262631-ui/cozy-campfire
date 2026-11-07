@@ -12,6 +12,7 @@
  * 啟動：npm run server（預設埠 3000，可用環境變數 PORT 更改）
  */
 import express from 'express';
+import compression from 'compression';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import path from 'node:path';
@@ -351,7 +352,7 @@ const homeRoom = (owner) => {
   return homeRooms.get(owner);
 };
 /** 存檔：統計和錢包更新很頻繁，等 10 秒合併成一次；其他 2 秒 */
-const saveJson = (file, data) => storage.save(file, data, file === 'stats.json' || file === 'players.json' ? 10000 : 2000);
+const saveJson = (file, data) => storage.save(file, data, file === 'stats.json' || file === 'players.json' ? 45000 : 8000);
 
 // ---------- 營火時間（台北時間早上 9:30、晚上 9:30，各 30 分鐘）：流星雨、松果加倍、限定流星吊飾 ----------
 const envNum = (k, def) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : def);
@@ -869,6 +870,8 @@ function activatePass(vid, order) {
 
 // ---------- HTTP ----------
 const app = express();
+// 省流量（11/07）：網頁、程式、資料先壓縮再送（遊戲主程式 1.4 MB → 約 0.55 MB）
+app.use(compression());
 /** 伺服器這次醒來的時間：Render 免費方案沒人叫醒會睡著，醒來就重新算（看定時叫醒有沒有效） */
 const BOOT_AT = Date.now();
 const awakeText = () => {
@@ -1345,7 +1348,14 @@ const io = new Server(httpServer, {
   cors: { origin: true },
   pingInterval: 10000,
   pingTimeout: 8000,
+  // 省流量：WebSocket 訊息先壓縮再送（位置更新很多是重複的字，壓縮效果好）
+  perMessageDeflate: { threshold: 0, zlibDeflateOptions: { level: 6, memLevel: 7 } },
 });
+/** 網頁切到背景的玩家放在這個房間：不送別人的走動（掛機只算松果，不傳畫面資料） */
+const BG = 'bg';
+/** 居民（NPC）的位置每幾次廣播才送一次：20Hz ÷ 4 ＝ 每秒 5 次，看起來一樣順，流量少很多 */
+const NPC_EVERY = 4;
+let tickNo = 0;
 
 // ---------- 小工具 ----------
 const num = (v, min, max, fallback = 0) => {
@@ -1514,6 +1524,20 @@ io.on('connection', (socket) => {
     home: publicHome(homes[homeOwner]),
     fuel: chan.fuel,
     players: [...room.players.values()].filter((p) => p.id !== socket.id).map(publicInfo),
+  });
+
+  /** 網頁切到背景／回到前景：背景時不送別人的走動；回來時補一次所有人現在的位置 */
+  socket.on('bg', (hidden) => {
+    if (hidden) {
+      socket.join(BG);
+      return;
+    }
+    socket.leave(BG);
+    if (!room) return;
+    const batch = {};
+    for (const p of room.players.values()) if (p.id !== socket.id) batch[p.id] = packState(p);
+    for (const p of room.npcs?.values() ?? []) batch[p.id] = packState(p);
+    socket.emit('states', batch);
   });
 
   socket.on('join', (data = {}, ack) => {
@@ -3244,6 +3268,7 @@ setInterval(() => {
   const dt = (now - lastTick) / 1000;
   lastTick = now;
   fireSync += dt;
+  const npcTurn = ++tickNo % NPC_EVERY === 0;
 
   for (const c of channels.values()) {
     c.fuel = Math.max(0, c.fuel - BURN_RATE * dt);
@@ -3255,13 +3280,21 @@ setInterval(() => {
       // 只送有變動的玩家（含營地居民）
       const batch = {};
       let any = false;
-      for (const p of [...room.players.values(), ...room.npcs.values()]) {
+      for (const p of room.players.values()) {
         if (!p.dirty) continue;
         batch[p.id] = packState(p);
         p.dirty = false;
         any = true;
       }
-      if (any) io.to(key(c.ch, id)).volatile.emit('states', batch);
+      if (npcTurn) {
+        for (const p of room.npcs.values()) {
+          if (!p.dirty) continue;
+          batch[p.id] = packState(p);
+          p.dirty = false;
+          any = true;
+        }
+      }
+      if (any) io.to(key(c.ch, id)).except(BG).volatile.emit('states', batch);
       // 每個分流只有一團火（在森林），各房間都同步一下數值，回森林時才不會跳動
       if (fireSync >= 2) io.to(key(c.ch, id)).emit('fireSync', { fuel: c.fuel });
     }
@@ -3277,7 +3310,7 @@ setInterval(() => {
       p.dirty = false;
       any = true;
     }
-    if (any) io.to(`home:${owner}`).volatile.emit('states', batch);
+    if (any) io.to(`home:${owner}`).except(BG).volatile.emit('states', batch);
   }
   if (fireSync >= 2) fireSync = 0;
 }, TICK_MS);

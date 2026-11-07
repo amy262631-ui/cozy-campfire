@@ -218,6 +218,9 @@ export class FishingGame {
       this.focusEl.hidden = true;
       return;
     }
+    // 11/07 作者：畫面中間一直顯示「靜靜釣了幾分・幾條」有點礙眼 → 釣魚中不顯示，收竿時跳一次小結
+    this.focusEl.hidden = true;
+    return;
     const sec = Math.floor((performance.now() - this.session.at) / 1000);
     this.focusEl.hidden = false;
     this.focusEl.textContent = compactScreen()
@@ -228,6 +231,11 @@ export class FishingGame {
   stop() {
     // 舉著魚起身：魚不收，交給 main.js 繼續舉著到處走
     const keep = this.phase === 'show' && this.fish ? { ...this.fish } : null;
+    // 收竿小結：釣了一陣子或有釣到才說
+    if (this.session) {
+      const sec = Math.floor((performance.now() - this.session.at) / 1000);
+      if (this.session.n > 0 || sec >= 60) this.hud?.toast(t('🎣 這次釣了 {m} 分鐘・{n} 條', { m: Math.max(1, Math.round(sec / 60)), n: this.session.n }), 2600);
+    }
     this.#go('idle');
     this.bobber.visible = this.line.visible = this.bang.visible = this.reflect.visible = false;
     clearInterval(this.focusTimer);

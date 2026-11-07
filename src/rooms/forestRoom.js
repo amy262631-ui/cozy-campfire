@@ -500,7 +500,7 @@ export function createForestRoom() {
   let lastActions = null; // 坐著的時候，位置固定在座位上（resolveCollision 用）
   const seatedOn = () => {
     const a = lastActions;
-    return a?.seat && (a.state === 'sofa' || a.state === 'roast' || a.state === 'eat') ? a.seat : null;
+    return a?.seat && ['sofa', 'roast', 'eat', 'addWood', 'blanket'].includes(a.state) ? a.seat : null;
   };
 
   const occluders = [...world.occluders];
@@ -610,7 +610,8 @@ export function createForestRoom() {
       const s = seatedOn();
       if (s) {
         // 坐在圓木上：固定在座位；烤棉花糖的姿勢比較低，高度少一點
-        pos.set(s.x, lastActions.state === 'sofa' ? s.h : s.h * 0.6, s.z);
+        const st = lastActions.state;
+        pos.set(s.x, st === 'sofa' || st === 'addWood' ? s.h : s.h * 0.6, s.z);
         return;
       }
       world.resolveCollision(pos, r);
@@ -648,10 +649,10 @@ export function createForestRoom() {
 
     onAction(name, actions) {
       lastActions = actions;
-      // 🪵 坐在圓木上：E＝起身、F＝直接在座位上烤棉花糖（不用再走到火邊）
+      // 🪵 坐在圓木上：E＝坐著添柴火、F＝直接在座位上烤棉花糖、Z＝坐著裹毯子；移動＝起身
       if (seatedOn()) {
         if (name === 'interact') {
-          actions.stop();
+          if (actions.state === 'sofa' || actions.state === 'blanket') actions.start('addWood');
           return true;
         }
         if (name === 'roast' && actions.state === 'sofa') {
@@ -764,7 +765,7 @@ export function createForestRoom() {
     interactHint(actions) {
       lastActions = actions;
       const p0 = actions.player.position;
-      if (seatedOn()) return ['🧍', t('起身')];
+      if (seatedOn()) return ['🪵', t('添柴')];
       if (!carrying && fireSeats.near(p0, 0.75)) return ['🪵', t('坐下')];
       if (!carrying && treasures.near(p0)) return ['✨', t('撿寶藏')];
       if (!carrying && trash.near(p0)) return ['♻️', t('撿起來')];

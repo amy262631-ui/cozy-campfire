@@ -128,6 +128,8 @@ export class SocialPanel {
   setBadge(n) {
     this.badgeEl.hidden = !n;
     this.badgeEl.textContent = n > 9 ? '9+' : String(n);
+    // 有新的好友邀請／密頻：整顆按鈕紅底閃爍（打開好友視窗看過就停）
+    this.badgeEl.closest('.social-btn')?.classList.toggle('alert', !!n);
   }
 
   openChat() {

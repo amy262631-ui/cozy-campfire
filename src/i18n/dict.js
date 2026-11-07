@@ -4,6 +4,13 @@
  */
 export const DICT = {
   en: {
+    "🎣 這次釣了 {m} 分鐘・{n} 條": "🎣 Fished for {m} min · {n} caught",
+    "<kbd>F</kbd> 烤棉花糖　<kbd>E</kbd> 添柴火　<kbd>Z</kbd> 裹毯　·　移動＝起身": "<kbd>F</kbd> Roast　<kbd>E</kbd> Add wood　<kbd>Z</kbd> Blanket　·　Move to stand",
+    "<kbd>Z</kbd> 拿掉毯子　<kbd>E</kbd> 添柴火　·　移動＝起身": "<kbd>Z</kbd> Remove blanket　<kbd>E</kbd> Add wood　·　Move to stand",
+    "<kbd>F</kbd> 烤　<kbd>E</kbd> 添柴　<kbd>Z</kbd> 裹毯": "<kbd>F</kbd> Roast　<kbd>E</kbd> Wood　<kbd>Z</kbd> Blanket",
+    "<kbd>Z</kbd> 拿掉毯子": "<kbd>Z</kbd> Remove blanket",
+    "水邊按 F 釣魚 🎣　發光的石頭、貝殼按 E 撿 🐚": "F at the water to fish 🎣　E to pick up glowing stones & shells 🐚",
+    "走到發光圈圈按 E 採摘 🧺　蟲蟲用捕蟲網 🦋": "E at glowing circles to gather 🧺　Catch bugs with a net 🦋",
     "掛機撿松果變快": "Collect idle pinecones faster",
     "掛機加速": "Idle Boost",
     "比較容易釣到稀有魚": "Rare fish bite more often",
@@ -1893,6 +1900,13 @@ export const DICT = {
     "確定購買": "Buy",
   },
   ja: {
+    "🎣 這次釣了 {m} 分鐘・{n} 條": "🎣 {m}分釣って {n}匹",
+    "<kbd>F</kbd> 烤棉花糖　<kbd>E</kbd> 添柴火　<kbd>Z</kbd> 裹毯　·　移動＝起身": "<kbd>F</kbd> マシュマロ　<kbd>E</kbd> 薪をくべる　<kbd>Z</kbd> 毛布　·　動くと立つ",
+    "<kbd>Z</kbd> 拿掉毯子　<kbd>E</kbd> 添柴火　·　移動＝起身": "<kbd>Z</kbd> 毛布をとる　<kbd>E</kbd> 薪をくべる　·　動くと立つ",
+    "<kbd>F</kbd> 烤　<kbd>E</kbd> 添柴　<kbd>Z</kbd> 裹毯": "<kbd>F</kbd> 焼く　<kbd>E</kbd> 薪　<kbd>Z</kbd> 毛布",
+    "<kbd>Z</kbd> 拿掉毯子": "<kbd>Z</kbd> 毛布をとる",
+    "水邊按 F 釣魚 🎣　發光的石頭、貝殼按 E 撿 🐚": "水辺で F で釣り 🎣　光る石や貝は E で拾う 🐚",
+    "走到發光圈圈按 E 採摘 🧺　蟲蟲用捕蟲網 🦋": "光る輪で E で採集 🧺　虫は虫取り網で 🦋",
     "掛機撿松果變快": "放置で松ぼっくりが早く集まる",
     "掛機加速": "放置ブースト",
     "比較容易釣到稀有魚": "レアな魚が釣れやすくなる",
@@ -3782,6 +3796,13 @@ export const DICT = {
     "確定購買": "購入する",
   },
   ko: {
+    "🎣 這次釣了 {m} 分鐘・{n} 條": "🎣 이번에 {m}분 낚시・{n}마리",
+    "<kbd>F</kbd> 烤棉花糖　<kbd>E</kbd> 添柴火　<kbd>Z</kbd> 裹毯　·　移動＝起身": "<kbd>F</kbd> 마시멜로　<kbd>E</kbd> 장작 넣기　<kbd>Z</kbd> 담요　·　움직이면 일어나기",
+    "<kbd>Z</kbd> 拿掉毯子　<kbd>E</kbd> 添柴火　·　移動＝起身": "<kbd>Z</kbd> 담요 벗기　<kbd>E</kbd> 장작 넣기　·　움직이면 일어나기",
+    "<kbd>F</kbd> 烤　<kbd>E</kbd> 添柴　<kbd>Z</kbd> 裹毯": "<kbd>F</kbd> 굽기　<kbd>E</kbd> 장작　<kbd>Z</kbd> 담요",
+    "<kbd>Z</kbd> 拿掉毯子": "<kbd>Z</kbd> 담요 벗기",
+    "水邊按 F 釣魚 🎣　發光的石頭、貝殼按 E 撿 🐚": "물가에서 F로 낚시 🎣　빛나는 돌·조개는 E로 줍기 🐚",
+    "走到發光圈圈按 E 採摘 🧺　蟲蟲用捕蟲網 🦋": "빛나는 원에서 E로 채집 🧺　벌레는 잠자리채로 🦋",
     "掛機撿松果變快": "방치 솔방울을 더 빨리 주워요",
     "掛機加速": "방치 가속",
     "比較容易釣到稀有魚": "희귀한 물고기가 더 잘 잡혀요",

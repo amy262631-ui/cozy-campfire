@@ -304,7 +304,7 @@ export function createLakeRoom() {
           return true;
         }
         if (gather.tryPick(actions)) return true;
-        actions.hud.toast(t('湖邊沒有營火，走到水邊按 F 釣魚吧 🎣　岸邊發光的石頭、貝殼可以按 E 撿起來'));
+        actions.hud.toast(t('水邊按 F 釣魚 🎣　發光的石頭、貝殼按 E 撿 🐚'));
         return true;
       }
       return false;
