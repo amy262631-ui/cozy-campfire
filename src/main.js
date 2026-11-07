@@ -2626,7 +2626,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   const plotName = (p) => (p ? t('{z} 區 {n} 號', { z: zoneName(p.z), n: p.n }) : '');
   document.getElementById('ui').insertAdjacentHTML(
     'beforeend',
-    `<div class="camp-bar" id="camp-bar"><button type="button" class="camp-btn" id="zone-btn"></button><button type="button" class="camp-btn" id="cbar-shop">🛒 ${t('小舖')}</button></div>`,
+    `<div class="camp-bar" id="camp-bar"><button type="button" class="camp-btn" id="zone-btn"></button><button type="button" class="camp-btn" id="cbar-shop">🛒<span class="cb-long"> ${t('小舖')}</span></button></div>`,
   );
   const campBar = document.getElementById('camp-bar');
   const zoneBtn = document.getElementById('zone-btn');
@@ -2634,7 +2634,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const id = roomMgr?.current.id;
     campBar.classList.toggle('show', id === 'campground' || id === 'home');
     zoneBtn.hidden = id !== 'campground';
-    zoneBtn.textContent = `🏕️ ${t('{z} 區', { z: zoneName(campZone) })} ▾`;
+    // 手機：縮成小圓按鈕（只有圖示＋區名），比較不擋畫面
+    zoneBtn.innerHTML = `🏕️<span class="cb-long"> ${t('{z} 區', { z: zoneName(campZone) })} ▾</span><b class="cb-short">${zoneName(campZone)}</b>`;
   }
   document.getElementById('cbar-shop').addEventListener('click', () => shopPanel.open());
   /** 換到另一區（同一個帳篷營地，換一群鄰居）；how：'next'／'prev' 從拱門走過來、其他＝從營地大門進來 */
