@@ -940,8 +940,8 @@ async function init() {
       applyLook(preview);
       const name = kind === 'fur' ? FUR_PALETTES[val]?.name : t(item.zh);
       // 🖼️ 確認視窗裡直接放一張「換上之後」的樣子（11/07：視窗會擋住角色，看不到身上的預覽）
-      const look = { fur: preview.fur ?? 0, species: sp, tail: preview.tail || SPECIES_TAIL[sp], ear: preview.ear || SPECIES_EARS[sp] };
-      const img = snapshot(`look:${sp}:${look.fur}:${look.tail}:${look.ear}:${kind}`, () => {
+      const look = { fur: preview.fur ?? 0, species: sp, tail: preview.tail || SPECIES_TAIL[sp], ears: preview.ear || SPECIES_EARS[sp] }; // 角色吃的是 ears（之前寫成 ear，耳朵預覽都一樣）
+      const img = snapshot(`look:${sp}:${look.fur}:${look.tail}:${look.ears}:${kind}`, () => {
         const ch = new ProceduralFox(look);
         ch.root.rotation.y = kind === 'tail' ? 2.5 : 0.45; // 尾巴：轉到看得到背後
         const g = new THREE.Group();
