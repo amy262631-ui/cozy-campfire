@@ -1346,8 +1346,10 @@ app.post('/api/pay/notify', express.urlencoded({ extended: false }), (req, res) 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: true },
-  pingInterval: 10000,
-  pingTimeout: 8000,
+  // 11/07：原本 10 秒問一次、8 秒沒回就斷，太嚴格。免費主機偶爾卡一兩秒、手機網路晃一下，
+  // 就會讓好幾個人同時斷線（11/6 20:47 那次）。改回 socket.io 的預設值，比較能撐過短暫的卡頓。
+  pingInterval: 25000,
+  pingTimeout: 20000,
   // 省流量：WebSocket 訊息先壓縮再送（位置更新很多是重複的字，壓縮效果好）
   perMessageDeflate: { threshold: 0, zlibDeflateOptions: { level: 6, memLevel: 7 } },
 });

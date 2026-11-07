@@ -49,7 +49,9 @@ export async function init(dir) {
  * 省流量（11/07）：存進 Upstash 前先 gzip 壓縮，再轉成文字（開頭加 gz:）。
  * 讀的時候兩種都認得：舊的純 JSON、新的 gz: 壓縮版，所以不用搬資料。
  */
-const pack = (data) => 'gz:' + zlib.gzipSync(JSON.stringify(data)).toString('base64');
+// 壓縮放到背景執行緒（gzip 非同步），免費主機 CPU 很小，不要讓存檔卡住遊戲
+const gzip = (buf) => new Promise((ok, no) => zlib.gzip(buf, (err, out) => (err ? no(err) : ok(out))));
+const pack = async (data) => 'gz:' + (await gzip(JSON.stringify(data))).toString('base64');
 const unpack = (raw) => (typeof raw === 'string' && raw.startsWith('gz:') ? JSON.parse(zlib.gunzipSync(Buffer.from(raw.slice(3), 'base64')).toString('utf8')) : JSON.parse(raw));
 
 async function redis(args) {
@@ -94,7 +96,7 @@ export async function load(file) {
     const raw = await redis(['GET', PREFIX + file]);
     if (raw != null) return unpack(raw);
     if (local !== undefined) {
-      await redis(['SET', PREFIX + file, pack(local)]);
+      await redis(['SET', PREFIX + file, await pack(local)]);
       console.log(`[存檔] 已把 ${file} 匯入 Upstash`);
     }
     return local;
@@ -117,7 +119,7 @@ async function write(file) {
   writeLocal(file, data);
   if (!remote) return;
   try {
-    await redis(['SET', PREFIX + file, pack(data)]);
+    await redis(['SET', PREFIX + file, await pack(data)]);
     status.ok = true;
     status.lastSave = new Date().toISOString();
   } catch (err) {
