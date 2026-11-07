@@ -4,7 +4,8 @@ import { gridOf, expandPrice, EXPAND_PRICES, GRID_MAX, FURNITURE_COLORS, hasColo
 import { TENT_SHAPES, TENT_SHAPE_BY_ID } from '../game/tentShapes.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TentPreview } from './TentPreview.js';
-import { YARD_ITEMS } from '../game/yardCatalog.js';
+import { YARD_ITEMS, normYard, isBigYard, YARD_SMALL_MAX } from '../game/yardCatalog.js';
+import { SIGNS } from '../game/signCatalog.js';
 import { addCloseX } from './CloseX.js';
 
 /**
@@ -86,10 +87,17 @@ export class ShopPanel {
         this.busy = false;
         return this.render();
       }
+      const sgb = e.target.closest('[data-sign]');
+      if (sgb && !this.busy) {
+        this.busy = true;
+        await this.onEdit?.('sign', { s: sgb.dataset.sign });
+        this.busy = false;
+        return this.render();
+      }
       const yd = e.target.closest('[data-yard]');
       if (yd && !this.busy) {
         this.busy = true;
-        await this.onEdit?.('yard', { s: yd.dataset.yard, slot: yd.dataset.slot });
+        await this.onEdit?.('yard', { s: yd.dataset.yard, on: yd.dataset.on === '1' });
         this.busy = false;
         return this.render();
       }
@@ -175,23 +183,45 @@ export class ShopPanel {
       </div>`;
     if (this.tab === 'yard') {
       this.preview.stop();
-      const own = home.yard?.own ?? [];
-      const row = (y, on, slot) => {
+      const yd = normYard({ ...(home.yard ?? {}), sm: [...(home.yard?.sm ?? [])] });
+      const own = yd.own ?? [];
+      const smFull = yd.sm.length >= YARD_SMALL_MAX;
+      const row = (y) => {
         const has = own.includes(y.id);
+        const placed = yd.on === y.id || yd.sm.includes(y.id);
         const act = has
-          ? y.id === on
-            ? `<button type="button" data-yard="" data-slot="${slot}">${t('✅ 擺著中・收起來')}</button>`
-            : `<button type="button" data-yard="${y.id}">${t('擺出來')}</button>`
+          ? placed
+            ? `<button type="button" data-yard="${y.id}" data-on="0">${t('✅ 擺著中・收起來')}</button>`
+            : !isBigYard(y.id) && smFull
+              ? `<button type="button" disabled>${t('小型已滿 3 個')}</button>`
+              : `<button type="button" data-yard="${y.id}" data-on="1">${isBigYard(y.id) && yd.on ? t('換成這個') : t('擺出來')}</button>`
           : `<button type="button" data-buy="yard_${y.id}" ${coins == null || coins < y.price ? 'disabled' : ''}>🌰 ${y.price}</button>`;
-        return `<div class="yard-row${y.id === on ? ' on' : ''}"><span class="yr-icon">${y.icon}</span><div class="yr-txt"><b>${t(y.zh)}</b><small>${t(y.note)}</small></div>${act}</div>`;
+        return `<div class="yard-row${placed ? ' on' : ''}"><span class="yr-icon">${y.icon}</span><div class="yr-txt"><b>${t(y.zh)}</b><small>${t(y.note)}</small></div>${act}</div>`;
       };
-      // 兩格分開：大型擺設一次一樣、🪑 門口桌椅另外一樣（可以同時擺）
+      // 🪧 門牌：買過的可以隨時換；星空門牌（月票限定）月票還沒開放前先不顯示，有星空月票的人才看得到
+      const ownSigns = home.signs ?? ['wood'];
+      const curSign = home.sign ?? 'wood';
+      const signRow = (sg) => {
+        const using = curSign === sg.id;
+        const has = sg.pass ? !!this.passStar?.() : ownSigns.includes(sg.id);
+        const act = using
+          ? `<button type="button" disabled>${t('✅ 使用中')}</button>`
+          : has
+            ? `<button type="button" data-sign="${sg.id}">${t('換上')}</button>`
+            : sg.pass
+              ? `<button type="button" disabled>${t('星空月票限定')}</button>`
+              : `<button type="button" data-buy="sign_${sg.id}" ${coins == null || coins < sg.price ? 'disabled' : ''}>🌰 ${sg.price}</button>`;
+        return `<div class="yard-row${using ? ' on' : ''}"><span class="yr-icon">${sg.icon}</span><div class="yr-txt"><b>${t(sg.zh)}</b><small>${t(sg.note)}</small></div>${act}</div>`;
+      };
+      // 大型一次 1 個、小型最多 3 個（11/07 改版）
       this.body.innerHTML = `${tabs}
-        <div class="shop-sub">${t('擺在帳篷營地裡、你家門口旁邊，大家經過都看得到。大型擺設和門口桌椅各可以擺一樣，買過的可以隨時換')}</div>
-        <div class="yard-sec">${t('🪑 門口桌椅')}</div>
-        <div class="yard-list">${YARD_ITEMS.filter((y) => y.slot === 'seat').map((y) => row(y, home.yard?.seat ?? null, 'seat')).join('')}</div>
-        <div class="yard-sec">${t('🚙 大型擺設')}</div>
-        <div class="yard-list">${YARD_ITEMS.filter((y) => y.slot !== 'seat').map((y) => row(y, home.yard?.on ?? null, 'on')).join('')}</div>`;
+        <div class="shop-sub">${t('擺在帳篷營地裡、你家門口，大家經過都看得到。大型擺設 1 個、小型擺設最多 3 個，買過的可以隨時換')}</div>
+        <div class="yard-sec">${t('🚙 大型擺設（擺 1 個）')}</div>
+        <div class="yard-list">${YARD_ITEMS.filter((y) => isBigYard(y.id)).map(row).join('')}</div>
+        <div class="yard-sec">${t('🪑 小型擺設（最多 3 個，現在 {n} 個）', { n: yd.sm.length })}</div>
+        <div class="yard-list">${YARD_ITEMS.filter((y) => !isBigYard(y.id)).map(row).join('')}</div>
+        <div class="yard-sec">${t('🪧 門牌（寫著你的營位和名字）')}</div>
+        <div class="yard-list">${SIGNS.filter((sg) => !sg.pass || this.passStar?.()).map(signRow).join('')}</div>`;
       return;
     }
     if (this.tab === 'look') {
@@ -263,7 +293,8 @@ export class ShopPanel {
       ${CATS.map((c) => `<button type="button" data-cat="${c.id}" class="${this.cat === c.id ? 'on' : ''}">${c.icon} ${c.name}</button>`).join('')}
     </div>`;
     const list = this.cat === 'all' ? FURNITURE : FURNITURE.filter((f) => f.cat === this.cat);
-    const tag = (f) => (f.kind === 'small' ? t('可放桌上') : f.kind === 'mat' ? t('可墊底') : f.top ? t('上面可放') : '');
+    // 🐟 魚缸：卡片上直接標能放幾星的魚（不用點開就看得到）
+    const tag = (f) => (f.fish ? (f.fish >= 6 ? t('👑 魚王也行') : t('⭐{n} 以下', { n: f.fish })) : f.kind === 'small' ? t('可放桌上') : f.kind === 'mat' ? t('可墊底') : f.top ? t('上面可放') : '');
     const color = this.color ?? 0;
     const colors = `<div class="shop-colors"><span>${t('🎨 顏色')}</span>${FURNITURE_COLORS.map(
       (c) => `<button type="button" data-color="${c.id}" class="${c.id === color ? 'on' : ''}">${c.icon} ${t(c.zh)}</button>`,
@@ -271,7 +302,7 @@ export class ShopPanel {
     this.body.innerHTML = `${tabs}
       <div class="shop-sub">${t('買了會放進背包，回帳篷按「🛠️ 布置」擺出來；買之前可以先選顏色')}</div>
       ${cats}
-      ${colors}
+      ${this.cat === 'fish' ? `<div class="shop-hint">${t('🐟 每個魚缸放 1 條你釣過的魚；星星越多，放得下越稀有的魚')}</div>` : colors}
       <div class="shop-grid">
         ${list.map((f) => {
           const owned = home.inv?.[f.id] ?? 0;
@@ -283,7 +314,7 @@ export class ShopPanel {
             <span class="si-icon">${f.icon}</span>
             <span class="si-name">${f.name}</span>
             <span class="si-price">🌰 ${f.price}</span>
-            ${tg ? `<span class="si-tag">${tg}</span>` : ''}
+            ${tg ? `<span class="si-tag${f.fish ? ' fish' : ''}">${tg}</span>` : ''}
             ${owned ? `<span class="si-owned">${t('有 {n} 個', { n: owned })}</span>` : ''}
           </button>`;
         }).join('')}

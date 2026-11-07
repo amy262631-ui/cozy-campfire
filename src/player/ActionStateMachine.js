@@ -262,8 +262,21 @@ export class ActionStateMachine {
     this.hud.showRoast(false);
     // 🍡 吃棉花糖的動作（其他人也看得到）；吃完：坐在圓木上就繼續坐著，不然站起來
     this.eatDone = d;
+    this.eatingDish = false;
     this.character.setEat?.(d);
     this.state = 'eat'; // 不走 #exit，避免「收起來了」提示
+    this.t = 0;
+  }
+
+  /** 🍲 吃一道料理的動作（站著或坐著都可以；釣魚、騎車這些時候就不演） */
+  eatDish(color) {
+    if (!['free', 'sofa'].includes(this.state)) return;
+    const seat = this.state === 'sofa' ? this.seat : null;
+    this.eatDone = 0.5;
+    this.eatingDish = true;
+    this.character.setEatDish?.(color);
+    this.state = 'eat';
+    this.seat = seat;
     this.t = 0;
   }
 
@@ -351,8 +364,9 @@ export class ActionStateMachine {
       case 'eat':
         r.locked = true;
         r.pose = 'eat';
-        r.faceAngle = this.seat ? this.seat.face : faceFire;
+        r.faceAngle = this.seat ? this.seat.face : this.eatingDish ? null : faceFire; // 吃料理：面向原本的方向
         if (this.t > EAT_SECONDS) {
+          this.eatingDish = false;
           this.state = this.seat ? 'sofa' : 'free';
           if (this.seat) this.restFace = this.seat.face;
           this.t = 0;

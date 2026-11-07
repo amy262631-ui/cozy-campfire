@@ -24,6 +24,7 @@ export const FURNITURE_CATS = [
   { id: 'plant', icon: '🪴', zh: '植物' },
   { id: 'toy', icon: '🧸', zh: '玩偶' },
   { id: 'deco', icon: '🍰', zh: '小物' },
+  { id: 'fish', icon: '🐟', zh: '魚缸' },
   { id: 'wall', icon: '🧱', zh: '隔間' },
 ];
 
@@ -56,7 +57,7 @@ export const FURNITURE_CATALOG = [
   { id: 'beanbag', icon: '🫘', zh: '懶骨頭', price: 14, cat: 'sit', seat: 0.18 },
   { id: 'catbed', icon: '🐈', zh: '貓咪窩', price: 16, cat: 'sit', seat: 0.1, sleep: true },
   { id: 'rocking', icon: '🪑', zh: '小搖椅', price: 20, cat: 'sit', seat: 0.24 },
-  { id: 'sofa', icon: '🛋️', zh: '雙人小沙發', price: 28, cat: 'sit', seat: 0.24 },
+  { id: 'sofa', icon: '🛋️', zh: '雙人小沙發', price: 28, cat: 'sit', seat: 0.24, wide: 0.8 }, // wide：往右多佔一格（11/07：兩個人才坐得下，兩個座位）
   { id: 'bed', icon: '🛏️', zh: '睡鋪', price: 30, cat: 'sit', top: 0.235, seat: 0.24, sleep: true, long: 0.6 }, // long：往後多佔半格（床比較長）
   // ---- 桌櫃 ----
   { id: 'crate', icon: '📦', zh: '木箱', price: 6, cat: 'table', top: 0.36 },
@@ -115,10 +116,18 @@ export const FURNITURE_CATALOG = [
   { id: 'hatrack', icon: '🧥', zh: '衣帽架', price: 15, cat: 'deco' }, // 展示收集到的造型
   // 🐠 大魚缸：放一條自己釣過的魚進去游（魚王也可以，拿來炫耀）
   // fish：最多放幾星的魚（魚王算 6）；same：同一種可以一個一個往上疊成魚缸牆
-  { id: 'tank_s', icon: '🫧', zh: '桌上小魚缸', price: 18, cat: 'deco', kind: 'small', color: false, fish: 2 },
-  { id: 'tank_round', icon: '🔵', zh: '圓形魚缸', price: 30, cat: 'deco', color: false, fish: 3 },
-  { id: 'aquarium', icon: '🐟', zh: '大魚缸', price: 45, cat: 'deco', color: false, fish: 4, top: 0.84, same: true },
-  { id: 'tank_l', icon: '🐋', zh: '巨型水族箱', price: 120, cat: 'deco', color: false, fish: 6, top: 1.3, same: true },
+  { id: 'tank_s', icon: '🫧', zh: '桌上小魚缸', price: 18, cat: 'fish', kind: 'small', color: false, fish: 2 },
+  { id: 'tank_round', icon: '🔵', zh: '圓形魚缸', price: 30, cat: 'fish', color: false, fish: 3 },
+  { id: 'aquarium', icon: '🐟', zh: '大魚缸', price: 45, cat: 'fish', color: false, fish: 4, top: 0.84, same: true },
+  { id: 'tank_l', icon: '🐋', zh: '巨型水族箱', price: 120, cat: 'fish', color: false, fish: 6, top: 1.3, same: true },
+  // 11/07 魚缸改版：更多形狀、尺寸（都只放 1 條魚）
+  { id: 'tank_jar', icon: '🫙', zh: '玻璃罐小魚缸', price: 12, cat: 'fish', kind: 'small', color: false, fish: 1 },
+  { id: 'tank_cube', icon: '🧊', zh: '方形桌上缸', price: 22, cat: 'fish', kind: 'small', color: false, fish: 2 },
+  { id: 'tank_wood', icon: '🪵', zh: '木框復古缸', price: 40, cat: 'fish', color: false, fish: 3 },
+  { id: 'tank_plant', icon: '🌿', zh: '水草造景缸', price: 55, cat: 'fish', color: false, fish: 4 },
+  { id: 'tank_tube', icon: '🏛️', zh: '圓柱水族箱', price: 80, cat: 'fish', color: false, fish: 5 },
+  { id: 'koi_pond', icon: '🪷', zh: '室內錦鯉池', price: 150, cat: 'fish', color: false, fish: 5, wide: 0.8, long: 0.8 }, // 2×2 格
+  { id: 'tank_wall', icon: '🌊', zh: '整面牆水族箱', price: 180, cat: 'fish', color: false, fish: 6, wide: 0.8 }, // 2 格寬
   // ---- 🧱 隔間牆：貼在格子的一邊，可以轉方向，人走不過去（門牆可以穿過） ----
   { id: 'wall_log', icon: '🪵', zh: '原木隔間牆', price: 10, cat: 'wall', kind: 'wall', color: false },
   { id: 'wall_plank', icon: '🤍', zh: '白木板牆', price: 10, cat: 'wall', kind: 'wall' },
@@ -136,6 +145,22 @@ export const FURNITURE_CATALOG = [
   { id: 'vegbasket', icon: '🧺', zh: '蔬菜籃', cat: 'deco', kind: 'small', craft: true },
   { id: 'driftshelf', icon: '🪵', zh: '漂流木小架', cat: 'table', top: 0.5, craft: true },
   { id: 'shellframe', icon: '🖼️', zh: '貝殼相框', cat: 'deco', kind: 'small', craft: true },
+  // 11/07 擴充：♻️ 回收手作 8 種＋🌿 自然手作 7 種
+  { id: 'bottle_lamp', icon: '💡', zh: '寶特瓶小燈', cat: 'light', kind: 'small', craft: true },
+  { id: 'tire_swing', icon: '🛞', zh: '輪胎鞦韆', cat: 'sit', seat: 0.42, craft: true },
+  { id: 'bottle_charm', icon: '🍾', zh: '漂流瓶吊飾', cat: 'deco', craft: true },
+  { id: 'can_planter', icon: '🥫', zh: '鋁罐小盆栽', cat: 'plant', kind: 'small', craft: true },
+  { id: 'net_basket', icon: '🧺', zh: '漁網吊籃', cat: 'deco', craft: true },
+  { id: 'umbrella_lamp', icon: '☂️', zh: '雨傘吊燈', cat: 'light', craft: true },
+  { id: 'slipper_pot', icon: '🩴', zh: '拖鞋花盆', cat: 'plant', kind: 'small', craft: true },
+  { id: 'float_chime', icon: '🎐', zh: '浮標風鈴', cat: 'deco', craft: true },
+  { id: 'log_bench', icon: '🪵', zh: '原木長凳', cat: 'sit', seat: 0.3, craft: true },
+  { id: 'glowmush_lamp', icon: '🍄', zh: '發光蘑菇燈', cat: 'light', kind: 'small', craft: true },
+  { id: 'bug_frame', icon: '🦋', zh: '昆蟲標本框', cat: 'deco', kind: 'small', craft: true },
+  { id: 'pressed_flower', icon: '🌸', zh: '押花畫', cat: 'deco', kind: 'small', craft: true },
+  { id: 'crystal_sun', icon: '💎', zh: '水晶窗飾', cat: 'deco', craft: true },
+  { id: 'pearl_lamp', icon: '🦪', zh: '珍珠貝殼燈', cat: 'light', kind: 'small', craft: true },
+  { id: 'meteor_lamp', icon: '☄️', zh: '流星吊燈', cat: 'light', craft: true },
   // ---- 🎁 分享禮物（小舖買不到） ----
   { id: 'postcard', icon: '📮', zh: '營火明信片牆', cat: 'deco', gift: 'share' },
   { id: 'foxlamp', icon: '🏮', zh: '狐狸提燈', cat: 'light', kind: 'small', gift: 'ref1' },

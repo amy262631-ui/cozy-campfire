@@ -5098,6 +5098,7 @@ body.touch.fishing .fish-focus {
 
   body.touch:not(.m-more) .m-stack .invite-chip,
   body.touch:not(.m-more) .m-stack .dex-chip,
+  body.touch:not(.m-more) .m-stack .news-chip,
   body.touch:not(.m-more) .m-stack .look-chip,
   body.touch:not(.m-more) .m-stack .pass-chip,
   body.touch:not(.m-more) .m-stack .acct-chip,
@@ -6735,3 +6736,73 @@ body:not(.room-forest_main) .fire-meter > :not(.buff-chip) { display: none; }
 
 /* 手機：提示太長時自動換行，不要超出畫面（11/07） */
 body.touch .toast { white-space: normal; max-width: 88vw; box-sizing: border-box; line-height: 1.4; }
+
+/* 🏕️ 帳篷營地右邊的小按鈕：換區、🛒 小舖（帳篷裡也有小舖）（11/07） */
+.camp-bar { position: fixed; right: 12px; top: 46%; display: none; flex-direction: column; gap: 8px; z-index: 6; pointer-events: auto; }
+.camp-bar.show { display: flex; }
+.camp-btn { padding: 8px 12px; border-radius: 999px; border: 1px solid rgba(255, 220, 170, 0.45); background: rgba(40, 28, 18, 0.82); color: #ffe8c8; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.camp-btn[hidden] { display: none; }
+body.building .camp-bar { display: none; }
+/* 🚚 搬家小地圖：24 格（6×4） */
+.mv-tabs { display: flex; gap: 6px; margin: 8px 0; flex-wrap: wrap; }
+.mv-tabs .on { background: #f0a050; color: #2a1a10; }
+.mv-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 6px 0; }
+.mv-cell { aspect-ratio: 1; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.2); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.mv-cell.free { background: #f6efe2; color: #6a4a2a; }
+.mv-cell.taken { background: #7a5236; color: #f6e2c8; cursor: default; }
+.mv-cell.mine { background: #f0a050; color: #2a1a10; cursor: default; }
+
+/* 🌰 怎麼拿松果（點上面的松果數字打開；大字給小朋友看）（11/07） */
+.pc-chip.tappable { cursor: pointer; pointer-events: auto; }
+.pine-help { display: flex; flex-direction: column; gap: 8px; }
+.ph-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 240, 220, 0.08); font-size: 17px; }
+.ph-row b { flex: 1; font-weight: 700; }
+.ph-row em { font-style: normal; color: #ffd27a; font-size: 14px; white-space: nowrap; }
+.ph-row .mini-btn { white-space: nowrap; }
+.ph-row.small { font-size: 14px; background: none; padding: 4px 6px; }
+.ph-ic { font-size: 24px; width: 30px; text-align: center; }
+.ph-star { text-align: center; color: #ffd27a; font-weight: 700; font-size: 15px; margin-top: 4px; }
+.ph-more summary { cursor: pointer; text-align: center; opacity: 0.8; padding: 6px; }
+
+/* 📢 更新紀錄（手機收在「⋯」裡，跟圖鑑一樣） */
+.news-chip { margin-left: 6px; padding: 2px 9px; border: 1px solid rgba(255, 220, 170, 0.45); border-radius: 999px; background: rgba(120, 80, 40, 0.3); color: #ffe8c8; font: inherit; font-size: 12px; cursor: pointer; pointer-events: auto; }
+
+/* 🌱 新手小任務：大字、小字提示；收起來時角落的「🌱 新手小任務」不受新手階段隱藏 */
+.ritual.kid .ritual-text { font-size: 20px; font-weight: 700; line-height: 1.35; }
+.ritual-sub { margin-top: 4px; font-size: 13px; opacity: 0.85; }
+.ritual-sub[hidden] { display: none; }
+body.touch .ritual.kid .ritual-text { font-size: 18px; }
+body .idea-chip.kid-chip:not([hidden]) { display: inline-block !important; background: rgba(90, 140, 70, 0.55); border-color: rgba(190, 240, 160, 0.6); }
+.tut-glow { animation: tut-glow 1s ease-in-out infinite; box-shadow: 0 0 0 3px rgba(255, 220, 120, 0.9); }
+@keyframes tut-glow { 50% { box-shadow: 0 0 14px 5px rgba(255, 220, 120, 0.95); transform: scale(1.06); } }
+
+/* ❓ 常見問題・📖 營地手冊（大字、簡單） */
+.help-chip { margin-left: 6px; padding: 2px 10px; border: 1px solid rgba(160, 220, 255, 0.55); border-radius: 999px; background: rgba(60, 110, 150, 0.35); color: #e4f4ff; font: inherit; font-size: 13px; cursor: pointer; pointer-events: auto; }
+.help-faq { display: flex; flex-direction: column; gap: 10px; }
+.hf-row { padding: 10px 12px; border-radius: 12px; background: rgba(255, 240, 220, 0.07); display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+.hf-q { font-size: 17px; grid-column: 1; }
+.hf-a { font-size: 14px; opacity: 0.9; grid-column: 1; line-height: 1.45; }
+.hf-go { grid-column: 2; grid-row: 1 / span 2; white-space: nowrap; }
+.help-manual-btn { margin-top: 6px; width: 100%; padding: 10px; border-radius: 12px; border: 1px solid rgba(255, 220, 170, 0.35); background: rgba(255, 220, 170, 0.12); color: inherit; font: inherit; font-size: 15px; cursor: pointer; }
+.hm-tabs { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-bottom: 8px; }
+.hm-tab { width: 38px; height: 38px; border-radius: 10px; border: 1px solid transparent; background: rgba(255, 240, 220, 0.07); font-size: 20px; cursor: pointer; }
+.hm-tab.on { border-color: rgba(255, 210, 140, 0.8); background: rgba(255, 210, 140, 0.2); }
+.hm-page { text-align: center; padding: 6px 4px 2px; }
+.hm-ic { font-size: 64px; line-height: 1.1; }
+.hm-title { font-size: 20px; font-weight: 700; margin-top: 4px; }
+.hm-line { font-size: 17px; margin: 8px 0 10px; line-height: 1.45; }
+.hm-go { font-size: 15px; padding: 6px 14px; }
+.hm-more { margin-top: 10px; text-align: left; font-size: 14px; }
+.hm-more summary { cursor: pointer; text-align: center; opacity: 0.8; }
+.hm-more ul { margin: 6px 0 0; padding-left: 20px; line-height: 1.7; }
+.hm-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 10px; }
+
+/* 🐟 魚缸：能放幾星 */
+.si-tag.fish { background: rgba(90, 160, 220, 0.35); color: #e6f4ff; }
+.tank-big { font-size: 18px; font-weight: 700; color: #ffe08a; margin-bottom: 4px; }
+.tank-n { margin-top: 6px; font-weight: 600; }
+.tank-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; max-height: 120px; overflow: auto; }
+.tank-fish { font-size: 12px; padding: 1px 7px; border-radius: 999px; background: rgba(120, 190, 255, 0.2); }
+.tank-fish.no { opacity: 0.35; filter: grayscale(1); }
+
+.fr-plot { font-size: 12px; font-weight: 400; opacity: 0.75; margin-left: 4px; }

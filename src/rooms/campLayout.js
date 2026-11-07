@@ -9,7 +9,7 @@
  */
 import { seededRandom } from '../scene/textures.js';
 
-export const CAMP_SIZE = 32;
+export const CAMP_SIZE = 24; // 11/07：每區 24 頂（營位放大，門口擺得下大型 1 個＋小型 3 個）
 export const ENTRY_Z = 31;
 export const BOUNDS = { minX: -37, maxX: 37, minZ: -36, maxZ: ENTRY_Z + 0.6 };
 export const LOOP_CENTER = { x: 0, z: -3 };
@@ -66,7 +66,7 @@ function resample(pts, step) {
   return out;
 }
 
-const TENT_GAP = 6.3; // 帳篷中心之間至少這麼遠（含菜園）
+const TENT_GAP = 8.5; // 帳篷中心之間至少這麼遠（含菜園、門口擺設；11/07 從 6.3 放大）
 const OFFSET = 6.3; // 帳篷中心離小路中線的距離
 const PATH_CLEAR = 5.4; // 帳篷中心離任何一段小路至少這麼遠
 

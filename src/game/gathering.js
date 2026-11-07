@@ -1,5 +1,5 @@
 /**
- * 採集（前端、伺服器共用的資料）：迷霧森林 50 種＋湖邊石頭貝殼 12 種＋營火寶藏 8 種。
+ * 採集（前端、伺服器共用的資料）：迷霧森林 50 種＋湖邊石頭貝殼 24 種＋營火寶藏 8 種。
  *
  * - 每個人的採集點各自分開：你採走了，別人那邊還在
  * - 採過的點幾小時後長回來，東西放進採集籃不會壞，採集籃不限格子
@@ -97,7 +97,28 @@ export const GATHER_ITEMS = [
   { id: 'paper_crane', type: 'treasure', icon: '🕊️', zh: '許願紙鶴', rarity: 2, color: 0xffffff, hint: '晚上 8～10 點，營火附近閃閃發光' },
   { id: 'glow_crystal', type: 'treasure', icon: '🔮', zh: '螢光水晶', rarity: 3, color: 0x9ff0e0, hint: '晚上 8～10 點，營火附近閃閃發光' },
   { id: 'fox_mask', type: 'treasure', icon: '🦊', zh: '狐狸小面具', rarity: 3, color: 0xf08a3c, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  // ---- 11/07 擴充：湖邊石頭 6 → 12、貝殼 6 → 12（加在最後面）----
+  { id: 'skip_stone', type: 'stone', icon: '🪨', zh: '打水漂石', rarity: 1, color: 0x8f9aa0, hint: '扁扁的，最適合打水漂' },
+  { id: 'swirl_stone', type: 'stone', icon: '🌀', zh: '漩渦石', rarity: 1, color: 0x7a8a9a, hint: '上面有一圈一圈的漩渦花紋' },
+  { id: 'obsidian', type: 'stone', icon: '⚫', zh: '黑曜石', rarity: 2, color: 0x2a2630, hint: '黑黑亮亮，像一小片夜空' },
+  { id: 'red_jasper', type: 'stone', icon: '🔴', zh: '紅碧玉', rarity: 2, color: 0xb8443a, hint: '溫暖的紅色，摸起來滑滑的' },
+  { id: 'trilobite', type: 'stone', icon: '🐚', zh: '三葉蟲化石', rarity: 3, color: 0x8a7a62, hint: '好久好久以前的小生物' },
+  { id: 'moonstone', type: 'stone', icon: '🌙', zh: '月光石', rarity: 3, color: 0xdfe8ff, night: true, hint: '只有晚上才找得到，會微微發光' },
+  { id: 'crab_shell', type: 'shell', icon: '🦀', zh: '小螃蟹殼', rarity: 1, color: 0xd2703a, hint: '小螃蟹搬家留下來的' },
+  { id: 'bird_feather', type: 'shell', icon: '🪶', zh: '水鳥羽毛', rarity: 1, color: 0xe8e4dc, hint: '軟軟的，被風吹到岸邊' },
+  { id: 'reed', type: 'shell', icon: '🌾', zh: '蘆葦束', rarity: 1, color: 0xc8b07a, hint: '湖邊長了一大片' },
+  { id: 'spiral_shell', type: 'shell', icon: '🐚', zh: '螺旋貝', rarity: 2, color: 0xf0d8b8, hint: '轉啊轉的螺旋，像冰淇淋' },
+  { id: 'heart_drift', type: 'shell', icon: '🤎', zh: '心形漂流木', rarity: 2, color: 0xa88a6a, hint: '被湖水磨成愛心的形狀' },
+  { id: 'rainbow_shell', type: 'shell', icon: '🫧', zh: '七彩蚌殼', rarity: 3, color: 0xd8e8ff, hint: '對著光看，會出現彩虹' },
+  // ---- 🗓️ 每月限定（month：那個月才採得到；不算進全收集，收在圖鑑的「限定」區；隔年同一個月會再出現）----
+  { id: 'film_shell', type: 'shell', icon: '🎞️', zh: '膠捲貝殼', rarity: 2, color: 0x4a4a52, month: 11, hint: '11 月限定：露營電影夜，湖邊撿得到' },
 ];
+/** 🗓️ 每月限定的東西（不算進全收集） */
+export const isLimited = (x) => !!x?.month;
+/** 台北時間現在是幾月（1～12） */
+export function taipeiMonth(now = new Date()) {
+  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', month: 'numeric' }).format(now));
+}
 export const GATHER_BY_ID = Object.fromEntries(GATHER_ITEMS.map((x) => [x.id, x]));
 /** 第一次採到：依稀有度送松果；全部收集完再送 */
 export const GATHER_FIRST_GAIN = [0, 2, 4, 8];
@@ -142,10 +163,12 @@ function makeSpots() {
   }
   return spots;
 }
-/** 湖畔碼頭的岸邊：石頭 5 個、貝殼 5 個（避開中間的碼頭） */
+/** 湖畔碼頭的岸邊：石頭 7 個、貝殼 7 個（避開中間的碼頭） */
 const LAKE_SPOTS = [
   [-8.2, 2.3, 'stone'], [-6.6, 3.2, 'shell'], [-5.0, 2.1, 'stone'], [-3.6, 3.0, 'shell'], [-2.2, 2.2, 'stone'],
   [2.2, 2.3, 'shell'], [3.7, 3.1, 'stone'], [5.2, 2.1, 'shell'], [6.7, 3.0, 'stone'], [8.2, 2.2, 'shell'],
+  // 11/07：種類變多，岸邊再加 4 個（只能往後加）
+  [-7.4, 4.0, 'shell'], [-2.9, 4.1, 'stone'], [2.9, 4.0, 'shell'], [7.4, 4.1, 'stone'],
 ].map(([x, z, type]) => ({ type, x, z, room: 'lake_dock' }));
 /** 所有採集點：前面是迷霧森林，後面是湖邊（room 標示在哪裡） */
 export const GATHER_SPOTS = [...makeSpots().map((s) => ({ ...s, room: 'mist_forest' })), ...LAKE_SPOTS];
@@ -169,8 +192,8 @@ export function isNight(now = new Date()) {
 }
 
 /** 在某一型的採集點採到什麼（依稀有度抽：★★★ 很難遇到；白天、晚上的種類不一樣） */
-export function gatherItemAt(type, night, rand = Math.random) {
-  const pool = GATHER_ITEMS.filter((x) => x.type === type && (night ? !x.day : !x.night));
+export function gatherItemAt(type, night, rand = Math.random, month = taipeiMonth()) {
+  const pool = GATHER_ITEMS.filter((x) => x.type === type && (night ? !x.day : !x.night) && (!x.month || x.month === month));
   const weight = (x) => [0, 14, 3, 0.5][x.rarity];
   const total = pool.reduce((a, x) => a + weight(x), 0);
   let r = rand() * total;

@@ -31,7 +31,7 @@ export class HUD {
 
       <div class="prompt" id="prompt"></div>
 
-      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="date-chip" id="date-chip" hidden>${t('🔥 約朋友')}</button><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="go-chip" id="go-chip">${t('🧭 去哪裡')} ▾</button><button type="button" class="home-chip fire-chip" id="fire-chip" hidden>${t('🔥 回營火')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="look-chip" id="look-chip">${t('👒 造型')}</button><button type="button" class="pass-chip" id="pass-chip" hidden>${t('🎫 月票')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button><a class="shopinfo-chip" href="/shop.html" target="_blank" rel="noopener">${t('ℹ️ 商店資訊・聯絡')}</a></div>
+      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="date-chip" id="date-chip" hidden>${t('🔥 約朋友')}</button><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="go-chip" id="go-chip">${t('🧭 去哪裡')} ▾</button><button type="button" class="help-chip" id="help-chip" title="${t('常見問題・營地手冊')}">${t('❓ 問題')}</button><button type="button" class="home-chip fire-chip" id="fire-chip" hidden>${t('🔥 回營火')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="news-chip" id="news-chip" title="${t('更新紀錄')}">${t('📢 更新')}</button><button type="button" class="look-chip" id="look-chip">${t('👒 造型')}</button><button type="button" class="pass-chip" id="pass-chip" hidden>${t('🎫 月票')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button><a class="shopinfo-chip" href="/shop.html" target="_blank" rel="noopener">${t('ℹ️ 商店資訊・聯絡')}</a></div>
       <div class="go-menu" id="go-menu" hidden></div>
       <div class="today" id="today" hidden></div>
       <div class="event-line" id="event-line" hidden></div>
@@ -204,11 +204,20 @@ export class HUD {
       ['tent_social', t('☕ 交流帳篷')],
       ['tent_focus', t('⛺ 專注帳篷')],
     ];
+    // 🏕️ 帳篷營地：每一區各一行（A 區、B 區…，標出我家在哪一區）
+    const zi = this.zoneInfo?.() ?? { zones: [], mine: null, cur: -1 };
+    const nZones = Math.max(1, zi.zones.length, (zi.mine?.z ?? 0) + 1);
+    const ci = PLACES.findIndex(([id]) => id === 'campground');
+    PLACES.splice(
+      ci,
+      1,
+      ...Array.from({ length: nZones }, (_, z) => [`camp:${z}`, `${t('🏕️ 帳篷營地・{z} 區', { z: String.fromCharCode(65 + z) })}${zi.mine?.z === z ? ' ⭐' : ''}`]),
+    );
     this.el.goMenu.innerHTML = PLACES.map(([id, label]) => {
-      const here = id === room;
+      const here = id === room || (id.startsWith('camp:') && Number(id.slice(5)) === zi.cur);
       const off = id === 'home' && !home;
       // 👣 各區現在幾個人（伺服器的 areas；我的帳篷不顯示）
-      const n = id !== 'home' && this.areas ? this.areas[id] ?? 0 : null;
+      const n = id !== 'home' && !id.startsWith('camp:') && this.areas ? this.areas[id] ?? 0 : null;
       const cnt = n == null ? '' : `<span class="go-n${n ? '' : ' zero'}">${t('{n} 人', { n })}</span>`;
       return `<button type="button" data-go="${id}" ${here ? 'disabled' : ''} class="${here ? 'here' : ''}${off ? ' off' : ''}">${cnt}${label}${here ? `<small>${t('目前在這裡')}</small>` : off ? `<small>${t('先到小舖買帳篷')}</small>` : ''}</button>`;
     }).join('');

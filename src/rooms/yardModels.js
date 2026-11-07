@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 /**
  * 🚙 門口擺設的 3D 模型（原尺寸；營地裡會跟帳篷一起縮小）。
@@ -145,8 +146,8 @@ export function buildYard(id) {
         back.rotation.x = -0.2;
         for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(0.02, 0.42, mat(0x2a2522), x + sx * 0.22, 0.21, 0.2 + sz * 0.2, 5);
       };
-      chair(-0.45);
-      chair(0.45);
+      chair(-0.62); // 11/07：兩張椅子拉開一點，兩個人坐才不會撞在一起
+      chair(0.62);
       cyl(0.08, 0.22, mat(0xc9483c), 0, 0.11, 0.6, 8); // 小保溫壺
       break;
     }
@@ -168,58 +169,121 @@ export function buildYard(id) {
       break;
     }
     case 'camper': {
-      const cream = mat(0xf4ead8);
-      const red = mat(0xc9483c);
-      box(4.0, 1.9, 1.8, cream, 0, 1.25);
-      box(4.02, 0.5, 1.82, red, 0, 0.55);
-      add(new THREE.CylinderGeometry(0.9, 0.9, 4.0, 16, 1, false, 0, Math.PI), cream, 0, 2.2, 0).rotation.z = Math.PI / 2;
-      // 車頭
-      box(0.9, 1.0, 1.7, cream, 2.35, 0.9);
-      win(0.8, 0.6, 2.81, 1.15, 0, Math.PI / 2).material = glowMat(0xbfe0ff);
-      for (const x of [-1.2, 0.2]) {
-        win(0.9, 0.6, x, 1.6, 0.905);
-        win(0.9, 0.6, x, 1.6, -0.905, Math.PI);
+      // 11/07 重新設計：圓角的復古小巴（紅色下半身＋奶油色上半身＋可愛的圓燈），原本是方盒子加半圓柱，作者覺得醜
+      const cream = mat(0xf6ecd8);
+      const red = mat(0x8a5a3c); // 11/07 作者：下半身改咖啡色
+      const teal = mat(0xd9b07a); // 車頂掀頂：奶茶色，跟咖啡色比較搭
+      const rbox = (w, h, d, r, m, x, y, z = 0) => add(new RoundedBoxGeometry(w, h, d, 3, r), m, x, y, z);
+      rbox(4.3, 0.95, 1.9, 0.28, red, 0, 0.82); // 下半身
+      rbox(4.3, 1.25, 1.88, 0.42, cream, 0, 1.78); // 上半身（圓圓的車頂）
+      rbox(4.34, 0.12, 1.92, 0.05, mat(0xfff8ec), 0, 1.25); // 中間的白色腰線
+      rbox(2.6, 0.22, 1.7, 0.1, teal, -0.35, 2.47); // 車頂的掀頂
+      // 車頭（+x）：大擋風玻璃、兩顆圓燈、小保險桿
+      rbox(0.04, 0.6, 1.45, 0.02, glowMat(0xbfe6ff), 2.155, 1.82); // 擋風玻璃（貼在車頭上）
+      for (const z of [-0.6, 0.6]) {
+        add(new THREE.CircleGeometry(0.15, 16), glowMat(0xfff3c8), 2.161, 0.9, z).rotation.y = Math.PI / 2;
+        add(new THREE.TorusGeometry(0.15, 0.025, 6, 16), mat(0xe8e2d6), 2.165, 0.9, z).rotation.y = Math.PI / 2;
       }
-      box(0.7, 1.4, 0.04, mat(0x8a5a3a), 1.2, 1.15, 0.91); // 門
-      for (const [x, z] of [[-1.2, 0.88], [1.6, 0.88], [-1.2, -0.88], [1.6, -0.88]]) wheel(x, z, 0.36);
-      // 遮陽棚
-      const awn = box(2.4, 0.04, 0.9, mat(0xe0a83a), -0.4, 2.2, 1.35);
-      awn.rotation.x = 0.15;
-      for (let i = 0; i < 6; i++) box(0.2, 0.05, 0.92, mat(0xfff3e2), -1.5 + i * 0.44, 2.21, 1.35).rotation.x = 0.15;
-      for (const x of [-1.5, 0.7]) cyl(0.03, 2.1, dark, x, 1.05, 1.75, 6);
+      add(new THREE.CircleGeometry(0.2, 3), mat(0xfff8ec), 2.162, 1.25, 0).rotation.y = Math.PI / 2; // 車頭的小 V 標
+      rbox(0.18, 0.16, 1.95, 0.06, mat(0xe8e2d6), 2.2, 0.42);
+      rbox(0.18, 0.16, 1.95, 0.06, mat(0xe8e2d6), -2.2, 0.42);
+      // 側面：圓角小窗（亮著暖暖的燈）、門（門上一個圓窗）
+      for (const sz of [1, -1]) {
+        for (const x of [-1.5, -0.55]) {
+          const w = rbox(0.75, 0.55, 0.04, 0.12, glowMat(0xffd98a), x, 1.85, sz * 0.95);
+          w.scale.z = 1;
+        }
+      }
+      rbox(0.75, 1.5, 0.05, 0.12, mat(0xe9dcc4), 1.2, 1.25, 0.955); // 門
+      add(new THREE.CircleGeometry(0.17, 16), glowMat(0xffd98a), 1.2, 1.72, 0.985);
+      for (const [x, z] of [[-1.35, 0.9], [1.35, 0.9], [-1.35, -0.9], [1.35, -0.9]]) wheel(x, z, 0.36);
+      // 條紋遮陽棚（門那一側）＋兩根細柱＋小燈串
+      // 短短的條紋遮陽棚（不會伸到隔壁帳篷）＋小燈串
+      for (let i = 0; i < 6; i++) {
+        const st = box(0.42, 0.04, 0.6, mat(i % 2 ? 0xfff3e2 : 0xe0a83a), -1.3 + i * 0.42, 2.32, 1.22);
+        st.rotation.x = 0.22;
+      }
+      for (let i = 0; i < 7; i++) add(new THREE.IcosahedronGeometry(0.055, 0), glowMat([0xffd98a, 0xff9a8a, 0x9ad8ff][i % 3]), -1.4 + i * 0.37, 2.16 - Math.sin((i / 6) * Math.PI) * 0.16, 1.5);
       break;
     }
     case 'airstream': {
-      const silver = mat(0xd8dde4, { metalness: 0.6, roughness: 0.3 });
-      const shell = add(new THREE.CapsuleGeometry(1.05, 2.8, 6, 16), silver, 0, 1.45, 0);
+      // 11/07 改版（最貴的擺設，要看起來高級）：拋光鋁殼＋一圈圈鉚釘接縫、車頭環繞式車窗、
+      // 薄荷色細腰線、輪罩、扇形邊遮陽棚＋燈串、車尾木頭露台（兩張躺椅、小桌燈、盆栽）
+      const silver = mat(0xe8ecf0, { metalness: 0.22, roughness: 0.3 });
+      const seam = mat(0xb8c0c8, { metalness: 0.3, roughness: 0.35 });
+      const shell = add(new THREE.CapsuleGeometry(1.05, 2.8, 10, 24), silver, 0, 1.45, 0);
       shell.rotation.z = Math.PI / 2;
       shell.scale.set(1, 1, 0.85);
-      box(4.6, 0.25, 1.6, mat(0x5a5a5a), 0, 0.5);
-      for (const x of [-1.2, 0, 1.2]) {
-        const w = add(new THREE.CircleGeometry(0.28, 14), glowMat(0xffd98a), x, 1.75, 0.9);
-        w.scale.set(1.4, 1, 1);
+      // 鉚釘接縫（直的一圈一圈）
+      for (const x of [-1.05, -0.35, 0.35, 1.05]) {
+        const ring = add(new THREE.TorusGeometry(1.055, 0.012, 4, 32), seam, x, 1.45, 0);
+        ring.rotation.y = Math.PI / 2;
+        ring.scale.set(0.85, 1, 1);
       }
-      box(0.7, 1.45, 0.05, mat(0xe8eef4), 0.6, 1.2, 0.86);
-      for (const z of [0.7, -0.7]) wheel(0, z, 0.38);
+      // 薄荷色細腰線（左右兩側）
+      for (const sz of [1, -1]) box(3.6, 0.07, 0.02, mat(0x6fc2b0), 0, 1.08, sz * 0.9);
+      // 車頭環繞式車窗（深色玻璃帶）
+      const wrap = add(new THREE.SphereGeometry(1.06, 24, 8, -Math.PI / 2.6, Math.PI / 1.3, 1.15, 0.38), glowMat(0x9fc4d8), 1.4, 1.45, 0);
+      wrap.scale.set(1, 1, 0.86);
+      // 側窗：圓角、有鉻框
+      for (const sz of [1, -1]) {
+        for (const x of [-1.15, -0.2]) {
+          add(new RoundedBoxGeometry(0.62, 0.42, 0.05, 2, 0.12), seam, x, 1.75, sz * 0.875);
+          add(new RoundedBoxGeometry(0.54, 0.34, 0.06, 2, 0.1), glowMat(0xffd98a), x, 1.75, sz * 0.88);
+        }
+      }
+      // 門：鉻框＋圓窗
+      add(new RoundedBoxGeometry(0.72, 1.5, 0.06, 2, 0.14), seam, 0.75, 1.2, 0.87);
+      add(new RoundedBoxGeometry(0.62, 1.4, 0.07, 2, 0.12), mat(0xdfe5ea, { metalness: 0.2, roughness: 0.3 }), 0.75, 1.2, 0.875);
+      add(new THREE.CircleGeometry(0.13, 16), glowMat(0xffd98a), 0.75, 1.62, 0.912);
+      // 底盤、輪罩（輪子半藏起來比較有質感）
+      box(4.2, 0.22, 1.5, mat(0x5a5f66), 0, 0.48);
+      for (const z of [0.72, -0.72]) {
+        wheel(-0.15, z, 0.36);
+        // 輪罩：側面半圓的鋁板蓋住輪子上半部
+        add(new THREE.CircleGeometry(0.44, 16, 0, Math.PI), mat(0xe8ecf0, { metalness: 0.22, roughness: 0.3, side: THREE.DoubleSide }), -0.15, 0.5, z * 1.24);
+      }
       box(0.9, 0.08, 0.08, mat(0x3a3a3a), 2.75, 0.55); // 拖桿
-      // 門口燈串下的小折疊椅（可以坐）
-      box(0.5, 0.05, 0.45, mat(0xc9483c), -1.1, 0.42, 1.65);
-      box(0.5, 0.45, 0.05, mat(0xc9483c), -1.1, 0.66, 1.43).rotation.x = -0.2;
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(0.02, 0.42, mat(0x2a2522), -1.1 + sx * 0.22, 0.21, 1.65 + sz * 0.2, 5);
-      // 燈串
-      for (let i = 0; i < 9; i++) {
-        const x = -2 + i * 0.5;
-        add(new THREE.IcosahedronGeometry(0.06, 0), glowMat([0xffd98a, 0xff9a8a, 0x9ad8ff][i % 3]), x, 2.4 - Math.sin((i / 8) * Math.PI) * 0.25, 1.05);
+      // 扇形邊遮陽棚（門那一側，短短的，不會伸到隔壁）＋燈串
+      for (let i = 0; i < 7; i++) {
+        const c = i % 2 ? 0xfff6ea : 0x6fc2b0;
+        const st = box(0.42, 0.04, 0.55, mat(c), -1.0 + i * 0.42, 2.25, 1.15);
+        st.rotation.x = 0.25;
+        const sc = add(new THREE.CircleGeometry(0.21, 10, Math.PI, Math.PI), mat(c, { side: THREE.DoubleSide }), -1.0 + i * 0.42, 2.17, 1.42);
+        sc.rotation.x = -0.1;
+      }
+      for (let i = 0; i < 9; i++) add(new THREE.IcosahedronGeometry(0.055, 0), glowMat([0xffd98a, 0xff9a8a, 0x9ad8ff][i % 3]), -1.0 + i * 0.32, 2.0 - Math.sin((i / 8) * Math.PI) * 0.18, 1.45);
+      // 🪵 車尾木頭露台：兩張躺椅（兩個人坐也不擠）、小桌＋燈、盆栽
+      box(1.5, 0.12, 2.5, wood, -2.75, 0.06, 0.15);
+      for (let i = 0; i < 6; i++) box(0.02, 0.005, 2.5, dark, -3.45 + i * 0.28, 0.123, 0.15);
+      // 躺椅並排、背靠拖車、面向車尾外面（兩張中間隔 1.4，兩個人坐不會撞）
+      const lounge = (z) => {
+        box(0.75, 0.1, 0.5, mat(0xf3ead8), -2.85, 0.35, z);
+        const back = box(0.08, 0.5, 0.5, mat(0xf3ead8), -2.47, 0.6, z);
+        back.rotation.z = -0.35;
+        box(0.7, 0.06, 0.52, wood, -2.85, 0.27, z);
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(0.025, 0.2, dark, -2.85 + sx * 0.3, 0.2, z + sz * 0.2, 5);
+      };
+      lounge(-0.55);
+      lounge(0.85);
+      cyl(0.17, 0.04, wood, -2.95, 0.5, 0.15, 12); // 兩張中間的小圓桌
+      cyl(0.03, 0.36, dark, -2.95, 0.3, 0.15, 6);
+      add(new THREE.SphereGeometry(0.07, 10, 8), glowMat(0xffe0a0), -2.95, 0.6, 0.15); // 桌燈
+      g.userData.glow = { x: -2.95, y: 0.7, z: 0.15, color: 0xffd090 };
+      for (const z of [-1.0, 1.3]) {
+        cyl(0.13, 0.22, mat(0xc98a5a), -3.35, 0.23, z, 10);
+        add(new THREE.IcosahedronGeometry(0.2, 0), mat(0x5f9a4f), -3.35, 0.48, z);
       }
       break;
     }
     // ---- 🪑 門口桌椅 ----
     case 'bench': {
       // 剖半的圓木：圓的那面朝下、切面朝上
-      const log = add(new THREE.CylinderGeometry(0.22, 0.22, 1.3, 12, 1, false, Math.PI, Math.PI), wood, 0, 0.4, 0);
+      // 11/07：加長，兩個人坐才不會擠（座位 ±0.55）
+      const log = add(new THREE.CylinderGeometry(0.22, 0.22, 1.75, 12, 1, false, Math.PI, Math.PI), wood, 0, 0.4, 0);
       log.rotation.z = Math.PI / 2;
-      box(1.3, 0.02, 0.44, mat(0xd8b48a), 0, 0.4, 0); // 切面
-      for (const x of [-0.5, 0.5]) cyl(0.12, 0.22, dark, x, 0.11, 0, 8);
+      box(1.75, 0.02, 0.44, mat(0xd8b48a), 0, 0.4, 0); // 切面
+      for (const x of [-0.7, 0.7]) cyl(0.12, 0.22, dark, x, 0.11, 0, 8);
       break;
     }
     case 'bistro': {
@@ -255,17 +319,28 @@ export function buildYard(id) {
       break;
     }
     case 'swing': {
+      // 11/07：加寬，兩個人並排坐才不會擠在一起（座位 ±0.55）
       for (const s of [-1, 1]) {
         for (const z of [-0.4, 0.4]) {
-          const post = cyl(0.05, 1.9, dark, s * 0.85, 0.92, z * 0.7, 6);
+          const post = cyl(0.05, 1.9, dark, s * 1.15, 0.92, z * 0.7, 6);
           post.rotation.x = z > 0 ? -0.2 : 0.2;
         }
       }
-      cyl(0.05, 1.8, dark, 0, 1.82, 0, 6).rotation.z = Math.PI / 2;
-      for (const x of [-0.55, 0.55]) cyl(0.012, 1.3, mat(0xe8dcc0), x, 1.17, 0, 4);
-      box(1.2, 0.06, 0.45, wood, 0, 0.5, 0);
-      box(1.2, 0.4, 0.05, wood, 0, 0.72, -0.22).rotation.x = -0.15;
-      box(1.1, 0.06, 0.4, mat(0xe0a83a), 0, 0.55, 0.02); // 軟墊
+      cyl(0.05, 2.4, dark, 0, 1.82, 0, 6).rotation.z = Math.PI / 2;
+      // 會搖的部分（繩子＋座板＋椅背＋軟墊）放進一個以橫桿為軸的小組，有人坐時前後輕輕搖（11/07）
+      const from = g.children.length;
+      for (const x of [-0.85, 0.85]) cyl(0.012, 1.3, mat(0xe8dcc0), x, 1.17, 0, 4);
+      box(1.8, 0.06, 0.45, wood, 0, 0.5, 0);
+      box(1.8, 0.4, 0.05, wood, 0, 0.72, -0.22).rotation.x = -0.15;
+      box(1.7, 0.06, 0.4, mat(0xe0a83a), 0, 0.55, 0.02); // 軟墊
+      const rocker = new THREE.Group();
+      rocker.position.y = 1.82;
+      for (const c of g.children.slice(from)) {
+        c.position.y -= 1.82;
+        rocker.add(c);
+      }
+      g.add(rocker);
+      g.userData.rocker = rocker;
       break;
     }
     default:
@@ -276,4 +351,4 @@ export function buildYard(id) {
 }
 
 /** 擺設佔多大（營地裡擋路用，原尺寸的半徑） */
-export const yardRadius = (id) => ({ jeep: 1.6, camper: 2.2, airstream: 2.4, tarp: 1.6, hammock: 1.4, canoe: 1.3, picnic: 1.0, bench: 0.8, bistro: 1.0, firestool: 0.9, swing: 1.1 })[id] ?? 0.6;
+export const yardRadius = (id) => ({ jeep: 1.6, camper: 2.2, airstream: 2.4, tarp: 1.6, hammock: 1.4, canoe: 1.3, picnic: 1.0, bench: 0.95, bistro: 1.0, firestool: 0.9, swing: 1.35 })[id] ?? 0.6;

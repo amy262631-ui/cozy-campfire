@@ -13,7 +13,7 @@ export const YARD_ITEMS = [
   { id: 'tarp', icon: '⛱️', zh: '天幕和露營椅', price: 260, note: '撐開的天幕下面放兩張露營椅' },
   { id: 'jeep', icon: '🚙', zh: '越野車', price: 480, note: '車頂載著行李的森林綠越野車' },
   { id: 'camper', icon: '🚐', zh: '露營車', price: 650, note: '奶油色的復古露營車，窗戶亮著暖暖的燈' },
-  { id: 'airstream', icon: '🚃', zh: '銀色拖車屋', price: 900, note: '亮晶晶的圓弧銀色拖車屋，門口掛著燈串' },
+  { id: 'airstream', icon: '🚃', zh: '銀色拖車屋', price: 900, note: '拋光鋁殼的圓弧拖車屋，車尾有木頭露台和兩張躺椅' },
   // ---- 🪑 門口桌椅（slot: 'seat'，跟上面的大型擺設分開擺，兩格可以同時有）----
   { id: 'bench', icon: '🪵', zh: '原木長椅', price: 30, note: '一根大圓木剖半做成的長椅，可以坐兩個人', slot: 'seat' },
   { id: 'bistro', icon: '☕', zh: '小圓桌和椅子', price: 50, note: '白色小圓桌配兩張折疊椅，適合喝茶聊天', slot: 'seat' },
@@ -21,10 +21,41 @@ export const YARD_ITEMS = [
   { id: 'swing', icon: '🪢', zh: '雙人鞦韆椅', price: 90, note: '木架上掛著有軟墊的鞦韆椅，坐上去會輕輕搖', slot: 'seat' },
 ];
 export const YARD_BY_ID = Object.fromEntries(YARD_ITEMS.map((x) => [x.id, x]));
-/** 擺在哪一格：'on' 大型擺設、'seat' 門口桌椅 */
-export const yardSlotOf = (id) => (YARD_BY_ID[id]?.slot === 'seat' ? 'seat' : 'on');
-/** 這頂帳篷門口有沒有擺這樣東西（兩格都算） */
-export const hasYard = (h, id) => !!id && (h?.yard?.on === id || h?.yard?.seat === id);
+/**
+ * 11/07 改版：門口分「大型（一次 1 個）」和「小型（最多 3 個）」
+ *   大型：吊床、獨木舟、天幕、越野車、露營車、拖車屋
+ *   小型：郵筒、野餐桌、烤肉爐、腳踏車＋4 種門口桌椅
+ * 存檔：homes[vid].yard = { own: [...買過的], on: 大型 id 或 null, sm: [小型 id，最多 3 個] }
+ * 舊存檔的 seat（門口桌椅）、以前放在 on 的小東西，用 normYard() 自動搬到 sm，不會不見。
+ */
+export const YARD_BIG = new Set(['hammock', 'canoe', 'tarp', 'jeep', 'camper', 'airstream']);
+export const YARD_SMALL_MAX = 3;
+export const isBigYard = (id) => YARD_BIG.has(id);
+/** 擺在哪一格：'on' 大型、'sm' 小型 */
+export const yardSlotOf = (id) => (isBigYard(id) ? 'on' : 'sm');
+/** 把舊格式整理成新格式（會直接改 y；重複呼叫沒關係） */
+export function normYard(y) {
+  if (!y) return y;
+  y.own ??= [];
+  const sm = Array.isArray(y.sm) ? y.sm.filter((id) => YARD_BY_ID[id] && !isBigYard(id)) : [];
+  if (y.on && !isBigYard(y.on)) {
+    if (!sm.includes(y.on)) sm.unshift(y.on);
+    y.on = null;
+  }
+  if (y.seat) {
+    if (!sm.includes(y.seat)) sm.push(y.seat);
+    delete y.seat;
+  }
+  y.on = y.on && YARD_BY_ID[y.on] ? y.on : null;
+  y.sm = sm.slice(0, YARD_SMALL_MAX);
+  return y;
+}
+/** 這頂帳篷門口有沒有擺這樣東西（大型、小型都算） */
+export const hasYard = (h, id) => {
+  if (!id || !h?.yard) return false;
+  const y = normYard(h.yard);
+  return y.on === id || y.sm.includes(id);
+};
 
 /**
  * 門口擺設的功能（按 E 跳出選單；只有一種功能的就直接做）
@@ -39,12 +70,12 @@ export const YARD_USES = {
   bike: { use: ['bike'] },
   hammock: { seats: [{ x: 0, y: 1.0, z: 0, face: Math.PI / 2, sleep: true }] },
   canoe: { use: ['canoe'] },
-  tarp: { seats: [{ x: -0.45, y: 0.45, z: 0.2, face: 0 }, { x: 0.45, y: 0.45, z: 0.2, face: 0 }] },
-  jeep: { use: ['drive'], seats: [{ x: -0.1, y: 0.7, z: 0.35, face: Math.PI / 2, driver: true }, { x: -0.1, y: 0.7, z: -0.35, face: Math.PI / 2 }] },
+  tarp: { seats: [{ x: -0.62, y: 0.45, z: 0.2, face: 0 }, { x: 0.62, y: 0.45, z: 0.2, face: 0 }] },
+  jeep: { use: ['drive'], seats: [{ x: 0.15, y: 0.7, z: 0.32, face: Math.PI / 2, driver: true }, { x: -0.95, y: 0.75, z: -0.3, face: Math.PI / 2 }] }, // 駕駛座在前、乘客坐後座（兩個人才不會疊在一起）
   camper: { seats: [{ x: 1.2, y: 0.25, z: 1.25, face: 0 }, { x: -0.6, y: 1.0, z: 0, face: Math.PI / 2, sleep: true, inside: true }] },
-  airstream: { use: ['cooler'], seats: [{ x: -1.1, y: 0.45, z: 1.65, face: 0 }] },
-  bench: { seats: [{ x: -0.35, y: 0.42, z: 0, face: 0 }, { x: 0.35, y: 0.42, z: 0, face: 0 }] },
+  airstream: { use: ['cooler'], seats: [{ x: -2.85, y: 0.42, z: -0.55, face: -Math.PI / 2 }, { x: -2.85, y: 0.42, z: 0.85, face: -Math.PI / 2 }] }, // 車尾露台的兩張躺椅
+  bench: { seats: [{ x: -0.6, y: 0.42, z: 0, face: 0 }, { x: 0.6, y: 0.42, z: 0, face: 0 }] },
   bistro: { seats: [{ x: -0.55, y: 0.45, z: 0, face: Math.PI / 2 }, { x: 0.55, y: 0.45, z: 0, face: -Math.PI / 2 }] },
   firestool: { seats: [{ x: -0.6, y: 0.35, z: 0.1, face: Math.PI / 2 }, { x: 0.6, y: 0.35, z: 0.1, face: -Math.PI / 2 }] },
-  swing: { seats: [{ x: -0.25, y: 0.5, z: 0, face: 0, swing: true }, { x: 0.25, y: 0.5, z: 0, face: 0, swing: true }] },
+  swing: { seats: [{ x: -0.6, y: 0.5, z: 0, face: 0, swing: true }, { x: 0.6, y: 0.5, z: 0, face: 0, swing: true }] },
 };

@@ -6,9 +6,15 @@ const FIRST_KEY = 'cozy-campfire-first-quest';
 const LAST_KEY = 'cozy-campfire-last-quest';
 /** 按過 ✕：這台裝置之後不再自動跳出任務卡（改按「💡 今日小靈感」） */
 const QUIET_KEY = 'cozy-campfire-quest-quiet';
-/** 🌱 新手前三個任務：疊石頭 → 烤棉花糖（在火邊坐下）→ 釣魚 */
-const INTRO = ['stone', 'roast', 'fish'];
-const INTRO_KEY = 'cozy-intro-done';
+/**
+ * 🌱 新手小任務（11/07 改版，有小學生在玩：一次一件事、大字、每句 12 字內）
+ * 1 走到營火旁邊 → 2 坐在木頭上 → 3 丟一根木頭 → 4 烤一個棉花糖 → 5 去湖邊釣一條魚 → 6 去小舖看帳篷
+ * 做完 6 步送 20 松果。之後買了帳篷，再跳第 7 步「去我的帳篷」。
+ */
+const INTRO = ['k_fire', 'k_sit', 'k_wood', 'k_roast', 'k_fish', 'k_shop'];
+const INTRO_KEY = 'cozy-kid-intro';
+/** 第 7 步（有帳篷之後）做過了沒 */
+const HOME_KEY = 'cozy-kid-home';
 const store = (k, v) => {
   try {
     if (v === undefined) return localStorage.getItem(k);
@@ -40,7 +46,90 @@ function buildTasks(touch) {
     return d > near ? { step: 0, text: t(farText, { n: Math.ceil(d) }), target } : { step: 1, text: nearText, target };
   };
 
+  // 🌱 新手小任務：text＝大字（12 字內），sub＝小字操作提示（手機、電腦各自的）
+  const kidWalk = (s, target, near, big) => {
+    const d = dist(s.pos, target, 0.6);
+    return { step: d > near ? 0 : 1, text: big, sub: d > near ? t('還有 {n} 公尺', { n: Math.ceil(d) }) + '・' + k(t('用 WASD 走路'), t('用左下角搖桿走路')) : null, target };
+  };
+  const kidBack = (s) => ({ step: 0, text: t('先回到營火旁'), sub: t('點「🧭 去哪裡」→「🔥 中央營火」'), target: null, go: true });
+  const kid = {
+    k_fire: {
+      icon: '👉',
+      name: t('走到營火旁邊'),
+      auto: (s) => s.inForest && dist(s.pos, s.fire) < 3.2,
+      guide(s) {
+        if (!s.inForest) return kidBack(s);
+        return kidWalk(s, s.fire, 2.6, t('走到營火旁邊'));
+      },
+    },
+    k_sit: {
+      icon: '🪵',
+      name: t('坐在木頭上'),
+      auto: (s) => s.seatFire,
+      guide(s) {
+        if (!s.inForest) return kidBack(s);
+        const seat = s.freeSeat();
+        const d = dist(s.pos, seat, 0.3);
+        return { step: d > 0.6 ? 0 : 1, text: t('坐在木頭上'), sub: d > 0.6 ? t('走到發光的圓木旁') : k(t('按 E 坐下'), t('點右下「🪵 坐下」')), target: seat };
+      },
+    },
+    k_wood: {
+      icon: '🔥',
+      name: t('丟一根木頭'),
+      on: 'wood',
+      guide(s) {
+        if (!s.inForest) return kidBack(s);
+        if (dist(s.pos, s.fire, 1.6) > 0.3) return kidWalk(s, s.fire, 0.3, t('丟一根木頭進營火'));
+        return { step: 1, text: t('丟一根木頭進營火'), sub: k(t('按 E 添柴'), t('點右下「🪵 添柴」')), target: null };
+      },
+    },
+    k_roast: {
+      icon: '🍡',
+      name: t('烤一個棉花糖'),
+      on: 'roast',
+      guide(s) {
+        if (!s.inForest) return kidBack(s);
+        if (s.state === 'roast') return { step: 2, text: t('變金黃色就收回！'), sub: k(t('再按一次 F'), t('再點一次「🍡 烤」')), target: null };
+        if (dist(s.pos, s.fire, 1.6) > 0.3) return kidWalk(s, s.fire, 0.3, t('烤一個棉花糖'));
+        return { step: 1, text: t('烤一個棉花糖'), sub: k(t('按 F 開始烤'), t('點右下「🍡 烤」')), target: null };
+      },
+    },
+    k_fish: {
+      icon: '🎣',
+      name: t('去湖邊釣一條魚'),
+      on: 'fish',
+      guide(s) {
+        if (s.roomId === 'lake_dock') {
+          if (s.state === 'fish') return { step: 2, text: t('浮標沉下去就拉！'), sub: k(t('浮標整個沉下去時按 F'), t('浮標整個沉下去時點「🎣」')), target: null };
+          return { step: 1, text: t('走到碼頭盡頭'), sub: k(t('按 F 開始釣魚'), t('點右下「🎣 釣魚」')), target: s.dockEnd };
+        }
+        if (!s.inForest) return kidBack(s);
+        const d = dist(s.pos, s.lakeGate, 0.5);
+        return { step: 0, text: t('去湖邊釣一條魚'), sub: t('走進發光的路口（{n} 公尺）', { n: Math.ceil(d) }), target: s.lakeGate };
+      },
+    },
+    k_shop: {
+      icon: '🛒',
+      name: t('去小舖看帳篷'),
+      on: 'shop',
+      guide(s) {
+        const sub = t('帳篷 {p} 顆，你有 {n} 顆 🌰', { p: s.tentPrice, n: s.coins ?? 0 });
+        if (!s.inForest) return { step: 0, text: t('去小舖看帳篷'), sub: t('點右邊「🛒 小舖」'), target: null };
+        const d = dist(s.pos, s.shopFront, 0.8);
+        return { step: d > 1 ? 0 : 1, text: t('去小舖看帳篷'), sub: d > 1 ? sub : k(t('按 E 打開小舖'), t('點右下「🏪 小舖」')), target: s.shopFront };
+      },
+    },
+    k_home: {
+      icon: '🏠',
+      name: t('去我的帳篷'),
+      auto: (s) => s.inMyHome,
+      guide: () => ({ step: 0, text: t('去我的帳篷'), sub: t('點「🧭 去哪裡」→「🏠 我的帳篷」'), target: null, go: true }),
+    },
+  };
+  for (const v of Object.values(kid)) v.kid = true;
+
   return {
+    ...kid,
     stone: {
       icon: '🪨',
       name: t('疊石許願'),
@@ -203,6 +292,7 @@ export class RitualGuide {
         <button type="button" class="ritual-x" id="ritual-x" aria-label="close">×</button>
         <div class="ritual-title" id="ritual-title"></div>
         <div class="ritual-text" id="ritual-text"></div>
+        <div class="ritual-sub" id="ritual-sub" hidden></div>
         <div class="ritual-dots" id="ritual-dots"></div>
         <div class="ritual-actions" id="ritual-actions" hidden>
           <button type="button" id="ritual-next">${t('🎲 再來一個')}</button>
@@ -215,12 +305,14 @@ export class RitualGuide {
     this.el = root.querySelector('#ritual');
     this.titleEl = root.querySelector('#ritual-title');
     this.textEl = root.querySelector('#ritual-text');
+    this.subEl = root.querySelector('#ritual-sub');
+    this.goChip = document.getElementById('go-chip');
     this.dotsEl = root.querySelector('#ritual-dots');
     this.actionsEl = root.querySelector('#ritual-actions');
     this.arrow = root.querySelector('#ritual-arrow');
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
     root.querySelector('#ritual-x').addEventListener('click', () => {
-      store(QUIET_KEY, '1');
+      if (!this.task?.kid) store(QUIET_KEY, '1'); // 新手小任務按 ✕ 只是先收起來，角落按鈕還能叫回來
       this.finish();
     });
     // 角落的「💡 今日小靈感」：任務卡收起來時才出現，按了就給一個小任務
@@ -258,9 +350,50 @@ export class RitualGuide {
     this.beacon.visible = false;
     scene.add(this.beacon);
 
-    // 第一次來（而且沒按過 ✕）：直接帶「疊石許願」；老玩家不自動跳出，改按角落的「💡 今日小靈感」
-    if (this.newbie && !store(QUIET_KEY)) this.#start('stone');
+    // 第一次來：直接帶新手小任務（之前做到一半的，下次進來接著做）；老玩家不自動跳出，改按角落的「💡 今日小靈感」
+    const intro = this.nextIntro();
+    if (intro) this.#start(intro);
     else this.finish();
+  }
+
+  /** 老玩家換新裝置（伺服器說玩超過一天）：還沒開始做的新手小任務就不跑了 */
+  skipIntroIfVeteran() {
+    if (this.#introDone().length || !this.task?.kid || this.id !== INTRO[0]) return;
+    store(INTRO_KEY, JSON.stringify([...INTRO]));
+    store(HOME_KEY, '1');
+    store(FIRST_KEY, '1');
+    this.newbie = false;
+    this.done = true;
+    this.finish();
+  }
+
+  /** 新手小任務做完了的清單 */
+  #introDone() {
+    try {
+      const v = JSON.parse(localStorage.getItem(INTRO_KEY) || '[]');
+      return Array.isArray(v) ? v : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** 新手小任務還在進行中（第一次來，或之前做到一半） */
+  get kidMode() {
+    const done = this.#introDone();
+    return (this.newbie || done.length > 0) && INTRO.some((id) => !done.includes(id));
+  }
+
+  /** 🏠 第 7 步：新手小任務做完、買了帳篷，還沒進過自己的帳篷 → 帶他去（main.js 在帳篷資料更新時呼叫） */
+  checkHome(hasTent, inMyHome) {
+    if (!hasTent || store(HOME_KEY)) return;
+    const done = this.#introDone();
+    if (!done.includes('k_shop')) return;
+    if (inMyHome) {
+      store(HOME_KEY, '1');
+      return;
+    }
+    if (this.active && !this.done && this.task) return; // 正在做別的任務，先不要打斷
+    this.#start('k_home');
   }
 
   /** 按「💡 今日小靈感」：還有沒做完的就叫回來，不然換一個新的 */
@@ -270,7 +403,7 @@ export class RitualGuide {
       this.ideaBtn.hidden = true;
       return;
     }
-    this.#start(this.task && !this.done ? this.id : this.newbie && !this.completed ? 'stone' : this.#pick()); // 做到一半按 ✕ 的，接著做同一個
+    this.#start(this.task && !this.done ? this.id : this.#pick()); // 做到一半按 ✕ 的，接著做同一個
   }
 
   /** 隨機挑一個任務（不要跟上一個一樣） */
@@ -283,19 +416,14 @@ export class RitualGuide {
     }
     const intro = this.nextIntro();
     if (intro) return intro;
-    const ids = Object.keys(this.tasks).filter((id) => id !== last && this.canPick(id));
+    const ids = Object.keys(this.tasks).filter((id) => id !== last && !this.tasks[id].kid && this.canPick(id));
     return ids[Math.floor(Math.random() * ids.length)];
   }
 
   /** 新手還沒做完的教學任務（第一次來的那幾天才有） */
   nextIntro() {
-    if (!this.newbie) return null;
-    let done = [];
-    try {
-      done = JSON.parse(localStorage.getItem(INTRO_KEY) || '[]');
-    } catch {
-      /* 無痕模式 */
-    }
+    if (!this.kidMode) return null;
+    const done = this.#introDone();
     return INTRO.find((id) => !done.includes(id) && this.tasks[id]) ?? null;
   }
 
@@ -305,13 +433,21 @@ export class RitualGuide {
     this.active = true;
     this.done = false;
     this._key = null;
-    // 新來的旅人：第一個任務用比較親切的標題，卡片也亮一點
-    const first = this.newbie && !this.completed;
-    this.titleEl.textContent = first
-      ? `👋 ${t('第一次來？先試試：{name}', { name: this.task.name })}`
+    // 🌱 新手小任務：標題只寫第幾步，大字在下面；卡片亮一點
+    const kid = !!this.task.kid;
+    const i = INTRO.indexOf(id);
+    this.titleEl.textContent = kid
+      ? i >= 0
+        ? `🌱 ${t('新手小任務 {i}/{n}', { i: i + 1, n: INTRO.length })}`
+        : `🌱 ${t('最後一步！')}`
       : `${this.task.icon} ${t('小任務：{name}', { name: this.task.name })}`;
-    this.el.classList.toggle('first', first);
-    this.dotsEl.innerHTML = '<i></i>'.repeat(this.task.steps);
+    this.el.classList.toggle('first', kid);
+    this.el.classList.toggle('kid', kid);
+    this.dotsEl.innerHTML = kid ? '' : '<i></i>'.repeat(this.task.steps);
+    this.subEl.hidden = true;
+    this.#glowGo(false);
+    this.ideaBtn.textContent = kid ? t('🌱 新手小任務') : t('💡 今日小靈感');
+    this.ideaBtn.classList.toggle('kid-chip', kid);
     this.actionsEl.hidden = true;
     this.el.classList.remove('done');
     this.el.hidden = false;
@@ -329,12 +465,20 @@ export class RitualGuide {
       this.arrow.hidden = true;
       return;
     }
+    if (this.task.auto?.(s)) {
+      this.done = true;
+      this.#complete(null);
+      return;
+    }
     const g = this.task.guide(s);
-    const key = `${g.step}|${g.text}`;
+    const key = `${g.step}|${g.text}|${g.sub ?? ''}`;
     if (key !== this._key) {
       this._key = key;
-      this.textEl.innerHTML = g.text;
+      this.textEl.innerHTML = this.task.kid ? `${this.task.icon} ${g.text}` : g.text;
+      this.subEl.hidden = !g.sub;
+      this.subEl.textContent = g.sub ?? '';
       [...this.dotsEl.children].forEach((d, i) => d.classList.toggle('on', i <= g.step));
+      this.#glowGo(!!g.go && !this.el.hidden);
     }
     if (!g.target) {
       this.beacon.visible = false;
@@ -354,7 +498,7 @@ export class RitualGuide {
    */
   async event(name, data) {
     if (!this.active || this.done || this.task.on !== name) return;
-    if (name === 'roast' && !(data >= 0.35 && data < 0.75)) {
+    if (name === 'roast' && !this.task.kid && !(data >= 0.35 && data < 0.75)) {
       this.hud.toast(t('差一點！要在金黃色的時候收回，再烤一顆試試 🍡'), 3500);
       return;
     }
@@ -367,7 +511,49 @@ export class RitualGuide {
     this.#complete(n ?? null);
   }
 
+  /** 「🧭 去哪裡」按鈕閃一閃（要玩家去點它的時候） */
+  #glowGo(on) {
+    this.goChip ??= document.getElementById('go-chip');
+    this.goChip?.classList.toggle('tut-glow', on);
+  }
+
+  /** 🌱 新手小任務完成一步：大大的「做到了！」，自動接下一步 */
+  #completeKid() {
+    this.beacon.visible = false;
+    this.arrow.hidden = true;
+    this.#glowGo(false);
+    this.subEl.hidden = true;
+    this.textEl.innerHTML = `🎉 ${t('做到了！')}`;
+    this.el.classList.add('done');
+    this.completed = true;
+    store(FIRST_KEY, '1');
+    if (this.id === 'k_home') {
+      store(HOME_KEY, '1');
+      this.subEl.hidden = false;
+      this.subEl.textContent = t('可以買家具布置你的家 🪑');
+      setTimeout(() => this.done && this.id === 'k_home' && this.finish(), 6000);
+      return;
+    }
+    const done = this.#introDone();
+    if (!done.includes(this.id)) done.push(this.id);
+    store(INTRO_KEY, JSON.stringify(done));
+    const firstTime = done.length === 1;
+    this.onComplete?.(this.task, firstTime);
+    const next = this.nextIntro();
+    if (next) {
+      setTimeout(() => this.done && this.id !== next && this.#start(next), 1800);
+      return;
+    }
+    // 6 步都做完了：送 20 顆松果（main.js 問伺服器）
+    this.titleEl.textContent = `🌱 ${t('新手小任務完成！')}`;
+    this.subEl.hidden = false;
+    this.subEl.textContent = t('送你 20 顆松果 🌰');
+    this.onIntroDone?.();
+    setTimeout(() => this.done && this.id === 'k_shop' && this.finish(), 7000);
+  }
+
   #complete(n) {
+    if (this.task.kid) return this.#completeKid();
     this.n = n;
     this.beacon.visible = false;
     this.arrow.hidden = true;
@@ -380,19 +566,6 @@ export class RitualGuide {
     this.el.classList.remove('first');
     const firstTime = this.newbie && !this.completed;
     this.completed = true;
-    // 🌱 新手教學：記下做完的，接著自動帶下一個
-    if (this.newbie && INTRO.includes(this.id)) {
-      try {
-        const done = JSON.parse(localStorage.getItem(INTRO_KEY) || '[]');
-        if (!done.includes(this.id)) done.push(this.id);
-        localStorage.setItem(INTRO_KEY, JSON.stringify(done));
-      } catch {
-        /* 無痕模式 */
-      }
-      const next = this.nextIntro();
-      if (next) setTimeout(() => this.done && this.id !== next && this.#start(next), 4000);
-      else this.onIntroDone?.();
-    }
     this.onComplete?.(this.task, firstTime);
     try {
       localStorage.setItem(FIRST_KEY, '1');
@@ -405,6 +578,11 @@ export class RitualGuide {
   finish() {
     this.active = false;
     this.el.hidden = true;
+    this.#glowGo(false);
+    // 新手小任務做到一半收起來：角落按鈕變「🌱 新手小任務」，按了接著做
+    const kidLeft = this.task?.kid && !this.done;
+    this.ideaBtn.textContent = kidLeft ? t('🌱 新手小任務') : t('💡 今日小靈感');
+    this.ideaBtn.classList.toggle('kid-chip', !!kidLeft);
     this.ideaBtn.hidden = false;
     this.beacon.visible = false;
     this.arrow.hidden = true;

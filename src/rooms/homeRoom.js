@@ -25,7 +25,33 @@ const GADGET_HINT = {
   guitar: ['🎸', '彈奏', '彈一段木吉他'],
   telescope: ['🔭', '看星星', '用望遠鏡看星星'],
   fridge: ['🧊', '冰箱', '打開小冰箱'],
+  // 11/07 家具小互動（作者確認的 12 種）
+  book: ['📖', '翻書', '翻一本書'],
+  clock: ['⏰', '看時間', '看看小鬧鐘'],
+  globe: ['🌍', '轉一轉', '轉一下地球儀'],
+  crystal: ['🔮', '占卜', '看看水晶球'],
+  easel: ['🎨', '畫畫', '畫兩筆'],
+  tea: ['☕', '喝一口', '喝一口熱茶'],
+  plush: ['🧸', '抱抱', '抱一下'],
+  chime: ['🎐', '搖一搖', '搖一下風鈴'],
+  lamp: ['💡', '開關燈', '開燈／關燈'],
+  feed: ['🐟', '餵魚', '餵魚'],
+  water: ['💧', '澆水', '澆澆水'],
 };
+/** 家具 id → 小互動種類（沒有就是不能互動） */
+export function gadgetKind(id) {
+  if (['radio', 'guitar', 'telescope', 'fridge'].includes(id)) return id;
+  if (id === 'bookshelf' || id === 'books') return 'book';
+  if (id === 'clock' || id === 'globe' || id === 'crystal' || id === 'easel') return id;
+  if (id === 'teapot' || id === 'mug') return 'tea';
+  if (id === 'chime' || id === 'shellchime') return 'chime';
+  if (id.startsWith('tank')) return 'feed';
+  const f = CATALOG_BY_ID[id];
+  if (f?.cat === 'toy') return 'plush';
+  if (f?.cat === 'light') return 'lamp';
+  if (f?.cat === 'plant') return 'water';
+  return null;
+}
 export function createHomeRoom() {
   const group = new THREE.Group();
   group.name = 'home';
@@ -153,13 +179,14 @@ export function createHomeRoom() {
   /** 二樓的家具（站在二樓才會擋路） */
   const colliders2 = [];
   const swimmers = [];
+  const rockingChairs = []; // 🪑 小搖椅（有人坐就搖）
+  let feedUntil = 0; // 🐟 剛餵過魚：游快一點
   /** 可以坐、躺的位置；rest＝現在坐在哪（{ x, y, z, kind, actions }） */
   const seats = [];
   let rest = null;
   let lastPos = { x: 0, y: 0, z: 0 };
   /** 離自己最近、按 E 可以坐的家具 */
   /** 🎵 有小功能的家具（按 E）：收音機、木吉他、望遠鏡、小冰箱；小暖爐坐在旁邊會暖暖的 */
-  const GADGETS = { radio: 1, guitar: 1, telescope: 1, fridge: 1 };
   const gadgets = [];
   const stoves = [];
   const nearGadget = () => {
@@ -354,6 +381,7 @@ export function createHomeRoom() {
     const cells = new Map();
     colliders2.length = 0;
     swimmers.length = 0;
+    rockingChairs.length = 0;
     seats.length = 0;
     gadgets.length = 0;
     stoves.length = 0;
@@ -377,19 +405,28 @@ export function createHomeRoom() {
         m.position.set(c.x + o.x * Math.cos(ba) + o.z * Math.sin(ba), c.y + o.y, c.z - o.x * Math.sin(ba) + o.z * Math.cos(ba));
         m.rotation.y = (it.r ?? 0) * (Math.PI / 2);
         m.userData.cell = { x, z };
+        m.userData.item = it.i;
         furnitureGroup.add(m);
         m.traverse((o) => o.userData.swim && swimmers.push(o));
+        if (it.i === 'rocking') {
+          m.rotation.order = 'YXZ'; // 🪑 小搖椅：沿著椅子自己的前後方向搖
+          rockingChairs.push(m);
+        }
       });
       // 門口那條走道（最前排中間）的家具不擋路，免得把門堵住出不去
       // 🛋️ 可以坐、躺的家具（按 E）
       stack.forEach((it) => {
-        if (GADGETS[it.i]) gadgets.push({ id: it.i, x: c.x, z: c.z, loft: isLoftCell(z) });
+        const gk = gadgetKind(it.i);
+        if (gk) gadgets.push({ id: gk, item: it.i, x: c.x, z: c.z, loft: isLoftCell(z), mesh: furnitureGroup.children.find((o) => o.userData.cell?.x === x && o.userData.cell?.z === z && o.userData.item === it.i) });
         if (it.i === 'stove') stoves.push({ x: c.x, z: c.z, loft: isLoftCell(z) });
       });
       stack.forEach((it, lv) => {
         const f = CATALOG_BY_ID[it.i];
         if (f?.seat == null) return;
-        seats.push({ x: c.x, z: c.z, y: c.y + stackY(stack, lv) + f.seat, a: (it.r ?? 0) * (Math.PI / 2), sleep: !!f.sleep, loft: isLoftCell(z) });
+        const a = (it.r ?? 0) * (Math.PI / 2);
+        seats.push({ x: c.x, z: c.z, y: c.y + stackY(stack, lv) + f.seat, a, sleep: !!f.sleep, loft: isLoftCell(z) });
+        // 🛋️ 兩格寬的家具（雙人小沙發）：右邊那一格再一個座位
+        if (f.wide) seats.push({ x: c.x + f.wide * Math.cos(a), z: c.z - f.wide * Math.sin(a), y: c.y + stackY(stack, lv) + f.seat, a, sleep: false, loft: isLoftCell(z) });
       });
       const list = isLoftCell(z) ? colliders2 : colliders;
       const doorLane = !isLoftCell(z) && z === grid - 1 && Math.abs(c.x) < 0.85;
@@ -405,12 +442,14 @@ export function createHomeRoom() {
         }
       }
       if (stack.some((it) => !CATALOG_BY_ID[it.i]?.walk && CATALOG_BY_ID[it.i]?.kind !== 'wall')) list.push({ x: c.x, z: c.z, r: 0.34 });
-      // 比較長的家具（床）：後面再擋半格
+      // 比較長的家具（床）：後面再擋半格；比較寬的（雙人小沙發）：右邊再擋一格
       for (const it of stack) {
-        const L = CATALOG_BY_ID[it.i]?.long;
-        if (!L) continue;
         const a = (it.r ?? 0) * (Math.PI / 2);
-        list.push({ x: c.x - L * Math.sin(a), z: c.z - L * Math.cos(a), r: 0.3 });
+        const L = CATALOG_BY_ID[it.i]?.long;
+        if (L) list.push({ x: c.x - L * Math.sin(a), z: c.z - L * Math.cos(a), r: 0.3 });
+        const Wd = CATALOG_BY_ID[it.i]?.wide;
+        if (Wd) list.push({ x: c.x + Wd * Math.cos(a), z: c.z - Wd * Math.sin(a), r: 0.34 });
+        if (Wd && L) list.push({ x: c.x + Wd * Math.cos(a) - L * Math.sin(a), z: c.z - Wd * Math.sin(a) - L * Math.cos(a), r: 0.34 }); // 2×2（錦鯉池）
       }
     }
     if (prev) {
@@ -534,6 +573,34 @@ export function createHomeRoom() {
       return scale;
     },
     /** 有小功能的家具、可以坐的位置（測試用） */
+    /** 💡 開關燈：把燈的光暈、點光源、發光材質關掉／打開；回傳開著沒 */
+    toggleLamp(g) {
+      const m = g?.mesh;
+      if (!m) return true;
+      const on = m.userData.lampOff === true;
+      m.userData.lampOff = !on;
+      m.traverse((o) => {
+        if (o.isLight || o.isSprite) o.visible = on;
+        const mt = o.material;
+        if (mt && 'emissiveIntensity' in mt) {
+          o.userData.emi ??= mt.emissiveIntensity;
+          mt.emissiveIntensity = on ? o.userData.emi : 0;
+        }
+        if (mt?.isMeshBasicMaterial && mt.color && (mt.color.r + mt.color.g > 1.4)) {
+          o.userData.baseCol ??= mt.color.clone();
+          mt.color.copy(on ? o.userData.baseCol : o.userData.baseCol.clone().multiplyScalar(0.35));
+        }
+      });
+      return on;
+    },
+    /** 🐟 餵魚：魚缸裡的魚游快一點（4 秒） */
+    feedFish() {
+      feedUntil = performance.now() + 4000;
+    },
+    /** 🌱 澆水：植物左右晃一晃 */
+    wiggle(g) {
+      if (g?.mesh) g.mesh.userData.wiggle = 1;
+    },
     get gadgets() {
       return gadgets;
     },
@@ -549,10 +616,14 @@ export function createHomeRoom() {
       if (actions.state === 'free' && name === 'interact') {
         const u = nearUse();
         if (u?.gadget) {
-          actions.onGadget?.(u.gadget.id, mine);
+          actions.onGadget?.(u.gadget.id, mine, u.gadget);
           return true;
         }
         const s = u?.seat;
+        if (s && this.seatTaken?.(s)) {
+          actions.hud.toast(t('這個位置有人了'));
+          return true;
+        }
         if (s) {
           // 坐下：坐在家具中間；躺下：腳在床尾、頭朝床頭（家具的後面）
           const kind = s.sleep ? 'sleep' : 'sofa';
@@ -587,6 +658,19 @@ export function createHomeRoom() {
       return mine ? t('<kbd>E</kbd> 布置帳篷') : null;
     },
     update(dt, time) {
+      // 🌱 澆水後植物晃一晃
+      for (const gd of gadgets) {
+        const m = gd.mesh;
+        if (!m?.userData.wiggle) continue;
+        m.userData.wiggle = Math.max(0, m.userData.wiggle - dt * 0.8);
+        m.rotation.z = Math.sin(time * 14) * 0.08 * m.userData.wiggle;
+      }
+      // 🪑 小搖椅：有人坐著就前後搖
+      for (const m of rockingChairs) {
+        const want = this.occupied?.(m.position.x, m.position.z, 0.35) ? 0.12 : 0;
+        m.userData.amp = (m.userData.amp ?? 0) + (want - (m.userData.amp ?? 0)) * Math.min(1, dt * 2);
+        m.rotation.x = Math.sin(time * 2.2) * m.userData.amp;
+      }
       // 🔥 坐在小暖爐旁邊：燈光暖一點、亮一點（火光一閃一閃）
       const warm = rest && rest.actions.state === rest.kind && stoves.some((q) => Math.hypot(q.x - rest.sx, q.z - rest.sz) < 1.8);
       warmK += ((warm ? 1 : 0) - warmK) * Math.min(1, dt * 2);
@@ -594,10 +678,12 @@ export function createHomeRoom() {
       light.color.copy(lightColor).lerp(WARM, warmK * 0.6);
       // 🐠 魚缸裡的魚游來游去
       for (const f of swimmers) {
-        const u = time * 0.7 + f.parent.position.x;
+        // 剛餵過魚：游快一點（用累加的相位，速度變了也不會跳一下）
+        f.userData.ph = (f.userData.ph ?? time * 0.7) + dt * (performance.now() < feedUntil ? 2.2 : 0.7);
+        const u = f.userData.ph + f.parent.position.x;
         const sw = f.userData.swim;
         f.position.x = Math.sin(u) * sw.range;
-        f.position.z = Math.cos(u * 0.8) * sw.range * 0.5;
+        f.position.z = Math.cos(u * 0.8) * sw.range * (sw.zk ?? 0.5);
         f.position.y = sw.y + Math.sin(u * 1.7) * 0.03;
         f.rotation.y = Math.cos(u) > 0 ? 0 : Math.PI;
       }

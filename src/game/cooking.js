@@ -38,6 +38,8 @@ export const DISHES = [
   // 🍖 只能用自家門口的烤肉爐做（grill）
   { id: 'camp_skewer', icon: '🍢', zh: '營地烤肉串', need: [{ type: 'veg', n: 2 }, { type: 'mush', n: 2 }], grill: true },
   { id: 'grill_platter', icon: '🔥', zh: '炭烤拼盤', need: [{ id: 'corn', n: 1 }, { id: 'sweetpotato', n: 1 }, { id: 'onion', n: 1 }], grill: true },
+  // ---- 🗓️ 每月限定（month：那個月才煮得出來；不算進全收集）----
+  { id: 'popcorn', icon: '🍿', zh: '爆米花', need: [{ id: 'corn', n: 2 }], month: 11 }, // 11 月：露營電影夜
 ];
 export const DISH_BY_ID = Object.fromEntries(DISHES.map((d) => [d.id, d]));
 /** 第一次煮出某道料理送的松果（大鍋菜特別多） */
@@ -91,6 +93,7 @@ export const DISH_FX = {
   star_pudding: ['idle', 2],
   gold_tart: ['idle', 2],
   big_pot: ['idle', 2],
+  popcorn: ['speed', 1],
 };
 /** 現在的效果（沒有或過期回傳 null）：{ k, lv, until, v, ...BUFFS[k] } */
 export function activeBuff(b, now = Date.now()) {

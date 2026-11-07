@@ -28,19 +28,19 @@ export class ConfirmBuy {
     return !this.el.hidden;
   }
 
-  ask({ icon = '', name = '', price = 0, img = '', desc = '', coins = null, money = '' }) {
+  ask({ icon = '', name = '', price = 0, img = '', desc = '', coins = null, money = '', title = '', yes = '' }) {
     this.#done(false); // 前一個還開著就當取消
     const poor = coins != null && coins < price;
     this.card.innerHTML = `
-      <div class="cbuy-title">${t('🛒 要買這個嗎？')}</div>
+      <div class="cbuy-title">${title || t('🛒 要買這個嗎？')}</div>
       ${img ? `<img class="cbuy-img" src="${img}" alt="">` : `<div class="cbuy-icon">${icon}</div>`}
       <div class="cbuy-name">${icon && img ? `${icon} ` : ''}${name}</div>
       ${desc ? `<div class="cbuy-desc">${desc}</div>` : ''}
-      <div class="cbuy-price">${money ? `💳 ${money}` : `🌰 ${price}`}${!money && coins != null ? `<small>${t('（你有 {n} 顆）', { n: coins })}</small>` : ''}</div>
+      ${yes ? '' : `<div class="cbuy-price">${money ? `💳 ${money}` : `🌰 ${price}`}`}${yes ? '' : `${!money && coins != null ? `<small>${t('（你有 {n} 顆）', { n: coins })}</small>` : ''}</div>`}
       ${poor ? `<div class="cbuy-poor">${t('松果還差 {n} 顆', { n: price - coins })}</div>` : ''}
       <div class="cbuy-btns">
         <button type="button" data-cb="no" class="cbuy-no">${t('再想想')}</button>
-        <button type="button" data-cb="yes" class="cbuy-yes" ${poor ? 'disabled' : ''}>${money ? t('前往付款') : t('確定購買')}</button>
+        <button type="button" data-cb="yes" class="cbuy-yes" ${poor ? 'disabled' : ''}>${yes || (money ? t('前往付款') : t('確定購買'))}</button>
       </div>`;
     this.el.hidden = false;
     return new Promise((resolve) => (this.resolve = resolve));

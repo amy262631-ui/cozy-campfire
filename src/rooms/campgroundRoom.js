@@ -11,6 +11,7 @@ import { buildSoil, buildCrop } from './gardenModels.js';
 import { slotLocal } from '../game/garden.js';
 import { createTrashLayer } from './trashLayer.js';
 import { buildYard, yardRadius } from './yardModels.js';
+import { buildSign } from './signModels.js';
 import { YARD_USES, YARD_BY_ID } from '../game/yardCatalog.js';
 const YARD_ICON = Object.fromEntries(Object.entries(YARD_BY_ID).map(([k, v]) => [k, v.icon]));
 const YARD_NAME = Object.fromEntries(Object.entries(YARD_BY_ID).map(([k, v]) => [k, v.zh]));
@@ -25,7 +26,17 @@ const SCALE = 0.55; // 營地裡的帳篷縮小一點，才排得下
 const YARD_SCALE_OF = { camper: 0.6, airstream: 0.6, jeep: 0.7 };
 const yardScale = (id) => YARD_SCALE_OF[id] ?? 0.8;
 // 🪑 門口桌椅那一格的位置（帳篷自己的座標；x 跟著菜園的另一邊）
-const SEAT_SPOT = { x: -2.1, z: 4.4, ry: 0 };
+/**
+ * 🚙 門口擺設的位置（帳篷座標：+z＝朝小路，x 依菜園在哪一邊左右相反；11/07 作者確認的配置）
+ *   大型：帳篷旁邊（菜園的另一邊）、車頭朝小路
+ *   小型 ①②③：門口前院；門口到小路的走道保持空的
+ */
+const BIG_SPOT = { x: -3.6, z: -0.5 };
+const SMALL_SPOTS = [
+  { x: -1.45, z: 4.45, ry: 0 },
+  { x: -3.3, z: 4.25, ry: 0.2 },
+  { x: -2.65, z: 2.6, ry: 0.5 },
+];
 export const CAMP_PLOTS = CAMP_SIZE;
 const PLOTS = LAYOUT.plots;
 
@@ -551,11 +562,15 @@ export function createCampgroundRoom() {
   tentGlowDim.opacity = 0.35;
   const patchMine = lowpoly(0x4a5c33);
   const patchOther = lowpoly(0x3a5230);
-  let plots = PLOTS.map((p, i) => ({ ...p, door: spots[i].door, out: spots[i].out, garden: spots[i].garden, tent: null, key: null, g: null, collider: null }));
+  let plots = PLOTS.map((p, i) => ({ ...p, i, door: spots[i].door, out: spots[i].out, garden: spots[i].garden, tent: null, key: null, g: null, collider: null }));
 
-  const tentKey = (tent) => (tent ? [tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.open, tent.likes, tent.n, tent.yard ?? '', tent.seat ?? '', JSON.stringify(tent.garden ?? null)].join('|') : 'empty');
+  let zoneNow = 0; // 🏕️ 現在顯示哪一區（門牌寫「A 區 7 號」用）
+  const plotTitle = (i) => t('{z} 區 {n} 號', { z: String.fromCharCode(65 + zoneNow), n: i + 1 });
+  const tentKey = (tent) => (tent ? [zoneNow, tent.sign ?? '', tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.open, tent.likes, tent.n, tent.yard ?? '', (tent.sm ?? []).join(','), JSON.stringify(tent.garden ?? null)].join('|') : `empty:${zoneNow}`);
   const trash = createTrashLayer(group);
   const ridePicked = new Set(); // 騎車自動撿過的垃圾（避免同一件一直送）
+  const rockers = new Set(); // 會搖的門口擺設（鞦韆）
+  const _rp = new THREE.Vector3();
   /** 🥕 小菜園的作物（世界座標，跟帳篷分開放） */
   const gardensGroup = new THREE.Group();
   group.add(gardensGroup);
@@ -576,7 +591,7 @@ export function createCampgroundRoom() {
     const g = new THREE.Group();
     g.position.set(p.x, 0, p.z);
     g.rotation.y = p.ry;
-    const patch = new THREE.Mesh(new THREE.CircleGeometry(2.6, 20), tent?.mine ? patchMine : patchOther);
+    const patch = new THREE.Mesh(new THREE.CircleGeometry(3.0, 22), tent?.mine ? patchMine : patchOther);
     patch.rotation.x = -Math.PI / 2;
     patch.position.y = 0.006;
     patch.userData.ownGeo = true;
@@ -584,14 +599,11 @@ export function createCampgroundRoom() {
     const doorAt = (front) => plotSpots(p, front);
     if (!tent) {
       // 空地：小木牌
-      const stake = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.8, 0.08), poleMat);
-      stake.position.set(0, 0.4, 0.8);
-      stake.userData.ownGeo = true;
-      g.add(stake);
-      const s = makeSign(t('空地'), { height: 0.22, bg: 'rgba(30,20,14,0.45)' });
-      s.position.set(0, 1.05, 0.8);
-      s.userData.own = true;
-      g.add(s);
+      // 空營位：小木樁門牌「A 區 5 號・空地」（有帳篷的人走過來按 E 可以搬來這裡）
+      const es = buildSign('empty', plotTitle(p.i), t('空地'));
+      es.traverse((o) => o.isMesh && (o.userData.ownGeo = true));
+      es.position.set(0, 0, 0.8);
+      g.add(es);
       const sp = doorAt(0.7);
       return { g, door: sp.door, out: sp.out, collider: null, yards: [] };
     }
@@ -639,15 +651,26 @@ export function createCampgroundRoom() {
       gg.add(crop);
       crop.traverse((o) => o.userData.spin && spinners.push(o));
     });
+    // 🪧 門牌：靠小路、菜園那一邊的前面，從路上一眼看得到（11/07）
+    const sgn = buildSign(tent.sign ?? 'wood', plotTitle(p.i), tent.mine ? t('⭐ 我家') : tent.name || t('旅人'));
+    sgn.traverse((o) => o.isMesh && (o.userData.ownGeo = true));
+    sgn.position.set(0.85 * (p.gardenSide || 1), 0, 5.0);
+    g.add(sgn);
     // 🚙 門口擺設：帳篷前面、菜園的另一邊
     //    🪑 門口桌椅另外一格：擺在大型擺設的前面一點（兩格可以同時有）
     const yards = [];
     const side = p.gardenSide || 1;
-    for (const [id, lx, lz, ry] of [[tent.yard, -2.4 * side, 2.3, -Math.PI / 2], [tent.seat, SEAT_SPOT.x * side, SEAT_SPOT.z, SEAT_SPOT.ry * side]]) {
+    const place = [];
+    if (tent.yard) place.push([tent.yard, BIG_SPOT.x * side, BIG_SPOT.z, -Math.PI / 2, side === 1]);
+    (tent.sm ?? []).slice(0, SMALL_SPOTS.length).forEach((id, i) => place.push([id, SMALL_SPOTS[i].x * side, SMALL_SPOTS[i].z, SMALL_SPOTS[i].ry * side, false]));
+    for (const [id, lx, lz, ry, mirror] of place) {
       if (!id) continue;
       const y = buildYard(id);
       y.traverse((o) => o.isMesh && (o.userData.ownGeo = true));
       y.scale.setScalar(yardScale(id)); // 門口擺設比帳篷大一點：可以坐、躺，跟角色的比例才對
+      // 大型擺設：車頭一律朝小路；門、遮陽棚那一側朝自己的帳篷（菜園在右邊時要鏡像，座位跟著一起翻）
+      if (mirror) y.scale.z *= -1;
+      if (y.userData.rocker) rockers.add(y); // 🪢 鞦韆：有人坐就會搖
       y.position.set(lx, 0, lz);
       y.rotation.y = ry;
       g.add(y);
@@ -898,6 +921,55 @@ export function createCampgroundRoom() {
   const returnSpawn = {};
   // 站在門口、面朝外；鏡頭在前面看著自己和身後的帳篷（不然會卡進帳篷裡）
   const outSpot = (p) => (p ? { x: p.out.x, z: p.out.z, ry: p.out.ry, camYaw: Math.PI, camPitch: 0.42 } : undefined);
+  // 🏕️ 區與區之間的路口（11/07）：中央草原上兩座小木拱門「往 B 區 →」「← 往 A 區」，走進去就換區
+  //    每一區都有營地大門回中央營火（同一張地圖）
+  const MAIN_GATE = { to: 'forest_main', x: 0, z: ENTRY_Z + 0.4, r: 0.9, label: t('回到營火') };
+  const entrances = [MAIN_GATE];
+  const GATE_NEXT = { x: cx + 3.9, z: cz + 0.6 };
+  const GATE_PREV = { x: cx - 3.9, z: cz + 0.6 };
+  const gatesGroup = new THREE.Group();
+  group.add(gatesGroup);
+  function buildZoneGate(text) {
+    const g = new THREE.Group();
+    for (const sx of [-0.75, 0.75]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.2, 0.14), poleMat);
+      post.position.set(sx, 1.1, 0);
+      post.userData.ownGeo = true;
+      g.add(post);
+    }
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.16, 0.18), poleMat);
+    bar.position.y = 2.2;
+    bar.userData.ownGeo = true;
+    g.add(bar);
+    const sg = makeSign(text, { height: 0.34 });
+    sg.position.y = 2.65;
+    sg.userData.own = true;
+    g.add(sg);
+    const gl = new THREE.Sprite(tentGlow);
+    gl.position.y = 2.2;
+    gl.scale.setScalar(1.6);
+    g.add(gl);
+    return g;
+  }
+  function setGates(z) {
+    for (const c of [...gatesGroup.children]) {
+      disposeGroup(c);
+      gatesGroup.remove(c);
+    }
+    entrances.length = 0;
+    entrances.push(MAIN_GATE);
+    const L = (k) => String.fromCharCode(65 + k);
+    const add = (pos, to, text) => {
+      const g = buildZoneGate(text);
+      g.position.set(pos.x, 0, pos.z);
+      g.rotation.y = Math.PI / 2; // 拱門面向左右，從草原中間走進去
+      gatesGroup.add(g);
+      entrances.push({ to, x: pos.x, z: pos.z, r: 0.75, label: text });
+    };
+    add(GATE_NEXT, `zone:${z + 1}`, t('往 {z} 區 →', { z: L(z + 1) }));
+    if (z > 0) add(GATE_PREV, `zone:${z - 1}`, t('← 往 {z} 區', { z: L(z - 1) }));
+  }
+  setGates(0);
   return {
     id: 'campground',
     label: t('🏕️ 帳篷營地'),
@@ -906,7 +978,7 @@ export function createCampgroundRoom() {
     background: new THREE.Color(FOG_COLOR),
     outdoor: true,
     occluders: [],
-    entrances: [{ to: 'forest_main', x: 0, z: ENTRY_Z + 0.4, r: 0.9, label: t('回到營火') }],
+    entrances,
     spawn: { x: 0, z: ENTRY_Z - 2.6, ry: Math.PI },
     returnSpawn,
     cameraDistance: 8,
@@ -930,6 +1002,15 @@ export function createCampgroundRoom() {
       return slotWorld(p, i);
     },
     /** 從某頂帳篷出來時，站回那頂帳篷的門口 */
+    /** 🏕️ 現在顯示哪一區（換區時先呼叫，再 setTents） */
+    setZone(z) {
+      if ((z | 0) !== zoneNow || !gatesGroup.children.length) setGates(z | 0);
+      zoneNow = z | 0;
+    },
+    /** 換區後站在哪：從「往下一區」走進來→站在新區的「往上一區」拱門旁，反過來也一樣 */
+    zoneSpawn(from) {
+      return from === 'next' ? { x: GATE_PREV.x + 1.5, z: GATE_PREV.z, ry: Math.PI / 2 } : from === 'prev' ? { x: GATE_NEXT.x - 1.5, z: GATE_NEXT.z, ry: -Math.PI / 2 } : { x: 0, z: ENTRY_Z - 2.6, ry: Math.PI };
+    },
     setReturnFrom(plot) {
       returnSpawn.home = outSpot(plot);
     },
@@ -937,14 +1018,28 @@ export function createCampgroundRoom() {
      * 從自己的帳篷出來：站到營地裡自己帳篷的門口。
      * 伺服器一定把自己的帳篷排在第 0 格；還沒拿到清單時，就用自己帳篷的造型先算門口。
      */
-    setReturnToMine(shape) {
+    setReturnToMine(shape, plot) {
+      // 🏕️ 固定營位：自己帳篷在第 n 號（n−1 格）；還沒拿到清單時用造型先算門口
+      const idx = plot?.n ? plot.n - 1 : 0;
       const mine = plots.find((p) => p.tent?.mine);
       if (mine) return (returnSpawn.home = outSpot(mine));
       const sh = shapeOf(shape);
       const front = (sh.kind === 'rect' ? sh.D : sh.R) * SCALE;
-      returnSpawn.home = outSpot(plotSpots(PLOTS[0], front));
+      returnSpawn.home = outSpot(plotSpots(PLOTS[Math.min(idx, PLOTS.length - 1)], front));
     },
     update(dt, time, camera) {
+      // 🪢 鞦韆：附近有人坐著就前後輕輕搖，沒人就慢慢停下來
+      for (const y of rockers) {
+        if (!y.parent) {
+          rockers.delete(y);
+          continue;
+        }
+        y.getWorldPosition(_rp);
+        const r = y.userData.rocker;
+        const want = this.occupied?.(_rp.x, _rp.z, 1.2) ? 0.16 : 0;
+        r.userData.amp = (r.userData.amp ?? 0) + (want - (r.userData.amp ?? 0)) * Math.min(1, dt * 1.5);
+        r.rotation.x = Math.sin(time * 1.9) * r.userData.amp;
+      }
       // 🚲 騎車經過垃圾：自動撿起來，不用停下來（同一件只送一次，等伺服器回覆）
       const ra = lastActions;
       if (ra?.state === 'ride') {

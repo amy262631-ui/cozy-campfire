@@ -260,6 +260,12 @@ export class RemotePlayers {
 
   /** 讓本地玩家不會跟其他小動物重疊（輕微推開） */
   /** 某個位置附近有沒有其他玩家（營火圓木有沒有人坐） */
+  /** 附近有沒有人坐著（鞦韆、搖椅會不會搖） */
+  anySeatedNear(x, z, r) {
+    for (const p of this.players.values()) if (['sofa', 'eat', 'sleep'].includes(p.state) && Math.hypot(p.pos.x - x, p.pos.z - z) < r) return true;
+    return false;
+  }
+
   anyNear(x, z, r) {
     for (const p of this.players.values()) if (Math.hypot(p.pos.x - x, p.pos.z - z) < r) return true;
     return false;

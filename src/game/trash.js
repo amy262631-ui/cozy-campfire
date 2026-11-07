@@ -35,6 +35,15 @@ export const TRASH = [
   { id: 'umbrella', icon: '☂️', zh: '壞掉的雨傘', rarity: 3, where: ['camp', 'shore'], model: 'stick', color: 0x3a3a5a },
   { id: 'cup_lid', icon: '🧋', zh: '飲料杯蓋', rarity: 1, where: ['camp', 'fire', 'shore'], model: 'flat', color: 0xf6f3ec },
   { id: 'tire', icon: '🛞', zh: '舊輪胎', rarity: 3, where: ['lake'], model: 'tire', color: 0x2a2a2a },
+  // ---- 11/07 擴充（加在最後面，多幾種稀有的）----
+  { id: 'juice_box', icon: '🧃', zh: '鋁箔包', rarity: 1, where: ['camp', 'fire'], model: 'box', color: 0x7ac0e0 },
+  { id: 'noodle_bowl', icon: '🍜', zh: '泡麵碗', rarity: 1, where: ['camp', 'fire'], model: 'cup', color: 0xf0e8d8 },
+  { id: 'broken_rod', icon: '🎣', zh: '斷掉的釣竿', rarity: 2, where: ['lake', 'shore'], model: 'stick', color: 0x5a3a2a },
+  { id: 'flashlight', icon: '🔦', zh: '壞掉的手電筒', rarity: 2, where: ['camp', 'shore'], model: 'can', color: 0xf2c14e },
+  { id: 'old_plush', icon: '🧸', zh: '破舊玩偶', rarity: 3, where: ['shore', 'camp'], model: 'ball', color: 0xb08a5a },
+  { id: 'broken_phone', icon: '📱', zh: '壞掉的手機', rarity: 3, where: ['lake'], model: 'box', color: 0x2a2a3a },
+  { id: 'bike_wheel', icon: '🚲', zh: '腳踏車輪', rarity: 3, where: ['lake'], model: 'tire', color: 0x3a3a3a },
+  { id: 'broken_chair', icon: '🪑', zh: '斷腿露營椅', rarity: 3, where: ['camp'], model: 'box', color: 0x3a6a4a },
 ];
 export const TRASH_BY_ID = Object.fromEntries(TRASH.map((x) => [x.id, x]));
 /** 每種地方同時最多幾件垃圾（同一分流） */

@@ -227,6 +227,183 @@ export function buildFurniture(id, opts = {}) {
       ball(0.04, mat(0xf3b0c0), 0.15, 0.24, 0.02, 1, 0.5, 0.8);
       break;
     }
+    // ---------- 🔨 11/07 擴充：♻️ 回收手作 ----------
+    case 'bottle_lamp': {
+      // 寶特瓶小燈：兩個瓶子裡關著發光的螢火蟲
+      const pet = glass(0x9fd8ff, 0.4);
+      for (const x of [-0.06, 0.06]) {
+        cyl(0.045, 0.045, 0.16, pet, x, 0.08, 0, 10);
+        cyl(0.02, 0.035, 0.04, pet, x, 0.18, 0, 8);
+        cyl(0.022, 0.022, 0.02, mat(0x4a74b5), x, 0.21, 0, 8);
+        for (let k = 0; k < 3; k++) ball(0.012, glow(0xd8ff7a), x + (k - 1) * 0.015, 0.05 + k * 0.035, 0.01 * k);
+      }
+      break;
+    }
+    case 'tire_swing': {
+      // 輪胎鞦韆：木架吊著一個舊輪胎（可以坐）
+      const wood = mat(0xb8a088);
+      for (const x of [-0.36, 0.36]) {
+        const leg = cyl(0.035, 0.045, 1.5, wood, x, 0.72, 0);
+        leg.rotation.z = x > 0 ? 0.08 : -0.08;
+      }
+      const bar = cyl(0.035, 0.035, 0.84, wood, 0, 1.45, 0);
+      bar.rotation.z = Math.PI / 2;
+      for (const x of [-0.12, 0.12]) cyl(0.008, 0.008, 1.0, mat(0xd8c8a0), x, 0.95, 0, 4);
+      const tire = torus(0.2, 0.07, mat(0x2a2a2a), 0, 0.42, 0, Math.PI * 2, 14);
+      tire.rotation.x = Math.PI / 2;
+      break;
+    }
+    case 'bottle_charm': {
+      // 漂流瓶吊飾：漂流木架上掛著一個裝了小貝殼的玻璃瓶
+      const wood = mat(0xb8a088);
+      cyl(0.03, 0.04, 1.0, wood, 0, 0.5);
+      cyl(0.14, 0.16, 0.04, wood, 0, 0.02);
+      const arm = cyl(0.02, 0.02, 0.3, wood, 0.12, 0.98);
+      arm.rotation.z = Math.PI / 2;
+      cyl(0.004, 0.004, 0.16, mat(0xcfc8b8), 0.24, 0.9, 0, 4);
+      cyl(0.05, 0.05, 0.14, glass(0x5a9a5a, 0.45), 0.24, 0.73, 0, 10);
+      cyl(0.02, 0.03, 0.05, glass(0x5a9a5a, 0.45), 0.24, 0.825, 0, 8);
+      ball(0.025, mat(0xf3b0c0), 0.24, 0.69, 0, 1, 0.6, 0.5);
+      break;
+    }
+    case 'can_planter': {
+      // 鋁罐小盆栽：兩個紅色鋁罐種小野花
+      for (const [x, c] of [[-0.05, 0xd2453c], [0.06, 0x4a74b5]]) {
+        cyl(0.04, 0.04, 0.12, mat(c), x, 0.06, 0, 10);
+        cyl(0.036, 0.036, 0.01, mat(0x5a4030), x, 0.12, 0, 10);
+        cyl(0.004, 0.004, 0.08, mat(0x4f8a4a), x, 0.16, 0, 4);
+        ball(0.022, mat(x < 0 ? 0xffd84a : 0xf3a6c0), x, 0.205, 0);
+      }
+      break;
+    }
+    case 'net_basket': {
+      // 漁網吊籃：立架上吊著漁網做的籃子，裡面放了貝殼
+      const wood = mat(0xb8a088);
+      cyl(0.03, 0.04, 1.2, wood, -0.2, 0.6);
+      cyl(0.14, 0.16, 0.04, wood, -0.2, 0.02);
+      const arm = cyl(0.02, 0.02, 0.36, wood, -0.04, 1.18);
+      arm.rotation.z = Math.PI / 2;
+      cyl(0.004, 0.004, 0.3, mat(0x6a9a7a), 0.1, 1.03, 0, 4);
+      add(new THREE.SphereGeometry(0.15, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mat(0x6a9a7a, { wireframe: true }), 0.1, 0.86, 0);
+      torus(0.15, 0.012, mat(0x6a9a7a), 0.1, 0.86, 0).rotation.x = Math.PI / 2;
+      ball(0.04, mat(0xf3d8c8), 0.08, 0.76, 0.02, 1, 0.6, 0.8);
+      ball(0.035, mat(0xf3b0c0), 0.14, 0.77, -0.03, 1, 0.6, 0.8);
+      break;
+    }
+    case 'umbrella_lamp': {
+      // 雨傘吊燈：倒過來的舊雨傘變成燈罩
+      cyl(0.025, 0.03, 1.3, mat(0x3a3a3a), 0, 0.65);
+      cyl(0.16, 0.18, 0.04, mat(0x3a3a3a), 0, 0.02);
+      const shade = add(new THREE.ConeGeometry(0.3, 0.2, 8, 1, true), mat(0x3a3a5a, { side: THREE.DoubleSide }), 0, 1.3, 0);
+      shade.rotation.x = 0;
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        cyl(0.004, 0.004, 0.32, mat(0x8a8a8a), Math.cos(a) * 0.15, 1.25, Math.sin(a) * 0.15, 3).rotation.set(Math.sin(a) * 1.1, 0, -Math.cos(a) * 1.1);
+      }
+      ball(0.06, glow(0xffe08a), 0, 1.18, 0);
+      break;
+    }
+    case 'slipper_pot': {
+      // 拖鞋花盆：單隻藍色拖鞋裡長出小花
+      box(0.12, 0.03, 0.26, mat(0x4a74b5), 0, 0.015, 0);
+      box(0.1, 0.04, 0.1, mat(0x4a74b5), 0, 0.05, 0.05);
+      box(0.08, 0.03, 0.12, mat(0x5a4030), 0, 0.045, -0.05);
+      for (const [x, z, c] of [[-0.02, -0.05, 0xffd84a], [0.025, -0.08, 0xffffff], [0.01, -0.02, 0xf3a6c0]]) {
+        cyl(0.004, 0.004, 0.1, mat(0x4f8a4a), x, 0.1, z, 4);
+        ball(0.022, mat(c), x, 0.15, z);
+      }
+      break;
+    }
+    case 'float_chime': {
+      // 浮標風鈴：漂流木橫桿掛著橘色的舊浮標和貝殼
+      const wood = mat(0xb8a088);
+      for (const x of [-0.26, 0.26]) cyl(0.03, 0.035, 1.1, wood, x, 0.55);
+      const bar = cyl(0.03, 0.03, 0.6, wood, 0, 1.08);
+      bar.rotation.z = Math.PI / 2;
+      for (const [x, c] of [[-0.12, 0xf08a3c], [0.12, 0xffffff]]) {
+        cyl(0.004, 0.004, 0.25, mat(0xcfc8b8), x, 0.94, 0, 4);
+        ball(0.06, mat(c), x, 0.76, 0);
+        ball(0.03, mat(0xd2453c), x, 0.82, 0, 1, 0.5, 1);
+      }
+      ball(0.03, mat(0xf3d8c8), 0, 0.84, 0, 1, 0.7, 0.4);
+      cyl(0.004, 0.004, 0.2, mat(0xcfc8b8), 0, 0.96, 0, 4);
+      break;
+    }
+    // ---------- 🌿 自然手作 ----------
+    case 'log_bench': {
+      // 原木長凳：剖半的漂流木＋兩塊石頭腳（可以坐）
+      const wood = mat(0xa88a6a);
+      const top = cyl(0.12, 0.12, 0.74, wood, 0, 0.26, 0, 10);
+      top.rotation.z = Math.PI / 2;
+      top.scale.set(1, 1, 0.75);
+      for (const x of [-0.26, 0.26]) ball(0.11, mat(0x8a8a84), x, 0.1, 0, 1.2, 0.9, 1);
+      cyl(0.1, 0.1, 0.01, mat(0xd8c0a0), -0.37, 0.26, 0, 10).rotation.z = Math.PI / 2;
+      break;
+    }
+    case 'glowmush_lamp': {
+      // 發光蘑菇燈：月光小菇放在小木墩上，晚上淡淡發光
+      cyl(0.1, 0.11, 0.06, mat(0x7a5236), 0, 0.03);
+      for (const [x, z, sc] of [[0, 0, 1], [0.06, 0.04, 0.6], [-0.05, 0.04, 0.5]]) {
+        cyl(0.015 * sc, 0.02 * sc, 0.12 * sc, mat(0xe8f8f0), x, 0.06 + 0.06 * sc, z, 6);
+        dome(0.06 * sc, glow(0x9ff0e0), x, 0.06 + 0.12 * sc, z, 0.6);
+      }
+      break;
+    }
+    case 'bug_frame': {
+      // 昆蟲標本框：木框裡一隻蝴蝶、一隻甲蟲
+      box(0.3, 0.24, 0.03, mat(0x7a5236), 0, 0.14);
+      box(0.25, 0.19, 0.032, mat(0xf3ead8), 0, 0.14);
+      for (const s2 of [-1, 1]) ball(0.035, mat(0xc8f0d8), -0.06 + s2 * 0.03, 0.16, 0.02, 1, 1.3, 0.3);
+      cyl(0.006, 0.006, 0.06, mat(0x3a2a1a), -0.06, 0.16, 0.02, 4);
+      ball(0.03, mat(0x3f9a6a), 0.06, 0.13, 0.02, 0.8, 1.2, 0.5);
+      box(0.12, 0.012, 0.012, mat(0x7a5236), 0, 0.03, -0.05).rotation.x = 0.4;
+      break;
+    }
+    case 'pressed_flower': {
+      // 押花畫：漂流木框＋壓平的野花
+      box(0.28, 0.34, 0.03, mat(0xb8a088), 0, 0.18);
+      box(0.22, 0.28, 0.032, mat(0xfaf3e6), 0, 0.18);
+      for (const [x, y, c] of [[-0.05, 0.24, 0xf3a6c0], [0.05, 0.2, 0xffd84a], [-0.02, 0.13, 0x8a5ac9], [0.06, 0.1, 0xffffff]]) {
+        ball(0.022, mat(c), x, y, 0.02, 1, 1, 0.2);
+        box(0.004, 0.08, 0.004, mat(0x4f8a4a), x, y - 0.05, 0.019);
+      }
+      box(0.12, 0.012, 0.012, mat(0xb8a088), 0, 0.03, -0.05).rotation.x = 0.4;
+      break;
+    }
+    case 'crystal_sun': {
+      // 水晶窗飾：立架上吊著白石英和湖玻璃，會反光
+      const wood = mat(0x7a5236);
+      cyl(0.025, 0.03, 1.3, wood, 0, 0.65);
+      cyl(0.14, 0.16, 0.04, wood, 0, 0.02);
+      const ring = torus(0.18, 0.012, mat(0xd8c890), 0, 1.1, 0);
+      ring.rotation.y = 0;
+      for (const [x, y, c] of [[0, 0.98, 0xf3f3f3], [-0.1, 1.02, 0x8ad0c8], [0.1, 1.02, 0x8ad0c8]]) {
+        cyl(0.003, 0.003, 0.08, mat(0xcfc8b8), x, y + 0.06, 0, 3);
+        add(new THREE.OctahedronGeometry(0.04, 0), mat(c, { emissive: c, emissiveIntensity: 0.25, roughness: 0.1 }), x, y, 0).scale.y = 1.5;
+      }
+      break;
+    }
+    case 'pearl_lamp': {
+      // 珍珠貝殼燈：打開的大貝殼裡放一顆發光的珍珠
+      dome(0.14, mat(0xf6f0e8), 0, 0.02, 0, 0.4);
+      const lid = dome(0.14, mat(0xf3d8c8), 0, 0.06, -0.08, 0.4);
+      lid.rotation.x = -1.1;
+      ball(0.045, glow(0xfff6e8), 0, 0.07, 0.02);
+      break;
+    }
+    case 'meteor_lamp': {
+      // 流星吊燈：立架上吊著流星碎片，旁邊繞著螢光水晶
+      cyl(0.025, 0.03, 1.4, mat(0x3a3a4a), 0, 0.7);
+      cyl(0.16, 0.18, 0.04, mat(0x3a3a4a), 0, 0.02);
+      const arm = cyl(0.018, 0.018, 0.34, mat(0x3a3a4a), 0.15, 1.38);
+      arm.rotation.z = Math.PI / 2;
+      cyl(0.004, 0.004, 0.2, mat(0xcfc8b8), 0.3, 1.28, 0, 3);
+      add(new THREE.DodecahedronGeometry(0.08, 0), glow(0xbfe0ff), 0.3, 1.13, 0);
+      const tail = cone(0.05, 0.22, glass(0xbfe0ff, 0.4), 0.38, 1.2, 0);
+      tail.rotation.z = 2.2;
+      add(new THREE.OctahedronGeometry(0.035, 0), glow(0x9ff0e0), 0.2, 1.05, 0.06);
+      break;
+    }
     case 'shellframe': {
       box(0.26, 0.32, 0.03, mat(0xe8dcc8), 0, 0.17);
       box(0.18, 0.24, 0.032, mat(0x8ac0d8), 0, 0.17);
@@ -494,18 +671,22 @@ export function buildFurniture(id, opts = {}) {
     case 'sofa': {
       const c = mat(0xf0a6ae);
       const c2 = mat(0xfbd3d6);
-      box(0.74, 0.2, 0.42, c, 0, 0.14);
+      // 11/07：佔兩格（往右多一格），兩個坐墊各在一格中間，兩個人坐才不會疊在一起
+      const cx = 0.4; // 整張沙發的中心在兩格中間
+      box(1.52, 0.2, 0.42, c, cx, 0.14);
+      for (const x of [0, 0.8]) box(0.66, 0.08, 0.34, c2, x, 0.28, 0.03);
       for (const s of [-1, 1]) {
-        box(0.33, 0.08, 0.34, c2, s * 0.17, 0.28, 0.03);
-        box(0.1, 0.32, 0.44, c, s * 0.34, 0.24, 0);
-        cyl(0.03, 0.025, 0.05, mat(0x8a5a36), s * 0.32, 0.025, 0.17);
-        cyl(0.03, 0.025, 0.05, mat(0x8a5a36), s * 0.32, 0.025, -0.17);
+        box(0.1, 0.32, 0.44, c, cx + s * 0.73, 0.24, 0);
+        cyl(0.03, 0.025, 0.05, mat(0x8a5a36), cx + s * 0.7, 0.025, 0.17);
+        cyl(0.03, 0.025, 0.05, mat(0x8a5a36), cx + s * 0.7, 0.025, -0.17);
       }
-      const back = box(0.74, 0.36, 0.12, c, 0, 0.4, -0.16);
+      const back = box(1.52, 0.36, 0.12, c, cx, 0.4, -0.16);
       back.rotation.x = -0.08;
-      const p = ball(0.09, mat(0xfff3c8), 0.18, 0.4, -0.06, 1, 1, 0.45);
-      p.rotation.z = 0.3;
-      flat(heart(0.035), 0.01, mat(0xf58aa8), 0.18, 0.4, -0.02).rotation.set(0, 0, 0.3);
+      for (const x of [0.12, 0.92]) {
+        const p = ball(0.09, mat(0xfff3c8), x, 0.4, -0.06, 1, 1, 0.45);
+        p.rotation.z = 0.3;
+      }
+      flat(heart(0.035), 0.01, mat(0xf58aa8), 0.12, 0.4, -0.02).rotation.set(0, 0, 0.3);
       break;
     }
     // ======== 桌櫃 ========
@@ -1128,6 +1309,138 @@ export function buildFurniture(id, opts = {}) {
       box(0.6, 0.02, 0.4, glow(0xbfe8ff), 0, 1.255, 0); // 水族燈
       const fish = tankFish(opts.fish, 0.82, 0.2, 1.5, DARK);
       if (fish) g.add(fish);
+      break;
+    }
+    // ---- 🐟 11/07 新魚缸 ----
+    case 'tank_jar': {
+      // 玻璃罐小魚缸（放桌上）：1 星小魚
+      cyl(0.11, 0.1, 0.02, mat(0x8a6a48), 0, 0.01, 0, 12);
+      cyl(0.1, 0.1, 0.02, mat(0xe8d6a8), 0, 0.03, 0, 12);
+      cyl(0.105, 0.1, 0.2, glass(0x9ad4f2, 0.3), 0, 0.12, 0, 14);
+      cyl(0.07, 0.08, 0.04, mat(0xc89a62), 0, 0.24, 0, 10); // 軟木塞
+      cone(0.012, 0.08, mat(0x4f9a4a), 0.05, 0.08, -0.03, 4);
+      const fish = tankFish(opts.fish, 0.12, 0.03, 0.42, DARK);
+      if (fish) g.add(fish);
+      break;
+    }
+    case 'tank_cube': {
+      // 方形桌上缸：2 星
+      box(0.3, 0.03, 0.3, mat(0x3a2a1a), 0, 0.015, 0);
+      box(0.28, 0.03, 0.28, mat(0xe8d6a8), 0, 0.045, 0);
+      box(0.28, 0.26, 0.28, glass(0x7ec4ee, 0.28), 0, 0.17, 0);
+      for (const [x, z, c] of [[-0.08, 0.06, 0xb0a898], [0.07, -0.05, 0x8f8778]]) ball(0.03, mat(c), x, 0.07, z);
+      cone(0.015, 0.14, mat(0x4f9a4a), -0.09, 0.13, -0.08, 4);
+      const fish = tankFish(opts.fish, 0.18, 0.06, 0.5, DARK);
+      if (fish) g.add(fish);
+      break;
+    }
+    case 'tank_wood': {
+      // 木框復古缸：4 隻腳的木架＋木框
+      const wd = mat(0x8a5a32);
+      for (const [x, z] of [[-0.3, -0.2], [0.3, -0.2], [-0.3, 0.2], [0.3, 0.2]]) box(0.05, 0.42, 0.05, wd, x, 0.21, z);
+      box(0.66, 0.04, 0.46, wd, 0, 0.42, 0);
+      box(0.6, 0.04, 0.4, mat(0xe8d6a8), 0, 0.46, 0);
+      box(0.6, 0.4, 0.4, glass(0x6ab8e8, 0.28), 0, 0.68, 0);
+      for (const [x, z] of [[-0.31, -0.21], [0.31, -0.21], [-0.31, 0.21], [0.31, 0.21]]) box(0.04, 0.44, 0.04, wd, x, 0.66, z);
+      box(0.66, 0.04, 0.46, wd, 0, 0.9, 0);
+      cone(0.03, 0.22, mat(0x4f9a4a), -0.2, 0.59, -0.12, 5);
+      ball(0.05, mat(0xb0a898), 0.18, 0.5, 0.1);
+      const fish = tankFish(opts.fish, 0.68, 0.15, 0.9, DARK);
+      if (fish) g.add(fish);
+      break;
+    }
+    case 'tank_plant': {
+      // 水草造景缸：低櫃＋滿滿的水草和石頭
+      box(0.78, 0.36, 0.44, mat(0x2f3a2a), 0, 0.18, 0);
+      box(0.76, 0.05, 0.42, mat(0x5a4a32), 0, 0.385, 0);
+      box(0.76, 0.42, 0.42, glass(0x5fc0b0, 0.26), 0, 0.62, 0);
+      const greens = [0x3f8a4a, 0x5aa84a, 0x2e7a50, 0x7cbc5a];
+      [[-0.32, 0.3], [-0.25, 0.22], [-0.17, 0.34], [-0.06, 0.16], [0.14, 0.2], [0.24, 0.36], [0.31, 0.26]].forEach(([x, h], i) => cone(0.035, h, mat(greens[i % 4]), x, 0.41 + h / 2, -0.12 + (i % 3) * 0.04, 5));
+      for (const [x, z, r] of [[0.02, 0.05, 0.07], [-0.12, 0.1, 0.045], [0.2, 0.08, 0.05]]) ball(r, mat(0x8f8778), x, 0.41 + r * 0.6, z, 1.3, 0.8, 1);
+      box(0.8, 0.04, 0.44, mat(0x2f3a2a), 0, 0.85, 0);
+      box(0.6, 0.02, 0.3, glow(0xd8ffe8), 0, 0.825, 0);
+      const fish = tankFish(opts.fish, 0.66, 0.18, 1, DARK);
+      if (fish) g.add(fish);
+      break;
+    }
+    case 'tank_tube': {
+      // 圓柱水族箱：高高的玻璃圓柱，氣泡往上冒
+      cyl(0.3, 0.32, 0.28, mat(0x3a2a1a), 0, 0.14, 0, 18);
+      cyl(0.27, 0.27, 0.04, mat(0xe8d6a8), 0, 0.3, 0, 18);
+      cyl(0.27, 0.27, 1.1, glass(0x5aaee6, 0.26), 0, 0.85, 0, 20);
+      cyl(0.3, 0.3, 0.06, mat(0x3a2a1a), 0, 1.43, 0, 18);
+      torus(0.24, 0.015, glow(0xbfe8ff), 0, 1.39, 0).rotation.x = Math.PI / 2;
+      cone(0.04, 0.5, mat(0x3f8a4a), -0.12, 0.57, -0.08, 5);
+      cone(0.03, 0.34, mat(0x5aa84a), 0.1, 0.49, -0.1, 5);
+      for (let i = 0; i < 6; i++) ball(0.018, glass(0xe8f8ff, 0.55), 0.14, 0.45 + i * 0.16, 0.08);
+      const fish = tankFish(opts.fish, 0.9, 0.12, 1.1, DARK);
+      if (fish) g.add(fish);
+      break;
+    }
+    case 'koi_pond': {
+      // 室內錦鯉池：地上的小池子，佔 2×2 格（往右、往後各多一格）
+      const pond = new THREE.Group();
+      pond.position.set(0.4, 0, -0.4);
+      g.add(pond);
+      const water = new THREE.Mesh(new THREE.CircleGeometry(0.62, 24), glass(0x4a9ad8, 0.45));
+      water.rotation.x = -Math.PI / 2;
+      water.position.y = 0.1;
+      pond.add(water);
+      const bed = new THREE.Mesh(new THREE.CircleGeometry(0.64, 24), mat(0x3d5a4a));
+      bed.rotation.x = -Math.PI / 2;
+      bed.position.y = 0.02;
+      pond.add(bed);
+      const stones = [0x9a9286, 0xb0a898, 0x8f8778];
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const r = 0.08 + ((i * 7) % 3) * 0.012;
+        const st = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), mat(stones[i % 3]));
+        st.position.set(Math.cos(a) * 0.68, r * 0.7, Math.sin(a) * 0.68);
+        st.scale.set(1.3, 0.8, 1);
+        st.rotation.y = a;
+        pond.add(st);
+      }
+      for (const [x, z] of [[-0.25, 0.2], [0.28, -0.15], [0.05, 0.32]]) {
+        const pad = new THREE.Mesh(new THREE.CircleGeometry(0.09, 10, 0.3, Math.PI * 2 - 0.6), mat(0x5aa84a));
+        pad.rotation.x = -Math.PI / 2;
+        pad.position.set(x, 0.105, z);
+        pond.add(pad);
+      }
+      const lotus = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.07, 6), mat(0xf5a8c8));
+      lotus.position.set(-0.25, 0.14, 0.2);
+      pond.add(lotus);
+      const fish = tankFish(opts.fish, 0.08, 0.36, 1.2, DARK);
+      if (fish) {
+        fish.userData.swim.zk = 1; // 圓圓的池子：繞圈游
+        pond.add(fish);
+      }
+      break;
+    }
+    case 'tank_wall': {
+      // 整面牆水族箱：兩格寬、靠牆的大水族箱（往右多一格）
+      const wall = new THREE.Group();
+      wall.position.set(0.4, 0, -0.18);
+      g.add(wall);
+      const add2 = (geo, m, x, y, z) => {
+        const o = new THREE.Mesh(geo, m);
+        o.position.set(x, y, z);
+        wall.add(o);
+        return o;
+      };
+      const dark = mat(0x2a2420);
+      add2(new THREE.BoxGeometry(1.5, 0.3, 0.42), dark, 0, 0.15, 0);
+      add2(new THREE.BoxGeometry(1.46, 0.06, 0.4), mat(0xe8d6a8), 0, 0.33, 0);
+      add2(new THREE.BoxGeometry(1.46, 1.2, 0.4), glass(0x3f8fd0, 0.3), 0, 0.96, 0);
+      add2(new THREE.BoxGeometry(1.5, 0.06, 0.42), dark, 0, 1.59, 0);
+      add2(new THREE.BoxGeometry(1.2, 0.02, 0.26), glow(0xbfe8ff), 0, 1.555, 0);
+      const greens = [0x3f8a4a, 0x5aa84a, 0x2e7a50];
+      [[-0.62, 0.7], [-0.5, 0.45], [-0.3, 0.3], [0.35, 0.55], [0.52, 0.8], [0.64, 0.4]].forEach(([x, h], i) => add2(new THREE.ConeGeometry(0.045, h, 5), mat(greens[i % 3]), x, 0.36 + h / 2, -0.1));
+      for (const [x, r] of [[-0.1, 0.09], [0.12, 0.06], [0.45, 0.07]]) add2(new THREE.DodecahedronGeometry(r, 0), mat(0x8f8778), x, 0.38, 0.05);
+      const fish = tankFish(opts.fish, 1.0, 0.5, 1.6, DARK);
+      if (fish) {
+        fish.userData.swim.zk = 0.2; // 水族箱很窄：前後少游一點
+        wall.add(fish);
+      }
       break;
     }
     default:

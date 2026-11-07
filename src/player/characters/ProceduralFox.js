@@ -477,6 +477,17 @@ export class ProceduralFox {
     this.eatMallow = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.05, 6, 12), new THREE.MeshStandardMaterial({ color: 0xfff8ee, roughness: 0.7 }));
     this.eatMallow.visible = false;
     torso.add(this.eatMallow);
+    // 🍲 吃料理用的小碗（左手捧著，右手一口一口送到嘴邊）（11/07）
+    this.eatBowl = new THREE.Group();
+    const bowlMat = new THREE.MeshStandardMaterial({ color: 0xc98a5a, roughness: 0.6 });
+    const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), bowlMat);
+    bowl.material.side = THREE.DoubleSide;
+    this.eatFood = new THREE.Mesh(new THREE.CircleGeometry(0.068, 14), new THREE.MeshStandardMaterial({ color: 0xe8a050, roughness: 0.8 }));
+    this.eatFood.rotation.x = -Math.PI / 2;
+    this.eatFood.position.y = -0.012;
+    this.eatBowl.add(bowl, this.eatFood);
+    this.eatBowl.visible = false;
+    torso.add(this.eatBowl);
     this.eatString = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 1, 6), new THREE.MeshBasicMaterial({ color: 0xfff6e6 }));
     this.eatString.visible = false;
     torso.add(this.eatString);
@@ -503,8 +514,16 @@ export class ProceduralFox {
    *   生的（< 0.35）牽絲拉長、金黃（< 0.75）冒星星＋開心轉圈、有點焦（< 1）點頭讚、黑炭 冒黑煙＋搖頭
    */
   setEat(d) {
+    this.eatDish = false;
     this.eatKind = d < 0.35 ? 0 : d < 0.75 ? 1 : d < 1 ? 2 : 3;
     donenessColor(Math.min(d, 1.2), this.eatMallow.material.color);
+  }
+
+  /** 🍲 吃一道料理：捧著小碗吃，吃完開心轉圈（color＝碗裡食物的顏色） */
+  setEatDish(color = 0xe8a050) {
+    this.eatDish = true;
+    this.eatKind = 1;
+    this.eatFood.material.color.set(color);
   }
 
   setPose(name) {
@@ -621,7 +640,10 @@ export class ProceduralFox {
     const pt = this.poseTime;
     const kind = this.eatKind;
     // 手上的棉花糖：咬一口小一點，咬第二口就吃完了
-    const left = !on ? 0 : pt < 0.5 ? 1 : pt < 0.9 ? 0.62 : pt < (kind === 0 ? 1.25 : 1.15) ? 0.4 : 0;
+    // 🍲 吃料理：碗捧在左手，吃到 1.4 秒（開始開心反應）才收起來；不拿棉花糖
+    this.eatBowl.visible = on && this.eatDish && pt < 1.45;
+    if (this.eatBowl.visible) this.eatBowl.position.copy(this.arms[0].position).add(this._bowlOff ?? (this._bowlOff = new THREE.Vector3(0.06, 0.04, 0.06)));
+    const left = !on || this.eatDish ? 0 : pt < 0.5 ? 1 : pt < 0.9 ? 0.62 : pt < (kind === 0 ? 1.25 : 1.15) ? 0.4 : 0;
     this.eatMallow.visible = left > 0;
     if (left > 0) {
       this.eatMallow.position.copy(this.arms[1].position).add(this._eatOff ?? (this._eatOff = new THREE.Vector3(-0.02, 0.07, 0.05)));
