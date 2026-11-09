@@ -3406,6 +3406,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   const setFriendBadge = (b) => social.setBadge((b?.dm ?? 0) + (b?.req ?? 0) + (b?.sup ?? 0));
   net.on('socialBadge', setFriendBadge);
   // 👫 11/09 玩家建議：邀請、分享、營火之約成功後，問要不要加對方好友（兩邊都按就直接成為好友）
+  // 👥 同一個人在別的視窗（或別的裝置）打開了營地：這個視窗先暫停，避免同一個人出現兩隻
+  net.on('dupLogin', () => hud.toast(t('👥 你在別的視窗打開了營地，這裡先暫停。要回來玩就重新整理這一頁'), 15000));
   net.on('friendSuggest', ({ name, hid, role } = {}) => {
     if (!hid) return;
     const text = role === 'ref' ? t('🎉 <b>{name}</b> 來營地了！加好友？', { name: escapeHtml(name ?? '') }) : t('👋 <b>{name}</b> 邀你來的，加好友？', { name: escapeHtml(name ?? '') });

@@ -1911,6 +1911,16 @@ io.on('connection', (socket) => {
       if (session) today().src[src].n++;
     }
     socket.data.vid = wal ? String(data.vid).slice(0, 24) : null;
+    // 👥 11/10 作者回報：手機切去「商店資訊」再回來，自己的角色多一隻（舊連線被手機暫停，伺服器還沒發現斷線，要等約 45 秒）
+    // → 同一個人重新連上時，把他其他舊連線收掉（真的開兩個視窗的話，舊視窗會顯示「在別的視窗打開了」）
+    if (socket.data.vid) {
+      for (const so of io.sockets.sockets.values()) {
+        if (so !== socket && so.data.vid === socket.data.vid) {
+          so.emit('dupLogin');
+          so.disconnect(true);
+        }
+      }
+    }
     const ip = String(socket.handshake.headers['x-forwarded-for'] ?? socket.handshake.address ?? '').split(',')[0].trim();
     // 朋友透過連結進來（?with=）：
     // ① 第一次來、待滿 3 分鐘 → 邀請人拿松果和每週造型

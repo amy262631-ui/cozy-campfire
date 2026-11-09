@@ -27,16 +27,18 @@ const PROMPTS = {
 };
 /** 手機畫面小：提示短一點（按鍵會換成按鈕圖示） */
 const PROMPTS_SHORT = {
+  // 11/10 作者：手機、平板右下角已經有一樣的按鈕，坐著／裹毯／躺著的提示多餘，還會壓到聊天 → 不顯示（null）
+  // 只留「怎麼做」的說明：烤棉花糖要收回、釣魚什麼時候拉竿
   near: PROMPTS.near,
   roast: t('<kbd>F</kbd> 收回享用'),
-  blanket: t('<kbd>Z</kbd> 起身'),
-  stargaze: t('<kbd>空白鍵</kbd> 起身'),
+  blanket: null,
+  stargaze: null,
   fish: t('浮標整個沉下去就按 <kbd>F</kbd>'),
-  sofa: t('移動就起身'),
-  sleep: t('💤 移動就起身'),
-  seat: t('<kbd>F</kbd> 烤　<kbd>E</kbd> 添柴　<kbd>Z</kbd> 裹毯'),
-  seatBlanket: t('<kbd>Z</kbd> 拿掉毯子'),
-  ride: t('<kbd>E</kbd> 下車'),
+  sofa: null,
+  sleep: null,
+  seat: null,
+  seatBlanket: null,
+  ride: null,
 };
 
 /**
@@ -455,14 +457,16 @@ export class ActionStateMachine {
   /** 目前該顯示的互動提示（HTML）或 null */
   get prompt() {
     if (EMOTE_IDS.has(this.state)) return null;
+    // 手機、平板（有觸控按鈕）都用短版；電腦沒有按鈕，照舊顯示按鍵說明
+    const P = this.compact || document.body.classList.contains('touch') ? PROMPTS_SHORT : PROMPTS;
     if (this.state === 'fish' && this.room?.fishing?.phase === 'show') return this.compact ? t('<kbd>F</kbd> 繼續釣　·　走開就舉著魚炫耀') : t('<kbd>F</kbd> 繼續釣魚　·　直接走開，就舉著魚到處炫耀 🐟');
     if (this.state === 'fish' && this.room?.fishing?.busy) return null;
-    if (this.state === 'sofa' && this.seat && !this.seat.yard) return (this.compact ? PROMPTS_SHORT : PROMPTS).seat;
-    if (this.state === 'blanket' && this.seat?.fire) return (this.compact ? PROMPTS_SHORT : PROMPTS).seatBlanket;
+    if (this.state === 'sofa' && this.seat && !this.seat.yard) return P.seat;
+    if (this.state === 'blanket' && this.seat?.fire) return P.seatBlanket;
     if (this.state === 'free') {
       if (this.room?.prompt) return this.room.prompt(this);
       return this.nearFire ? PROMPTS.near : null;
     }
-    return (this.compact ? PROMPTS_SHORT : PROMPTS)[this.state] ?? null;
+    return P[this.state] ?? null;
   }
 }
