@@ -39,6 +39,15 @@ export const FURNITURE_COLORS = [
   { id: 3, icon: '🌊', zh: '海藍', hue: 0.58, sat: 0.5, light: 0 },
   { id: 4, icon: '🌙', zh: '夜色', hue: 0.7, sat: 0.35, light: -0.12 },
 ];
+/**
+ * 🎫 月票限定配色（11/09 作者定案，還沒開放；正式上架時接在 FURNITURE_COLORS 後面）
+ * 流行的「跳色」：家具面積最大的部分用第一個顏色，其他有顏色的小部分（坐墊、抽屜、床墊）用 duo 的顏色
+ */
+export const PASS_COLORS = [
+  { id: 5, icon: '🩵', zh: '蒂芬妮藍×奶油白', hue: 0.475, sat: 0.5, l: 0.68, duo: { hue: 0.11, sat: 0.55, l: 0.9 }, pass: 1 },
+  { id: 6, icon: '🤍', zh: '奶油白×奶茶', hue: 0.11, sat: 0.55, l: 0.9, duo: { hue: 0.075, sat: 0.32, l: 0.62 }, pass: 1 },
+  { id: 7, icon: '💜', zh: '薰衣草紫×奶油白', hue: 0.73, sat: 0.36, l: 0.74, duo: { hue: 0.11, sat: 0.55, l: 0.9 }, pass: 1 },
+];
 /** 這種魚放得進這個魚缸嗎（魚王算 6 星） */
 export const fishFits = (tank, fish) => !!tank?.fish && !!fish && !fish.junk && (fish.legend ? 6 : fish.rarity) <= tank.fish;
 export const hasColors = (f) => !!f && !f.gift && !f.craft && f.color !== false;
@@ -165,7 +174,14 @@ export const FURNITURE_CATALOG = [
   { id: 'postcard', icon: '📮', zh: '營火明信片牆', cat: 'deco', gift: 'share' },
   { id: 'foxlamp', icon: '🏮', zh: '狐狸提燈', cat: 'light', kind: 'small', gift: 'ref1' },
   { id: 'telescope', icon: '🔭', zh: '星空望遠鏡', cat: 'deco', gift: 'ref5' },
+  // 🌅 早安卡：來營地滿 7 天的大禮（11/09，每輪送一件，依序；只有這裡拿得到）
+  { id: 'login_lantern', icon: '🏮', zh: '星星紙燈籠', cat: 'light', kind: 'small', gift: 'login' },
+  { id: 'login_terrarium', icon: '🪴', zh: '玻璃小花園', cat: 'plant', kind: 'small', gift: 'login' },
+  { id: 'login_candle', icon: '🕯️', zh: '香氛蠟燭罐', cat: 'light', kind: 'small', gift: 'login' },
+  { id: 'login_foxpillow', icon: '🦊', zh: '狐狸抱枕', cat: 'toy', gift: 'login' },
 ];
+/** 🌅 早安卡第 7 天大禮的小家具（照順序一輪送一件，全部拿完就只送松果） */
+export const LOGIN_GIFTS = ['login_lantern', 'login_terrarium', 'login_candle', 'login_foxpillow'];
 
 export const CATALOG_BY_ID = Object.fromEntries(FURNITURE_CATALOG.map((f) => [f.id, f]));
 

@@ -213,7 +213,9 @@ export class HUD {
       const here = id === room || (id.startsWith('camp:') && zi.cur >= 0);
       const off = id === 'home' && !home;
       // 👣 各區現在幾個人（伺服器的 areas；我的帳篷不顯示）
-      const n = id !== 'home' && !id.startsWith('camp:') && this.areas ? this.areas[id] ?? 0 : null;
+      // 帳篷營地（camp:幾區）用伺服器的 campground：各區加起來＋在自己帳篷裡的人（11/08 作者：營地看不到人數）
+      const aid = id.startsWith('camp:') ? 'campground' : id;
+      const n = id !== 'home' && this.areas ? this.areas[aid] ?? 0 : null;
       const cnt = n == null ? '' : `<span class="go-n${n ? '' : ' zero'}">${t('{n} 人', { n })}</span>`;
       return `<button type="button" data-go="${id}" ${here ? 'disabled' : ''} class="${here ? 'here' : ''}${off ? ' off' : ''}">${cnt}${label}${here ? `<small>${t('目前在這裡')}</small>` : off ? `<small>${t('先到小舖買帳篷')}</small>` : ''}</button>`;
     }).join('');

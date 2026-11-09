@@ -669,7 +669,8 @@ export function createCampgroundRoom() {
       const mirror = y0 === 'tarp' ? false : y0 === 'camper' ? side !== 1 : side === 1;
       place.push([y0, BIG_SPOT.x * side, BIG_SPOT.z, ry, mirror]);
     }
-    (tent.sm ?? []).slice(0, SMALL_SPOTS.length).forEach((id, i) => place.push([id, SMALL_SPOTS[i].x * side, SMALL_SPOTS[i].z, SMALL_SPOTS[i].ry * side, false]));
+    // 小型擺設：郵筒的門要朝小路（11/08 作者），模型的門在 +x，所以多轉 -90 度
+    (tent.sm ?? []).slice(0, SMALL_SPOTS.length).forEach((id, i) => place.push([id, SMALL_SPOTS[i].x * side, SMALL_SPOTS[i].z, SMALL_SPOTS[i].ry * side + (id === 'mailbox' ? -Math.PI / 2 : 0), false]));
     for (const [id, lx, lz, ry, mirror] of place) {
       if (!id) continue;
       const y = buildYard(id);

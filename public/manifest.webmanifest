@@ -1,0 +1,17 @@
+{
+  "name": "迷霧森林露營地",
+  "short_name": "迷霧營地",
+  "description": "沒力氣出門的夜晚，來營火旁坐一下。",
+  "start_url": "/?src=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1d1714",
+  "theme_color": "#1d1714",
+  "lang": "zh-Hant",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

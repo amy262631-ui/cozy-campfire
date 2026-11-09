@@ -45,7 +45,7 @@ export function giftInfo(cat, id) {
   }
   if (cat === 'furn') {
     const x = CATALOG_BY_ID[id];
-    if (!x || x.gift) return null; // 分享禮物家具不能轉送
+    if (!x || x.gift || x.pass || x.box) return null; // 分享禮物家具不能轉送；🎫 月票家具、🎁 限定禮盒家具也不能送（作者 11/09：保持專屬）
     return { icon: x.icon, zh: x.zh, value: x.price ?? 10 }; // 手作家具算 10
   }
   return null;

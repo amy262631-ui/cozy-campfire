@@ -13,6 +13,7 @@ export const SOURCES = [
   { id: 'line', zh: 'LINE', match: ['line.me', 'line.naver'] },
   { id: 'fb', zh: 'Facebook', match: ['facebook', 'fb.com'] },
   { id: 'search', zh: '搜尋引擎', match: ['google.', 'bing.', 'yahoo.', 'duckduckgo', 'naver.com', 'daum.net'] },
+  { id: 'pwa', zh: '📲 手機桌面捷徑', match: [] },
   { id: 'invite', zh: '朋友邀請連結', match: [] },
   { id: 'other', zh: '其他網站', match: [] },
   { id: 'direct', zh: '直接進來', match: [] },
@@ -56,4 +57,40 @@ export function detectSource(loc = location, referrer = document.referrer) {
     /* 壞掉的 referrer */
   }
   return sourceFrom({ tag: q.get('src') || q.get('utm_source') || q.get('ref'), invite: !!q.get('with'), host: loc.hostname, ref });
+}
+
+/** 📱 是不是在 App 內建瀏覽器（LINE、IG、FB、Threads、微信）或被嵌在別的網站裡（iframe）；伺服器端沒有 navigator 就回空字串 */
+export function inAppKind() {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') return '';
+  const ua = navigator.userAgent || '';
+  if (/\bLine\//i.test(ua)) return 'line';
+  if (/Instagram/i.test(ua)) return 'ig';
+  if (/Barcelona|Threads/i.test(ua)) return 'threads';
+  if (/FBAN|FBAV|FB_IAB|FBIOS|Messenger/i.test(ua)) return 'fb';
+  if (/MicroMessenger/i.test(ua)) return 'wechat';
+  try {
+    if (window.top !== window.self) return 'iframe';
+  } catch {
+    return 'iframe';
+  }
+  return '';
+}
+
+/** 📲 是不是從手機桌面的圖示打開的（加到主畫面後，會用全螢幕模式開） */
+export function isStandalone() {
+  if (typeof window === 'undefined') return false;
+  try {
+    return !!(window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone);
+  } catch {
+    return false;
+  }
+}
+/** 這台裝置要怎麼加到桌面：'ios'（iPhone/iPad Safari）、'android'、'desktop'；在 App 裡要先用瀏覽器打開 */
+export function installKind() {
+  if (typeof navigator === 'undefined') return 'desktop';
+  const ua = navigator.userAgent || '';
+  const ios = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (ios) return 'ios';
+  if (/Android/i.test(ua)) return 'android';
+  return 'desktop';
 }

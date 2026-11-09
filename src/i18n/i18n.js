@@ -30,7 +30,8 @@ function detect() {
   if (nav.startsWith('ko')) return 'ko';
   if (nav.startsWith('zh')) return 'zh-Hant';
   if (nav.startsWith('en')) return 'en';
-  return 'zh-Hant';
+  // 11/09：中英日韓以外的國家（泰文、法文、印尼文⋯）先給英文，比看不懂的中文好
+  return nav ? 'en' : 'zh-Hant';
 }
 
 export const lang = detect();

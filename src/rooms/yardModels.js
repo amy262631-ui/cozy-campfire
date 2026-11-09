@@ -46,7 +46,11 @@ export function buildYard(id) {
       cyl(0.06, 1.0, dark, 0, 0.5);
       box(0.5, 0.36, 0.34, mat(0xd2453c), 0, 1.15);
       add(new THREE.CylinderGeometry(0.17, 0.17, 0.5, 12, 1, false, 0, Math.PI), mat(0xd2453c), 0, 1.33, 0).rotation.z = Math.PI / 2;
-      box(0.04, 0.24, 0.1, mat(0xf2c14e), 0.27, 1.32, 0.12);
+      // 11/08：信箱門在 +x 那一頭（擺的時候轉成朝小路），小旗子插在側面
+      box(0.02, 0.3, 0.3, mat(0xb83a32), 0.255, 1.18, 0);
+      box(0.03, 0.04, 0.08, mat(0xe8d6a8), 0.27, 1.26, 0);
+      box(0.1, 0.04, 0.03, mat(0xf2c14e), -0.02, 1.3, 0.185);
+      box(0.04, 0.18, 0.03, mat(0xf2c14e), -0.07, 1.39, 0.185);
       break;
     case 'picnic': {
       box(1.8, 0.08, 0.8, wood, 0, 0.75);

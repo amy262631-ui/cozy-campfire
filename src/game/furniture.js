@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { buildOutfit } from '../player/outfit3d.js';
 import { OUTFIT_BY_ID } from './outfits.js';
 import { t } from '../i18n/i18n.js';
-import { FURNITURE_CATALOG, FURNITURE_CATS, FURNITURE_COLORS } from './furnitureCatalog.js';
+import { FURNITURE_CATALOG, FURNITURE_CATS, FURNITURE_COLORS, PASS_COLORS } from './furnitureCatalog.js';
 import { FISH } from '../fishing/fishData.js';
 
 /**
@@ -1443,6 +1443,229 @@ export function buildFurniture(id, opts = {}) {
       }
       break;
     }
+    // ---------- 🎫 月票家具（11/09 構圖，還沒上架） ----------
+    case 'pass_eggchair': {
+      // 🪺 吊籃椅：C 字形支架吊著一顆藤編蛋形籃（開口朝前），裡面一顆軟墊
+      const metal = mat(0x3a3430, { metalness: 0.4, roughness: 0.5 });
+      cyl(0.26, 0.3, 0.05, metal, 0.05, 0.025, -0.18, 16);
+      const arc = torus(0.75, 0.035, metal, -0.2, 0.77, -0.18, Math.PI * 0.95, 20);
+      arc.rotation.z = -Math.PI * 0.42;
+      cyl(0.012, 0.012, 0.3, metal, 0.12, 1.42, -0.18);
+      const rattan = mat(0xc9a46a, { side: THREE.DoubleSide });
+      const egg = add(new THREE.SphereGeometry(0.4, 20, 14, Math.PI / 2 + 0.75, Math.PI * 2 - 1.5, 0.12, Math.PI * 0.84), rattan, 0.12, 0.85, -0.18);
+      egg.scale.set(1, 1.25, 1);
+      // 藤編的直條紋
+      for (let k = 0; k < 10; k++) {
+        const a = Math.PI / 2 + 0.85 + (k / 9) * (Math.PI * 2 - 1.7);
+        const rib = torus(0.405, 0.008, mat(0x9a7444), 0.12, 0.85, -0.18, Math.PI * 0.84, 14);
+        rib.scale.set(1, 1.25, 1);
+        rib.rotation.set(0, -a, Math.PI / 2 - Math.PI * 0.42);
+      }
+      // 開口的圓邊
+      const rim = torus(0.33, 0.025, mat(0x9a7444), 0.12, 0.83, 0.05, Math.PI * 2, 24);
+      rim.scale.set(0.95, 1.35, 1);
+      ball(0.3, mat(0xf3e2c8), 0.12, 0.6, -0.16, 1, 0.38, 1);
+      ball(0.13, mat(0xe8a0a8), 0.04, 0.88, -0.4, 1.4, 0.9, 0.6);
+      break;
+    }
+    case 'pass_cloudrug': {
+      // ☁️ 雲朵地毯（作者 11/09：星空地毯換成這個）：奶油白、邊緣圓鼓鼓的雲朵形，軟軟的厚一點
+      const cloudShape = (sx, sz) => {
+        const sh = new THREE.Shape();
+        for (let k = 0; k <= 140; k++) {
+          const tt = (k / 140) * Math.PI * 2;
+          const f = 1 + 0.16 * Math.abs(Math.sin(3.5 * tt)); // 7 個圓鼓鼓的邊
+          const x = Math.cos(tt) * sx * f;
+          let z = Math.sin(tt) * sz * f;
+          if (z < 0) z *= 0.8; // 底邊平一點
+          if (k) sh.lineTo(x, z);
+          else sh.moveTo(x, z);
+        }
+        return sh;
+      };
+      const soft = { depth: 0.015, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.025, bevelSegments: 4, curveSegments: 12 };
+      const base = add(new THREE.ExtrudeGeometry(cloudShape(0.6, 0.4), soft), mat(0xf3e6cc, { flatShading: false, roughness: 1 }), 0, 0.02, 0.02);
+      base.rotation.x = -Math.PI / 2;
+      // 上面再鋪一層小一點、更白的雲（像軟墊縫起來的樣子）
+      const top = add(new THREE.ExtrudeGeometry(cloudShape(0.44, 0.28), soft), mat(0xfaf3e4, { flatShading: false, roughness: 1 }), 0.02, 0.045, 0.02);
+      top.rotation.x = -Math.PI / 2;
+      break;
+    }
+    case 'pass_glowtree': {
+      // 🌳 發光室內小樹：陶盆＋彎彎的樹幹，樹冠裡掛滿會亮的小燈球（按 E 換顏色）
+      const h = pot(0.2, 0.26, 0xe8dccb);
+      const bark = mat(0x6a4a30);
+      const t1 = cyl(0.04, 0.06, 0.6, bark, 0.02, h + 0.3);
+      t1.rotation.z = -0.12;
+      const t2 = cyl(0.025, 0.035, 0.35, bark, -0.1, h + 0.62);
+      t2.rotation.z = 0.6;
+      const tones = [0xb8d8a8, 0xa8cfa0, 0xc8e4b4];
+      const crowns = [[0.06, 1.05, 0, 0.3], [-0.2, 0.95, 0.05, 0.22], [0.24, 0.92, -0.05, 0.2], [0, 1.25, -0.05, 0.2]];
+      crowns.forEach(([x, y, z, r], i) => {
+        const b = ball(r, mat(tones[i % 3], { emissive: 0xfff0c0, emissiveIntensity: 0.18 }), x, y, z);
+        b.scale.y = 0.85;
+      });
+      // 小燈球貼在樹冠表面，四面八方都有
+      const bulbs = [0xffd27a, 0xffb8e0, 0xb8e4ff, 0xfff1a8];
+      for (let i = 0; i < 24; i++) {
+        const v = -0.55 + (((i * 37) % 100) / 100) * 1.45; // 高低
+        const ang = i * 2.39996;
+        const h = Math.sqrt(Math.max(0, 1 - v * v));
+        ball(0.032, glow(bulbs[i % 4]), 0.03 + Math.cos(ang) * h * 0.46, 1.04 + v * 0.36, Math.sin(ang) * h * 0.34);
+      }
+      break;
+    }
+    case 'pass_gramophone': {
+      // 📀 唱片機：木頭小櫃子上一台黑膠轉盤＋金色大喇叭（按 E 播音樂）
+      const wood = mat(0x7a4a2a);
+      box(0.56, 0.42, 0.42, wood, 0, 0.21, 0);
+      box(0.6, 0.04, 0.46, mat(0x5a3420), 0, 0.44, 0);
+      for (const sx of [-1, 1]) box(0.2, 0.2, 0.01, mat(0x5a3420), sx * 0.13, 0.22, 0.215);
+      for (const sx of [-1, 1]) ball(0.018, mat(0xd9a84a, { metalness: 0.6, roughness: 0.3 }), sx * 0.05, 0.22, 0.225);
+      box(0.4, 0.06, 0.34, mat(0x3a2418), -0.04, 0.49, 0);
+      cyl(0.15, 0.15, 0.012, mat(0x141414), -0.06, 0.528, 0.01, 24);
+      cyl(0.045, 0.045, 0.014, mat(0xd84a4a), -0.06, 0.53, 0.01, 12);
+      const arm = box(0.02, 0.015, 0.18, mat(0xc0c0c0, { metalness: 0.6 }), 0.1, 0.545, 0.0);
+      arm.rotation.y = 0.5;
+      const gold = mat(0xd9a84a, { metalness: 0.6, roughness: 0.3 });
+      const neck = cyl(0.018, 0.022, 0.32, gold, 0.17, 0.66, -0.1);
+      neck.rotation.x = 0.25;
+      // 大喇叭：開口朝前上方
+      const horn = add(new THREE.CylinderGeometry(0.22, 0.02, 0.42, 20, 1, true), mat(0xd9a84a, { metalness: 0.6, roughness: 0.3, side: THREE.DoubleSide }), 0.15, 0.93, 0.02);
+      horn.rotation.x = 0.85;
+      horn.rotation.z = -0.15;
+      const lip = add(new THREE.TorusGeometry(0.22, 0.012, 6, 20), gold, 0.15 + 0.03, 0.93 + 0.14, 0.02 + 0.16);
+      lip.rotation.x = 0.85 - Math.PI / 2;
+      lip.rotation.z = -0.15;
+      break;
+    }
+    case 'pass_chandelier': {
+      // 💎 水晶吊燈：金色圓環＋垂下來的水晶，鏈子吊在半空（按 E 開關）
+      const gold = mat(0xd9a84a, { metalness: 0.6, roughness: 0.3 });
+      const Y = 1.85;
+      cyl(0.01, 0.01, 0.7, gold, 0, Y + 0.45);
+      const ring = torus(0.32, 0.025, gold, 0, Y, 0, Math.PI * 2, 24);
+      ring.rotation.x = Math.PI / 2;
+      const ring2 = torus(0.18, 0.02, gold, 0, Y + 0.16, 0, Math.PI * 2, 20);
+      ring2.rotation.x = Math.PI / 2;
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const arm = cyl(0.012, 0.012, 0.36, gold, Math.cos(a) * 0.16, Y + 0.08, Math.sin(a) * 0.16);
+        arm.rotation.set(Math.sin(a) * 0.9, 0, -Math.cos(a) * 0.9);
+        cyl(0.03, 0.03, 0.06, mat(0xf3ead8), Math.cos(a) * 0.32, Y + 0.05, Math.sin(a) * 0.32);
+        ball(0.035, glow(0xffe6a0), Math.cos(a) * 0.32, Y + 0.1, Math.sin(a) * 0.32);
+      }
+      const crystal = glass(0xdff2ff, 0.65);
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + 0.26;
+        const r = i % 2 ? 0.3 : 0.2;
+        const len = i % 2 ? 0.16 : 0.24;
+        cyl(0.003, 0.003, len, gold, Math.cos(a) * r, Y - len / 2, Math.sin(a) * r, 4);
+        const c = add(new THREE.OctahedronGeometry(0.035, 0), crystal, Math.cos(a) * r, Y - len - 0.03, Math.sin(a) * r);
+        c.scale.y = 1.7;
+      }
+      add(new THREE.OctahedronGeometry(0.06, 0), crystal, 0, Y - 0.32, 0).scale.y = 1.8;
+      break;
+    }
+    case 'pass_canopybed': {
+      // 🛏️ 四柱紗帳床：比睡鋪大一點，四根木柱上掛著半透明的紗帳
+      const z0 = -0.3;
+      const wood = mat(0xe8dccb);
+      box(0.86, 0.16, 1.46, wood, 0, 0.12, z0);
+      box(0.82, 0.12, 1.4, mat(0xfaf3e6), 0, 0.26, z0);
+      box(0.84, 0.06, 0.82, mat(0xb8a0d8), 0, 0.33, 0.02);
+      ball(0.13, mat(0xffffff), -0.18, 0.37, -0.82, 1.4, 0.6, 1);
+      ball(0.13, mat(0xffffff), 0.18, 0.37, -0.82, 1.4, 0.6, 1);
+      box(0.9, 0.7, 0.08, wood, 0, 0.45, -1.02);
+      const H = 1.85;
+      const posts = [[-0.43, 0.42], [0.43, 0.42], [-0.43, -1.02], [0.43, -1.02]];
+      for (const [x, z] of posts) {
+        cyl(0.03, 0.035, H, wood, x, H / 2, z, 8);
+        ball(0.045, wood, x, H + 0.02, z);
+      }
+      for (const z of [0.42, -1.02]) box(0.9, 0.05, 0.05, wood, 0, H - 0.02, z);
+      for (const x of [-0.43, 0.43]) box(0.05, 0.05, 1.48, wood, x, H - 0.02, z0 + 0.0);
+      // 紗帳：頂上一片＋四個角綁起來的布
+      const veil = mat(0xffffff, { transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, flatShading: false });
+      box(0.9, 0.01, 1.48, veil, 0, H - 0.04, z0 + 0.0);
+      for (const [x, z] of posts) {
+        const curtain = add(new THREE.CylinderGeometry(0.07, 0.07, H - 0.25, 10, 1, true), veil, x * 0.94, (H - 0.25) / 2 + 0.2, z + (z > 0 ? -0.04 : 0.04));
+        curtain.scale.z = 0.7;
+        add(new THREE.ConeGeometry(0.12, 0.25, 10, 1, true), veil, x * 0.94, 0.3, z + (z > 0 ? -0.04 : 0.04));
+        torus(0.06, 0.012, mat(0xd9a84a), x * 0.94, 0.95, z + (z > 0 ? -0.04 : 0.04)).rotation.x = Math.PI / 2;
+      }
+      break;
+    }
+    // ---------- 🌅 早安卡限定小家具（11/09） ----------
+    case 'login_lantern': {
+      // 🏮 星星紙燈籠：圓圓的米色紙燈籠，表面挖了小星星，裡面透出暖光，掛在小木架上
+      const wood = mat(0x7a5236);
+      box(0.05, 0.62, 0.05, wood, -0.16, 0.31, 0);
+      box(0.24, 0.04, 0.05, wood, -0.06, 0.6, 0);
+      cyl(0.006, 0.006, 0.1, mat(0x5a3c26), 0.05, 0.53, 0);
+      const paper = mat(0xf6e4c0, { emissive: 0xffb860, emissiveIntensity: 0.55, flatShading: false });
+      const l = ball(0.13, paper, 0.05, 0.36, 0);
+      l.scale.y = 1.12;
+      for (const y of [0.22, 0.5]) torus(0.07, 0.012, mat(0xc9533c), 0.05, y, 0).rotation.x = Math.PI / 2;
+      for (const [a, y] of [[0.3, 0.38], [1.6, 0.32], [2.6, 0.42], [-0.9, 0.3], [-2.0, 0.4]]) {
+        const st = add(new THREE.ExtrudeGeometry(star(0.028), { depth: 0.004, bevelEnabled: false }), glow(0xfff1b8), 0.05 + Math.sin(a) * 0.131, y, Math.cos(a) * 0.131);
+        st.rotation.y = a;
+      }
+      cyl(0.022, 0.022, 0.04, mat(0xc9533c), 0.05, 0.505, 0);
+      break;
+    }
+    case 'login_terrarium': {
+      // 🪴 玻璃小花園：木底座＋玻璃圓罩，裡面有青苔、小蘑菇、小石頭
+      cyl(0.17, 0.19, 0.06, mat(0x8a5e3a), 0, 0.03, 0, 18);
+      cyl(0.15, 0.15, 0.03, mat(0x4f8a3c, { flatShading: false }), 0, 0.075, 0, 18);
+      ball(0.05, mat(0x6aa84f), -0.06, 0.08, 0.03, 1, 0.5, 1);
+      ball(0.04, mat(0x5a9a45), 0.05, 0.08, -0.05, 1, 0.5, 1);
+      for (const [x, z, h, c] of [[0.04, 0.05, 0.08, 0xe8584a], [-0.03, -0.05, 0.06, 0xf3ecdf], [0.08, -0.01, 0.05, 0xe8584a]]) {
+        cyl(0.008, 0.01, h, mat(0xf3ead8), x, 0.09 + h / 2, z, 6);
+        dome(0.028, mat(c), x, 0.09 + h, z, 0.7);
+      }
+      add(new THREE.DodecahedronGeometry(0.03, 0), mat(0x9a9488), -0.08, 0.1, -0.02);
+      const dm = add(new THREE.SphereGeometry(0.16, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), glass(0xdff2ff, 0.25), 0, 0.09, 0);
+      dm.scale.y = 1.35;
+      ball(0.02, mat(0x8a5e3a), 0, 0.31, 0);
+      break;
+    }
+    case 'login_candle': {
+      // 🕯️ 香氛蠟燭罐：玻璃罐裡一根奶油色蠟燭，小火苗＋木蓋放旁邊、乾燥花一小束
+      add(new THREE.CylinderGeometry(0.075, 0.075, 0.13, 18, 1, true), glass(0xf3d9b0, 0.4), 0, 0.065, 0);
+      cyl(0.075, 0.075, 0.01, glass(0xf3d9b0, 0.5), 0, 0.005, 0, 18);
+      cyl(0.068, 0.068, 0.08, mat(0xf6ead2, { flatShading: false }), 0, 0.045, 0, 18);
+      cyl(0.003, 0.003, 0.025, mat(0x2a1a14), 0, 0.1, 0, 4);
+      const fl = add(new THREE.ConeGeometry(0.012, 0.04, 8), glow(0xffc46b), 0, 0.13, 0);
+      fl.scale.set(1, 1, 1);
+      cyl(0.08, 0.08, 0.02, mat(0x8a5e3a), 0.13, 0.01, 0.05, 18);
+      for (const [x, z, c] of [[-0.11, 0.04, 0xb8a0d8], [-0.12, 0.0, 0xe8b0c0], [-0.1, -0.03, 0xf3ecdf]]) {
+        const st = cyl(0.003, 0.003, 0.14, mat(0x6a8a4a), x, 0.07, z, 4);
+        st.rotation.z = 0.25;
+        ball(0.015, mat(c), x - 0.018, 0.14, z);
+      }
+      break;
+    }
+    case 'login_foxpillow': {
+      // 🦊 狐狸抱枕：橘色圓圓的狐狸臉抱枕，白色臉頰、三角耳朵
+      const orange = mat(0xf08a3c);
+      const white = mat(0xfaf3e6);
+      const head = ball(0.24, orange, 0, 0.22, 0, 1, 0.9, 0.55);
+      head.rotation.x = -0.15;
+      for (const sx of [-1, 1]) {
+        const ear = cone(0.08, 0.16, orange, sx * 0.15, 0.43, -0.01, 4);
+        ear.rotation.z = -sx * 0.35;
+        const ein = cone(0.045, 0.09, mat(0x2a1a14), sx * 0.15, 0.42, 0.03, 4);
+        ein.rotation.z = -sx * 0.35;
+        ball(0.1, white, sx * 0.1, 0.15, 0.08, 1.2, 0.8, 0.5);
+      }
+      for (const sx of [-1, 1]) {
+        ball(0.022, mat(0x2a1a14), sx * 0.08, 0.25, 0.125);
+        ball(0.025, mat(0xffa3ad), sx * 0.13, 0.19, 0.115, 1, 0.6, 0.4);
+      }
+      ball(0.022, mat(0x2a1a14), 0, 0.19, 0.135);
+      break;
+    }
     default:
       box(0.3, 0.3, 0.3, mat(0xffffff));
   }
@@ -1452,7 +1675,7 @@ export function buildFurniture(id, opts = {}) {
       o.receiveShadow = true;
     }
   });
-  if (opts.color) tint(g, FURNITURE_COLORS[opts.color]);
+  if (opts.color) tint(g, FURNITURE_COLORS[opts.color] ?? PASS_COLORS.find((c) => c.id === opts.color));
   return g;
 }
 
@@ -1484,10 +1707,29 @@ const tintCache = new Map();
 function tint(g, cv) {
   if (!cv?.hue && cv?.hue !== 0) return;
   const hsl = {};
+  // 🎫 跳色：這件家具「面積最大」的顏色用主色，其他有顏色的小部分（坐墊、抽屜、床墊）用第二個顏色
+  let mainMat = null;
+  if (cv.duo) {
+    const area = new Map();
+    g.traverse((o) => {
+      if (!o.isMesh || !o.material?.isMeshStandardMaterial) return;
+      o.geometry.computeBoundingSphere();
+      const r = o.geometry.boundingSphere.radius * Math.max(o.scale.x, o.scale.y, o.scale.z);
+      area.set(o.material, (area.get(o.material) ?? 0) + r * r);
+    });
+    let best = -1;
+    for (const [m, a] of area) {
+      m.color.getHSL(hsl);
+      const wood = hsl.h > 0.03 && hsl.h < 0.13 && hsl.l < 0.42;
+      if (hsl.s < 0.15 || wood || m.transparent) continue;
+      if (a > best) [best, mainMat] = [a, m];
+    }
+  }
   g.traverse((o) => {
     if (!o.isMesh || !o.material?.isMeshStandardMaterial) return;
     const m = o.material;
-    const key = `${m.uuid}|${cv.id}`;
+    const role = cv.duo ? (m === mainMat ? 'p' : 'g') : '';
+    const key = `${m.uuid}|${cv.id}|${role}`;
     if (!tintCache.has(key)) {
       m.color.getHSL(hsl);
       const wood = hsl.h > 0.03 && hsl.h < 0.13 && hsl.l < 0.42;
@@ -1495,9 +1737,14 @@ function tint(g, cv) {
       else {
         const c = m.clone();
         c.color.setHSL(cv.hue, Math.max(cv.sat, hsl.s * 0.7), Math.min(0.85, Math.max(0.15, hsl.l + cv.light)));
+        // 🎫 月票跳色：固定的顏色（保留一點原本的深淺，看得出立體）
+        const shade = (h, sa, l) => c.color.setHSL(h, sa, Math.min(0.94, Math.max(0.2, l + (hsl.l - 0.6) * 0.35)));
+        if (cv.l != null) shade(cv.hue, cv.sat, cv.l);
+        if (cv.duo && role === 'g') shade(cv.duo.hue, cv.duo.sat, cv.duo.l);
         tintCache.set(key, c);
       }
     }
     o.material = tintCache.get(key);
   });
 }
+

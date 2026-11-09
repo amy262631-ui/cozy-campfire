@@ -29,7 +29,15 @@ export const CABIN = {
   stairX1: 3.1,
   stairBottom: 2.8, // 樓梯最下面一階（z）
 };
-export const TENT_SHAPE_BY_ID = Object.fromEntries(TENT_SHAPES.map((s) => [s.id, s]));
+/**
+ * 🎫 月票小屋（11/09 構圖階段，作者確認前不放進小舖 TENT_SHAPES，伺服器也還沒有）
+ *   🔭 玻璃星空圓頂屋 300（兩種月票）、🌳 私人樹屋 500（星空月票，有二樓）
+ */
+export const PASS_SHAPES = [
+  { id: 'stardome', icon: '🔭', name: t('玻璃星空圓頂屋'), price: 300, pass: 1, kind: 'round', R: 3.8, light: 2.4, style: 'log' },
+  { id: 'treehouse', icon: '🌳', name: t('私人樹屋'), price: 500, pass: 2, kind: 'rect', W: 3.4, D: 3.4, light: 3.6, style: 'log', loft: true },
+];
+export const TENT_SHAPE_BY_ID = Object.fromEntries([...TENT_SHAPES, ...PASS_SHAPES].map((s) => [s.id, s]));
 export const shapeOf = (id) => TENT_SHAPE_BY_ID[id] ?? TENT_SHAPES[0];
 
 const GAP = 0.3; // 門口開口（弧度的一半）
@@ -184,6 +192,11 @@ export function buildTentShell(shapeId, mats, { outside = false, noPole = false 
     }
   }
   if (sh.id === 'cabin') buildCabin(sh, mats, add, outside);
+  if (sh.id === 'stardome') buildStarDome(sh, mats, add, outside, g);
+  if (sh.id === 'treehouse') {
+    if (outside) buildTreeHouseOutside(mats, add, g);
+    else buildTreeHouseInside(sh, mats, add, g);
+  }
   return g;
 }
 
@@ -327,3 +340,367 @@ export const tentDoorZ = (shapeId) => {
   const sh = shapeOf(shapeId);
   return sh.kind === 'rect' ? sh.D - 0.05 : sh.R - 0.05;
 };
+
+// ───────────── 🎫 月票小屋 ─────────────
+const passMat = {};
+const pm = (k, make) => (passMat[k] ??= make());
+const glassMat = () =>
+  pm('glass', () => new THREE.MeshStandardMaterial({ color: 0xbfe2ff, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+const frostMat = () =>
+  pm('frost', () => new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.6, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
+const brassMat = () => pm('brass', () => new THREE.MeshStandardMaterial({ color: 0xd9a84a, roughness: 0.35, metalness: 0.6, flatShading: true }));
+const glowMat = (c = 0xffd98a) => pm(`glow${c}`, () => new THREE.MeshBasicMaterial({ color: c }));
+const leafMat = (i) => pm(`leaf${i}`, () => new THREE.MeshStandardMaterial({ color: [0x4f8a3c, 0x5f9c45, 0x3f7533, 0x6aa84f][i % 4], roughness: 1, flatShading: true }));
+const barkMat = () => pm('bark', () => new THREE.MeshStandardMaterial({ color: 0x5e4029, roughness: 1, flatShading: true }));
+const ropeMat = () => pm('rope', () => new THREE.MeshStandardMaterial({ color: 0xc9a46a, roughness: 1 }));
+
+/** 圓圓、邊緣柔柔的光點貼圖（星星用，不要方塊） */
+function dotTexture() {
+  return pm('dotTex', () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const x = c.getContext('2d');
+    const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.25, 'rgba(255,255,255,0.85)');
+    g.addColorStop(0.55, 'rgba(255,255,255,0.18)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g;
+    x.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  });
+}
+/** 夜空底色：頭頂深藍、地平線帶一點紫，中間斜斜一條淡淡的銀河 */
+function skyTexture() {
+  return pm('skyTex', () => {
+    const W = 512;
+    const H = 256;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#04071c');
+    g.addColorStop(0.55, '#0c1236');
+    g.addColorStop(1, '#2a2052');
+    x.fillStyle = g;
+    x.fillRect(0, 0, W, H);
+    let seed = 11;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    // 銀河：沿著一條斜線灑很多半透明的霧點
+    for (let i = 0; i < 900; i++) {
+      const u = rnd();
+      const off = (rnd() - 0.5) * (rnd() * 70);
+      const px = u * W;
+      const py = H * 0.25 + Math.sin(u * Math.PI * 2) * 40 + off;
+      const r = 6 + rnd() * 18;
+      const gg = x.createRadialGradient(px, py, 0, px, py, r);
+      const tint = rnd() < 0.5 ? '180,190,255' : '230,200,255';
+      gg.addColorStop(0, `rgba(${tint},0.08)`);
+      gg.addColorStop(1, `rgba(${tint},0)`);
+      x.fillStyle = gg;
+      x.fillRect(px - r, py - r, r * 2, r * 2);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = THREE.RepeatWrapping;
+    return t;
+  });
+}
+/** 一片星空：漸層夜空＋銀河＋大中小三種圓星星（有的偏暖、有的偏藍）。圓頂屋裡抬頭看得到 */
+function starField(r = 16) {
+  const grp = new THREE.Group();
+  grp.name = 'stars';
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(r + 2, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2),
+    pm('skyMat', () => new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false, depthWrite: false })),
+  );
+  sky.renderOrder = -1;
+  grp.add(sky);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (const [n, size, op] of [[520, 0.22, 0.75], [140, 0.42, 0.9], [26, 0.75, 1]]) {
+    const pos = [];
+    const col = [];
+    for (let i = 0; i < n; i++) {
+      const a = rnd() * Math.PI * 2;
+      const y = 0.12 + Math.pow(rnd(), 0.8) * 0.88;
+      const h = Math.sqrt(1 - y * y);
+      pos.push(Math.cos(a) * h * r, y * r, Math.sin(a) * h * r);
+      const k = rnd();
+      const c = k < 0.18 ? [1, 0.9, 0.7] : k < 0.36 ? [0.75, 0.85, 1] : [1, 1, 1];
+      col.push(...c);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    const m = pm(`stars${size}`, () => new THREE.PointsMaterial({ size, map: dotTexture(), vertexColors: true, transparent: true, opacity: op, depthWrite: false, sizeAttenuation: true, fog: false }));
+    grp.add(new THREE.Points(geo, m));
+  }
+  return grp;
+}
+
+/** 🔭 玻璃星空圓頂屋：矮矮的原木圍牆＋透明玻璃圓頂（黃銅骨架），晚上躺著看得到星星 */
+function buildStarDome(sh, mats, add, outside, g) {
+  const R = sh.R;
+  const BASE = 0.75; // 原木圍牆高度
+  const SY = 0.82; // 圓頂壓扁一點
+  // 原木圍牆（門口留空）
+  add(new THREE.CylinderGeometry(R, R, BASE, 40, 1, true, GAP, Math.PI * 2 - GAP * 2), mats.canvas, 0, BASE / 2, 0);
+  const cap = add(new THREE.TorusGeometry(R, 0.09, 6, 40, Math.PI * 2 - GAP * 2), mats.wood, 0, BASE, 0);
+  cap.rotation.x = Math.PI / 2;
+  cap.rotation.z = Math.PI / 2 + GAP;
+  // 玻璃圓頂
+  const glass = add(new THREE.SphereGeometry(R, 40, 16, 0, Math.PI * 2, 0, Math.PI / 2), glassMat(), 0, BASE, 0);
+  glass.scale.y = SY;
+  glass.renderOrder = 2;
+  // 黃銅骨架：8 條經線＋2 圈緯線＋頂端小圓環
+  for (let i = 0; i < 8; i++) {
+    const rib = add(new THREE.TorusGeometry(R + 0.01, 0.04, 5, 24, Math.PI / 2), brassMat(), 0, BASE, 0);
+    rib.scale.y = SY;
+    rib.rotation.y = (i / 8) * Math.PI * 2 + Math.PI / 8; // 1/4 圓：從地面彎到頂
+  }
+  for (const k of [0.45, 0.8]) {
+    const ring = add(new THREE.TorusGeometry(R * Math.sqrt(1 - k * k) + 0.01, 0.035, 5, 40), brassMat(), 0, BASE + R * k * SY, 0);
+    ring.rotation.x = Math.PI / 2;
+  }
+  const top = add(new THREE.TorusGeometry(0.35, 0.07, 6, 16), brassMat(), 0, BASE + R * SY, 0);
+  top.rotation.x = Math.PI / 2;
+  // 圓拱木門框（從圍牆往上，穿過玻璃）
+  const dz = R * Math.cos(GAP) - 0.02;
+  for (const sx of [-1, 1]) add(new THREE.BoxGeometry(0.14, 1.9, 0.16), mats.wood, sx * 1.05, 0.95, dz);
+  const arch = add(new THREE.TorusGeometry(1.05, 0.08, 6, 16, Math.PI), mats.wood, 0, 1.9, dz);
+  arch.rotation.z = 0;
+  if (outside) {
+    // 作者 11/09：外面看進去不顯示真正的家具 → 玻璃下半霧面＋屋裡暖暖的燈光（看得出有人住）
+    const frost = add(new THREE.SphereGeometry(R + 0.02, 40, 6, 0, Math.PI * 2, Math.PI / 2 - 0.62, 0.62), frostMat(), 0, BASE, 0);
+    frost.scale.y = SY;
+    frost.renderOrder = 3;
+    const warm = add(new THREE.CircleGeometry(R - 0.1, 32), glowMat(0xe9bf86), 0, BASE + 0.02, 0);
+    warm.rotation.x = -Math.PI / 2;
+    // 門前的小木平台
+    add(new THREE.BoxGeometry(2.6, 0.12, 1.0), mats.wood, 0, 0.06, R + 0.35);
+    // 門邊的望遠鏡（三腳架）
+    const tx = 2.3;
+    const tz = R + 0.5;
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const leg = add(new THREE.CylinderGeometry(0.025, 0.025, 1.2, 5), mats.wood, tx + Math.cos(a) * 0.22, 0.58, tz + Math.sin(a) * 0.22);
+      leg.rotation.set(Math.sin(a) * 0.35, 0, -Math.cos(a) * 0.35);
+    }
+    const tube = add(new THREE.CylinderGeometry(0.07, 0.11, 1.0, 10), brassMat(), tx, 1.3, tz);
+    tube.rotation.x = -0.9;
+    tube.rotation.z = 0.3;
+    // 圍牆上一圈小星星燈
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) < GAP + 0.1) continue;
+      add(new THREE.OctahedronGeometry(0.07, 0), glowMat(0xfff1b8), Math.sin(a) * (R + 0.05), BASE + 0.12, Math.cos(a) * (R + 0.05));
+    }
+  } else {
+    // 屋裡：抬頭就是星空（只在玻璃後面看得到）
+    g.add(starField());
+    // 一顆小月亮
+    add(new THREE.SphereGeometry(0.7, 16, 12), glowMat(0xfff4d6), -6, 11, -7);
+    const halo = new THREE.Sprite(pm('halo', () => new THREE.SpriteMaterial({ map: dotTexture(), color: 0xfff0c8, transparent: true, opacity: 0.35, depthWrite: false, fog: false })));
+    halo.position.set(-6, 11, -7);
+    halo.scale.setScalar(4.5);
+    g.add(halo);
+  }
+}
+
+/** 一團葉子 */
+function leafBall(add, x, y, z, r, i) {
+  const m = add(new THREE.IcosahedronGeometry(r, 0), leafMat(i), x, y, z);
+  m.rotation.set(i * 0.7, i * 1.3, i * 0.4);
+  m.scale.y = 0.75;
+  return m;
+}
+
+/** 🌳 私人樹屋（外面）：大樹幹撐著一間小木屋，樹冠蓋在屋頂上，繩梯爬上門口，旁邊有鞦韆 */
+function buildTreeHouseOutside(mats, add) {
+  const P = 1.6; // 平台高度
+  const W = 2.7;
+  const D = 2.4;
+  const WALL = 2.6;
+  const RH = 1.4;
+  // 樹幹＋樹根
+  // 樹幹在屋子左後角，從地上一路穿過屋簷長到樹冠裡
+  const TX = -3.5;
+  const TZ = 1.6;
+  const TH = P + WALL + RH + 1.4;
+  add(new THREE.CylinderGeometry(0.55, 0.9, TH, 9), barkMat(), TX, TH / 2, TZ);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.3;
+    const root = add(new THREE.ConeGeometry(0.38, 1.5, 5), barkMat(), TX + Math.cos(a) * 0.9, 0.3, TZ + Math.sin(a) * 0.9);
+    root.rotation.set(Math.sin(a) * 1.1, 0, -Math.cos(a) * 1.1);
+  }
+  // 平台＋斜撐
+  add(new THREE.BoxGeometry(W * 2 + 0.6, 0.22, D * 2 + 1.4), mats.wood, 0, P, 0.35);
+  for (const [x, z] of [[W, D + 1.0], [-W, D + 1.0], [W, -D], [-W, -D]]) add(new THREE.CylinderGeometry(0.12, 0.14, P, 6), barkMat(), x, P / 2, z);
+  // 牆（木板）
+  const box = (w, h, d, x, y, z, m = mats.canvas) => add(new THREE.BoxGeometry(w, h, d), m, x, y, z);
+  box(W * 2, WALL, 0.12, 0, P + WALL / 2, -D);
+  box(0.12, WALL, D * 2, W, P + WALL / 2, 0);
+  box(0.12, WALL, D * 2, -W, P + WALL / 2, 0);
+  box(W - 0.6, WALL, 0.12, -(W + 0.6) / 2, P + WALL / 2, D);
+  box(W - 0.6, WALL, 0.12, (W + 0.6) / 2, P + WALL / 2, D);
+  box(1.2, WALL - 1.9, 0.12, 0, P + 1.9 + (WALL - 1.9) / 2, D);
+  // 山牆
+  const tri = new THREE.Shape();
+  tri.moveTo(-W, 0);
+  tri.lineTo(W, 0);
+  tri.lineTo(0, RH);
+  tri.closePath();
+  for (const z of [D + 0.06, -D - 0.06]) add(new THREE.ShapeGeometry(tri), mats.accentDouble ?? mats.canvas, 0, P + WALL, z);
+  // 斜屋頂
+  const slope = Math.atan2(RH, W);
+  const len = Math.hypot(W + 0.5, RH + 0.35);
+  for (const sx of [-1, 1]) {
+    const r = add(new THREE.BoxGeometry(len, 0.14, D * 2 + 0.9), mats.accentDouble ?? mats.accent, (sx * (W + 0.5)) / 2 - sx * 0.05, P + WALL + RH / 2 - 0.1, 0);
+    r.rotation.z = -sx * slope;
+  }
+  // 門
+  box(1.1, 1.85, 0.08, 0, P + 0.93, D + 0.02, mats.wood);
+  add(new THREE.SphereGeometry(0.06, 8, 6), mats.gold ?? brassMat(), 0.38, P + 0.95, D + 0.09);
+  // 圓窗（亮著）
+  const round = (x, y, z, ry, r = 0.36) => {
+    const w = add(new THREE.CircleGeometry(r, 16), mats.window ?? glowMat(), x, y, z);
+    w.rotation.y = ry;
+    const fr = add(new THREE.TorusGeometry(r, 0.06, 6, 16), mats.wood, x, y, z);
+    fr.rotation.y = ry;
+  };
+  round(-1.75, P + 1.45, D + 0.07, 0);
+  round(1.75, P + 1.45, D + 0.07, 0);
+  round(W + 0.07, P + 1.5, 0.6, Math.PI / 2);
+  round(-W - 0.07, P + 1.5, 0.6, -Math.PI / 2);
+  round(0, P + WALL + 0.55, D + 0.08, 0, 0.28);
+  // 門口小陽台欄杆（前面中間留給繩梯）
+  const fz = D + 1.0;
+  for (const sx of [-1, 1]) {
+    for (let x = 0.8; x <= W + 0.25; x += 0.42) box(0.06, 0.7, 0.06, sx * x, P + 0.45, fz, mats.wood);
+    box(W - 0.5, 0.07, 0.07, (sx * (W + 0.3 + 0.8)) / 2, P + 0.82, fz, mats.wood);
+  }
+  // 繩梯：從陽台垂到地上
+  for (const sx of [-1, 1]) {
+    const rope = add(new THREE.CylinderGeometry(0.025, 0.025, P + 0.1, 5), ropeMat(), sx * 0.32, P / 2, fz + 0.25);
+    rope.rotation.x = 0.12;
+  }
+  for (let i = 0; i < 6; i++) {
+    const y = 0.2 + i * (P / 6.2);
+    box(0.72, 0.06, 0.1, 0, y, fz + 0.25 + (P / 2 - y) * 0.12, mats.wood);
+  }
+  // 陽台的小桌子＋兩張椅子（作者 11/09：可以坐）
+  const tbx = 2.0;
+  const tbz = D + 0.55;
+  add(new THREE.CylinderGeometry(0.32, 0.32, 0.06, 12), mats.wood, tbx, P + 0.62, tbz);
+  add(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 6), mats.wood, tbx, P + 0.36, tbz);
+  for (const sx of [-1, 1]) {
+    const cx = tbx + sx * 0.62;
+    box(0.36, 0.06, 0.36, cx, P + 0.4, tbz, mats.wood);
+    box(0.06, 0.4, 0.36, cx + sx * 0.18, P + 0.6, tbz, mats.wood);
+    for (const [dx, dz] of [[-0.14, -0.14], [0.14, -0.14], [-0.14, 0.14], [0.14, 0.14]]) box(0.04, 0.3, 0.04, cx + dx, P + 0.25, tbz + dz, mats.wood);
+  }
+  add(new THREE.CylinderGeometry(0.06, 0.07, 0.12, 8), mats.accent, tbx, P + 0.71, tbz);
+  // 陽台掛的小燈籠
+  add(new THREE.CylinderGeometry(0.012, 0.012, 0.4, 4), ropeMat(), -1.0, P + WALL - 0.25, D + 0.5);
+  add(new THREE.SphereGeometry(0.13, 10, 8), glowMat(0xffc46b), -1.0, P + WALL - 0.55, D + 0.5);
+  // 樹冠：屋頂上面一大團、四周幾團
+  const top = P + WALL + RH;
+  const balls = [
+    [-1.6, top + 1.5, -1.2, 2.0], [0.4, top + 1.2, -1.0, 1.6], [-0.4, top + 2.6, -0.8, 1.5], [1.9, top + 0.6, -0.8, 1.3],
+    [-3.3, top + 0.9, 1.2, 1.4], [-2.8, top - 0.6, 0.9, 1.0], [-3.0, top + 1.6, -1.9, 1.3], [0.8, top + 2.3, 0.6, 1.1],
+    [-1.4, top + 0.9, 1.2, 1.0], [2.9, top - 0.5, 0.3, 0.9], [-2.2, top - 0.4, 2.0, 0.75], [1.6, top + 1.6, -2.0, 1.2],
+  ];
+  balls.forEach(([x, y, z, r], i) => leafBall(add, x, y, z, r, i));
+  // 樹幹往左伸一根粗樹枝，掛一個木板鞦韆
+  const bx = TX - 2.3;
+  const by = P + WALL - 0.2;
+  const branch = add(new THREE.CylinderGeometry(0.1, 0.2, 2.8, 6), barkMat(), (TX + bx) / 2 - 0.2, by + 0.25, TZ + 0.6);
+  branch.rotation.z = Math.PI / 2 + 0.2;
+  leafBall(add, bx - 0.5, by + 0.4, TZ + 0.6, 0.85, 3);
+  for (const dz of [-0.28, 0.28]) add(new THREE.CylinderGeometry(0.015, 0.015, by - 0.5, 4), ropeMat(), bx, (by + 0.5) / 2, TZ + 0.6 + dz);
+  box(0.4, 0.06, 0.7, bx, 0.5, TZ + 0.6, mats.wood);
+}
+
+/** 🌳 私人樹屋（屋裡）：跟小木屋一樣有二樓（同一套樓梯和閣樓），多了一根穿過屋子的大樹幹、看得到樹葉的窗、垂下來的藤蔓小燈 */
+function buildTreeHouseInside(sh, mats, add, g) {
+  const winGreen = pm('leafWin', () => new THREE.MeshBasicMaterial({ color: 0x6fae5a }));
+  buildCabin(sh, { ...mats, windowIn: winGreen }, add, false);
+  // 穿過屋子的樹幹（左後角，碰不到樓梯）
+  const H = CABIN.wall + CABIN.roof;
+  add(new THREE.CylinderGeometry(0.42, 0.55, H, 9), barkMat(), -sh.W + 0.75, H / 2, -sh.D + 0.75);
+  // 牆上的圓窗：外面是樹葉
+  for (const [x, y, z, ry] of [[sh.W - 0.03, 1.4, -0.6, -Math.PI / 2], [-sh.W + 0.03, 1.4, 1.2, Math.PI / 2], [sh.W - 0.03, CABIN.loftY + 1.2, -2.2, -Math.PI / 2]]) {
+    const w = add(new THREE.CircleGeometry(0.42, 16), winGreen, x, y, z);
+    w.rotation.y = ry;
+    const fr = add(new THREE.TorusGeometry(0.42, 0.06, 6, 16), mats.wood, x, y, z);
+    fr.rotation.y = ry;
+    for (const [dx, dy] of [[0.12, 0.08], [-0.15, -0.1], [0.05, -0.2]]) {
+      const lf = add(new THREE.CircleGeometry(0.11, 5), leafMat(1), x + (ry < 0 ? -0.01 : 0.01), y + dy, z + dx);
+      lf.rotation.y = ry;
+    }
+  }
+  // 藤蔓（作者 11/09：不要垂直站著，要從屋頂自然纏繞，也不能擋到擺設）
+  // ①沿著樹幹螺旋往上爬 ②從樹幹頂沿屋脊、屋頂斜面爬開 ③沿著四面牆的最上緣一圈，偶爾垂下短短一小段；中間夾著小燈泡
+  const TRX = -sh.W + 0.75;
+  const TRZ = -sh.D + 0.75;
+  const W = sh.W;
+  const D = sh.D;
+  const top = CABIN.wall;
+  const ridge = CABIN.wall + CABIN.roof;
+  const vine = (pts, leafEvery = 0.42, bulbEvery = 0) => {
+    const curve = new THREE.CatmullRomCurve3(pts.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
+    const len = curve.getLength();
+    add(new THREE.TubeGeometry(curve, Math.max(8, Math.round(len * 6)), 0.022, 4, false), pm('vineStem', () => new THREE.MeshStandardMaterial({ color: 0x5a5a2e, roughness: 1 })));
+    const n = Math.floor(len / leafEvery);
+    for (let i = 1; i < n; i++) {
+      const u = i / n;
+      const p = curve.getPointAt(u);
+      const tg = curve.getTangentAt(u);
+      const side = i % 2 ? 1 : -1;
+      const lf = add(new THREE.OctahedronGeometry(0.085, 0), leafMat(i % 4), p.x + tg.z * 0.06 * side, p.y - 0.03, p.z - tg.x * 0.06 * side);
+      lf.scale.set(1.5, 0.45, 1);
+      lf.rotation.y = Math.atan2(tg.x, tg.z) + side * 0.6;
+    }
+    if (bulbEvery) {
+      const m = Math.floor(len / bulbEvery);
+      for (let i = 1; i <= m; i++) {
+        const p = curve.getPointAt((i - 0.5) / m);
+        add(new THREE.SphereGeometry(0.05, 8, 6), glowMat(0xffe6a0), p.x, p.y - 0.07, p.z);
+      }
+    }
+    return curve;
+  };
+  // ① 繞著樹幹爬上去（從腰的高度開始，不擋地上的家具）
+  const helix = [];
+  for (let i = 0; i <= 28; i++) {
+    const a = i * 0.55;
+    const y = 0.9 + (i / 28) * (ridge - 1.1);
+    const r = 0.5 - (i / 28) * 0.08;
+    helix.push([TRX + Math.cos(a) * r, y, TRZ + Math.sin(a) * r]);
+  }
+  vine(helix, 0.38);
+  // ② 從樹幹頂沿著屋脊往前爬，兩條分支沿屋頂斜面往下
+  const yRoof = (x) => top + CABIN.roof * (1 - Math.abs(x) / W) - 0.12;
+  vine([[TRX + 0.3, yRoof(TRX + 0.3), TRZ], [-0.6, yRoof(-0.6), -D + 0.6], [0, yRoof(0), -0.6], [0.15, yRoof(0.15), 0.8], [-0.1, yRoof(-0.1), D - 0.3]], 0.45, 0.75);
+  vine([[0, yRoof(0), -0.6], [1.0, yRoof(1.0), -0.2], [2.0, yRoof(2.0), 0.3], [W - 0.2, yRoof(W - 0.2), 0.1]], 0.45, 0.7);
+  vine([[0.15, yRoof(0.15), 0.8], [-1.0, yRoof(-1.0), 1.3], [-2.2, yRoof(-2.2), 1.9], [-W + 0.2, yRoof(-W + 0.2), 2.2]], 0.45, 0.7);
+  // ③ 牆的最上緣一圈（微微下垂成弧）
+  const sag = (a, b, n = 4) => {
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const u = i / n;
+      pts.push([a[0] + (b[0] - a[0]) * u, top - 0.12 - Math.sin(u * Math.PI) * 0.18, a[1] + (b[1] - a[1]) * u]);
+    }
+    return pts;
+  };
+  const e = 0.12;
+  vine(sag([-W + e, -D + 1.4], [W - e, -D + e]), 0.5, 0.9);
+  vine(sag([W - e, -D + e], [W - e, D - e]), 0.5, 0.9);
+  vine(sag([-W + e, D - e], [-W + e, -D + 1.4]), 0.5, 0.9);
+  // 偶爾垂下一小段（靠牆，不超過 40 公分）
+  for (const [x, z] of [[W - 0.15, -1.6], [W - 0.15, 1.4], [-W + 0.15, 0.4], [0.8, -D + 0.15], [-1.4, -D + 0.15]]) {
+    vine([[x, top - 0.2, z], [x + 0.03, top - 0.38, z], [x - 0.02, top - 0.58, z]], 0.25);
+  }
+}

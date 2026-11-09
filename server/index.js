@@ -38,7 +38,7 @@ import { LAYOUT as CAMP_LAYOUT } from '../src/rooms/campLayout.js';
 import { PASS, PASS_TIERS, FREE, SPONSOR } from '../src/game/pass.js';
 import crypto from 'node:crypto';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack, hasLoft } from './homes.js';
-import { hasColors, FURNITURE_COLORS, fishFits } from '../src/game/furnitureCatalog.js';
+import { hasColors, FURNITURE_COLORS, fishFits, LOGIN_GIFTS } from '../src/game/furnitureCatalog.js';
 import { YARD_BY_ID, hasYard, isBigYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
 import { CHALLENGE_BY_ID, challengesOf } from '../src/game/dailyChallenge.js';
@@ -237,13 +237,13 @@ function vidOfHid(hid) {
 /**
  * 🏕️ 固定營位（11/07）：每頂帳篷有固定的門牌「A 區 7 號」，所有人看到的位置都一樣。
  *   homes[vid].plot = { z: 區（0＝A）, n: 1～24 }；作者一開始住 A 區 1 號（camp.json 的 author），之後也能像大家一樣搬走。
- *   新版第一次啟動：15 天內有上線的照最近上線排，每區先住 18 頂、每 4 號留 1 個空位（4、8、12…），前中後都有空地可以搬。
- *   15 天沒上線（月票有效、作者除外）讓出營位；帳篷、家具、菜園都留著，回來自動分新營位（優先原本那區）。
+ *   新版第一次啟動：7 天（原 15）內有上線的照最近上線排，每區先住 18 頂、每 4 號留 1 個空位（4、8、12…），前中後都有空地可以搬。
+ *   7 天（原 15）沒上線（月票有效、作者除外）讓出營位；帳篷、家具、菜園都留著，回來自動分新營位（優先原本那區）。
  */
 const CAMP_PLOTS = 24;
 const campMeta = asObject(await storage.load('camp.json')); // { author: vid, migrated: 時間 }
 const saveCamp = () => saveJson('camp.json', campMeta);
-const RELEASE_MS = 15 * 864e5;
+const RELEASE_MS = 7 * 864e5; // 11/08 作者：15 天改 7 天（7 天沒來就算不玩了，讓位給新人；回來自動分空位）;
 const zoneName = (z) => String.fromCharCode(65 + (z % 26)) + (z >= 26 ? String(Math.floor(z / 26) + 1) : '');
 const MOVE_PRICE = 100;
 const STAR_FREE_MOVES = 2;
@@ -311,9 +311,9 @@ function migrateCamp() {
   campMeta.migrated = now;
   saveCamp();
   saveJson('homes.json', homes);
-  console.log(`[營地] 固定營位搬遷完成：${n} 頂分到營位，${list.length - n} 頂超過 15 天沒上線先不分`);
+  console.log(`[營地] 固定營位搬遷完成：${n} 頂分到營位，${list.length - n} 頂超過 7 天沒上線先不分`);
 }
-/** 讓位：15 天沒上線（月票有效、作者除外）讓出營位，每小時檢查一次 */
+/** 讓位：7 天沒上線（月票有效、作者除外）讓出營位，每小時檢查一次 */
 setInterval(() => {
   const now = Date.now();
   let n = 0;
@@ -326,7 +326,7 @@ setInterval(() => {
   }
   if (n) {
     saveJson('homes.json', homes);
-    console.log(`[營地] ${n} 頂帳篷超過 15 天沒上線，讓出營位`);
+    console.log(`[營地] ${n} 頂帳篷超過 7 天沒上線，讓出營位`);
   }
 }, 3600000);
 /** 每一區住了幾頂（換區選單用） */
@@ -335,6 +335,17 @@ function zoneCounts() {
   for (const h of Object.values(homes)) if (h?.tent && h.plot) c[h.plot.z] = (c[h.plot.z] ?? 0) + 1;
   const max = Math.max(1, c.length);
   return Array.from({ length: max }, (_, z) => c[z] ?? 0);
+}
+/** 👣 帳篷營地每一區現在幾個人（11/08 作者：換區格子旁邊要看得到）：在那一區走動的人（同分流）＋在那一區帳篷裡的人 */
+function zoneOnline(ch, len) {
+  const out = Array(len).fill(0);
+  const c = channels.get(ch);
+  if (c) for (const [k, r] of c.rooms) if (baseRoom(k) === 'campground') { const z = campZoneOf(k); if (z < len) out[z] += r.players.size; }
+  for (const [owner, r] of homeRooms) {
+    const z = homes[owner]?.plot?.z;
+    if (r.players.size && z != null && z < len) out[z] += r.players.size;
+  }
+  return out;
 }
 /** 帳篷營地某一區：長度 24 的陣列，第 i 格＝那一區 i+1 號（沒人住＝null） */
 function campList(zone = 0, selfVid = null) {
@@ -1050,6 +1061,26 @@ if (fs.existsSync(distDir)) {
     res.send(enc === 'br' ? p.br : p.gz);
   });
   app.use('/assets', express.static(assetsDir, { immutable: true, maxAge: '1y' }));
+  // 📲 手機桌面捷徑的名字跟著玩家的語言（11/09）：遊戲會帶 ?lang=；沒帶就看瀏覽器語言
+  app.get('/manifest.webmanifest', (req, res, next) => {
+    let base;
+    try {
+      base = JSON.parse(fs.readFileSync(path.join(distDir, 'manifest.webmanifest'), 'utf8'));
+    } catch {
+      return next();
+    }
+    const al = String(req.headers['accept-language'] ?? '').toLowerCase();
+    const q = String(req.query.lang ?? '');
+    const lg = ['zh-Hant', 'en', 'ja', 'ko'].includes(q) ? q : al.startsWith('zh') ? 'zh-Hant' : al.startsWith('ja') ? 'ja' : al.startsWith('ko') ? 'ko' : al ? 'en' : 'zh-Hant';
+    const L = {
+      en: ['Misty Forest Campground', 'Misty Camp', 'Too tired to go out tonight? Come sit by the fire for a while.'],
+      ja: ['霧の森キャンプ場', '霧の森キャンプ', '出かける元気がない夜は、焚き火のそばでひと休み。'],
+      ko: ['안개 숲 캠핑장', '안개 숲 캠핑', '나가기 힘든 밤엔 모닥불 옆에 잠깐 앉아요.'],
+    }[lg];
+    if (L) Object.assign(base, { name: L[0], short_name: L[1], description: L[2], lang: lg });
+    res.set('Cache-Control', 'no-cache');
+    res.type('application/manifest+json').send(JSON.stringify(base));
+  });
   app.use(express.static(distDir));
 }
 
@@ -1159,7 +1190,14 @@ app.get(['/stats', '/api/stats'], (req, res) => {
       return `<tr><td>${nm}</td><td>${n} 天</td><td>${players[v]?.streak ?? '-'} 天</td><td>${h?.tent ? (h.plot ? `${zoneName(h.plot.z)} 區 ${h.plot.n} 號` : '有') : '-'}</td><td>${prev.get(v) ?? 0} 天</td></tr>`;
     })
     .join('');
+  const iaSum = {};
+  for (const k of allDays.slice(0, 7)) for (const [ia, n] of Object.entries(stats[k]?.inapp ?? {})) iaSum[ia] = (iaSum[ia] ?? 0) + n;
+  const iaNames = { line: 'LINE', ig: 'Instagram', fb: 'Facebook', threads: 'Threads', wechat: '微信', iframe: '嵌在別的網站' };
+  const iaLine = Object.keys(iaSum).length
+    ? Object.entries(iaSum).sort((a, b) => b[1] - a[1]).map(([ia, n]) => `${iaNames[ia] ?? ia} ${n} 次`).join('・')
+    : '還沒有（11/08 之後才開始統計）';
   const regTable = `<h3>👥 固定玩家（最近 7 天）</h3>
+<p>📲 從手機桌面圖示打開的次數（最近 7 天）：${allDays.slice(0, 7).reduce((n, k) => n + (stats[k]?.pwa ?? 0), 0)} 次<br>📱 從 App 內建瀏覽器或嵌入網頁進來的次數：${iaLine}<br><small>這些人常常存不了進度，下次進來會被當成新的人（「只來 1 天」會偏多）。遊戲會跳提示請他們用瀏覽器打開。</small></p>
 <p>來 3 天以上（固定玩家）<b>${bw.reg}</b> 人${trend(bw.reg, bp.reg)}・其中 5 天以上（常客）<b>${bw.fan}</b> 人${trend(bw.fan, bp.fan)}・來 2 天 ${bw.two} 人・只來 1 天 ${bw.one} 人<br><small>箭頭是跟再前一週比。名字是帳篷門牌上的名字；沒買帳篷的顯示「（沒帳篷）」。</small></p>
 <div class="wrap"><table><tr><th>名字</th><th>這週來了</th><th>連續天數</th><th>營位</th><th>上週來了</th></tr>${regs || '<tr><td colspan="5">這週還沒有來 3 天以上的玩家</td></tr>'}</table></div>`;
   // 🎫 營火月票的收入：這個月（台北時間）付款成功的訂單
@@ -1815,6 +1853,10 @@ io.on('connection', (socket) => {
       const vid = String(data.vid ?? '').slice(0, 24);
       if (vid && !d.vids.includes(vid) && d.vids.length < 50000) d.vids.push(vid);
       if (data.touch) d.touch++;
+      // 📱 App 內建瀏覽器／嵌入網頁（11/08：看「只來一天」是不是被重複算）
+      const ia = ['line', 'ig', 'fb', 'threads', 'wechat', 'iframe'].includes(data.inapp) ? data.inapp : null;
+      if (ia) (d.inapp ??= {})[ia] = (d.inapp[ia] ?? 0) + 1;
+      if (data.pwa) d.pwa = (d.pwa ?? 0) + 1; // 📲 從手機桌面圖示打開
       // 來源統計：從哪裡來的、各來源有幾個新旅人
       d.src ??= {};
       const e = (d.src[src] ??= { v: 0, n: 0 });
@@ -1887,11 +1929,21 @@ io.on('connection', (socket) => {
         }
         wal.streak = wal.last === yesterday ? wal.streak + 1 : 1;
         wal.last = d;
-        const gain = 2 + Math.min(wal.streak, 7);
+        // 🌅 每日登入卡（11/09 作者）：來營地「第幾天」一輪 7 天，漏一天不歸零、接著算
+        //    第 1～6 天 3～8 顆；第 7 天大禮 30 顆＋一件限定小家具（照順序一輪一件，拿完就只送松果）
+        wal.ld = ((wal.ld ?? 0) % 7) + 1;
+        let gift = null;
+        let gain = 2 + wal.ld;
+        if (wal.ld === 7) {
+          gain = 30;
+          const next = LOGIN_GIFTS.find((id) => !(homes[myVid]?.gifts ?? []).includes(id));
+          if (next) gift = grantGift(myVid, next);
+        }
         wal.pc += gain;
         wal.tot += gain;
         saveJson('players.json', players);
-        daily = { gain, streak: wal.streak };
+        const tomorrow = dayKey(new Date(Date.now() + 86400000));
+        daily = { gain, streak: wal.streak, ld: wal.ld, gift, next: LOGIN_GIFTS.find((id) => !(homes[myVid]?.gifts ?? []).includes(id)) ?? null, tmr: dailyOutfit(tomorrow).id };
       }
       // 🔥 營火月票：每天第一次進來多領松果
       const tier = passTier(wal);
@@ -2717,7 +2769,8 @@ io.on('connection', (socket) => {
   socket.on('movePrice', (data, ack) => ack?.({ ok: true, cost: movePrice(player?.vid) }));
   socket.on('campList', (data = {}, ack) => {
     const zone = Math.floor(num(data?.zone, 0, 59, campZone));
-    ack?.({ ok: true, zone, tents: campList(zone, player?.vid), zones: zoneCounts(), mine: homes[player?.vid]?.plot ?? null, reserved: zone === 0 && !campMeta.author ? [1] : [] });
+    const zones = zoneCounts();
+    ack?.({ ok: true, zone, tents: campList(zone, player?.vid), zones, online: zoneOnline(player?.ch, Math.max(zones.length + 1, zone + 1)), mine: homes[player?.vid]?.plot ?? null, reserved: zone === 0 && !campMeta.author ? [1] : [] });
   });
 
   // ---------- 🏛️ 營地標本櫃：大家一起捐，寫上第一個捐的人 ----------
@@ -3385,7 +3438,10 @@ io.on('connection', (socket) => {
       })
       .sort((a, b) => b.unread - a.unread || b.online - a.online || (b.last?.at ?? 0) - (a.last?.at ?? 0));
     const reqs = (w.frq ?? []).filter((f) => players[f]).map((f) => ({ hid: homeId(f), name: nameOfVid(f) }));
-    ack?.({ ok: true, code: homeId(me), friends, reqs, badge: socialBadge(me) });
+    // 11/08 作者：已經加過的人（好友、我送出的、對方送來的）不要再出現在「＋ 加好友」：回傳他們現在的連線 id
+    const knownVids = new Set([...friendsOf(w), ...(w.frq ?? [])]);
+    const known = [...io.sockets.sockets.values()].filter((s) => knownVids.has(s.data.vid)).map((s) => s.id);
+    ack?.({ ok: true, code: homeId(me), friends, reqs, known, badge: socialBadge(me) });
   });
   let lastFriendReq = 0;
   socket.on('friendAdd', (data = {}, ack) => {

@@ -46,6 +46,18 @@ export class ConfirmBuy {
     return new Promise((resolve) => (this.resolve = resolve));
   }
 
+  /** 🖼️ 只看預覽（不是買東西）：圖＋名字＋怎麼拿，一個「知道了」 */
+  view({ icon = '', name = '', img = '', desc = '' }) {
+    this.#done(false);
+    this.card.innerHTML = `
+      ${img ? `<img class="cbuy-img" src="${img}" alt="">` : `<div class="cbuy-icon">${icon}</div>`}
+      <div class="cbuy-name">${icon && img ? `${icon} ` : ''}${name}</div>
+      ${desc ? `<div class="cbuy-desc">${desc}</div>` : ''}
+      <div class="cbuy-btns"><button type="button" data-cb="yes" class="cbuy-yes">${t('知道了')}</button></div>`;
+    this.el.hidden = false;
+    return new Promise((resolve) => (this.resolve = resolve));
+  }
+
   #done(v) {
     if (this.el.hidden) return;
     this.el.hidden = true;

@@ -6831,3 +6831,106 @@ body.touch .camp-btn { width: 44px; height: 44px; padding: 0; display: flex; fle
 body.touch .camp-btn .cb-long { display: none; }
 body.touch .camp-btn .cb-short { display: block; font-size: 11px; margin-top: 1px; }
 body.touch .camp-btn[hidden] { display: none; }
+
+/* 📱 App 內建瀏覽器提示 */
+.inapp-tip { position: fixed; left: 50%; top: 86px; transform: translateX(-50%); z-index: 60; width: min(92vw, 360px); padding: 12px 14px; border-radius: 14px; background: rgba(40, 28, 18, 0.94); border: 1px solid rgba(255, 210, 140, 0.5); color: #fff3e0; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); font-size: 14px; }
+.inapp-tip b { font-size: 16px; }
+.inapp-btns { display: flex; gap: 8px; justify-content: flex-end; }
+.inapp-btns a { text-decoration: none; }
+
+.zone-chip .zc-on { font-style: normal; font-size: 11px; margin-top: 2px; padding: 0 6px; border-radius: 8px; background: rgba(255, 200, 120, 0.25); color: #ffe2b0; }
+.zone-chip .zc-on.zero { background: none; opacity: 0.5; }
+
+/* 👫 還沒聊過的好友：小方塊兩欄（11/08） */
+.fr-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin: 4px 0 8px; }
+.fr-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 7px 10px; border-radius: 10px; border: 1px solid rgba(255, 220, 170, 0.18); background: rgba(255, 240, 220, 0.06); color: inherit; font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.fr-chip b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.fr-chip small { font-size: 11px; opacity: 0.7; }
+.fr-chip:hover { background: rgba(255, 210, 140, 0.12); }
+.fr-sub { margin-top: 6px; font-size: 12px; opacity: 0.75; }
+
+/* 🌐 密頻翻譯（11/08） */
+.dm-msg .dm-tr { font-style: normal; font-size: 13px; padding: 4px 11px 0; opacity: 0.85; color: #cfe8ff; white-space: pre-wrap; word-break: break-word; }
+
+/* 🎒 背包格子（11/09）：像一般遊戲的道具欄 */
+.inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.inv-cell { position: relative; aspect-ratio: 1; border-radius: 12px; border: 1.5px solid rgba(255, 220, 170, 0.18); background: radial-gradient(circle at 50% 40%, rgba(255, 240, 220, 0.14), rgba(255, 240, 220, 0.04)); color: inherit; font: inherit; padding: 4px 2px 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; min-width: 0; }
+.inv-cell i { font-style: normal; font-size: 28px; line-height: 1; margin-bottom: 4px; }
+.inv-cell em { position: absolute; right: 4px; top: 3px; font-style: normal; font-size: 11px; font-weight: 700; padding: 0 5px; border-radius: 8px; background: rgba(0, 0, 0, 0.45); color: #fff3e0; }
+.inv-cell small { font-size: 10px; opacity: 0.85; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-cell.on { border-color: #ffc46b; box-shadow: 0 0 0 2px rgba(255, 196, 107, 0.35); background: rgba(255, 200, 120, 0.18); }
+.inv-info { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 12px; border-radius: 12px; background: rgba(40, 28, 18, 0.96); border: 1px solid rgba(255, 210, 140, 0.35); }
+.inv-info b { font-size: 15px; }
+.inv-info .mini-btn { margin-left: auto; }
+.inv-info[hidden] { display: none; }
+
+/* 🔥 約朋友：圖文流程卡（11/09） */
+.flow-card { margin: 8px 0; padding: 10px 10px 8px; border-radius: 14px; background: rgba(255, 240, 220, 0.06); border: 1px solid rgba(255, 220, 170, 0.18); }
+.flow-card.fc-daily { border-color: rgba(255, 170, 200, 0.45); background: rgba(255, 170, 200, 0.08); }
+.flow-card.fc-new { border-color: rgba(255, 214, 110, 0.45); background: rgba(255, 214, 110, 0.08); }
+.flow-card.fc-date { border-color: rgba(255, 140, 80, 0.5); background: rgba(255, 140, 80, 0.09); }
+.flow-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.flow-title small { font-weight: 400; font-size: 12px; opacity: 0.75; }
+.flow { display: flex; align-items: center; gap: 2px; }
+.flow-step { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; border-radius: 10px; background: rgba(0, 0, 0, 0.18); text-align: center; }
+.flow-step i { font-style: normal; font-size: 22px; line-height: 1; }
+.flow-step small { font-size: 11px; line-height: 1.25; }
+.flow-arrow { flex: none; font-size: 12px; opacity: 0.6; }
+.flow-or { text-align: center; font-size: 12px; opacity: 0.75; margin: 4px 0; }
+.flow-tiers { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; flex-wrap: wrap; }
+.flow-tiers b { font-weight: 600; padding: 2px 8px; border-radius: 10px; background: rgba(0, 0, 0, 0.2); }
+.flow-more { margin-top: 6px; font-size: 12px; }
+.flow-more summary { cursor: pointer; opacity: 0.85; }
+.flow-more ul { margin: 6px 0 0; padding-left: 18px; }
+
+/* 🖼️ 約朋友的獎勵可以點開看預覽（11/09） */
+.gift-row.can-prev { cursor: pointer; }
+.gift-row.can-prev:hover { background: rgba(255, 210, 140, 0.1); }
+.gift-row.can-prev .gift-text b::after { content: ' 🔍'; font-size: 11px; opacity: 0.6; }
+/* 📲 加到桌面的小提醒（11/09；之後「開心時刻分享」小泡泡也用這個樣式） */
+.share-pop { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 70; display: flex; align-items: center; gap: 8px; padding: 9px 8px 9px 14px; border-radius: 999px; background: rgba(40, 28, 18, 0.95); border: 1.5px solid #ffc46b; color: #fff3e0; font-size: 13px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45); max-width: calc(100vw - 24px); animation: sp-in 0.35s ease-out; }
+.share-pop b { color: #ffd98a; }
+.share-pop .sp-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.share-pop.happy { width: max-content; }
+.share-pop .sp-go { flex: none; border: 0; border-radius: 999px; padding: 7px 12px; font-weight: 700; font-size: 13px; background: linear-gradient(#ffb35c, #f08a3c); color: #3a1d06; cursor: pointer; }
+.share-pop .sp-x { flex: none; border: 0; background: none; color: #fff3e0; opacity: 0.6; padding: 4px 6px; cursor: pointer; font-size: 14px; }
+@keyframes sp-in { from { opacity: 0; transform: translate(-50%, 12px); } }
+
+/* 🌅 每日登入卡（11/09） */
+.login-back { position: fixed; inset: 0; z-index: 80; background: rgba(10, 6, 3, 0.55); display: flex; align-items: center; justify-content: center; padding: 12px; }
+.login-card { width: min(360px, 100%); max-height: calc(100vh - 24px); overflow-y: auto; border-radius: 20px; background: linear-gradient(#3a281a, #2a1c12); border: 1px solid rgba(255, 210, 140, 0.45); color: #fff3e0; padding: 16px 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); animation: sp-in 0.35s ease-out; }
+.login-card h3 { margin: 0 0 2px; font-size: 19px; text-align: center; }
+.login-card .lc-sub { text-align: center; font-size: 13px; opacity: 0.8; margin-bottom: 12px; }
+.lc-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 12px; }
+.lc-d { border-radius: 10px; background: rgba(0, 0, 0, 0.25); text-align: center; padding: 6px 0 5px; font-size: 11px; position: relative; }
+.lc-d i { display: block; font-style: normal; font-size: 18px; line-height: 1.2; }
+.lc-d.ok { opacity: 0.55; }
+.lc-d.ok::after { content: '✓'; position: absolute; top: 1px; right: 4px; color: #9be08a; font-weight: 700; }
+.lc-d.big { background: rgba(255, 140, 170, 0.2); outline: 1px dashed rgba(255, 170, 200, 0.7); }
+.lc-d.now { background: rgba(255, 196, 107, 0.28); outline: 2px solid #ffc46b; opacity: 1; }
+.lc-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 240, 220, 0.07); margin-bottom: 6px; font-size: 13px; }
+.lc-row[data-prev] { cursor: pointer; }
+.lc-row .ic { font-size: 26px; flex: none; }
+.lc-row img { width: 56px; height: 56px; border-radius: 10px; flex: none; }
+.lc-row b { display: block; font-size: 14px; }
+.lc-row small { opacity: 0.75; }
+.lc-row.lc-gift { background: rgba(255, 196, 107, 0.16); border: 1px solid rgba(255, 196, 107, 0.5); }
+.lc-sil { filter: brightness(0) opacity(0.55); }
+.lc-btn { display: block; width: 100%; margin-top: 10px; border: 0; border-radius: 14px; padding: 12px; font-size: 16px; font-weight: 700; background: linear-gradient(#ffb35c, #f08a3c); color: #3a1d06; cursor: pointer; }
+/* 📱 手機橫放（11/09）：登入卡改左右兩欄，整張放得下不用捲；新手小任務縮小，不要蓋住搖桿 */
+@media (orientation: landscape) and (max-height: 500px) {
+  .login-card { width: min(640px, 100%); display: grid; grid-template-columns: 1fr 1fr; column-gap: 8px; padding: 10px 12px; }
+  .login-card h3, .login-card .lc-sub, .lc-days, .lc-btn { grid-column: 1 / -1; }
+  .login-card h3 { font-size: 17px; }
+  .lc-days { margin-bottom: 8px; }
+  .lc-d { padding: 3px 0; }
+  .lc-d i { font-size: 15px; }
+  .lc-row { margin-bottom: 0; margin-top: 6px; padding: 6px 8px; }
+  .lc-row.lc-gift, .lc-row.lc-wide { grid-column: 1 / -1; }
+  .lc-row .ic { font-size: 22px; }
+  .lc-row img { width: 40px; height: 40px; }
+  .lc-btn { margin-top: 8px; padding: 9px; }
+  body.touch .ritual.kid { max-width: 330px; padding: 8px 12px; }
+  body.touch .ritual.kid .ritual-text { font-size: 15px; }
+  .ritual-sub { font-size: 12px; }
+}
