@@ -6960,3 +6960,6 @@ body.touch .camp-btn[hidden] { display: none; }
 .mv-pick { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 240, 220, 0.08); font-size: 13px; }
 .mv-pick b { flex: 1; }
 .mv-pick .mini-btn { background: linear-gradient(#ffb35c, #f08a3c); color: #3a1d06; font-weight: 700; }
+/* 👫 好友在線上＝綠點、不在＝灰點（11/09：Windows 的 ⚪ 會變淡紫色，看不出差別） */
+.fr-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #7d756d; margin-right: 6px; vertical-align: 1px; flex: none; }
+.fr-dot.on { background: #3fd46f; box-shadow: 0 0 6px rgba(63, 212, 111, 0.8); }

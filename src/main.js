@@ -3414,10 +3414,10 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       .sort((a, b) => (b.f.unread ? 1 : 0) - (a.f.unread ? 1 : 0) || (b.f.online ? 1 : 0) - (a.f.online ? 1 : 0) || (b.f.last?.at ?? 0) - (a.f.last?.at ?? 0) || a.i - b.i)
       .map((x) => x.f);
     const chips = mutual
-      .map((f) => `<button type="button" class="fr-chip${f.unread ? ' has-new' : ''}" data-chat="${f.hid}"><b>${f.online ? '🟢' : '⚪'} ${escapeHtml(f.name)}</b>${f.plot ? `<small>🏕️ ${plotName(f.plot)}</small>` : ''}${f.unread ? `<i class="fr-new">${f.unread}</i>` : ''}</button>`)
+      .map((f) => `<button type="button" class="fr-chip${f.unread ? ' has-new' : ''}" data-chat="${f.hid}"><b><i class="fr-dot${f.online ? ' on' : ''}"></i>${escapeHtml(f.name)}</b>${f.plot ? `<small>🏕️ ${plotName(f.plot)}</small>` : ''}${f.unread ? `<i class="fr-new">${f.unread}</i>` : ''}</button>`)
       .join('');
     const fr =
-      pending.map((f) => `<div class="craft-row fr-row" data-chat="${f.hid}"><div class="craft-info"><b>⚪ ${escapeHtml(f.name)}${f.plot ? ` <span class="fr-plot">🏕️ ${plotName(f.plot)}</span>` : ''}</b><small>${t('⏳ 等對方同意')}</small></div><span class="fr-go">›</span></div>`).join('') +
+      pending.map((f) => `<div class="craft-row fr-row" data-chat="${f.hid}"><div class="craft-info"><b><i class="fr-dot${f.online ? ' on' : ''}"></i>${escapeHtml(f.name)}${f.plot ? ` <span class="fr-plot">🏕️ ${plotName(f.plot)}</span>` : ''}</b><small>${t('⏳ 等對方同意')}</small></div><span class="fr-go">›</span></div>`).join('') +
       (chips ? `<div class="dex-note fr-sub">${t('點名字打開密頻、看聊天紀錄')}</div><div class="fr-chips">${chips}</div>` : '');
     modal.open(
       t('👫 好友'),
