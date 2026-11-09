@@ -944,6 +944,8 @@ async function init() {
   };
   /** 換上（或先買）一個外型 */
   async function pickLook(kind, v) {
+    // 11/09 玩家回報：買過大耳朵，重新進來又要再買 → 點之前一定先向伺服器問一次「買過哪些」（以前只有點「身體」分頁才會問）
+    if (net.online) await refreshLooks();
     const sp = profile?.species ?? 0;
     const val = kind === 'fur' ? Number(v) : v;
     const has =
@@ -973,10 +975,14 @@ async function init() {
       const ok = await confirmBuy.ask({ icon: item.icon, name, price: item.price, img, desc: t('換上之後的樣子（身上也先換上了）'), coins: pinecones });
       if (!ok) return applyLook(profile);
       const res = await net.request('buyLook', { kind, id: val });
-      if (!res?.ok) return hud.toast(res?.reason === 'poor' ? t('松果不夠喔 🌰') : t('沒買成，再試一次吧'));
-      myLooks = res.looks ?? myLooks;
-      audio.sfx('bell');
-      hud.toast(t('🐾 買到了！已經幫你換上'));
+      if (res?.reason === 'owned') {
+        await refreshLooks(); // 其實買過了：不扣松果，直接換上
+      } else if (!res?.ok) return hud.toast(res?.reason === 'poor' ? t('松果不夠喔 🌰') : t('沒買成，再試一次吧'));
+      else {
+        myLooks = res.looks ?? myLooks;
+        audio.sfx('bell');
+        hud.toast(t('🐾 買到了！已經幫你換上'));
+      }
     }
     // 換上：動物本來的形狀記成空的（換動物時跟著變）
     const next = { ...profile };
@@ -2442,6 +2448,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       const local = Object.fromEntries(Object.entries(fishingUI.creel).filter(([, e]) => e?.count).map(([i, e]) => [i, e.best || 1]));
       if (Object.keys(local).length) net.request('dexSync', { dex: local }).then((r) => r?.dex && fishingUI.mergeDex(r.dex));
       setCoins(w.pc, (w.daily?.gain ?? 0) + (w.daily?.pass ?? 0));
+      refreshLooks(); // 連上就先拿「買過的毛色、尾巴、耳朵」，打開外型頁才不會顯示成沒買過
       // 🌅 每日登入卡（11/09）：老玩家每天第一次進來跳一張卡；第一天的新人照舊只跳一句（不要打斷新手小任務）
       if (w.daily?.gain && (w.age ?? 0) >= 1 && w.daily.ld) setTimeout(() => showDailyCard(w.daily, w.outfit), 1800);
       else if (w.daily?.gain) {
