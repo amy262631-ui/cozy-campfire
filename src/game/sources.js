@@ -8,6 +8,7 @@ export const SOURCES = [
   { id: 'foundplay', zh: 'Foundplay', match: ['foundplay'] },
   { id: 'indielisted', zh: 'Indielisted', match: ['indielisted'] },
   { id: 'gyebo', zh: '韓國 gyebo', match: ['gyebo', 'aroido'] },
+  { id: 'itch', zh: 'itch.io', match: ['itch.io', 'itch.zone'] },
   { id: 'threads', zh: 'Threads', match: ['threads'] },
   { id: 'ig', zh: 'Instagram', match: ['instagram'] },
   { id: 'line', zh: 'LINE', match: ['line.me', 'line.naver'] },

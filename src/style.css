@@ -6963,3 +6963,12 @@ body.touch .camp-btn[hidden] { display: none; }
 /* 👫 好友在線上＝綠點、不在＝灰點（11/09：Windows 的 ⚪ 會變淡紫色，看不出差別） */
 .fr-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #7d756d; margin-right: 6px; vertical-align: 1px; flex: none; }
 .fr-dot.on { background: #3fd46f; box-shadow: 0 0 6px rgba(63, 212, 111, 0.8); }
+/* 電腦版：英日韓的遊戲名比較長，不要跟右邊的按鈕列疊在一起（11/09） */
+body:not(.touch) .title { max-width: 272px; }
+html:not([lang^='zh']) body:not(.touch) .title-main { font-size: 17px; letter-spacing: 0; white-space: nowrap; }
+html:not([lang^='zh']) body:not(.touch) .title-sub { font-size: 12px; letter-spacing: 0; line-height: 1.35; }
+/* 💬 小泡泡提示（分享、取名、加好友）：手機放高一點，不要擋到搖桿和下面那排按鈕（11/09 作者） */
+body.touch .share-pop { bottom: calc(215px + env(safe-area-inset-bottom, 0px)); }
+@media (orientation: landscape) and (max-height: 500px) {
+  body.touch .share-pop { bottom: 128px; top: auto; }
+}

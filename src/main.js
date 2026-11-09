@@ -3282,7 +3282,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       small: t('{icon} 一樣一樣慢慢找齊了', { icon }),
       text: t('我在迷霧森林露營地把{name}全部收集完了 🏆 沒力氣出門的夜晚，一起來營火旁坐一下吧', { name }),
     });
-  function sharePop(text, card, onGo) {
+  function sharePop(text, card, onGo, goLabel = t('✏️ 取名字'), ms = 8000) {
     // 取名提醒（onGo）不算在每天 3 次裡
     if (!onGo) try {
       const d = new Date().toDateString();
@@ -3296,7 +3296,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     document.querySelector('.share-pop.happy')?.remove();
     const el = document.createElement('div');
     el.className = 'share-pop happy';
-    el.innerHTML = `<span class="sp-t">${text}</span><button type="button" class="sp-go">${onGo ? t('✏️ 取名字') : t('📸 分享')}</button><button type="button" class="sp-x">✕</button>`;
+    el.innerHTML = `<span class="sp-t">${text}</span><button type="button" class="sp-go">${onGo ? goLabel : t('📸 分享')}</button><button type="button" class="sp-x">✕</button>`;
     el.addEventListener('pointerdown', (e) => e.stopPropagation());
     el.querySelector('.sp-go').addEventListener('click', () => {
       el.remove();
@@ -3305,7 +3305,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     });
     el.querySelector('.sp-x').addEventListener('click', () => el.remove());
     document.body.appendChild(el);
-    setTimeout(() => el.isConnected && el.remove(), 8000);
+    setTimeout(() => el.isConnected && el.remove(), ms);
   }
   /** 小舖裡的東西：名字、圖示、價格、預覽圖 */
   const shopItemInfo = (id, c) => {
@@ -3398,6 +3398,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   const fmtTime = (at) => new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(at));
   const setFriendBadge = (b) => social.setBadge((b?.dm ?? 0) + (b?.req ?? 0) + (b?.sup ?? 0));
   net.on('socialBadge', setFriendBadge);
+  // 👫 11/09 玩家建議：邀請、分享、營火之約成功後，問要不要加對方好友（兩邊都按就直接成為好友）
+  net.on('friendSuggest', ({ name, hid, role } = {}) => {
+    if (!hid) return;
+    const text = role === 'ref' ? t('🎉 <b>{name}</b> 來營地了！加好友？', { name: escapeHtml(name ?? '') }) : t('👋 <b>{name}</b> 邀你來的，加好友？', { name: escapeHtml(name ?? '') });
+    setTimeout(() => sharePop(text, null, () => addFriend({ hid }), t('＋ 加好友'), 20000), 3000);
+  });
   const friendErr = (r) =>
     ({ notFound: t('找不到這個玩家編號'), self: t('這是你自己喔'), already: t('你們已經是好友了'), full: t('好友已經滿 100 位了'), tooFast: t('慢慢來 🙂'), notFriend: t('要互相加好友才能密頻'), short: t('多寫幾個字吧'), tooMany: t('今天已經寄很多封了，作者看到會回你'), offline: t('還沒連上伺服器') })[r?.reason] ?? t('沒有成功，再試一次');
   async function addFriend(data) {
@@ -4406,7 +4412,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
 
   // 方便在瀏覽器 console 除錯（開發模式或網址加 ?debug）
   if (import.meta.env.DEV || params.has('debug')) {
-    window.__cozy = { renderer, forest, scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world, shopPanel, buildPanel, homeRoom: rooms.home, goHome, openBag, showDailyCard, sharePop, openMoveMap, openFriends, _setBag: (d, bk) => ((dishes = d), (basket = bk)) };
+    window.__cozy = { renderer, forest, scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world, shopPanel, buildPanel, homeRoom: rooms.home, goHome, openBag, showDailyCard, sharePop, openMoveMap, openFriends, inviteUrl, _setBag: (d, bk) => ((dishes = d), (basket = bk)) };
   }
 }
 

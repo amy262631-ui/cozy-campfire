@@ -716,6 +716,25 @@ const sameNetList = (ip) => {
   if (shared.netCredits.d !== d) shared.netCredits = { d, n: {} };
   return (shared.netCredits.n[ip] ??= []);
 };
+suggestFriend.done = new Set();
+/** 👫 邀請／分享／營火之約成功後，問兩邊要不要加好友（11/09 玩家建議）；已經互為好友、被封鎖就不問 */
+function suggestFriend(a, b) {
+  const wa = players[a];
+  const wb = players[b];
+  if (!wa || !wb || a === b) return;
+  if (friendsOf(wa).includes(b) && friendsOf(wb).includes(a)) return;
+  if ((wa.blk ?? []).includes(b) || (wb.blk ?? []).includes(a)) return;
+  const tell = (to, other, role) => {
+    if (friendsOf(players[to]).includes(other)) return; // 這邊已經送過邀請了
+    for (const so of io.sockets.sockets.values()) if (so.data.vid === to) so.emit('friendSuggest', { name: nameOfVid(other), hid: homeId(other), role });
+  };
+  const key = `${dayKey()}|${[a, b].sort().join('|')}`; // 同一對每天只問一次（邀請＋分享同時成功時不要問兩次）
+  if (suggestFriend.done.has(key)) return;
+  suggestFriend.done.add(key);
+  if (suggestFriend.done.size > 5000) suggestFriend.done.clear();
+  tell(b, a, 'ref'); // 邀請人：「○○ 用你的連結來了」
+  tell(a, b, 'friend'); // 被邀請的人：「你是 ○○ 邀請來的」
+}
 function finishStay(st) {
   const { kind, friend, ref, name } = st;
   if (!players[ref]) return;
@@ -729,10 +748,12 @@ function finishStay(st) {
   }
   if (kind === 'invite') {
     creditReferral(ref, name);
+    suggestFriend(friend, ref);
     return logInvite(kind, ref, friend, name, `✅ 成功：邀請人 +${REF_GAIN} 松果、每週造型`, !!st.net);
   }
   if (kind === 'share') {
     const got = grantOutfit(ref, dailyOutfit(dayKey()).id, 'daily');
+    suggestFriend(friend, ref);
     console.log(`[分享] ${name} 點了連結待滿了${got ? '，送出今天的每日造型' : '（今天的每日造型已經有了）'}`);
     return logInvite(kind, ref, friend, name, got ? '✅ 成功：送出今天的每日造型' : '✅ 待滿了（今天的每日造型本來就有了）', !!st.net);
   }
@@ -752,6 +773,7 @@ function finishStay(st) {
     if (a || b) bump('dates');
     logInvite(kind, ref, friend, name, a || b ? '✅ 成功：兩個人拿營火之約造型' : '✅ 成立了（兩個人造型都已經有了）', !!st.net);
     for (const s2 of io.sockets.sockets.values()) if (s2.data.vid === ref) s2.emit('dateFriend', { name });
+    suggestFriend(friend, ref);
   }
 }
 /** 檢查哪些已經待滿（每 5 秒，或朋友重新連上時） */
