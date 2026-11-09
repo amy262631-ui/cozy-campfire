@@ -1,4 +1,4 @@
-import { randomName } from './social/names.js';
+import { randomName, isAutoName } from './social/names.js';
 import * as THREE from 'three';
 import './style.css';
 import { t, translateStatic } from './i18n/i18n.js';
@@ -2188,6 +2188,16 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       if (net.online) await net.request('kidDone', {});
       setTimeout(showSeeYou, 8000);
       setTimeout(() => !welcome.visible && welcome.maybeShow(), 9000);
+      // ✏️ 11/09 作者：隨機名字常撞名 → 新手小任務做完，如果還是隨機名字，輕輕提醒一次去取名（只提醒一次）
+      setTimeout(() => {
+        try {
+          if (!isAutoName(myName) || localStorage.getItem('cozy-name-nudge')) return;
+          localStorage.setItem('cozy-name-nudge', '1');
+        } catch {
+          return;
+        }
+        sharePop(t('✏️ 幫自己取個名字吧'), null, () => hud.onMeClick?.());
+      }, 20000);
     },
     onComplete: (_task, firstTime) => {
       if (firstTime) setStage(1);
@@ -3272,8 +3282,9 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       small: t('{icon} 一樣一樣慢慢找齊了', { icon }),
       text: t('我在迷霧森林露營地把{name}全部收集完了 🏆 沒力氣出門的夜晚，一起來營火旁坐一下吧', { name }),
     });
-  function sharePop(text, card) {
-    try {
+  function sharePop(text, card, onGo) {
+    // 取名提醒（onGo）不算在每天 3 次裡
+    if (!onGo) try {
       const d = new Date().toDateString();
       const rec = JSON.parse(localStorage.getItem('cozy-share-pop') || '{}');
       const n = rec.d === d ? rec.n : 0;
@@ -3285,10 +3296,11 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     document.querySelector('.share-pop.happy')?.remove();
     const el = document.createElement('div');
     el.className = 'share-pop happy';
-    el.innerHTML = `<span class="sp-t">${text}</span><button type="button" class="sp-go">${t('📸 分享')}</button><button type="button" class="sp-x">✕</button>`;
+    el.innerHTML = `<span class="sp-t">${text}</span><button type="button" class="sp-go">${onGo ? t('✏️ 取名字') : t('📸 分享')}</button><button type="button" class="sp-x">✕</button>`;
     el.addEventListener('pointerdown', (e) => e.stopPropagation());
     el.querySelector('.sp-go').addEventListener('click', () => {
       el.remove();
+      if (onGo) return onGo();
       shareCard.open(card);
     });
     el.querySelector('.sp-x').addEventListener('click', () => el.remove());
