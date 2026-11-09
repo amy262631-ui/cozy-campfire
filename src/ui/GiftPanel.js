@@ -111,12 +111,15 @@ export class GiftPanel {
     const arrow = '<span class="flow-arrow">➜</span>';
     const flow = (...steps) => `<div class="flow">${steps.join(arrow)}</div>`;
     const card = (cls, title, sub, body) => `<div class="flow-card ${cls}"><div class="flow-title">${title}<small>${sub}</small></div>${body}</div>`;
+    // 11/09 作者：同一個網路要 5 分鐘那條，放在卡片裡看得到（原本只收在小細節）
+    const netNote = `<div class="flow-note">${t('🏢 同一個網路（共用 Wi‑Fi）要玩 {m} 分鐘', { m: R.net ?? 5 })}</div>`;
     this.rules.innerHTML = [
       card(
         'fc-daily',
         t('👒 每日造型'),
         t('每天換一款，兩種方法選一種'),
         flow(step('📤', t('傳連結')), step('👆', t('朋友點進來')), step('⏱️', t('玩 {m} 分鐘', { m: R.share ?? 1 })), step('🎁', t('你拿到'))) +
+          netNote +
           `<div class="flow-or">${t('或')}</div>` +
           flow(step('🎯', t('今日挑戰 3 題')), step('✅', t('全部做完')), step('🎁', t('你拿到'))),
       ),
@@ -125,13 +128,14 @@ export class GiftPanel {
         t('🌟 邀請新朋友'),
         t('只算第一次來營地的人'),
         flow(step('📤', t('傳連結')), step('🆕', t('新朋友點進來')), step('⏱️', t('玩 {m} 分鐘', { m: info.stay })), step('🎁', t('+{g} 🌰＋每週造型', { g: info.gain }))) +
+          netNote +
           `<div class="flow-tiers"><span>${t('累積')}</span><b>1 ${t('位')} 🏮</b><b>3 ${t('位')} 🌈</b><b>5 ${t('位')} 🔭</b></div>`,
       ),
       card(
         'fc-date',
         t('🔥 營火之約'),
         t('早上、晚上 9:30～10:00'),
-        flow(step('🕤', t('營火時間')), step('👆', t('朋友點連結')), step('⏱️', t('玩 {m} 分鐘', { m: R.date ?? 1 })), step('🎁🎁', t('兩個人都拿到'))),
+        flow(step('🕤', t('營火時間')), step('👆', t('朋友點連結')), step('⏱️', t('玩 {m} 分鐘', { m: R.date ?? 1 })), step('🎁🎁', t('兩個人都拿到'))) + netNote,
       ),
       `<details class="flow-more"><summary>${t('📌 小細節（同一個網路、中途離開、不算的情況）')}</summary><ul>${[
         t('🏢 同一個網路（家人、同事共用 Wi‑Fi）：要玩 {m} 分鐘、而且要真的玩一下（釣魚、採集、撿垃圾、做任務），每天最多算 {n} 位', { m: R.net ?? 5, n: R.netDaily ?? 3 }),

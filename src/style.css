@@ -6847,6 +6847,9 @@ body.touch .camp-btn[hidden] { display: none; }
 .fr-chip b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .fr-chip small { font-size: 11px; opacity: 0.7; }
 .fr-chip:hover { background: rgba(255, 210, 140, 0.12); }
+.fr-chip { position: relative; }
+.fr-chip.has-new { border-color: rgba(255, 120, 110, 0.7); background: rgba(255, 120, 110, 0.12); }
+.fr-new { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #e5484d; color: #fff; font-size: 11px; font-style: normal; font-weight: 700; line-height: 18px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
 .fr-sub { margin-top: 6px; font-size: 12px; opacity: 0.75; }
 
 /* 🌐 密頻翻譯（11/08） */
@@ -6934,3 +6937,26 @@ body.touch .camp-btn[hidden] { display: none; }
   body.touch .ritual.kid .ritual-text { font-size: 15px; }
   .ritual-sub { font-size: 12px; }
 }
+.flow-note { font-size: 11px; opacity: 0.75; margin: 4px 2px 0; }
+/* 🗺️ 搬家小地圖（11/09）：照營地真正的樣子 */
+.mv-map { margin: 6px 0; }
+.mv-svg { width: 100%; max-height: min(62vh, 520px); display: block; border-radius: 14px; }
+.mv-road { fill: none; stroke: #b48a5c; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.mv-road-in { fill: none; stroke: #e2c391; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.mv-nm { font-size: 1.9px; text-anchor: middle; fill: #3d2a18; font-weight: 600; }
+.mv-me { fill: #b34d00; font-size: 2.3px; }
+.mv-free { fill: #1f6b3a; }
+.mv-num { font-size: 2.4px; text-anchor: middle; font-weight: 800; fill: #1f6b3a; }
+.mv-ring2 { fill: #fff; stroke: #2f9e57; stroke-width: 0.45; stroke-dasharray: 1 0.6; }
+.mvp.free { cursor: pointer; }
+.mvp.free:hover .mv-ring2 { fill: #f2ffe9; }
+.mvp.sel .mv-ring2 { fill: #fff3a8; stroke: #f08a3c; stroke-width: 0.7; stroke-dasharray: none; }
+.mv-halo { fill: #fff6c9; opacity: 0.9; }
+.mv-star, .mv-fire { font-size: 2.6px; text-anchor: middle; }
+.mv-lm { font-size: 2.2px; text-anchor: middle; fill: #4a3420; font-weight: 700; }
+.mv-legend { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; font-size: 12px; opacity: 0.9; }
+.mv-legend span { display: flex; align-items: center; gap: 4px; }
+.mv-ring { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px dashed #2f9e57; }
+.mv-pick { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 240, 220, 0.08); font-size: 13px; }
+.mv-pick b { flex: 1; }
+.mv-pick .mini-btn { background: linear-gradient(#ffb35c, #f08a3c); color: #3a1d06; font-weight: 700; }

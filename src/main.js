@@ -57,7 +57,7 @@ import { LanguagePicker } from './ui/LanguagePicker.js';
 import { NoticePanel } from './ui/NoticePanel.js';
 import { ChannelPanel } from './ui/ChannelPanel.js';
 import { CairnPanel } from './ui/CairnPanel.js';
-import { zoneName } from './rooms/campLayout.js';
+import { zoneName, LAYOUT as CAMP_LAYOUT } from './rooms/campLayout.js';
 import { RitualGuide } from './ui/RitualGuide.js';
 import { HelpPanel } from './ui/HelpPanel.js';
 import { GIFT_CATS, giftInfo, basketCat, GIFT_DAILY_CAP, GIFT_MIN_DAYS } from './game/gifts.js';
@@ -2751,6 +2751,45 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       },
     );
   });
+  /** 🗺️ 搬家小地圖的圖（SVG）：草地、小樹、環形小路、入口小徑、營火小爐；帳篷照真正的位置畫 */
+  const TENT_TINT = ['#e7a05a', '#7fb3d5', '#e58f8f', '#9fd3a8', '#c7a6e0', '#f0d27a'];
+  function moveMapSvg(tents, mineN, reserved) {
+    const L = CAMP_LAYOUT;
+    const ox = -37, oz = -36.5, W = 74, H = 70;
+    const P = (p) => `${(p.x - ox).toFixed(1)} ${(p.z - oz).toFixed(1)}`;
+    const line = (pts, close) => 'M' + pts.filter((_, i) => i % 3 === 0).map(P).join(' L') + (close ? ' Z' : '');
+    if (!moveMapSvg.trees) {
+      let seed = 7;
+      const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      const path = [...L.loop, ...L.entry];
+      let out = '';
+      for (let i = 0; i < 70; i++) {
+        const x = rnd() * W, y = rnd() * H;
+        const wx = x + ox, wz = y + oz;
+        if (L.plots.some((p) => Math.hypot(p.x - wx, p.z - wz) < 5) || path.some((p) => Math.hypot(p.x - wx, p.z - wz) < 3.2) || Math.hypot(wx, wz + 3) < 8) continue;
+        out += `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="1.6" fill="#4f8a4a"/><circle r="1" cx="-.4" cy="-.4" fill="#67a85c"/></g>`;
+      }
+      moveMapSvg.trees = out;
+      moveMapSvg.roads = `<path d="${line(L.loop, true)}" class="mv-road"/><path d="${line(L.entry)}" class="mv-road"/><path d="${line(L.loop, true)}" class="mv-road-in"/><path d="${line(L.entry)}" class="mv-road-in"/>`;
+    }
+    const cx = (0 - ox).toFixed(1), cz = (-3 - oz).toFixed(1);
+    const plots = L.plots
+      .map((p, i) => {
+        const n = i + 1;
+        const tn = tents[i];
+        const at = `transform="translate(${P(p)})"`;
+        if (n === mineN)
+          return `<g class="mvp mine" ${at}><circle r="3.6" class="mv-halo"/><path d="M-2.6 1.6 L0 -2.6 L2.6 1.6 Z" fill="#ffb347" stroke="#7a3e10" stroke-width=".35"/><path d="M-.6 1.6 L0 .2 L.6 1.6Z" fill="#7a3e10"/><text y="-3.4" class="mv-star">⭐</text><text y="4.4" class="mv-nm mv-me">${t('我家')}</text></g>`;
+        if (tn || reserved.includes(n)) {
+          const nm = tn?.name ? escapeHtml(tn.name.slice(0, 6)) : '';
+          const c = TENT_TINT[[...(tn?.name ?? '')].reduce((a, ch) => a + ch.charCodeAt(0), n) % TENT_TINT.length];
+          return `<g class="mvp taken" ${at}><path d="M-2.2 1.4 L0 -2.2 L2.2 1.4 Z" fill="${c}" stroke="#5a3a22" stroke-width=".3"/><path d="M-.5 1.4 L0 .2 L.5 1.4Z" fill="#5a3a22"/>${nm ? `<text y="3.9" class="mv-nm">${nm}</text>` : ''}</g>`;
+        }
+        return `<g class="mvp free" data-n="${n}" ${at}><circle r="4" fill="transparent"/><circle r="2.7" class="mv-ring2"/><text y="1" class="mv-num">${n}</text><text y="4.6" class="mv-nm mv-free">${t('空位')}</text></g>`;
+      })
+      .join('');
+    return `<svg viewBox="-1 -1 ${W + 2} ${H + 5}" class="mv-svg"><rect x="-1" y="-1" width="${W + 2}" height="${H + 5}" rx="4" fill="#bfe3a4"/>${moveMapSvg.trees}<ellipse cx="${cx}" cy="${cz}" rx="6.6" ry="6" fill="#d8efb8"/>${moveMapSvg.roads}<g transform="translate(${cx} ${cz})"><circle r="1.9" fill="#8a6a4a"/><text y="1.2" class="mv-fire">🔥</text><text y="4.4" class="mv-lm">${t('營火小爐')}</text></g><text x="${(-ox).toFixed(1)}" y="${H + 0.6}" class="mv-lm">${t('🚪 入口（回營火）')}</text>${plots}</svg>`;
+  }
   /** 🚚 搬家小地圖：每一區 24 格，空的可以點 */
   async function openMoveMap(z) {
     const [list, price] = await Promise.all([net.request('campList', { zone: z }), net.request('movePrice')]);
@@ -2759,24 +2798,34 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const mine = myHome?.plot;
     const maxZ = Math.max((list.zones ?? []).length + 1, z + 1);
     const tabs = Array.from({ length: maxZ }, (_, k) => `<button type="button" class="mini-btn${k === z ? ' on' : ''}" data-mz="${k}">${zoneName(k)}</button>`).join('');
-    const cells = list.tents
-      .map((tn, i) => {
-        const n = i + 1;
-        const isMine = mine && mine.z === z && mine.n === n;
-        const reserved = (list.reserved ?? []).includes(n);
-        const cls = isMine ? 'mine' : tn ? 'taken' : reserved ? 'taken' : 'free';
-        const label = isMine ? '⭐' : tn || reserved ? '⛺' : n;
-        return `<button type="button" class="mv-cell ${cls}" data-n="${n}" ${cls !== 'free' ? 'disabled' : ''} title="${zoneName(z)} ${n}">${label}</button>`;
-      })
-      .join('');
+    // 🗺️ 11/09 作者：24 個格子看不出位置 → 照營地真正的樣子畫成可愛小地圖（營火小爐、彎彎小路、入口、每頂帳篷的位置）
+    const svg = moveMapSvg(list.tents, mine && mine.z === z ? mine.n : 0, list.reserved ?? []);
     modal.open(
       t('🚚 搬家'),
       `<div class="dex-note">${cost ? t('這次搬家要 {c} 顆松果（第一次免費）', { c: cost }) : t('這次搬家免費')}・${t('帳篷、家具、菜園、門口擺設會整組搬過去')}</div>
-       <div class="mv-tabs">${tabs}</div><div class="mv-grid">${cells}</div>
-       <div class="dex-note">${t('白色＝空營位，可以點；⭐＝我家')}</div>`,
+       <div class="mv-tabs">${tabs}</div><div class="mv-map">${svg}</div>
+       <div class="mv-legend"><span>⭐ ${t('我家')}</span><span>⛺ ${t('有人住')}</span><span><i class="mv-ring"></i> ${t('空位，點了就能搬')}</span></div>
+       <div class="mv-pick" id="mv-pick" hidden></div>`,
       (body) => {
         for (const b of body.querySelectorAll('[data-mz]')) b.addEventListener('click', () => (modal.close(), openMoveMap(Number(b.dataset.mz))));
-        for (const b of body.querySelectorAll('.mv-cell.free')) b.addEventListener('click', () => (modal.close(), askMove({ z, n: Number(b.dataset.n) }, cost)));
+        const pick = body.querySelector('#mv-pick');
+        for (const g of body.querySelectorAll('.mvp.free'))
+          g.addEventListener('click', () => {
+            for (const o of body.querySelectorAll('.mvp.sel')) o.classList.remove('sel');
+            g.classList.add('sel');
+            const n = Number(g.dataset.n);
+            const me = CAMP_LAYOUT.plots[n - 1];
+            const near = list.tents
+              .map((tn, i) => ({ tn, d: Math.hypot(CAMP_LAYOUT.plots[i].x - me.x, CAMP_LAYOUT.plots[i].z - me.z) }))
+              .filter((x) => x.tn?.name)
+              .sort((a, b) => a.d - b.d)
+              .slice(0, 2)
+              .map((x) => escapeHtml(x.tn.name));
+            pick.hidden = false;
+            pick.innerHTML = `<b>📍 ${t('{z} 區 {n} 號', { z: zoneName(z), n })}${near.length ? `・${t('鄰居：{names}', { names: near.join('、') })}` : ''}</b><button type="button" class="mini-btn" id="mv-go">${t('搬到這裡')}</button>`;
+            pick.querySelector('#mv-go').addEventListener('click', () => (modal.close(), askMove({ z, n }, cost)));
+            audio.sfx?.('click');
+          });
       },
     );
   }
@@ -3356,17 +3405,20 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const known = new Set(r.known ?? []);
     const here = [...remotes.players.values()].filter((p) => !p.npc && p.name && !known.has(p.id));
     const reqs = r.reqs.map((q) => `<div class="craft-row"><div class="craft-info"><b>👋 ${escapeHtml(q.name)}</b><small>${t('想加你好友')}</small></div><button type="button" class="mini-btn" data-acc="${q.hid}">${t('同意')}</button><button type="button" class="mini-btn ghost" data-rej="${q.hid}">${t('拒絕')}</button></div>`).join('');
-    // 11/08 作者：好友多了很長。聊過、有未讀、等對方同意的用大格；還沒聊過的縮成小方塊（兩欄）
-    const talked = r.friends.filter((f) => f.last || f.unread || !f.mutual);
-    const quiet = r.friends.filter((f) => !(f.last || f.unread || !f.mutual));
-    const chips = quiet
-      .map((f) => `<button type="button" class="fr-chip" data-chat="${f.hid}"><b>${f.online ? '🟢' : '⚪'} ${escapeHtml(f.name)}</b>${f.plot ? `<small>🏕️ ${plotName(f.plot)}</small>` : ''}</button>`)
+    // 11/09 作者：聊過的也不用一直顯示最後一句（會越來越多）→ 全部改小方塊，點名字再看紀錄。
+    // 有未讀＝右上角紅點＋數字、排最前面；等對方同意的照舊用一行放最上面（要處理）
+    const pending = r.friends.filter((f) => !f.mutual);
+    const mutual = r.friends
+      .filter((f) => f.mutual)
+      .map((f, i) => ({ f, i }))
+      .sort((a, b) => (b.f.unread ? 1 : 0) - (a.f.unread ? 1 : 0) || (b.f.online ? 1 : 0) - (a.f.online ? 1 : 0) || (b.f.last?.at ?? 0) - (a.f.last?.at ?? 0) || a.i - b.i)
+      .map((x) => x.f);
+    const chips = mutual
+      .map((f) => `<button type="button" class="fr-chip${f.unread ? ' has-new' : ''}" data-chat="${f.hid}"><b>${f.online ? '🟢' : '⚪'} ${escapeHtml(f.name)}</b>${f.plot ? `<small>🏕️ ${plotName(f.plot)}</small>` : ''}${f.unread ? `<i class="fr-new">${f.unread}</i>` : ''}</button>`)
       .join('');
-    const fr = talked
-      .map(
-        (f) => `<div class="craft-row fr-row" data-chat="${f.hid}"><div class="craft-info"><b>${f.online ? '🟢' : '⚪'} ${escapeHtml(f.name)}${f.plot ? ` <span class="fr-plot">🏕️ ${plotName(f.plot)}</span>` : ''}${f.unread ? ` <i class="social-badge in">${f.unread}</i>` : ''}</b><small>${f.mutual ? (f.last ? `${f.last.me ? t('我：') : ''}${escapeHtml(f.last.t)}` : t('還沒聊過，點一下開始密頻')) : t('⏳ 等對方同意')}</small></div><span class="fr-go">›</span></div>`,
-      )
-      .join('') + (chips ? `${talked.length ? `<div class="dex-note fr-sub">${t('還沒聊過（點一下開始密頻）')}</div>` : ''}<div class="fr-chips">${chips}</div>` : '');
+    const fr =
+      pending.map((f) => `<div class="craft-row fr-row" data-chat="${f.hid}"><div class="craft-info"><b>⚪ ${escapeHtml(f.name)}${f.plot ? ` <span class="fr-plot">🏕️ ${plotName(f.plot)}</span>` : ''}</b><small>${t('⏳ 等對方同意')}</small></div><span class="fr-go">›</span></div>`).join('') +
+      (chips ? `<div class="dex-note fr-sub">${t('點名字打開密頻、看聊天紀錄')}</div><div class="fr-chips">${chips}</div>` : '');
     modal.open(
       t('👫 好友'),
       `<div class="dex-note">${t('🆔 我的玩家編號：{id}', { id: `<b class="gift-id-inline">${r.code}</b>` })}</div>
@@ -4342,7 +4394,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
 
   // 方便在瀏覽器 console 除錯（開發模式或網址加 ?debug）
   if (import.meta.env.DEV || params.has('debug')) {
-    window.__cozy = { renderer, forest, scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world, shopPanel, buildPanel, homeRoom: rooms.home, goHome, openBag, showDailyCard, sharePop, _setBag: (d, bk) => ((dishes = d), (basket = bk)) };
+    window.__cozy = { renderer, forest, scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world, shopPanel, buildPanel, homeRoom: rooms.home, goHome, openBag, showDailyCard, sharePop, openMoveMap, openFriends, _setBag: (d, bk) => ((dishes = d), (basket = bk)) };
   }
 }
 

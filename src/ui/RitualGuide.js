@@ -350,6 +350,25 @@ export class RitualGuide {
     this.beacon.visible = false;
     scene.add(this.beacon);
 
+    // 👣 新手小任務：地上一串發亮的小腳印，從自己腳邊一路指向目標（11/09 作者：不讀字也知道往哪走）
+    this.feet = new THREE.Group();
+    const soleGeo = new THREE.CircleGeometry(1, 14);
+    for (let i = 0; i < 9; i++) {
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+      const foot = new THREE.Group();
+      const sole = new THREE.Mesh(soleGeo, mat);
+      sole.scale.set(0.11, 0.17, 1);
+      const toe = new THREE.Mesh(soleGeo, mat);
+      toe.scale.set(0.07, 0.07, 1);
+      toe.position.y = 0.23;
+      foot.add(sole, toe);
+      foot.rotation.x = -Math.PI / 2;
+      foot.userData.mat = mat;
+      this.feet.add(foot);
+    }
+    this.feet.visible = false;
+    scene.add(this.feet);
+
     // 第一次來：直接帶新手小任務（之前做到一半的，下次進來接著做）；老玩家不自動跳出，改按角落的「💡 今日小靈感」
     const intro = this.nextIntro();
     if (intro) this.#start(intro);
@@ -462,6 +481,7 @@ export class RitualGuide {
   update(dt, time, s) {
     if (!this.active || this.done) {
       this.beacon.visible = false;
+      if (this.feet) this.feet.visible = false;
       this.arrow.hidden = true;
       return;
     }
@@ -480,8 +500,10 @@ export class RitualGuide {
       [...this.dotsEl.children].forEach((d, i) => d.classList.toggle('on', i <= g.step));
       this.#glowGo(!!g.go && !this.el.hidden);
     }
+    this.#walkFeet(s, g, time);
     if (!g.target) {
       this.beacon.visible = false;
+      if (this.feet) this.feet.visible = false;
       this.arrow.hidden = true;
       return;
     }
@@ -511,6 +533,33 @@ export class RitualGuide {
     this.#complete(n ?? null);
   }
 
+  /** 👣 新手小任務才有：目標還在 1.5 公尺外時，腳印從腳邊往目標一閃一閃（像有人走在前面帶路） */
+  #walkFeet(s, g, time) {
+    const p = s.pos;
+    const tg = g.target;
+    const d = tg && p ? Math.hypot(tg.x - p.x, tg.z - p.z) : 0;
+    if (!this.task?.kid || !tg || d < 1.5) {
+      this.feet.visible = false;
+      return;
+    }
+    this.feet.visible = true;
+    const dx = (tg.x - p.x) / d;
+    const dz = (tg.z - p.z) / d;
+    const ang = Math.atan2(dx, dz);
+    const gap = 0.75;
+    const n = Math.min(this.feet.children.length, Math.floor((d - 0.6) / gap));
+    const wave = (time * 3) % (n + 3);
+    this.feet.children.forEach((f, i) => {
+      if (i >= n) return (f.userData.mat.opacity = 0);
+      const along = 0.7 + i * gap;
+      const side = i % 2 ? 0.13 : -0.13;
+      f.position.set(p.x + dx * along + dz * side, 0.06, p.z + dz * along - dx * side);
+      f.rotation.z = ang + Math.PI;
+      const near = Math.max(0, 1 - Math.abs(wave - i) / 2.2);
+      f.userData.mat.opacity = 0.4 + near * 0.55;
+    });
+  }
+
   /** 「🧭 去哪裡」按鈕閃一閃（要玩家去點它的時候） */
   #glowGo(on) {
     this.goChip ??= document.getElementById('go-chip');
@@ -520,6 +569,7 @@ export class RitualGuide {
   /** 🌱 新手小任務完成一步：大大的「做到了！」，自動接下一步 */
   #completeKid() {
     this.beacon.visible = false;
+    if (this.feet) this.feet.visible = false;
     this.arrow.hidden = true;
     this.#glowGo(false);
     this.subEl.hidden = true;
@@ -556,6 +606,7 @@ export class RitualGuide {
     if (this.task.kid) return this.#completeKid();
     this.n = n;
     this.beacon.visible = false;
+    if (this.feet) this.feet.visible = false;
     this.arrow.hidden = true;
     [...this.dotsEl.children].forEach((d) => d.classList.add('on'));
     this.textEl.innerHTML = n
@@ -586,6 +637,7 @@ export class RitualGuide {
     // 11/07 作者：「💡 今日小靈感」拿掉（有 ❓ 營地手冊就好）；只剩新手小任務做到一半時的「🌱 新手小任務」
     this.ideaBtn.hidden = !kidLeft;
     this.beacon.visible = false;
+    if (this.feet) this.feet.visible = false;
     this.arrow.hidden = true;
   }
 
