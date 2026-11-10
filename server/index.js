@@ -38,7 +38,7 @@ import { LAYOUT as CAMP_LAYOUT } from '../src/rooms/campLayout.js';
 import { PASS, PASS_TIERS, FREE, SPONSOR } from '../src/game/pass.js';
 import crypto from 'node:crypto';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack, hasLoft } from './homes.js';
-import { hasColors, FURNITURE_COLORS, fishFits, LOGIN_GIFTS } from '../src/game/furnitureCatalog.js';
+import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS } from '../src/game/furnitureCatalog.js';
 import { YARD_BY_ID, hasYard, isBigYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
 import { CHALLENGE_BY_ID, challengesOf } from '../src/game/dailyChallenge.js';
@@ -1144,6 +1144,26 @@ app.get('/api/channels', (_req, res) => {
   res.json(channelList());
 });
 // 統計頁：/stats（有設環境變數 STATS_KEY 的話，要用 /stats?key=密碼 才看得到）
+/** 🟢 現在在線的人（/stats、/admin 打開那一刻即時算，不另外存）；link(hid, name) 決定名字怎麼顯示 */
+function onlineList(link) {
+  const onRows = [];
+  const placeOf = (rid) => {
+    const z = campZoneOf(rid);
+    const base = baseRoom(rid);
+    return base === 'campground' ? `帳篷營地 ${zoneName(z)} 區` : ROOM_DEFS[base]?.label ?? base;
+  };
+  const addOn = (p, where, ch) => {
+    const w = players[p.vid];
+    const h = homes[p.vid];
+    const pt = passTier(w);
+    onRows.push({ ch, row: `<tr><td>${link(homeId(p.vid), p.name)}<br><small>${escH(homeId(p.vid))}</small></td><td>${escH(where)}</td><td>${ch}</td><td>${w?.fd ? `${Math.max(0, Math.round((Date.parse(`${dayKey()}T00:00:00Z`) - Date.parse(`${w.fd}T00:00:00Z`)) / 86400000)) + 1} 天` : w ? '老玩家' : '-'}</td><td>${h?.tent ? (h.plot ? plotLabel(h.plot) : '有') : '-'}</td><td>${pt ? `${pt.icon} ${pt.zh}` : ''}${isAuthorVid(p.vid) ? ' ⭐ 作者' : ''}</td></tr>` });
+  };
+  for (const c of channels.values()) for (const [rid, r] of c.rooms) for (const pl of r.players.values()) addOn(pl, placeOf(rid), c.ch);
+  for (const [owner, r] of homeRooms) for (const pl of r.players.values()) addOn(pl, owner === pl.vid ? '🏠 自己的帳篷' : `🏠 ${String(homes[owner]?.name ?? '別人')}的帳篷`, pl.ch ?? '-');
+  onRows.sort((x, y) => String(x.ch).localeCompare(String(y.ch)));
+  return onRows;
+}
+
 app.get(['/stats', '/api/stats'], (req, res) => {
   if (process.env.STATS_KEY && req.query.key !== process.env.STATS_KEY) return res.status(403).send('需要密碼：/stats?key=…');
   const days = Object.keys(stats).sort().reverse().slice(0, 30);
@@ -1218,10 +1238,12 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   const iaLine = Object.keys(iaSum).length
     ? Object.entries(iaSum).sort((a, b) => b[1] - a[1]).map(([ia, n]) => `${iaNames[ia] ?? ia} ${n} 次`).join('・')
     : '還沒有（11/08 之後才開始統計）';
+  const onNow = onlineList((hid, name) => escH(name));
   const regTable = `<h3>👥 固定玩家（最近 7 天）</h3>
 <p>📲 從手機桌面圖示打開的次數（最近 7 天）：${allDays.slice(0, 7).reduce((n, k) => n + (stats[k]?.pwa ?? 0), 0)} 次<br>📱 從 App 內建瀏覽器或嵌入網頁進來的次數：${iaLine}<br><small>這些人常常存不了進度，下次進來會被當成新的人（「只來 1 天」會偏多）。遊戲會跳提示請他們用瀏覽器打開。</small></p>
 <p>來 3 天以上（固定玩家）<b>${bw.reg}</b> 人${trend(bw.reg, bp.reg)}・其中 5 天以上（常客）<b>${bw.fan}</b> 人${trend(bw.fan, bp.fan)}・來 2 天 ${bw.two} 人・只來 1 天 ${bw.one} 人<br><small>箭頭是跟再前一週比。名字是帳篷門牌上的名字；沒買帳篷的顯示「（沒帳篷）」。</small></p>
-<div class="wrap"><table><tr><th>名字</th><th>這週來了</th><th>連續天數</th><th>營位</th><th>上週來了</th></tr>${regs || '<tr><td colspan="5">這週還沒有來 3 天以上的玩家</td></tr>'}</table></div>`;
+<div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start"><div class="wrap"><table><tr><th>名字</th><th>這週來了</th><th>連續天數</th><th>營位</th><th>上週來了</th></tr>${regs || '<tr><td colspan="5">這週還沒有來 3 天以上的玩家</td></tr>'}</table></div>
+<div class="wrap"><b style="color:#9fe39f">🟢 現在在線（${onNow.length} 人）</b><small>　打開這頁那一刻，重新整理才更新</small><table><tr><th>名字</th><th>在哪裡</th><th>分流</th><th>第幾天</th><th>營位</th><th>月票</th></tr>${onNow.map((r) => r.row).join('') || '<tr><td colspan="6">現在沒有人在線上</td></tr>'}</table></div></div>`;
   // 🎫 營火月票的收入：這個月（台北時間）付款成功的訂單
   const month = dayKey().slice(0, 7);
   const paid = Object.entries(orders).filter(([, o]) => o.status === 'paid' && !o.sim && dayKey(new Date(o.paidAt)).startsWith(month));
@@ -1290,7 +1312,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
       .catch(function () { st.textContent = '❌ 連不到伺服器'; btn.disabled = false; });
   };
 })();
-</script><p>伺服器已經連續醒著 <b>${awakeText()}</b>（從 ${new Date(BOOT_AT).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })} 起；正常只有重新部署時才會歸零，如果常常歸零，代表定時叫醒沒有生效、伺服器睡著過）</p><p>現在在線：${online} 人 · 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好；「新旅人」是第一次來的人（從 11/3 開始統計）。</p>
+</script><p>伺服器已經連續醒著 <b>${awakeText()}</b>（從 ${new Date(BOOT_AT).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })} 起；正常只有重新部署時才會歸零，如果常常歸零，代表定時叫醒沒有生效、伺服器睡著過）</p><p>現在在線：${online} 人（名單在下面「👥 固定玩家」右邊）· 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好；「新旅人」是第一次來的人（從 11/3 開始統計）。</p>
 <div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="${head.length}">還沒有資料</td></tr>'}</table></div>${regTable}${srcTable}${passTable}</body></html>`);
 });
 
@@ -1439,6 +1461,7 @@ app.get('/admin', (req, res) => {
   const furnOpts = Object.values(CATALOG_BY_ID).filter((f) => f.id !== 'tent').map((f) => `<option value="${f.id}">${f.icon ?? ''} ${escH(f.zh)}</option>`).join('');
   const invRows = invites.slice(-200).reverse().map((x) => `<tr><td>${t(x.at)}</td><td>${KIND_ZH[x.kind] ?? x.kind}</td><td><a href="#" data-q="${escH(x.ref)}">${escH(x.rn)}</a><br><small>${escH(x.ref)}</small></td><td><a href="#" data-q="${escH(x.friend)}">${escH(x.fn)}</a><br><small>${escH(x.friend)}</small></td><td>${x.net ? '🏢 同網路' : ''}</td><td style="text-align:left">${escH(x.r)}</td></tr>`).join('');
   const supRows = support.slice(-100).reverse().map((x) => `<tr><td>${t(x.at)}</td><td><a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a><br><small>${escH(x.hid)}</small></td><td style="white-space:pre-wrap;max-width:360px">${escH(x.t)}</td><td>${x.re ? `<div class="re">${escH(x.re)}</div><small>${t(x.reAt)}${x.seen ? '・玩家看過了' : '・玩家還沒看'}</small>` : `<textarea data-re="${x.id}" rows="2" cols="34" placeholder="回覆（玩家下次上線會看到）"></textarea><br><button data-send="${x.id}">回覆</button>`}</td></tr>`).join('');
+  const onRows = onlineList((hid, name) => `<a href="#" data-q="${escH(hid)}">${escH(name)}</a>`);
   const grantRows = grants.slice(-50).reverse().map((g) => `<tr><td>${t(g.at)}</td><td>${escH(g.name)}<br><small>${escH(g.hid)}</small></td><td>${escH(g.what)}</td><td style="text-align:left">${escH(g.note)}</td></tr>`).join('');
   res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>營地管理</title>
 <style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px;max-width:1100px;margin:auto}h3{color:#ffb46b;margin-top:26px}table{border-collapse:collapse;font-size:13px;width:100%}th,td{padding:6px 8px;border-bottom:1px solid #3a2e27;text-align:left;vertical-align:top}th{color:#ffb46b}small{opacity:.6}.wrap{overflow-x:auto}.box{background:#2a211c;border-radius:12px;padding:12px 14px;margin:8px 0}input,select,button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3}button{background:#f08a3c;color:#2a1608;border:none;font-weight:700;cursor:pointer}a{color:#ffd08a}#card p{margin:4px 0}.ok{color:#9be29b}.err{color:#ff9a8a}p.hint{opacity:.7;font-size:13px}.re{background:#3a2e27;border-radius:8px;padding:6px 8px;white-space:pre-wrap;max-width:360px}textarea{font:inherit;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3;padding:6px}</style></head>
@@ -1448,6 +1471,8 @@ app.get('/admin', (req, res) => {
 <select id="gtype"><option value="outfit">👒 造型</option><option value="pc">🌰 松果</option><option value="furn">🪑 家具</option></select>
 <select id="gout">${outfitOpts}</select><select id="gfurn" hidden>${furnOpts}</select><input id="gn" type="number" min="1" max="1000" value="10" hidden>
 <input id="gnote" placeholder="備註（例：同網路沒算到的邀請補發）" size="30"> <button id="give">送出</button> <span id="gmsg"></span></div>
+<h3>🟢 現在在線（${onRows.length} 人）</h3><p class="hint">打開這頁那一刻在線上的人（重新整理才會更新；營地居民不算）。點名字可以查他、發補償。</p>
+<div class="wrap"><table><tr><th>名字／玩家編號</th><th>在哪裡</th><th>分流</th><th>來營地第幾天</th><th>營位</th><th>月票</th></tr>${onRows.map((r) => r.row).join('') || '<tr><td colspan="6">現在沒有人在線上</td></tr>'}</table></div>
 <h3>✉️ 玩家來信（${support.filter((x) => !x.re).length} 則還沒回）</h3><p class="hint">玩家在遊戲裡按「✉️ 聯絡作者」寄來的，會自動附上玩家編號。點名字可以查他、發補償；回覆後玩家在線上會馬上收到，不在線上下次進來會看到。</p>
 <div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>內容</th><th>回覆</th></tr>${supRows || '<tr><td colspan="4">還沒有來信</td></tr>'}</table></div>
 <h3>👫 邀請紀錄（最近 200 筆）</h3><p class="hint">點名字可以直接查那位玩家。「同網路」＝邀請人和朋友用同一個網路（同事、家人），要待 ${Math.round(SAMENET_STAY_MS / 60000)} 分鐘、朋友要玩一下（釣魚、採集、撿垃圾、做任務），同一個網路每天最多算 ${SAMENET_DAILY} 位。</p>
@@ -2364,7 +2389,11 @@ io.on('connection', (socket) => {
     if (id !== 'tent' && !h.tent) return ack?.({ ok: false, reason: 'noTent' });
     if (id !== 'tent' && (h.inv[id] ?? 0) >= (CATALOG_BY_ID[id]?.kind === 'wall' ? 80 : 20)) return ack?.({ ok: false, reason: 'tooMany' });
     // 🎨 買的時候選的配色（0＝原色）
-    const color = hasColors(CATALOG_BY_ID[id]) ? Math.floor(num(data.c, 0, FURNITURE_COLORS.length - 1, 0)) : 0;
+    const color = hasColors(CATALOG_BY_ID[id]) ? Math.floor(num(data.c, 0, ALL_COLORS.length - 1, 0)) : 0;
+    // 🎫 月票家具、月票配色：月票開通（PASS_ON）而且月票有效才能買；買了永久保留
+    const needRank = Math.max(CATALOG_BY_ID[id]?.pass ?? 0, ALL_COLORS[color]?.pass ?? 0);
+    if (needRank && !PASS_ON) return ack?.({ ok: false, reason: 'off' });
+    if (needRank && (passTier(wal)?.rank ?? 0) < needRank) return ack?.({ ok: false, reason: 'needPass' });
     if (wal.pc < price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
     lastBuy = now;
     wal.pc -= price;
@@ -2440,7 +2469,7 @@ io.on('connection', (socket) => {
       if ((!SHOP[i] && !GIFT_FURNITURE.has(i) && !CATALOG_BY_ID[i]?.craft) || i === 'tent') return ack?.({ ok: false, reason: 'unknown' });
       const chk = stackCheck(h, x, z, i);
       if (chk.reason) return ack?.({ ok: false, reason: chk.reason });
-      const c = hasColors(CATALOG_BY_ID[i]) ? Math.floor(num(data.c, 0, FURNITURE_COLORS.length - 1, 0)) : 0;
+      const c = hasColors(CATALOG_BY_ID[i]) ? Math.floor(num(data.c, 0, ALL_COLORS.length - 1, 0)) : 0;
       if (available(h, i, c) <= 0) return ack?.({ ok: false, reason: 'none' });
       if (h.items.length >= maxItems(gridOf(h), hasLoft(h))) return ack?.({ ok: false, reason: 'tooMany' });
       const it = { i, x, z, r: Math.floor(num(data.r, 0, 3, 0)), l: chk.l };

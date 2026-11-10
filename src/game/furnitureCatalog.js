@@ -40,7 +40,7 @@ export const FURNITURE_COLORS = [
   { id: 4, icon: '🌙', zh: '夜色', hue: 0.7, sat: 0.35, light: -0.12 },
 ];
 /**
- * 🎫 月票限定配色（11/09 作者定案，還沒開放；正式上架時接在 FURNITURE_COLORS 後面）
+ * 🎫 月票限定配色（11/09 作者定案）：有月票才能選；買過的家具月票到期後照樣保留顏色
  * 流行的「跳色」：家具面積最大的部分用第一個顏色，其他有顏色的小部分（坐墊、抽屜、床墊）用 duo 的顏色
  */
 export const PASS_COLORS = [
@@ -48,6 +48,8 @@ export const PASS_COLORS = [
   { id: 6, icon: '🤍', zh: '奶油白×奶茶', hue: 0.11, sat: 0.55, l: 0.9, duo: { hue: 0.075, sat: 0.32, l: 0.62 }, pass: 1 },
   { id: 7, icon: '💜', zh: '薰衣草紫×奶油白', hue: 0.73, sat: 0.36, l: 0.74, duo: { hue: 0.11, sat: 0.55, l: 0.9 }, pass: 1 },
 ];
+/** 全部配色（id＝陣列位置；5～7 是月票限定，買的時候要有月票） */
+export const ALL_COLORS = [...FURNITURE_COLORS, ...PASS_COLORS];
 /** 這種魚放得進這個魚缸嗎（魚王算 6 星） */
 export const fishFits = (tank, fish) => !!tank?.fish && !!fish && !fish.junk && (fish.legend ? 6 : fish.rarity) <= tank.fish;
 export const hasColors = (f) => !!f && !f.gift && !f.craft && f.color !== false;
@@ -179,6 +181,13 @@ export const FURNITURE_CATALOG = [
   { id: 'login_terrarium', icon: '🪴', zh: '玻璃小花園', cat: 'plant', kind: 'small', gift: 'login' },
   { id: 'login_candle', icon: '🕯️', zh: '香氛蠟燭罐', cat: 'light', kind: 'small', gift: 'login' },
   { id: 'login_foxpillow', icon: '🦊', zh: '狐狸抱枕', cat: 'toy', gift: 'login' },
+  // ---- 🎫 月票家具（11/09 定案）：pass: 1＝兩種月票都能買（2＝只有星空）；買了永久保留，不能送人 ----
+  { id: 'pass_eggchair', icon: '🪺', zh: '吊籃椅', price: 40, cat: 'sit', seat: 0.5, pass: 1 },
+  { id: 'pass_cloudrug', icon: '☁️', zh: '雲朵地毯', price: 35, cat: 'rug', kind: 'mat', top: 0.06, walk: true, pass: 1 },
+  { id: 'pass_glowtree', icon: '🌳', zh: '發光室內小樹', price: 60, cat: 'plant', pass: 1 },
+  { id: 'pass_gramophone', icon: '📀', zh: '唱片機', price: 50, cat: 'deco', pass: 1 },
+  { id: 'pass_chandelier', icon: '💎', zh: '水晶吊燈', price: 70, cat: 'light', walk: true, pass: 1 }, // 吊在半空，底下走得過去
+  { id: 'pass_canopybed', icon: '🛏️', zh: '四柱紗帳床', price: 90, cat: 'sit', seat: 0.32, sleep: true, long: 0.6, pass: 1 },
 ];
 /** 🌅 早安卡第 7 天大禮的小家具（照順序一輪送一件，全部拿完就只送松果） */
 export const LOGIN_GIFTS = ['login_lantern', 'login_terrarium', 'login_candle', 'login_foxpillow'];

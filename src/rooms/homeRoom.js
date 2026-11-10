@@ -35,12 +35,15 @@ const GADGET_HINT = {
   plush: ['🧸', '抱抱', '抱一下'],
   chime: ['🎐', '搖一搖', '搖一下風鈴'],
   lamp: ['💡', '開關燈', '開燈／關燈'],
+  glowtree: ['🌳', '換燈色', '換小樹燈的顏色'],
   feed: ['🐟', '餵魚', '餵魚'],
   water: ['💧', '澆水', '澆澆水'],
 };
 /** 家具 id → 小互動種類（沒有就是不能互動） */
 export function gadgetKind(id) {
   if (['radio', 'guitar', 'telescope', 'fridge'].includes(id)) return id;
+  if (id === 'pass_gramophone') return 'radio'; // 📀 唱片機：跟收音機一樣換歌
+  if (id === 'pass_glowtree') return 'glowtree';
   if (id === 'bookshelf' || id === 'books') return 'book';
   if (id === 'clock' || id === 'globe' || id === 'crystal' || id === 'easel') return id;
   if (id === 'teapot' || id === 'mug') return 'tea';
@@ -180,6 +183,7 @@ export function createHomeRoom() {
   const colliders2 = [];
   const swimmers = [];
   const rockingChairs = []; // 🪑 小搖椅（有人坐就搖）
+  const swingers = []; // 🪺 吊籃椅的籃子（一直輕輕晃，有人坐晃大一點）
   let feedUntil = 0; // 🐟 剛餵過魚：游快一點
   /** 可以坐、躺的位置；rest＝現在坐在哪（{ x, y, z, kind, actions }） */
   const seats = [];
@@ -382,6 +386,7 @@ export function createHomeRoom() {
     colliders2.length = 0;
     swimmers.length = 0;
     rockingChairs.length = 0;
+    swingers.length = 0;
     seats.length = 0;
     gadgets.length = 0;
     stoves.length = 0;
@@ -412,6 +417,7 @@ export function createHomeRoom() {
           m.rotation.order = 'YXZ'; // 🪑 小搖椅：沿著椅子自己的前後方向搖
           rockingChairs.push(m);
         }
+        m.traverse((o) => o.userData.sway && swingers.push({ o, m }));
       });
       // 門口那條走道（最前排中間）的家具不擋路，免得把門堵住出不去
       // 🛋️ 可以坐、躺的家具（按 E）
@@ -593,6 +599,23 @@ export function createHomeRoom() {
       });
       return on;
     },
+    /** 🌳 發光小樹：燈球換一組顏色（暖黃→粉→藍→綠→彩色），回傳第幾組 */
+    cycleGlow(g) {
+      const m = g?.mesh;
+      if (!m) return 0;
+      const sets = [[0xffd27a, 0xffb8e0, 0xb8e4ff, 0xfff1a8], [0xffb8e0, 0xffc8ea, 0xff9ccf, 0xffe0f0], [0xb8e4ff, 0x9ad0ff, 0xd8f0ff, 0xa8e8f0], [0xc8f0a8, 0xa8e8b8, 0xe8ffb8, 0xb8f0d0], [0xff8a8a, 0xffd27a, 0x9ae8a0, 0x9ab8ff]];
+      const k = ((m.userData.glowSet ?? 0) + 1) % sets.length;
+      m.userData.glowSet = k;
+      m.traverse((o) => {
+        if (o.userData.bulb == null) return;
+        if (!o.userData.ownMat) {
+          o.material = o.material.clone(); // 每棵樹自己的燈，不影響別人
+          o.userData.ownMat = true;
+        }
+        o.material.color.setHex(sets[k][o.userData.bulb]);
+      });
+      return k;
+    },
     /** 🐟 餵魚：魚缸裡的魚游快一點（4 秒） */
     feedFish() {
       feedUntil = performance.now() + 4000;
@@ -670,6 +693,13 @@ export function createHomeRoom() {
         const want = this.occupied?.(m.position.x, m.position.z, 0.35) ? 0.12 : 0;
         m.userData.amp = (m.userData.amp ?? 0) + (want - (m.userData.amp ?? 0)) * Math.min(1, dt * 2);
         m.rotation.x = Math.sin(time * 2.2) * m.userData.amp;
+      }
+      // 🪺 吊籃椅：籃子繞著鉤子輕輕晃
+      for (const { o, m } of swingers) {
+        const want = this.occupied?.(m.position.x, m.position.z, 0.35) ? 0.07 : 0.025;
+        o.userData.amp = (o.userData.amp ?? want) + (want - (o.userData.amp ?? want)) * Math.min(1, dt * 1.5);
+        o.rotation.z = Math.sin(time * 1.4 + m.position.x) * o.userData.amp;
+        o.rotation.x = Math.sin(time * 1.1 + m.position.z) * o.userData.amp * 0.5;
       }
       // 🔥 坐在小暖爐旁邊：燈光暖一點、亮一點（火光一閃一閃）
       const warm = rest && rest.actions.state === rest.kind && stoves.some((q) => Math.hypot(q.x - rest.sx, q.z - rest.sz) < 1.8);

@@ -36,7 +36,7 @@ import { ConfirmBuy } from './ui/ConfirmBuy.js';
 import { buildYard } from './rooms/yardModels.js';
 import { buildSign } from './rooms/signModels.js';
 import { SIGN_BY_ID } from './game/signCatalog.js';
-import { FURNITURE_COLORS, gridOf, expandPrice, fishFits } from './game/furnitureCatalog.js';
+import { ALL_COLORS, gridOf, expandPrice, fishFits } from './game/furnitureCatalog.js';
 import { YARD_BY_ID, YARD_USES } from './game/yardCatalog.js';
 import { FUR_PALETTES } from './player/characters/furPalettes.js';
 import { BASE_FUR, PREMIUM_FUR, TAILS, EARS, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from './game/looks.js';
@@ -3144,7 +3144,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       else hud.toast(t('{icon} 買了{name}，回帳篷按「🛠️ 布置」擺出來', { icon: FURNITURE_BY_ID[id]?.icon ?? '', name: FURNITURE_BY_ID[id]?.name ?? '' }));
       return true;
     }
-    const why = { poor: t('松果不夠喔 🌰'), owned: t('你已經有帳篷了'), noTent: t('先買帳篷，才能放家具 ⛺'), tooMany: t('這個已經買很多了'), tooFast: t('慢慢來 🙂'), maxed: t('已經是最大的帳篷了 🎉') };
+    const why = { poor: t('松果不夠喔 🌰'), owned: t('你已經有帳篷了'), noTent: t('先買帳篷，才能放家具 ⛺'), tooMany: t('這個已經買很多了'), tooFast: t('慢慢來 🙂'), maxed: t('已經是最大的帳篷了 🎉'), needPass: t('🎫 這是月票限定，有月票才能買'), off: t('🎫 月票商品還沒開放喔') };
     hud.toast(why[res?.reason] ?? t('沒買成，再試一次吧'));
     return false;
   };
@@ -3353,7 +3353,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       return { icon: y?.icon, name: t(y?.zh ?? ''), price: y?.price ?? 0, desc: t(y?.note ?? ''), img: snapshot(id, () => buildYard(id.slice(5))) };
     }
     const f = FURNITURE_BY_ID[id];
-    const cv = c ? FURNITURE_COLORS[c] : null;
+    const cv = c ? ALL_COLORS[c] : null;
     // 🐟 魚缸：大字寫能放幾星，再列出「你釣過、放得進去的魚」
     let desc = '';
     if (f?.fish) {
@@ -3399,6 +3399,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     };
   }
   shopPanel.passStar = () => !!(passState?.active && passState?.tier === 'star'); // 🌌 星空門牌
+  shopPanel.passOn = () => payOn; // 🎫 月票開通了才有「月票」分頁
+  shopPanel.passRank = () => (passState?.active ? (PASS_TIERS[passState.tier] ?? PASS).rank : 0);
+  shopPanel.onNeedPass = () => {
+    hud.toast(t('🎫 這是月票限定，有月票才能買'));
+    openPass();
+  };
 
   // ---------- 👫 好友、💌 密頻、✉️ 聯絡作者 ----------
   let friendView = null; // 'list' | { hid } | 'support'（收到新訊息時重畫用）
@@ -3750,6 +3756,11 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       const on = rooms.home.toggleLamp?.(g);
       audio.sfx('tap');
       return hud.toast(on === false ? t('💡 關燈了') : t('💡 開燈了'));
+    }
+    if (id === 'glowtree') {
+      const k = rooms.home.cycleGlow?.(g) ?? 0;
+      audio.sfx('tap');
+      return hud.toast([t('🌳 小樹換成暖暖的黃光'), t('🌳 小樹換成粉紅色的光'), t('🌳 小樹換成藍色的光'), t('🌳 小樹換成綠色的光'), t('🌳 小樹換成彩色的光')][k]);
     }
     if (id === 'feed') {
       rooms.home.feedFish?.();

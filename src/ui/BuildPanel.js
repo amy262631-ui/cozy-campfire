@@ -2,7 +2,7 @@ import { t } from '../i18n/i18n.js';
 import { ALL_FURNITURE, FURNITURE_BY_ID } from '../game/furniture.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TENT_SHAPES } from '../game/tentShapes.js';
-import { CATALOG_BY_ID, canAddTo, fishFits, stackAt, gridOf, expandPrice, MAX_STACK, FURNITURE_COLORS } from '../game/furnitureCatalog.js';
+import { CATALOG_BY_ID, canAddTo, fishFits, stackAt, gridOf, expandPrice, MAX_STACK, ALL_COLORS } from '../game/furnitureCatalog.js';
 import { FISH } from '../fishing/fishData.js';
 
 /**
@@ -212,7 +212,7 @@ export class BuildPanel {
       const total = home.inv?.[f.id] ?? 0;
       if (!total) continue;
       let colored = 0;
-      for (const cv of FURNITURE_COLORS.slice(1)) {
+      for (const cv of ALL_COLORS.slice(1)) {
         const have = home.cinv?.[`${f.id}~${cv.id}`] ?? 0;
         colored += have;
         const n = have - home.items.filter((x) => x.i === f.id && x.c === cv.id).length;
@@ -223,7 +223,7 @@ export class BuildPanel {
     }
     const fits = avail.filter(({ f }) => canAddTo(stack, f.id));
     const list = fits
-      .map(({ f, n, c }) => `<button type="button" class="build-item" data-op="place" data-i="${f.id}" ${c ? `data-c="${c}"` : ''}><span>${f.icon}</span>${f.name}${c ? `<em class="bi-color">${FURNITURE_COLORS[c].icon}</em>` : ''}<small>×${n}</small></button>`)
+      .map(({ f, n, c }) => `<button type="button" class="build-item" data-op="place" data-i="${f.id}" ${c ? `data-c="${c}"` : ''}><span>${f.icon}</span>${f.name}${c ? `<em class="bi-color">${ALL_COLORS[c]?.icon}</em>` : ''}<small>×${n}</small></button>`)
       .join('');
     if (!stack.length) {
       this.title.textContent = t('要在這格放什麼？');

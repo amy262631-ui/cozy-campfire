@@ -1451,6 +1451,7 @@ export function buildFurniture(id, opts = {}) {
       const arc = torus(0.75, 0.035, metal, -0.2, 0.77, -0.18, Math.PI * 0.95, 20);
       arc.rotation.z = -Math.PI * 0.42;
       cyl(0.012, 0.012, 0.3, metal, 0.12, 1.42, -0.18);
+      const n0 = g.children.length; // 從這裡開始是吊著的籃子（會輕輕晃）
       const rattan = mat(0xc9a46a, { side: THREE.DoubleSide });
       const egg = add(new THREE.SphereGeometry(0.4, 20, 14, Math.PI / 2 + 0.75, Math.PI * 2 - 1.5, 0.12, Math.PI * 0.84), rattan, 0.12, 0.85, -0.18);
       egg.scale.set(1, 1.25, 1);
@@ -1466,6 +1467,15 @@ export function buildFurniture(id, opts = {}) {
       rim.scale.set(0.95, 1.35, 1);
       ball(0.3, mat(0xf3e2c8), 0.12, 0.6, -0.16, 1, 0.38, 1);
       ball(0.13, mat(0xe8a0a8), 0.04, 0.88, -0.4, 1.4, 0.9, 0.6);
+      // 籃子掛在支架頂端的鉤子上：包成一組，homeRoom 讓它繞鉤子輕輕晃
+      const sw = new THREE.Group();
+      sw.position.set(0.12, 1.3, -0.18);
+      sw.userData.sway = true;
+      for (const o of g.children.slice(n0)) {
+        o.position.sub(sw.position);
+        sw.add(o);
+      }
+      g.add(sw);
       break;
     }
     case 'pass_cloudrug': {
@@ -1511,7 +1521,7 @@ export function buildFurniture(id, opts = {}) {
         const v = -0.55 + (((i * 37) % 100) / 100) * 1.45; // 高低
         const ang = i * 2.39996;
         const h = Math.sqrt(Math.max(0, 1 - v * v));
-        ball(0.032, glow(bulbs[i % 4]), 0.03 + Math.cos(ang) * h * 0.46, 1.04 + v * 0.36, Math.sin(ang) * h * 0.34);
+        ball(0.032, glow(bulbs[i % 4]), 0.03 + Math.cos(ang) * h * 0.46, 1.04 + v * 0.36, Math.sin(ang) * h * 0.34).userData.bulb = i % 4; // 按 E 換顏色用
       }
       break;
     }
