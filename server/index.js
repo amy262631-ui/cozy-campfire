@@ -42,7 +42,7 @@ import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS } from '../src/game/furnit
 import { YARD_BY_ID, hasYard, isBigYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
 import { CHALLENGE_BY_ID, challengesOf } from '../src/game/dailyChallenge.js';
-import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_FIRST_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
+import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_FIRST_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, SPIRIT_ACT_KIND, SPIRIT_NIGHT_STAR, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
 import { FUR_TOTAL, BASE_FUR, PREMIUM_FUR, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from '../src/game/looks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -996,8 +996,61 @@ function activateSponsor(vid, order) {
   const wig = order.amt >= sponsorMin(dayKey(new Date(order.paidAt ?? Date.now())).slice(0, 7)) ? (picked && !owned.includes(picked.id) ? picked : list.find((o) => !owned.includes(o.id)) ?? null) : null;
   saveJson('players.json', players);
   const got = wig ? grantOutfit(vid, wig.id, 'sponsor') : null;
+  if (order) order.gave = { wig: got ? wig.id : null }; // 退款時照這個收回
   for (const s of io.sockets.sockets.values()) if (s.data.vid === vid) s.emit('sponsored', { amt: order.amt, wig: wig?.id ?? null, got: !!got });
   console.log(`[贊助] ${order.name} NT$${order.amt}${wig ? ` → ${wig.zh}` : ''}`);
+}
+/**
+ * 💸 退款後收回（11/11）：作者在綠界退款後，到 /admin 輸入訂單編號，把這筆送的東西收回
+ *   月票：扣回天數（升級的改回小營火）、扣回先送的松果（已經花掉就扣到 0）；支持營地：收回這筆送的假髮
+ */
+function refundOrder(no) {
+  const o = orders[no];
+  if (!o) return { ok: false, reason: '找不到這個訂單編號' };
+  if (o.status === 'refunded') return { ok: false, reason: '這筆已經收回過了' };
+  if (o.status !== 'paid') return { ok: false, reason: '這筆沒有付款成功，不用收回' };
+  const w = players[o.vid];
+  if (!w) return { ok: false, reason: '找不到這位玩家的存檔' };
+  const g = o.gave ?? {};
+  let what = '';
+  if (o.kind === 'sponsor') {
+    const wig = g.wig ?? null;
+    if (wig && w.outfits?.includes(wig)) {
+      w.outfits = w.outfits.filter((x) => x !== wig);
+      for (const [slot, id] of Object.entries(w.wear ?? {})) if (id === wig) delete w.wear[slot];
+      syncRack(o.vid);
+      what = `收回假髮 ${OUTFIT_BY_ID[wig]?.zh ?? wig}`;
+    } else what = '（這筆沒有送假髮）';
+    w.spons = Math.max(0, (w.spons ?? 0) - o.amt);
+  } else {
+    w.pass ??= {};
+    const plan = PASS_PLANS[o.plan];
+    const tier = PASS_TIERS[o.tier] ?? PASS_TIERS.ember;
+    const up = g.up ?? !!o.upgrade;
+    if (up) {
+      if (w.pass.tier === 'star') w.pass.tier = 'ember';
+      what = '星空改回小營火';
+    } else {
+      const ms = g.ms ?? (plan?.days ?? tier.days) * 86400000;
+      w.pass.until = Math.max(Date.now(), (w.pass.until ?? 0) - ms);
+      what = `月票扣回 ${Math.round(ms / 86400000)} 天`;
+    }
+    const pc = g.pc ?? (up ? PASS_TIERS.star.first - PASS_TIERS.ember.first : plan?.first ?? tier.first);
+    const took = Math.min(w.pc, pc);
+    w.pc -= took;
+    what += `、松果 -${took}${took < pc ? `（他只剩 ${took} 顆，不足的不扣）` : ''}`;
+  }
+  o.status = 'refunded';
+  o.refundAt = Date.now();
+  saveJson('orders.json', orders);
+  saveJson('players.json', players);
+  for (const s of io.sockets.sockets.values()) {
+    if (s.data.vid !== o.vid) continue;
+    s.emit('wallet', { pc: w.pc, delta: 0, reason: 'refund' });
+    if (o.kind !== 'sponsor') s.emit('pass', passView(w));
+  }
+  console.log(`[退款] ${o.name} ${no}：${what}`);
+  return { ok: true, what, name: o.name, amt: o.amt };
 }
 /**
  * 💝 付款成功 → 送東西（共用：以後接國外付款平台，付款成功也呼叫這一段）
@@ -1032,6 +1085,7 @@ function activatePass(vid, order) {
     gain = plan?.first ?? tier.first;
   }
   w.pass.bought = (w.pass.bought ?? 0) + 1;
+  if (order) order.gave = { pc: gain, ms: order.upgrade && cur?.id === 'ember' ? 0 : (PASS_PLANS[order.plan]?.days ?? tier.days) * 86400000, up: !!(order.upgrade && cur?.id === 'ember') }; // 退款時照這個收回
   w.pd = dayKey(); // 今天已經用「先送的松果」領過了，今天不再加每日的份
   w.pc += gain;
   w.tot += gain;
@@ -1290,6 +1344,28 @@ app.get(['/stats', '/api/stats'], (req, res) => {
           .join('')}</table></div>`
       : ''
   }`;
+  // ✨ 小精靈（11/11）：誰在養、養到哪裡（親密度 60 變小精靈、400 長大）
+  const KIND_ZH = { light: '✨ 小光點', drop: '💧 水滴', flame: '🔥 火苗', leaf: '🍃 葉子', cloud: '☁️ 雲朵', star: '⭐ 星星', mush: '🍄 蘑菇' };
+  const owners = Object.entries(players).flatMap(([v, w]) => {
+    const all = [w.spirit, ...(w.spiritBox ?? [])].filter((x) => x && (x.own || x.xp > 0));
+    return all.length ? [{ v, w, sp: all[0], n: all.length }] : [];
+  });
+  const stCount = [0, 0, 0];
+  for (const o of owners) stCount[spiritStage(o.sp.xp)]++;
+  const spDays = days.slice(0, 7);
+  const sumDay = (f) => spDays.reduce((a, k) => a + (stats[k]?.[f] ?? 0), 0);
+  const spRows = owners
+    .sort((a, b) => b.sp.xp - a.sp.xp)
+    .slice(0, 40)
+    .map(({ v, w, sp, n }) => {
+      const st = spiritStage(sp.xp);
+      const kind = st ? (sp.t ?? 'leaf') : 'light';
+      const nm = escH(String(homes[v]?.name || w.nm || '').slice(0, 20)) || '（沒名字）';
+      return `<tr><td>${nm}</td><td>${escH(String(sp.nm ?? ''))}</td><td>${KIND_ZH[kind] ?? kind}</td><td>${['光點', '小精靈', '長大'][st]}</td><td>${Math.floor(sp.xp)}</td><td>${n}</td></tr>`;
+    })
+    .join('');
+  const spiritTable = `<h3>✨ 小精靈</h3><p class="me">養小精靈的玩家 <b>${owners.length}</b> 人・還是光點 ${stCount[0]}・<b>變成小精靈（親密度 60 以上）${stCount[1] + stCount[2]}</b>・長大（400 以上）${stCount[2]}<br>最近 7 天：買第一顆蛋 ${sumDay('spiritFirst')} 次・買孵蛋器 ${sumDay('spiritEgg')} 次・孵出來 ${sumDay('spiritHatch')} 隻・變成小精靈 ${sumDay('spirit1')} 次・長大 ${sumDay('spirit2')} 次・換樣子 ${sumDay('spiritForm')} 次</p>
+<div class="wrap"><table><tr><th>玩家</th><th>小精靈名字</th><th>種類</th><th>階段</th><th>親密度</th><th>養了幾隻</th></tr>${spRows || '<tr><td colspan="6">還沒有人養</td></tr>'}</table></div>`;
   // 「其他網站」是哪些網站（最近 7 天，打開網頁的次數）
   const LANG_ZH = { zh: '中文', en: '英文', ja: '日文', ko: '韓文', th: '泰文', vi: '越南文', id: '印尼文', ms: '馬來文', fr: '法文', de: '德文', es: '西班牙文', pt: '葡萄牙文', ru: '俄文', '?': '不知道' };
   const otherAll = {};
@@ -1350,7 +1426,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   };
 })();
 </script><p>伺服器已經連續醒著 <b>${awakeText()}</b>（從 ${new Date(BOOT_AT).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })} 起；正常只有重新部署時才會歸零，如果常常歸零，代表定時叫醒沒有生效、伺服器睡著過）</p><p>現在在線：${online} 人（名單在下面「👥 固定玩家」右邊）· 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好；「新旅人」是第一次來的人（從 11/3 開始統計）。</p>
-<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="${head.length}">還沒有資料</td></tr>'}</table></div>${regTable}${srcTable}${passTable}</body></html>`);
+<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="${head.length}">還沒有資料</td></tr>'}</table></div>${regTable}${srcTable}${passTable}${spiritTable}</body></html>`);
 });
 
 // 📍 網頁一打開就記一次（還沒載入遊戲）：算「載入完成前就離開」；遊戲畫出第一張畫面再記一次 loaded
@@ -1452,6 +1528,10 @@ app.get('/api/lookup', (req, res) => {
   if (!vid) return res.json({ ok: false, reason: '找不到：請用玩家編號（遊戲「🔥 約朋友」或「👫 好友」視窗裡）或帳號名稱' });
   res.json({ ok: true, ...playerCard(vid) });
 });
+app.post('/api/refund', express.json(), (req, res) => {
+  if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
+  res.json(refundOrder(String(req.body?.no ?? '').trim()));
+});
 app.post('/api/grant', express.json(), (req, res) => {
   if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
   const vid = findVid(req.body?.q);
@@ -1520,6 +1600,7 @@ app.get('/admin', (req, res) => {
 <select id="gtype"><option value="outfit">👒 造型</option><option value="pc">🌰 松果</option><option value="furn">🪑 家具</option></select>
 <select id="gout">${outfitOpts}</select><select id="gfurn" hidden>${furnOpts}</select><input id="gn" type="number" min="1" max="1000" value="10" hidden>
 <input id="gnote" placeholder="備註（例：同網路沒算到的邀請補發）" size="30"> <button id="give">送出</button> <span id="gmsg"></span></div>
+<div class="box"><b>💸 退款後收回</b><br><span class="hint">先在綠界後台退款，再在這裡輸入那筆的訂單編號（/stats 月票表格最右邊那欄）。會扣回月票天數、先送的松果（已花掉就扣到 0）；支持營地會收回假髮。</span><br><input id="rno" placeholder="訂單編號" size="28"> <button id="refund">收回</button> <span id="rmsg"></span></div>
 <h3>🟢 現在在線（${onRows.length} 人）</h3><p class="hint">打開這頁那一刻在線上的人（重新整理才會更新；營地居民不算）。點名字可以查他、發補償。</p>
 <div class="wrap"><table><tr><th>名字／玩家編號</th><th>在哪裡</th><th>分流</th><th>第一次來</th><th>營位</th><th>月票</th></tr>${onRows.map((r) => r.row).join('') || '<tr><td colspan="6">現在沒有人在線上</td></tr>'}</table></div>
 <h3>✉️ 玩家來信（${support.filter((x) => !x.re).length} 則還沒回）</h3><p class="hint">玩家在遊戲裡按「✉️ 聯絡作者」寄來的，會自動附上玩家編號。點名字可以查他、發補償；回覆後玩家在線上會馬上收到，不在線上下次進來會看到。</p>
@@ -1569,6 +1650,13 @@ app.get('/admin', (req, res) => {
       $('give').disabled = false;
       $('gmsg').innerHTML = r.ok ? '<span class="ok">✅ 送出 ' + esc(r.what) + '（玩家在線上會馬上收到通知）</span>' : '<span class="err">❌ ' + esc(r.reason) + '</span>';
       if (r.ok) show(Object.assign({ ok: true }, r.card));
+    });
+  };
+  $('refund').onclick = function () {
+    var no = $('rno').value.trim();
+    if (!no || !confirm('確定要收回訂單 ' + no + ' 送的東西嗎？（請先在綠界退款）')) return;
+    fetch('/api/refund' + K, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ no: no }) }).then(function (r) { return r.json(); }).then(function (r) {
+      $('rmsg').innerHTML = r.ok ? '<span class="ok">✅ ' + esc(r.name) + ' NT$' + esc(r.amt) + '：' + esc(r.what) + '</span>' : '<span class="err">❌ ' + esc(r.reason) + '</span>';
     });
   };
 })();
@@ -1831,8 +1919,9 @@ io.on('connection', (socket) => {
     if (sp.day?.d !== d) sp.day = { d, xp: 0, feed: 0 };
     let add = feedXp;
     if (kind) {
-      const ck = kind === 'cook' ? 'fire' : kind; // 煮菜算在「顧火」那邊（變火苗）
+      const ck = SPIRIT_ACT_KIND[kind] ?? kind; // 這個活動算哪一種小精靈
       sp.c[ck] = (sp.c[ck] ?? 0) + 1;
+      if (ck !== 'star' && (isNight() || eventInfo().active)) sp.c.star = (sp.c.star ?? 0) + SPIRIT_NIGHT_STAR; // ⭐ 晚上、營火時間玩
       add = Math.min(SPIRIT_XP[kind] ?? 0, SPIRIT_DAY_CAP - sp.day.xp);
       if (add > 0) sp.day.xp += add;
     }
@@ -1883,7 +1972,10 @@ io.on('connection', (socket) => {
     if (roomId === 'home' && room.players.size === 0) homeRooms.delete(homeOwner);
   };
   /** 進入某個分流的某個房間 */
+  let lastSpiritForest = 0;
   const enter = (c, id) => {
+    // 🍄 去迷霧森林（10 分鐘算一次）
+    if (id === 'mist_forest' && Date.now() - lastSpiritForest > 600000) (lastSpiritForest = Date.now()), setTimeout(() => spiritGain('forest'), 0);
     chan = c;
     if (player) player.ch = c.ch;
     roomId = id;
@@ -2311,6 +2403,7 @@ io.on('connection', (socket) => {
 
   // 聊天：專注帳篷裡不能聊；每 0.8 秒最多一則；最多 40 字
   let lastChat = 0;
+  let lastSpiritChat = 0;
   socket.on('chat', (data = {}) => {
     if (!player || roomId === 'tent_focus') return;
     const now = Date.now();
@@ -2320,6 +2413,8 @@ io.on('connection', (socket) => {
     if (!text) return;
     bump('chats');
     io.to(rkey).emit('chat', { id: socket.id, name: player.name, text });
+    // ☁️ 陪別人聊天（同一區有別人才算，每分鐘最多一次）
+    if (room?.players.size > 1 && now - lastSpiritChat > 60000) (lastSpiritChat = now), spiritGain('chat');
   });
 
   // 表情符號（只接受清單內的）
@@ -2342,6 +2437,7 @@ io.on('connection', (socket) => {
     const text = String(data.text ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 30);
     if (!text) return;
     shared.wishes.push({ name: player.name, text, at: now });
+    spiritGain('wish'); // ⭐ 許願
     shared.wishes = shared.wishes.slice(-ARCHIVE_MAX);
     saveJson('wishes.json', shared.wishes);
     bump('wishes');
@@ -2397,6 +2493,7 @@ io.on('connection', (socket) => {
     wal.qdone.push(id);
     return true;
   };
+  let lastSpiritQuest = 0;
   socket.on('quest', (data = {}, ack) => {
     const id = String(data.id ?? '');
     if (!player || !QUEST_IDS.has(id)) return ack?.({ ok: false });
@@ -2404,6 +2501,7 @@ io.on('connection', (socket) => {
     d.quests ??= {};
     if (session) session.did = true;
     if (wal) wal.act = Date.now();
+    if (['kuji', 'ema', 'meteor'].includes(id) && Date.now() - lastSpiritQuest > 30000) (lastSpiritQuest = Date.now()), spiritGain('wish'); // ⭐ 抽籤、繪馬、流星
     if (!questsDone.has(id) && questFirst(id)) {
       questsDone.add(id);
       award(QUEST_GAIN, 'quest');
@@ -2953,7 +3051,7 @@ io.on('connection', (socket) => {
     if (isBug) {
       if (item.rarity >= 2) chal('bug');
     } else chal('gather');
-    spiritGain('gather');
+    spiritGain(item.type === 'mush' || roomId === 'mist_forest' ? 'mushGather' : 'gather'); // 🍄 採蘑菇、在迷霧森林採集算蘑菇
     ack?.({ ok: true, id: item.id, count: wal.bk[item.id], first, gain, bonus, extra, readyAt: wal.gat[i], now });
   });
   socket.on('giftInfo', (data, ack) => {
@@ -3136,6 +3234,15 @@ io.on('connection', (socket) => {
   });
 
   // ---------- ✨ 小精靈 ----------
+  // ☁️ 休息（坐著、睡覺、裹毯子滿 1 分鐘）、⭐ 看星星：前端回報，每 50 秒最多一次
+  let lastSpiritAct = 0;
+  socket.on('spiritAct', (data = {}) => {
+    const k = data.k === 'rest' || data.k === 'stargaze' ? data.k : null;
+    const now = Date.now();
+    if (!k || now - lastSpiritAct < 50000) return;
+    lastSpiritAct = now;
+    spiritGain(k);
+  });
   socket.on('spiritInfo', (_d, ack) => ack?.(wal ? { ok: true, sp: spiritView(), dish: wal.dish ?? {} } : { ok: false }));
   socket.on('spiritFeed', (data = {}, ack) => {
     if (!wal || !player) return ack?.({ ok: false });
@@ -3314,6 +3421,7 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     bump('harvests');
     chal('harvest');
+    spiritGain('harvest');
     ack?.({ ...gardenInfo(player.vid), got: { id: c.id, n }, first, gain: first ? CROP_FIRST_GAIN : 0, basket: wal.bk });
   });
   let lastWater = 0;

@@ -7175,3 +7175,19 @@ body.touch .share-pop { bottom: calc(215px + env(safe-area-inset-bottom, 0px)); 
   opacity: 0.35;
   cursor: default;
 }
+.sp-rules {
+  margin: 10px 0 4px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+}
+.sp-rules summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.sp-rules ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}

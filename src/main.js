@@ -62,7 +62,7 @@ import { ChannelPanel } from './ui/ChannelPanel.js';
 import { CairnPanel } from './ui/CairnPanel.js';
 import { zoneName, LAYOUT as CAMP_LAYOUT } from './rooms/campLayout.js';
 import { RitualGuide } from './ui/RitualGuide.js';
-import { HelpPanel } from './ui/HelpPanel.js';
+import { HelpPanel, spiritRuleLines } from './ui/HelpPanel.js';
 import { GIFT_CATS, giftInfo, basketCat, GIFT_DAILY_CAP, GIFT_MIN_DAYS } from './game/gifts.js';
 import { FIRE_SEATS } from './rooms/fireSeats.js';
 import { SHOP_FRONT } from './rooms/shop.js';
@@ -1493,9 +1493,19 @@ async function init() {
   const SPIRIT_SIT = new Set(['sofa', 'eat', 'sit', 'fish', 'reel', 'roast', 'showFish', 'swing', 'stargaze']);
   const spiritParty = (x, z) => world.eventShower && roomMgr.current?.id === 'forest_main' && Math.hypot(x, z) < 7;
   const spiritCam = new THREE.Vector3();
+  // ☁️ 休息（坐著、睡覺、裹毯子）滿 1 分鐘、⭐ 看星星滿 10 秒：告訴伺服器（小精靈會往雲朵／星星長）
+  let spiritRestT = 0;
+  let spiritStarT = 0;
+  const SPIRIT_REST = new Set(['sofa', 'sit', 'sleep', 'blanket', 'swing']);
   const updateSpirits = (dt) => {
     camera.getWorldPosition(spiritCam);
     const a = player.actionState;
+    if (spiritSt && !spiritSt.none && net.online) {
+      spiritRestT = SPIRIT_REST.has(a) ? spiritRestT + dt : 0;
+      spiritStarT = a === 'stargaze' ? spiritStarT + dt : 0;
+      if (spiritRestT > 60) (spiritRestT = 0), net.socket?.emit?.('spiritAct', { k: 'rest' });
+      if (spiritStarT > 10) (spiritStarT = -50), net.socket?.emit?.('spiritAct', { k: 'stargaze' });
+    }
     const m = player.mesh.position;
     mySpirit.update(dt, { x: m.x, y: m.y, z: m.z, ry: player.rotationY, scale: player.mesh.scale.x, speed: Math.hypot(player.velocity.x, player.velocity.z), state: a === 'sleep' || a === 'blanket' ? 'sleep' : SPIRIT_SIT.has(a) ? 'sit' : 'idle', cam: spiritCam, night: spiritNightNow, party: spiritParty(m.x, m.z) });
     return { cam: spiritCam, night: spiritNightNow, party: spiritParty };
@@ -1586,6 +1596,7 @@ async function init() {
     };
     return spiritPrev;
   };
+  const spiritRulesBox = () => `<details class="sp-rules"><summary>${t('📜 小精靈規則')}</summary><ul>${spiritRuleLines().map((x) => `<li>${x}</li>`).join('')}</ul></details>`;
   async function openSpirit() {
     if (!net.online) return hud.toast(t('連上伺服器才能看小精靈'));
     const res = await net.request('spiritInfo', {});
@@ -1599,9 +1610,9 @@ async function init() {
       return modal.open(
         t('✨ 小精靈'),
         `<div class="sp-top"><div class="sp-cv"></div><div class="sp-info"><b>${t('你還沒有小精靈')}</b><small>${t('到「🏪 營地小舖 → ✨ 小精靈」買一顆小精靈蛋（附孵蛋器），第一顆 {n} 🌰，買了馬上孵出來！', { n: sp.eggPrice })}</small></div></div>
-        <div class="dex-note">${t('孵出來是一顆小光點，飄在你肩膀旁邊。釣魚、添柴、煮菜、採集、餵料理，它就會慢慢長大，看你怎麼玩變成 💧 水滴、🔥 火苗或 🍃 葉子。')}</div>
+        <div class="dex-note">${t('孵出來是一顆小光點，飄在你肩膀旁邊。玩遊戲、餵料理，它就會慢慢長大，看你怎麼玩變成 💧 水滴、🔥 火苗、🍃 葉子、☁️ 雲朵、⭐ 星星或 🍄 蘑菇。')}</div>
         <div class="dex-note">${t('可以取名字、摸摸它；不養也沒關係，想養再買就好。')}</div>
-        <button type="button" class="shop-buy-tent" data-eggshop>${t('🥚 去小舖買小精靈蛋')}</button>`,
+        <button type="button" class="shop-buy-tent" data-eggshop>${t('🥚 去小舖買小精靈蛋')}</button>${spiritRulesBox()}`,
         (body) => {
           const pv = spiritPreview();
           body.querySelector('.sp-cv').appendChild(pv.canvas);
@@ -1613,7 +1624,7 @@ async function init() {
     const pct = sp.next ? Math.round(((sp.xp - sp.prev) / (sp.next - sp.prev)) * 100) : 100;
     const nextTxt = sp.stage === 0 ? t('再 {n} 點變成小精靈', { n: sp.next - sp.xp }) : sp.stage === 1 ? t('再 {n} 點就會長大', { n: sp.next - sp.xp }) : t('已經長大了 🌟');
     const c = sp.c ?? {};
-    const style = sp.stage === 0 ? `<div class="sp-style">${t('現在最像：')}<b>${[['💧', c.fish ?? 0], ['🔥', c.fire ?? 0], ['🍃', c.gather ?? 0]].map(([i, n]) => `${i} ${n}`).join('　')}</b><small>${t('變成小精靈時，看你最常做什麼：釣魚 💧、顧火・煮菜 🔥、採集 🍃')}</small></div>` : '';
+    const style = sp.stage === 0 ? `<div class="sp-style">${t('現在最像：')}<b>${[['💧', c.fish ?? 0], ['🔥', c.fire ?? 0], ['🍃', c.gather ?? 0], ['☁️', c.cloud ?? 0], ['⭐', c.star ?? 0], ['🍄', c.mush ?? 0]].map(([i, n]) => `${i} ${Math.floor(n)}`).join('　')}</b><small>${t('變成小精靈時，看你最常做什麼：釣魚 💧、顧火・煮菜 🔥、採集 🍃、休息・陪人聊天 ☁️、看星星・許願・晚上玩 ⭐、迷霧森林・採蘑菇・種菜收成 🍄')}</small></div>` : '';
     const favs = new Set(sp.fav ?? []);
     const mine = DISHES.filter((d) => dishes[d.id] > 0).sort((a, b) => favs.has(b.id) - favs.has(a.id));
     const feedLeft = sp.feedMax - sp.feed;
@@ -1623,7 +1634,7 @@ async function init() {
     const favLine = sp.fav ? `<div class="dex-note">${t('💗 最喜歡：')}${sp.fav.map((id) => DISH_BY_ID[id]).filter(Boolean).map((d) => `${d.icon} ${t(d.zh)}`).join('、')}${t('（長得比較快）')}</div>` : '';
     const forms = sp.stage === 2
       ? `<div class="dex-note">${t('🌟 長大以後可以換樣子（每次 {n} 🌰）', { n: sp.price })}</div><div class="sp-forms">${SPIRIT_TYPES.map((x) => `<button type="button" data-form="${x.id}" class="${x.id === sp.t ? 'on' : ''}" ${x.id === sp.t ? 'disabled' : ''}>${x.icon}<small>${t(x.zh)}</small></button>`).join('')}</div>`
-      : `<div class="dex-note">${t('🌟 長大以後可以花 {n} 🌰 換成任何樣子（☁️ 雲朵、⭐ 星星、🍄 蘑菇只能這樣換到）', { n: sp.price })}</div>`;
+      : `<div class="dex-note">${t('🌟 長大以後可以花 {n} 🌰 換成任何樣子', { n: sp.price })}</div>`;
     modal.open(
       t('✨ 我的小精靈'),
       `<div class="sp-top"><div class="sp-cv"></div><div class="sp-info"><b>${spiritLabel(sp)}</b>
@@ -1631,14 +1642,14 @@ async function init() {
         <small>${t('今天玩遊戲 +{a}／{b}・今天餵了 {c}／{d} 次', { a: sp.dayXp, b: sp.dayCap, c: sp.feed, d: sp.feedMax })}</small>
         <div class="sp-btns"><button type="button" class="mini-btn" data-rename>${t('✏️ 取名字')}</button><button type="button" class="mini-btn" data-pet>${t('🤲 摸摸')}</button><button type="button" class="mini-btn" data-hide>${sp.off ? t('✨ 叫它出來') : t('🙈 先收起來')}</button></div></div></div>
       ${style}
-      <div class="dex-note">${t('怎麼長大：🎣 釣到魚、🔥 添柴、🍲 煮菜、🍄 採集，都會加親密度；餵料理長最快')}</div>
+      <div class="dex-note">${t('怎麼長大：釣魚、添柴、煮菜、採集、休息、聊天、看星星、許願、種菜收成，都會加親密度；餵料理長最快')}</div>
       <div class="dex-note"><b>${t('🍱 餵它吃料理')}</b>${feedLeft > 0 ? t('（今天還能餵 {n} 次）', { n: feedLeft }) : t('（今天吃飽了，明天再餵）')}</div>
       ${favLine}${feed}${forms}
       <div class="dex-note"><b>${t('🏡 收起來的小精靈')}</b>（${1 + sp.box.length}／${sp.max}）</div>
       ${sp.box.length ? `<div class="sp-box">${sp.box.map((b, i) => `<button type="button" data-pick="${i}"><b>${b.stage ? SPIRIT_BY_ID[b.t]?.icon : '✨'}</b><small>${b.nm || t(SPIRIT_NAME[b.t])}</small><em>${t('帶出門')}</em></button>`).join('')}</div>` : ''}
       <div class="dex-note">${sp.egg ? t('🥚 蛋正在孵，大約再 {n} 分鐘', { n: Math.max(1, Math.ceil(sp.egg.left / 60000)) }) : t('想多養一隻？到「🏪 營地小舖 → ✨ 小精靈」買 🥚 孵蛋器（{n} 🌰）', { n: sp.eggPrice })}</div>
       ${sp.egg ? '' : `<button type="button" class="mini-btn" data-eggshop>${t('🥚 去買孵蛋器')}</button>`}
-      <div class="dex-note">${t('沒來玩也不會生病、不會離開，它會一直等你 💛')}</div>`,
+      <div class="dex-note">${t('沒來玩也不會生病、不會離開，它會一直等你 💛')}</div>${spiritRulesBox()}`,
       (body) => {
         const pv = spiritPreview();
         body.querySelector('.sp-cv').appendChild(pv.canvas);
@@ -2126,7 +2137,7 @@ async function init() {
       net.request('foreignTry', {});
       modal.open(
         t('🌏 付款方式提醒'),
-        `<div class="pay-foreign"><p>${t('目前只能用台灣發行的信用卡或台灣的 ATM 付款。')}</p><p>${t('國外的卡還在準備中，謝謝你的耐心 🙏')}</p></div>
+        `<div class="pay-foreign"><p>${t('目前只能用台灣發行的信用卡、Apple Pay、綠界Pay、台灣的 ATM 或超商條碼付款。')}</p><p>${t('國外的卡還在準備中，謝謝你的耐心 🙏')}</p></div>
         <div class="pay-btns"><button type="button" class="mini-btn ghost" id="pf-no">${t('取消')}</button><button type="button" class="mini-btn" id="pf-go">${t('我有台灣的卡，繼續付款')}</button></div>`,
         (body) => {
           body.querySelector('#pf-no').addEventListener('click', () => {
@@ -2221,7 +2232,7 @@ async function init() {
         <div class="pass-tiers">${PASS_TIER_LIST.map(card).join('')}</div>
         <div class="outfit-today">${status}</div>
         <div class="dex-note">${t('免費玩家：釣魚每天前 {f} 條照價算、掛機每天最多 {s} 顆。月票只會加快松果累積，遊戲裡的東西不買也拿得到；到期後買過的東西都保留。', { f: FREE.fish, s: FREE.sit })}</div>
-        <div class="dex-note">${t('一次付清，不會自動續扣。天數接在剩下的天數後面。目前僅支援台灣的信用卡／ATM。')}</div>
+        <div class="dex-note">${t('一次付清，不會自動續扣。天數接在剩下的天數後面。可用台灣的信用卡、Apple Pay、綠界Pay、ATM、超商條碼。')}</div>
         ${info && !info.account ? `<div class="dex-note">${t('購買前要先建立帳號（👤 存檔），換手機登入月票才不會不見')}</div>` : ''}
         ${info?.test && !off ? `<div class="dex-note">${t('⚠️ 目前是綠界測試模式，不會真的扣款')}</div>` : ''}
         ${off ? `<div class="outfit-today">${t('🎫 月票即將推出，敬請期待！')}</div>` : ''}
@@ -2249,7 +2260,7 @@ async function init() {
         <div class="dex-note">${t('先點選喜歡的那一款。同一個月再贊助一次，送你另一款。')}</div>
         ${allOwned ? `<div class="sw-has">${t('✅ 這個月的兩款你都有了，謝謝你的支持 💛')}</div>` : ''}
         ${off ? `<div class="sw-has">${t('🎁 即將推出，敬請期待！')}</div>` : `<div class="sw-amts">${(sp?.amounts ?? []).map((a) => `<button type="button" data-amt="${a}"><small>💝 ${t('贊助')}</small><b>NT$ ${a}</b></button>`).join('')}</div>`}
-        <div class="dex-note">${t('一次付清，不會自動續扣。目前僅支援台灣的信用卡／ATM。')}</div>
+        <div class="dex-note">${t('一次付清，不會自動續扣。可用台灣的信用卡、Apple Pay、綠界Pay、ATM、超商條碼。')}</div>
         ${sp && !sp.account ? `<div class="dex-note">${t('贊助前要先建立帳號（👤 存檔），假髮才不會不見')}</div>` : ''}
       </div>`;
     }
@@ -3324,6 +3335,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     payOn: () => payOn, // 🎫 月票開通後，手冊、常見問題才說明月票
     go: {
       pass: () => openPass('pass'),
+      spirit: () => openSpirit(),
       shop: () => shopPanel.open(),
       home: () => goHome(),
       move: () => openMoveMap(myHome?.plot?.z ?? 0),
