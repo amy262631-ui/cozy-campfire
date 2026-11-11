@@ -278,7 +278,7 @@ export const LOFT_FRONT = 0.2;
 export const loftRows = (grid) => Math.floor(((LOFT_FRONT + 2.4) * grid) / 6 / 0.8 + 1e-6);
 export const isLoftCell = (z) => z >= LOFT_Z;
 /** 這頂帳篷有沒有二樓 */
-export const hasLoft = (home) => home?.shape === 'cabin';
+export const hasLoft = (home) => home?.shape === 'cabin' || home?.shape === 'treehouse'; // 🏡 雙層小木屋、🌳 私人樹屋有二樓
 
 // ---------- 帳篷擴建 ----------
 /** 帳篷地板一開始 6×6 格，用松果一次擴一圈，最大 20×20 */

@@ -35,13 +35,14 @@ import { DISH_BY_ID, dishFirstGain, BUFF_MS, DISH_FX, activeBuff } from '../src/
 import { MUSEUM_BY_ID, DONATE_PER_DAY } from '../src/game/museum.js';
 import { TRASH, TRASH_BY_ID, TRASH_MAX, TRASH_ROOM, RECYCLE_GAIN, RECYCLE_DAILY_CAP, TRASH_FIRST_GAIN, TRASH_DEX_OUTFIT, pickTrash } from '../src/game/trash.js';
 import { LAYOUT as CAMP_LAYOUT } from '../src/rooms/campLayout.js';
-import { PASS, PASS_TIERS, FREE, SPONSOR } from '../src/game/pass.js';
+import { PASS, PASS_TIERS, PASS_PLANS, FREE, SPONSOR, sponsorAmounts, sponsorMin } from '../src/game/pass.js';
 import crypto from 'node:crypto';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack, hasLoft } from './homes.js';
 import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS } from '../src/game/furnitureCatalog.js';
 import { YARD_BY_ID, hasYard, isBigYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
 import { CHALLENGE_BY_ID, challengesOf } from '../src/game/dailyChallenge.js';
+import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
 import { FUR_TOTAL, BASE_FUR, PREMIUM_FUR, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from '../src/game/looks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -197,6 +198,8 @@ const dms = asObject(savedDms);
 const support = asArray(savedSupport);
 /** 🎁 作者發的補償紀錄：[{ at, hid, name, what, note }] */
 const grants = asArray(savedGrants);
+/** 🔭 星空圓頂屋可以選的骨架顏色（跟 src/game/tentShapes.js 的 FRAME_COLORS 一致） */
+const FRAME_IDS = new Set(['gold', 'silver', 'white', 'black', 'copper']);
 /** 💡 玩家建議（只有作者在 /ideas 看得到）：[{ n, t, at }] */
 let ideas = asArray(savedIdeas);
 const publicHome = (h) =>
@@ -210,6 +213,7 @@ const publicHome = (h) =>
         style: h.style ?? 'classic',
         shape: h.shape ?? 'bell',
         shapes: h.shapes ?? ['bell'],
+        frame: h.frame ?? 'gold', // 🔭 星空圓頂屋的骨架顏色
         name: h.name ?? '',
         likes: h.likes?.length ?? 0,
         notes: h.notes ?? [],
@@ -360,6 +364,7 @@ function campList(zone = 0, selfVid = null) {
       name: h.name ?? '',
       shape: h.shape ?? 'bell',
       style: h.style ?? 'classic',
+      frame: h.frame ?? 'gold',
       sign: h.sign === 'galaxy' && passTier(players[vid])?.id !== 'star' ? 'wood' : (h.sign ?? 'wood'), // 星空門牌：月票到期就換回木頭
       open: h.open !== false,
       likes: h.likes?.length ?? 0,
@@ -931,9 +936,13 @@ const upgradePrice = (w, now = Date.now()) => {
   const days = Math.ceil(Math.max(0, (w?.pass?.until ?? 0) - now) / 86400000);
   return Math.max(10, Math.round(((PASS_TIERS.star.price - PASS_TIERS.ember.price) * days) / 30));
 };
+/** 🎁 星空月票：每 30 天可以免費挑 1 件月票家具（第一次買星空就能拿；拿了之後 30 天再給一次） */
+const FREE_FURN_MS = 30 * 86400000;
+const freeFurnAt = (w) => (w?.pass?.freeAt ? w.pass.freeAt + FREE_FURN_MS : 0);
+const freeFurnOk = (w, now = Date.now()) => passTier(w)?.id === 'star' && freeFurnAt(w) <= now;
 const passView = (w) => {
   const tier = passTier(w);
-  return { until: w?.pass?.until ?? 0, active: !!tier, tier: tier?.id ?? null, today: w?.pd === dayKey(), upgrade: tier?.id === 'ember' ? upgradePrice(w) : null };
+  return { until: w?.pass?.until ?? 0, active: !!tier, tier: tier?.id ?? null, today: w?.pd === dayKey(), upgrade: tier?.id === 'ember' ? upgradePrice(w) : null, freeOk: freeFurnOk(w), freeNext: freeFurnAt(w) };
 };
 /** 綠界設定：Render 的環境變數；沒設定時用綠界公開的測試帳號（不會真的扣錢） */
 const ECPAY = {
@@ -981,11 +990,26 @@ function activateSponsor(vid, order) {
   w.spons = (w.spons ?? 0) + (order?.amt ?? 0);
   // 送他選的那一款（要是付款那個月的）；沒選或對不上就送那個月的第一款
   const list = sponsorOutfits(dayKey(new Date(order.paidAt ?? Date.now())).slice(0, 7));
-  const wig = order.amt >= SPONSOR.min ? list.find((o) => o.id === order.wig) ?? list[0] : null;
+  // 選的那款已經有了（同一個月再贊助一次）→ 改送另一款；兩款都有了就不重複給
+  const owned = w.outfits ?? [];
+  const picked = list.find((o) => o.id === order.wig) ?? list[0];
+  const wig = order.amt >= sponsorMin(dayKey(new Date(order.paidAt ?? Date.now())).slice(0, 7)) ? (picked && !owned.includes(picked.id) ? picked : list.find((o) => !owned.includes(o.id)) ?? null) : null;
   saveJson('players.json', players);
   const got = wig ? grantOutfit(vid, wig.id, 'sponsor') : null;
   for (const s of io.sockets.sockets.values()) if (s.data.vid === vid) s.emit('sponsored', { amt: order.amt, wig: wig?.id ?? null, got: !!got });
   console.log(`[贊助] ${order.name} NT$${order.amt}${wig ? ` → ${wig.zh}` : ''}`);
+}
+/**
+ * 💝 付款成功 → 送東西（共用：以後接國外付款平台，付款成功也呼叫這一段）
+ *   order.kind：'pass' 月票、'sponsor' 支持營地（假髮）
+ */
+function fulfillOrder(order) {
+  if (!order || order.done) return false;
+  order.done = Date.now();
+  saveJson('orders.json', orders);
+  if (order.kind === 'sponsor') activateSponsor(order.vid, order);
+  else activatePass(order.vid, order);
+  return true;
 }
 function activatePass(vid, order) {
   const w = players[vid];
@@ -1000,10 +1024,12 @@ function activatePass(vid, order) {
     w.pass.tier = 'star';
     gain = PASS_TIERS.star.first - PASS_TIERS.ember.first;
   } else {
-    w.pass.until = Math.max(now, w.pass.until ?? 0) + tier.days * 86400000;
+    // 1 個月／3 個月：天數疊加在剩下的天數上（舊訂單沒有 plan，照月票本身的 30 天）
+    const plan = PASS_PLANS[order?.plan];
+    w.pass.until = Math.max(now, w.pass.until ?? 0) + (plan?.days ?? tier.days) * 86400000;
     // 兩種混著買：用比較好的那一種
     w.pass.tier = cur && cur.rank > tier.rank ? cur.id : tier.id;
-    gain = tier.first;
+    gain = plan?.first ?? tier.first;
   }
   w.pass.bought = (w.pass.bought ?? 0) + 1;
   w.pd = dayKey(); // 今天已經用「先送的松果」領過了，今天不再加每日的份
@@ -1017,7 +1043,7 @@ function activatePass(vid, order) {
     s.emit('pass', { ...passView(w), gain, order: order?.no });
     s.data.onPass?.();
   }
-  console.log(`[月票] ${order?.name ?? vid} ${order?.upgrade ? '升級星空' : tier.zh}，到 ${new Date(w.pass.until).toISOString()}`);
+  console.log(`[月票] ${order?.name ?? vid} ${order?.upgrade ? '升級星空' : PASS_PLANS[order?.plan]?.item ?? tier.zh}，到 ${new Date(w.pass.until).toISOString()}`);
   return true;
 }
 
@@ -1115,9 +1141,9 @@ function loadSponsors() {
   try {
     const list = JSON.parse(fs.readFileSync(SPONSORS_FILE, 'utf8'));
     sponsors = Array.isArray(list) ? list.filter((s) => s && typeof s.name === 'string') : [];
-    console.log(`[贊助] 讀到 ${sponsors.length} 位贊助者`);
+    console.log(`[親友小花] 讀到 ${sponsors.length} 位（作者手動加的小黃花、四葉草，不是付款贊助）`);
   } catch (err) {
-    console.warn('[贊助] 讀取 sponsors.json 失敗：', err.message);
+    console.warn('[親友小花] 讀取 sponsors.json 失敗：', err.message);
   }
 }
 loadSponsors();
@@ -1156,7 +1182,7 @@ function onlineList(link) {
     const w = players[p.vid];
     const h = homes[p.vid];
     const pt = passTier(w);
-    onRows.push({ ch, row: `<tr><td>${link(homeId(p.vid), p.name)}<br><small>${escH(homeId(p.vid))}</small></td><td>${escH(where)}</td><td>${ch}</td><td>${w?.fd ? `${Math.max(0, Math.round((Date.parse(`${dayKey()}T00:00:00Z`) - Date.parse(`${w.fd}T00:00:00Z`)) / 86400000)) + 1} 天` : w ? '老玩家' : '-'}</td><td>${h?.tent ? (h.plot ? plotLabel(h.plot) : '有') : '-'}</td><td>${pt ? `${pt.icon} ${pt.zh}` : ''}${isAuthorVid(p.vid) ? ' ⭐ 作者' : ''}</td></tr>` });
+    onRows.push({ ch, row: `<tr><td>${link(homeId(p.vid), p.name)}<br><small>${escH(homeId(p.vid))}</small></td><td>${escH(where)}</td><td>${ch}</td><td>${w?.fd ? `${Number(w.fd.slice(5, 7))}/${Number(w.fd.slice(8, 10))}<br><small>（第 ${Math.max(0, Math.round((Date.parse(`${dayKey()}T00:00:00Z`) - Date.parse(`${w.fd}T00:00:00Z`)) / 86400000)) + 1} 天）</small>` : w ? '更早' : '-'}</td><td>${h?.tent ? (h.plot ? plotLabel(h.plot) : '有') : '-'}</td><td>${pt ? `${pt.icon} ${pt.zh}` : ''}${isAuthorVid(p.vid) ? ' ⭐ 作者' : ''}</td></tr>` });
   };
   for (const c of channels.values()) for (const [rid, r] of c.rooms) for (const pl of r.players.values()) addOn(pl, placeOf(rid), c.ch);
   for (const [owner, r] of homeRooms) for (const pl of r.players.values()) addOn(pl, owner === pl.vid ? '🏠 自己的帳篷' : `🏠 ${String(homes[owner]?.name ?? '別人')}的帳篷`, pl.ch ?? '-');
@@ -1180,9 +1206,10 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   // 來源統計：最近 7 天每個來源的人數、30 秒內離開、平均停留、隔天回來的比例
   const srcDays = days.slice(0, 7);
   const srcRows = SOURCES.map((so) => {
-    const a = { id: so.id, zh: so.zh, hits: 0, loaded: 0, v: 0, n: 0, ss: 0, s30: 0, sec: 0, d1: 0, nOld: 0 };
+    const a = { id: so.id, zh: so.zh, hits: 0, loaded: 0, v: 0, n: 0, ss: 0, s30: 0, sec: 0, d1: 0, nOld: 0, lang: {} };
     srcDays.forEach((k, idx) => {
       const e = stats[k]?.src?.[so.id];
+      for (const [lg, n] of Object.entries(stats[k]?.langSrc?.[so.id] ?? {})) a.lang[lg] = (a.lang[lg] ?? 0) + n;
       a.hits += stats[k]?.hitSrc?.[so.id] ?? 0;
       a.loaded += stats[k]?.loadSrc?.[so.id] ?? 0;
       if (!e) return;
@@ -1243,31 +1270,41 @@ app.get(['/stats', '/api/stats'], (req, res) => {
 <p>📲 從手機桌面圖示打開的次數（最近 7 天）：${allDays.slice(0, 7).reduce((n, k) => n + (stats[k]?.pwa ?? 0), 0)} 次<br>📱 從 App 內建瀏覽器或嵌入網頁進來的次數：${iaLine}<br><small>這些人常常存不了進度，下次進來會被當成新的人（「只來 1 天」會偏多）。遊戲會跳提示請他們用瀏覽器打開。</small></p>
 <p>來 3 天以上（固定玩家）<b>${bw.reg}</b> 人${trend(bw.reg, bp.reg)}・其中 5 天以上（常客）<b>${bw.fan}</b> 人${trend(bw.fan, bp.fan)}・來 2 天 ${bw.two} 人・只來 1 天 ${bw.one} 人<br><small>箭頭是跟再前一週比。名字是帳篷門牌上的名字；沒買帳篷的顯示「（沒帳篷）」。</small></p>
 <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start"><div class="wrap"><table><tr><th>名字</th><th>這週來了</th><th>連續天數</th><th>營位</th><th>上週來了</th></tr>${regs || '<tr><td colspan="5">這週還沒有來 3 天以上的玩家</td></tr>'}</table></div>
-<div class="wrap"><b style="color:#9fe39f">🟢 現在在線（${onNow.length} 人）</b><small>　打開這頁那一刻，重新整理才更新</small><table><tr><th>名字</th><th>在哪裡</th><th>分流</th><th>第幾天</th><th>營位</th><th>月票</th></tr>${onNow.map((r) => r.row).join('') || '<tr><td colspan="6">現在沒有人在線上</td></tr>'}</table></div></div>`;
+<div class="wrap"><b style="color:#9fe39f">🟢 現在在線（${onNow.length} 人）</b><small>　打開這頁那一刻，重新整理才更新</small><table><tr><th>名字</th><th>在哪裡</th><th>分流</th><th>第一次來</th><th>營位</th><th>月票</th></tr>${onNow.map((r) => r.row).join('') || '<tr><td colspan="6">現在沒有人在線上</td></tr>'}</table></div></div>`;
   // 🎫 營火月票的收入：這個月（台北時間）付款成功的訂單
   const month = dayKey().slice(0, 7);
   const paid = Object.entries(orders).filter(([, o]) => o.status === 'paid' && !o.sim && dayKey(new Date(o.paidAt)).startsWith(month));
   const revenue = paid.reduce((a, [, o]) => a + o.amt, 0);
   const sumOf = (f) => paid.filter(([, o]) => f(o)).reduce((a, [, o]) => a + o.amt, 0);
-  const split = `🔥 小營火 NT$ ${sumOf((o) => o.kind !== 'sponsor' && o.tier !== 'star' && !o.upgrade).toLocaleString()}・✨ 星空 NT$ ${sumOf((o) => o.kind !== 'sponsor' && (o.tier === 'star' || o.upgrade)).toLocaleString()}・☕ 贊助 NT$ ${sumOf((o) => o.kind === 'sponsor').toLocaleString()}`;
+  const planOf = (o) => PASS_PLANS[o.plan]?.months ?? 1;
+  const nt = (f) => `NT$ ${sumOf(f).toLocaleString()}`;
+  // 🌏 國外玩家想買：這個月按了幾次購買（按了「我有台灣的卡，繼續」幾次）
+  const fx = Object.entries(stats).filter(([k]) => k.startsWith(month)).reduce((a, [, d]) => [a[0] + (d.foreign ?? 0), a[1] + (d.foreignGo ?? 0)], [0, 0]);
+  const split = `🔥 小營火 1 個月 ${nt((o) => o.kind !== 'sponsor' && o.tier !== 'star' && !o.upgrade && planOf(o) === 1)}・3 個月 ${nt((o) => o.kind !== 'sponsor' && o.tier !== 'star' && !o.upgrade && planOf(o) === 3)}・✨ 星空 1 個月 ${nt((o) => o.kind !== 'sponsor' && o.tier === 'star' && !o.upgrade && planOf(o) === 1)}・3 個月 ${nt((o) => o.kind !== 'sponsor' && o.tier === 'star' && !o.upgrade && planOf(o) === 3)}・⬆️ 升級 ${nt((o) => o.upgrade)}・🎁 支持營地 ${nt((o) => o.kind === 'sponsor')}・🌏 國外玩家想買 ${fx[0]} 次（繼續付款 ${fx[1]} 次）`;
   const passTable = `<h3>🎫 月票＋☕ 贊助（${month}）</h3><p class="me">${ECPAY.prod ? '綠界正式模式' : '⚠️ 綠界測試模式（不會真的收錢）'}・這個月 ${paid.length} 筆、收入 <b>NT$ ${revenue.toLocaleString()}</b>（${split}）（個人網路銷售服務類大約每月 4 萬元以下，可以先不用辦稅籍，以國稅局最新規定為準）</p>${
     paid.length
       ? `<div class="wrap"><table><tr><th>付款時間</th><th>名字</th><th>項目</th><th>金額</th><th>付款方式</th><th>訂單編號</th></tr>${paid
           .sort((a, b) => b[1].paidAt - a[1].paidAt)
           .slice(0, 50)
-          .map(([no, o]) => `<tr><td>${new Date(o.paidAt).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td>${String(o.name).replace(/[<>&]/g, '')}</td><td>${o.kind === 'sponsor' ? '☕ 贊助' : o.upgrade ? '⬆️ 升級星空' : o.tier === 'star' ? '✨ 星空月票' : '🔥 小營火月票'}</td><td>${o.amt}</td><td>${o.pay ?? ''}</td><td>${no}</td></tr>`)
+          .map(([no, o]) => `<tr><td>${new Date(o.paidAt).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td>${String(o.name).replace(/[<>&]/g, '')}</td><td>${o.kind === 'sponsor' ? '🎁 支持營地' : o.upgrade ? '⬆️ 升級星空' : `${o.tier === 'star' ? '✨ 星空月票' : '🔥 小營火月票'} ${planOf(o)} 個月`}</td><td>${o.amt}</td><td>${o.pay ?? ''}</td><td>${no}</td></tr>`)
           .join('')}</table></div>`
       : ''
   }`;
-  const srcTable = `<h3>📍 來源（最近 7 天）</h3><div class="wrap"><table><tr><th>來源</th><th>打開網頁</th><th>載入完成前就離開</th><th>進來次數</th><th>新旅人</th><th>30秒內離開</th><th>平均停留</th><th>隔天又回來</th></tr>${
+  // 「其他網站」是哪些網站（最近 7 天，打開網頁的次數）
+  const LANG_ZH = { zh: '中文', en: '英文', ja: '日文', ko: '韓文', th: '泰文', vi: '越南文', id: '印尼文', ms: '馬來文', fr: '法文', de: '德文', es: '西班牙文', pt: '葡萄牙文', ru: '俄文', '?': '不知道' };
+  const otherAll = {};
+  for (const k of srcDays) for (const [h, n] of Object.entries(stats[k]?.otherRef ?? {})) otherAll[h] = (otherAll[h] ?? 0) + n;
+  const otherList = Object.entries(otherAll).sort((x, y) => y[1] - x[1]).slice(0, 20);
+  const otherTable = otherList.length ? `<p class="me">🌐 「其他網站」細分（最近 7 天）：${otherList.map(([h, n]) => `${h.replace(/[<>&]/g, '')} ${n}`).join('・')}</p>` : '';
+  const srcTable = `<h3>📍 來源（最近 7 天）</h3><div class="wrap"><table><tr><th>來源</th><th>打開網頁</th><th>載入完成前就離開</th><th>進來次數</th><th>新旅人</th><th>30秒內離開</th><th>平均停留</th><th>隔天又回來</th><th>語言（打開網頁）</th></tr>${
     srcRows
       .sort((x, y) => y.v - x.v)
       .map((a) => {
         const avg = a.ss ? Math.round(a.sec / a.ss) : 0;
-        return `<tr><td>${a.zh}</td><td>${a.hits || '-'}</td><td>${a.hits ? p100(Math.max(0, a.hits - a.loaded), a.hits) : '-'}</td><td>${a.v}</td><td>${a.n}</td><td>${p100(a.s30, a.ss)}</td><td>${Math.floor(avg / 60)}分${avg % 60}秒</td><td>${p100(a.d1, a.nOld)}</td></tr>`;
+        return `<tr><td>${a.zh}</td><td>${a.hits || '-'}</td><td>${a.hits ? p100(Math.max(0, a.hits - a.loaded), a.hits) : '-'}</td><td>${a.v}</td><td>${a.n}</td><td>${p100(a.s30, a.ss)}</td><td>${Math.floor(avg / 60)}分${avg % 60}秒</td><td>${p100(a.d1, a.nOld)}</td><td style="text-align:left">${Object.entries(a.lang).sort((x, y) => y[1] - x[1]).slice(0, 4).map(([lg, n]) => `${LANG_ZH[lg] ?? lg} ${n}`).join('・') || '-'}</td></tr>`;
       })
-      .join('') || '<tr><td colspan="8">還沒有資料（這版上線後才開始記）</td></tr>'
-  }</table></div><p>「打開網頁」是網頁一打開就記一次（還沒載入遊戲）；「載入完成前就離開」＝打開網頁但沒等到遊戲畫面就走了，如果很高，代表 30 秒流失是卡在載入。「隔天又回來」＝第一次來的人，隔天又進來的比例（今天的還沒算）。來源是看玩家從哪個網站點過來；Threads、IG 的 App 常常不告訴網站從哪裡來，會算進「直接進來」，貼連結時可以在網址後面加 <code>?src=threads</code>。</p>`;
+      .join('') || '<tr><td colspan="9">還沒有資料（這版上線後才開始記）</td></tr>'
+  }</table></div>${otherTable}<p>「打開網頁」是網頁一打開就記一次（還沒載入遊戲）；「載入完成前就離開」＝打開網頁但沒等到遊戲畫面就走了，如果很高，代表 30 秒流失是卡在載入。「隔天又回來」＝第一次來的人，隔天又進來的比例（今天的還沒算）。來源是看玩家從哪個網站點過來；Threads、IG 的 App 常常不告訴網站從哪裡來，會算進「直接進來」，貼連結時可以在網址後面加 <code>?src=threads</code>。</p>`;
   const online = [...channels.values()].reduce((n, c) => n + chCount(c), 0);
   res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>營地統計</title>
 <style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px}h3{color:#ffb46b;margin-top:28px}code{background:#2a211c;padding:1px 5px;border-radius:4px}table{border-collapse:collapse;font-size:13px}th,td{padding:6px 9px;border-bottom:1px solid #3a2e27;text-align:right;white-space:nowrap}th{color:#ffb46b;position:sticky;top:0;background:#1d1714}td:first-child,th:first-child{text-align:left}.wrap{overflow-x:auto}p{opacity:.75;font-size:13px}.me{opacity:1;padding:8px 12px;border-radius:10px;background:#2a211c;display:inline-block}.me button{margin-left:6px;padding:4px 10px;border:none;border-radius:999px;background:#f08a3c;color:#2a1608;font-weight:700;cursor:pointer}.me small{opacity:.7}</style></head>
@@ -1329,6 +1366,18 @@ app.all('/api/hit', (req, res) => {
   d[field === 'loadSrc' ? 'loaded' : 'hits'] = (d[field === 'loadSrc' ? 'loaded' : 'hits'] ?? 0) + 1;
   d[field] ??= {};
   d[field][src] = (d[field][src] ?? 0) + 1;
+  if (field === 'hitSrc') {
+    // 📍 細分（11/11）：「其他網站」記真正的網域；每個來源記語言（只記網域和語言的前兩碼，不記個人資料）
+    if (src === 'other') {
+      const host = (q('r') || q('src') || '?').toLowerCase().replace(/[^a-z0-9.\-_]/g, '').slice(0, 50) || '?';
+      d.otherRef ??= {};
+      if (d.otherRef[host] != null || Object.keys(d.otherRef).length < 80) d.otherRef[host] = (d.otherRef[host] ?? 0) + 1;
+    }
+    const lg = q('l').toLowerCase().slice(0, 2).replace(/[^a-z]/g, '') || '?';
+    d.langSrc ??= {};
+    d.langSrc[src] ??= {};
+    d.langSrc[src][lg] = (d.langSrc[src][lg] ?? 0) + 1;
+  }
   saveJson('stats.json', stats);
 });
 
@@ -1472,7 +1521,7 @@ app.get('/admin', (req, res) => {
 <select id="gout">${outfitOpts}</select><select id="gfurn" hidden>${furnOpts}</select><input id="gn" type="number" min="1" max="1000" value="10" hidden>
 <input id="gnote" placeholder="備註（例：同網路沒算到的邀請補發）" size="30"> <button id="give">送出</button> <span id="gmsg"></span></div>
 <h3>🟢 現在在線（${onRows.length} 人）</h3><p class="hint">打開這頁那一刻在線上的人（重新整理才會更新；營地居民不算）。點名字可以查他、發補償。</p>
-<div class="wrap"><table><tr><th>名字／玩家編號</th><th>在哪裡</th><th>分流</th><th>來營地第幾天</th><th>營位</th><th>月票</th></tr>${onRows.map((r) => r.row).join('') || '<tr><td colspan="6">現在沒有人在線上</td></tr>'}</table></div>
+<div class="wrap"><table><tr><th>名字／玩家編號</th><th>在哪裡</th><th>分流</th><th>第一次來</th><th>營位</th><th>月票</th></tr>${onRows.map((r) => r.row).join('') || '<tr><td colspan="6">現在沒有人在線上</td></tr>'}</table></div>
 <h3>✉️ 玩家來信（${support.filter((x) => !x.re).length} 則還沒回）</h3><p class="hint">玩家在遊戲裡按「✉️ 聯絡作者」寄來的，會自動附上玩家編號。點名字可以查他、發補償；回覆後玩家在線上會馬上收到，不在線上下次進來會看到。</p>
 <div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>內容</th><th>回覆</th></tr>${supRows || '<tr><td colspan="4">還沒有來信</td></tr>'}</table></div>
 <h3>👫 邀請紀錄（最近 200 筆）</h3><p class="hint">點名字可以直接查那位玩家。「同網路」＝邀請人和朋友用同一個網路（同事、家人），要待 ${Math.round(SAMENET_STAY_MS / 60000)} 分鐘、朋友要玩一下（釣魚、採集、撿垃圾、做任務），同一個網路每天最多算 ${SAMENET_DAILY} 位。</p>
@@ -1566,7 +1615,7 @@ app.get('/api/pay/go/:no', (req, res) => {
     PaymentType: 'aio',
     TotalAmount: String(o.amt),
     TradeDesc: o.kind === 'sponsor' ? 'CozyCampfire support' : 'CozyCampfire monthly pass',
-    ItemName: o.kind === 'sponsor' ? SPONSOR.item : o.upgrade ? '營火月票・升級星空（補差價）' : (PASS_TIERS[o.tier] ?? PASS).item,
+    ItemName: o.kind === 'sponsor' ? SPONSOR.item : o.upgrade ? '營火月票・升級星空（補差價）' : PASS_PLANS[o.plan]?.item ?? (PASS_TIERS[o.tier] ?? PASS).item,
     ReturnURL: `${base}/api/pay/notify`,
     ChoosePayment: 'ALL',
     EncryptType: '1',
@@ -1603,7 +1652,7 @@ app.post('/api/pay/notify', express.urlencoded({ extended: false }), (req, res) 
     o.ecpay = String(b.TradeNo ?? '').slice(0, 40);
     o.sim = b.SimulatePaid === '1'; // 綠界後台的「模擬付款」
     saveJson('orders.json', orders);
-    if (!o.sim || !ECPAY.prod) (o.kind === 'sponsor' ? activateSponsor : activatePass)(o.vid, o);
+    if (!o.sim || !ECPAY.prod) fulfillOrder(o);
   } else if (b.RtnCode !== '1') {
     o.last = `${b.RtnCode}:${String(b.RtnMsg ?? '').slice(0, 60)}`; // ATM、超商代碼取號成功，還沒付款
     saveJson('orders.json', orders);
@@ -1652,7 +1701,7 @@ const packState = (p) => [
   p.e | 0,
 ];
 
-const publicInfo = (p) => ({ id: p.id, name: p.name, fur: p.fur, sp: p.sp, tl: p.tl || undefined, er: p.er || undefined, rw: p.rw, ot: p.ot, pb: p.pb, s: packState(p) });
+const publicInfo = (p) => ({ id: p.id, name: p.name, fur: p.fur, sp: p.sp, tl: p.tl || undefined, er: p.er || undefined, rw: p.rw, ot: p.ot, pb: p.pb, sr: p.sr || undefined, s: packState(p) });
 
 /** 某個分流的某個房間，給新進玩家的完整資料 */
 function roomSnapshot(c, rid, selfId) {
@@ -1749,6 +1798,68 @@ io.on('connection', (socket) => {
       const got = grantOutfit(player.vid, dailyOutfit(d).id, 'chal');
       if (got) bump('chals');
     }
+  };
+  /** ✨ 小精靈：存檔、加親密度、長大（規則在 src/game/spiritRules.js） */
+  const spiritOf = () => {
+    if (!wal) return null;
+    wal.spirit ??= { xp: 0, c: {} };
+    wal.spirit.c ??= {};
+    return wal.spirit;
+  };
+  const spiritView = () => {
+    const sp = spiritOf();
+    if (!sp) return null;
+    const st = spiritStage(sp.xp);
+    const d = dayKey();
+    const day = sp.day?.d === d ? sp.day : { xp: 0, feed: 0 };
+    return { nm: sp.nm ?? '', xp: sp.xp, stage: st, t: st ? (sp.t ?? 'leaf') : 'light', next: SPIRIT_STAGE_AT[st + 1] ?? null, prev: SPIRIT_STAGE_AT[st], c: sp.c, off: !!sp.off, dayXp: day.xp, dayCap: SPIRIT_DAY_CAP, feed: day.feed, feedMax: SPIRIT_FEED_DAY, fav: st ? SPIRIT_FAV[sp.t ?? 'leaf'] : null, price: SPIRIT_CHANGE_PRICE, away: sp.away ?? 0, box: (wal.spiritBox ?? []).map((b) => ({ nm: b.nm ?? '', t: spiritStage(b.xp) ? (b.t ?? 'leaf') : 'light', stage: spiritStage(b.xp), xp: b.xp })), egg: wal.egg ? { left: Math.max(0, wal.egg.at - Date.now()) } : null, eggPrice: SPIRIT_EGG_PRICE, max: SPIRIT_MAX };
+  };
+  /** 小精靈外型變了：告訴同一區的人 */
+  const spiritSync = () => {
+    const code = spiritCode(spiritOf());
+    if (!player || player.sr === code) return;
+    player.sr = code;
+    if (rkey) socket.to(rkey).emit('spirit', { id: socket.id, sr: code });
+  };
+  /** kind：fish／fire／gather／cook；feed：餵食直接加 xp（不算每日上限） */
+  const spiritGain = (kind, feedXp = 0) => {
+    const sp = spiritOf();
+    if (!sp || !player?.vid) return;
+    const d = dayKey();
+    if (sp.day?.d !== d) sp.day = { d, xp: 0, feed: 0 };
+    let add = feedXp;
+    if (kind) {
+      const ck = kind === 'cook' ? 'fire' : kind; // 煮菜算在「顧火」那邊（變火苗）
+      sp.c[ck] = (sp.c[ck] ?? 0) + 1;
+      add = Math.min(SPIRIT_XP[kind] ?? 0, SPIRIT_DAY_CAP - sp.day.xp);
+      if (add > 0) sp.day.xp += add;
+    }
+    if (add <= 0) return;
+    const before = spiritStage(sp.xp);
+    sp.xp += add;
+    const after = spiritStage(sp.xp);
+    if (after !== before) {
+      if (before === 0) sp.t = autoKind(sp.c); // 變成小精靈：看最常做什麼
+      saveJson('players.json', players);
+      spiritSync();
+      bump(after === 1 ? 'spirit1' : 'spirit2');
+    }
+    socket.emit('spiritMe', { ...spiritView(), grew: after !== before ? after : 0, gain: add, kind: kind || 'feed' });
+  };
+  /** 🥚 蛋孵出來了：變成新的小光點，先放在「收起來的小精靈」裡 */
+  let eggTimer = null;
+  const checkEgg = () => {
+    clearTimeout(eggTimer);
+    eggTimer = null;
+    if (!wal?.egg) return;
+    const left = wal.egg.at - Date.now();
+    if (left > 0) return (eggTimer = setTimeout(checkEgg, left + 500));
+    wal.spiritBox ??= [];
+    wal.spiritBox.push({ xp: 0, c: {}, born: Date.now() });
+    wal.egg = null;
+    saveJson('players.json', players);
+    bump('spiritHatch');
+    socket.emit('spiritHatch', spiritView());
   };
   /** 疊石接力／添柴時光：每做一次多一顆松果（每場有上限） */
   const miniBonus = (kind) => {
@@ -1920,6 +2031,15 @@ io.on('connection', (socket) => {
     if (session && firstVisit) session.newbie = true; // 統計：新旅人留不留得住
     wal = wallet(myVid);
     if (wal) player.ot = wearCodes(wal);
+    if (wal) {
+      // ✨ 小精靈：好幾天沒來，它會衝過來（前端看 away）
+      const sp = spiritOf();
+      const now = Date.now();
+      sp.away = sp.last ? Math.floor((now - sp.last) / 86400000) : 0;
+      sp.last = now;
+      player.sr = spiritCode(sp);
+      setTimeout(checkEgg, 3000);
+    }
     // 🐾 特殊毛色、尾巴、耳朵：沒買過的不能用（動物本來的形狀免費）
     {
       const lk = wal?.looks ?? {};
@@ -2057,6 +2177,7 @@ io.on('connection', (socket) => {
       plotNote, // 🏕️ 「你的帳篷有了固定門牌／搬到 X 區 N 號了」
       code: player.vid ? homeId(player.vid) : null, // 邀請連結用的公開代號
       passOn: PASS_ON, // 🎫 月票要不要顯示
+      spirit: spiritView(), // ✨ 小精靈
       ver: webVersion,
       ...roomSnapshot(chan, curRid(), socket.id),
     });
@@ -2372,6 +2493,9 @@ io.on('connection', (socket) => {
       if (!h.tent) return ack?.({ ok: false, reason: 'noTent' });
       h.shapes ??= ['bell'];
       if (h.shapes.includes(shapeId)) return ack?.({ ok: false, reason: 'owned' });
+      // 🎫 月票小屋：月票開通（PASS_ON）而且等級夠才能買；買了永久保留
+      if (shape.pass && !PASS_ON) return ack?.({ ok: false, reason: 'off' });
+      if (shape.pass && (passTier(wal)?.rank ?? 0) < shape.pass) return ack?.({ ok: false, reason: 'needPass' });
       if (wal.pc < price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
       lastBuy = now;
       wal.pc -= price;
@@ -2420,11 +2544,16 @@ io.on('connection', (socket) => {
   // ---------- 布置自己的帳篷：放、轉、收起 ----------
   socket.on('homeEdit', (data = {}, ack) => {
     // 花色、造型在小舖也能換；擺家具要在自己的帳篷裡
-    if (data.op === 'style' || data.op === 'shape' || data.op === 'yard' || data.op === 'sign') {
+    if (data.op === 'style' || data.op === 'shape' || data.op === 'yard' || data.op === 'sign' || data.op === 'frame') {
       const h = homes[player?.vid];
       if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
       const v = String(data.s ?? '');
-      if (data.op === 'sign') {
+      if (data.op === 'frame') {
+        // 🔭 換星空圓頂屋的骨架顏色（有圓頂屋才能換，免費）
+        if (!FRAME_IDS.has(v)) return ack?.({ ok: false, reason: 'unknown' });
+        if (!(h.shapes ?? []).includes('stardome')) return ack?.({ ok: false, reason: 'locked' });
+        h.frame = v;
+      } else if (data.op === 'sign') {
         // 🪧 換門牌：買過的；星空門牌要星空月票有效
         const sg = SIGN_BY_ID[v];
         if (!sg) return ack?.({ ok: false, reason: 'unknown' });
@@ -2695,24 +2824,61 @@ io.on('connection', (socket) => {
   // ☕ 贊助：這個月的假髮、能不能付款
   socket.on('sponsorInfo', (data, ack) => {
     const wigs = sponsorOutfits(dayKey().slice(0, 7)).map((o) => o.id);
-    ack?.({ ok: true, on: PASS_ON, test: !ECPAY.prod, amounts: SPONSOR.amounts, min: SPONSOR.min, wigs, owned: wigs.filter((id) => wal?.outfits?.includes(id)), account: hasAccount(), total: wal?.spons ?? 0 });
+    ack?.({ ok: true, on: PASS_ON, test: !ECPAY.prod, amounts: sponsorAmounts(dayKey().slice(0, 7)), min: sponsorMin(dayKey().slice(0, 7)), wigs, owned: wigs.filter((id) => wal?.outfits?.includes(id)), account: hasAccount(), total: wal?.spons ?? 0 });
   });
   socket.on('sponsorOrder', (data = {}, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
     if (!PASS_ON) return ack?.({ ok: false, reason: 'off' });
     if (!hasAccount()) return ack?.({ ok: false, reason: 'account' });
     const amt = Number(data.amt);
-    if (!SPONSOR.amounts.includes(amt)) return ack?.({ ok: false, reason: 'amt' });
+    if (!sponsorAmounts(dayKey().slice(0, 7)).includes(amt)) return ack?.({ ok: false, reason: 'amt' });
+    if (data.age !== true) return ack?.({ ok: false, reason: 'age' }); // 🔞 沒勾年齡確認不建立訂單
     const now = Date.now();
     if (now - lastOrder < 5000) return ack?.({ ok: false, reason: 'tooFast' });
     lastOrder = now;
     const no = `CS${now.toString(36)}${crypto.randomBytes(3).toString('hex')}`.slice(0, 20).toUpperCase();
     const wigs = sponsorOutfits(dayKey().slice(0, 7)).map((o) => o.id);
     const wig = wigs.includes(data.wig) ? data.wig : wigs[0];
-    orders[no] = { vid: player.vid, name: player.name, amt, at: now, status: 'new', kind: 'sponsor', wig };
+    orders[no] = { vid: player.vid, name: player.name, amt, at: now, status: 'new', kind: 'sponsor', wig, age: { at: now, acct: acctOfVid(player.vid) } };
     saveJson('orders.json', orders);
     const proto = socket.handshake.headers['x-forwarded-proto']?.split(',')[0] || 'http';
     ack?.({ ok: true, no, url: `${proto}://${socket.handshake.headers.host}/api/pay/go/${no}` });
+  });
+  // 🎁 星空月票每月免費挑 1 件月票家具（放進背包，跟用松果買的一樣）
+  socket.on('passFree', (data = {}, ack) => {
+    if (!wal || !player?.vid) return ack?.({ ok: false });
+    if (!PASS_ON) return ack?.({ ok: false, reason: 'off' });
+    if (!freeFurnOk(wal)) return ack?.({ ok: false, reason: passTier(wal)?.id === 'star' ? 'used' : 'needPass' });
+    const id = String(data.id ?? '');
+    const f = CATALOG_BY_ID[id];
+    if (!f?.pass || f.pass > 2) return ack?.({ ok: false, reason: 'unknown' });
+    const h = homes[player.vid];
+    if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
+    if ((h.inv[id] ?? 0) >= 20) return ack?.({ ok: false, reason: 'tooMany' });
+    const color = hasColors(f) ? Math.floor(num(data.c, 0, ALL_COLORS.length - 1, 0)) : 0;
+    wal.pass.freeAt = Date.now();
+    h.inv[id] = (h.inv[id] ?? 0) + 1;
+    if (color) {
+      // 有選顏色：跟用松果買的一樣記在 cinv（id~顏色）
+      h.cinv ??= {};
+      h.cinv[`${id}~${color}`] = (h.cinv[`${id}~${color}`] ?? 0) + 1;
+    }
+    saveJson('players.json', players);
+    saveJson('homes.json', homes);
+    bump('passFree');
+    console.log(`[月票] ${player.name} 星空每月免費家具：${f.zh}`);
+    ack?.({ ok: true, home: publicHome(h), pass: passView(wal) });
+  });
+  // 🌏 國外玩家按了購買（只記次數，給作者判斷要不要申請國外卡）
+  let lastForeign = 0;
+  socket.on('foreignTry', (data, ack) => {
+    const now = Date.now();
+    if (now - lastForeign > 60000) {
+      lastForeign = now;
+      bump('foreign');
+      if (data?.go) bump('foreignGo');
+    }
+    ack?.({ ok: true });
   });
   socket.on('passOrder', (data, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
@@ -2723,14 +2889,16 @@ io.on('connection', (socket) => {
     lastOrder = now;
     // 訂單編號：英數字 20 字以內，不能重複
     const no = `CF${now.toString(36)}${crypto.randomBytes(3).toString('hex')}`.slice(0, 20).toUpperCase();
-    // 🔥 小營火、✨ 星空；小營火還沒到期可以升級星空（補差價）
-    const tier = PASS_TIERS[data?.tier] ? PASS_TIERS[data.tier] : PASS_TIERS.ember;
-    const cur = passTier(wal);
+    // 🔥 小營火、✨ 星空 × 1 個月／3 個月；小營火還沒到期可以升級星空（補差價）
     const upgrade = !!data?.upgrade;
+    const plan = PASS_PLANS[data?.plan] ?? (upgrade ? null : PASS_PLANS[`${PASS_TIERS[data?.tier] ? data.tier : 'ember'}1`]);
+    const tier = upgrade ? PASS_TIERS.star : PASS_TIERS[plan.tier];
+    const cur = passTier(wal);
+    if (data?.age !== true) return ack?.({ ok: false, reason: 'age' }); // 🔞 沒勾年齡確認不建立訂單
     if (upgrade && cur?.id !== 'ember') return ack?.({ ok: false, reason: 'noUpgrade' });
     if (!upgrade && cur?.id === 'star' && tier.id === 'ember') return ack?.({ ok: false, reason: 'hasStar' }); // 星空期間不用再買小營火
-    const amt = upgrade ? upgradePrice(wal, now) : tier.price;
-    orders[no] = { vid: player.vid, name: player.name, kind: 'pass', tier: upgrade ? 'star' : tier.id, upgrade, amt, at: now, status: 'new' };
+    const amt = upgrade ? upgradePrice(wal, now) : plan.price;
+    orders[no] = { vid: player.vid, name: player.name, kind: 'pass', tier: tier.id, plan: upgrade ? null : plan.id, upgrade, amt, at: now, status: 'new', age: { at: now, acct: acctOfVid(player.vid) } };
     // 太舊、沒付款的訂單清掉
     for (const [k, o] of Object.entries(orders)) if (o.status === 'new' && now - o.at > 7 * 86400000) delete orders[k];
     saveJson('orders.json', orders);
@@ -2781,6 +2949,7 @@ io.on('connection', (socket) => {
     if (isBug) {
       if (item.rarity >= 2) chal('bug');
     } else chal('gather');
+    spiritGain('gather');
     ack?.({ ok: true, id: item.id, count: wal.bk[item.id], first, gain, bonus, extra, readyAt: wal.gat[i], now });
   });
   socket.on('giftInfo', (data, ack) => {
@@ -2908,6 +3077,7 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     bump('cooks');
     if (d.need.length >= 3) chal('cook3');
+    spiritGain('cook');
     io.to(rkey).emit('cooked', { id: socket.id, name: player.name, dish: d.id });
     // 🍲 大菜（營火大鍋菜、營火麻辣鍋）：附近 6 公尺內的每個人都分到一份
     let shared = 0;
@@ -2959,6 +3129,90 @@ io.on('connection', (socket) => {
     bump('dishGifts');
     toSock.emit('dishGift', { from: player.name, fromId: socket.id, dish: d.id, dishes: toWal.dish });
     ack?.({ ok: true, ...dishView() });
+  });
+
+  // ---------- ✨ 小精靈 ----------
+  socket.on('spiritInfo', (_d, ack) => ack?.(wal ? { ok: true, sp: spiritView(), dish: wal.dish ?? {} } : { ok: false }));
+  socket.on('spiritFeed', (data = {}, ack) => {
+    if (!wal || !player) return ack?.({ ok: false });
+    const d = DISH_BY_ID[String(data.id ?? '')];
+    if (!d || !(wal.dish?.[d.id] > 0)) return ack?.({ ok: false, reason: 'none' });
+    const sp = spiritOf();
+    const day = dayKey();
+    if (sp.day?.d !== day) sp.day = { d: day, xp: 0, feed: 0 };
+    if (sp.day.feed >= SPIRIT_FEED_DAY) return ack?.({ ok: false, reason: 'full' });
+    wal.dish[d.id]--;
+    if (!wal.dish[d.id]) delete wal.dish[d.id];
+    sp.day.feed++;
+    const st = spiritStage(sp.xp);
+    const fav = st > 0 && SPIRIT_FAV[sp.t ?? 'leaf']?.includes(d.id);
+    saveJson('players.json', players);
+    io.to(rkey).emit('spiritAte', { id: socket.id, dish: d.id, fav });
+    spiritGain(null, fav ? SPIRIT_FAV_XP : SPIRIT_FEED_XP);
+    ack?.({ ok: true, fav, sp: spiritView(), ...dishView() });
+  });
+  socket.on('spiritForm', (data = {}, ack) => {
+    if (!wal || !player) return ack?.({ ok: false });
+    const t = String(data.t ?? '');
+    const sp = spiritOf();
+    if (!SPIRIT_KINDS.includes(t)) return ack?.({ ok: false });
+    if (spiritStage(sp.xp) < 2) return ack?.({ ok: false, reason: 'young' });
+    if (sp.t === t) return ack?.({ ok: false, reason: 'same' });
+    if (wal.pc < SPIRIT_CHANGE_PRICE) return ack?.({ ok: false, reason: 'poor' });
+    wal.pc -= SPIRIT_CHANGE_PRICE;
+    sp.t = t;
+    saveJson('players.json', players);
+    socket.emit('wallet', { pc: wal.pc, delta: -SPIRIT_CHANGE_PRICE, reason: 'spirit' });
+    bump('spiritForm');
+    spiritSync();
+    ack?.({ ok: true, sp: spiritView() });
+  });
+  socket.on('spiritEgg', (_d, ack) => {
+    if (!wal || !player?.vid) return ack?.({ ok: false });
+    if (wal.egg) return ack?.({ ok: false, reason: 'egg' });
+    if (1 + (wal.spiritBox?.length ?? 0) >= SPIRIT_MAX) return ack?.({ ok: false, reason: 'max' });
+    if (wal.pc < SPIRIT_EGG_PRICE) return ack?.({ ok: false, reason: 'poor' });
+    wal.pc -= SPIRIT_EGG_PRICE;
+    wal.egg = { at: Date.now() + SPIRIT_EGG_MS };
+    saveJson('players.json', players);
+    socket.emit('wallet', { pc: wal.pc, delta: -SPIRIT_EGG_PRICE, reason: 'egg' });
+    bump('spiritEgg');
+    checkEgg();
+    ack?.({ ok: true, sp: spiritView() });
+  });
+  /** 換一隻小精靈帶在身邊（原本的收起來） */
+  socket.on('spiritPick', (data = {}, ack) => {
+    if (!wal || !player) return ack?.({ ok: false });
+    const i = Math.floor(Number(data.i));
+    const box = wal.spiritBox ?? [];
+    if (!(i >= 0 && i < box.length)) return ack?.({ ok: false });
+    const cur = spiritOf();
+    const next = box[i];
+    next.c ??= {};
+    next.off = false;
+    delete cur.off;
+    box[i] = cur;
+    next.last = cur.last;
+    wal.spirit = next;
+    saveJson('players.json', players);
+    spiritSync();
+    ack?.({ ok: true, sp: spiritView() });
+  });
+  /** ✏️ 幫小精靈取名字（最多 8 個字） */
+  socket.on('spiritName', (data = {}, ack) => {
+    const sp = spiritOf();
+    if (!sp) return ack?.({ ok: false });
+    sp.nm = String(data.nm ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 8);
+    saveJson('players.json', players);
+    ack?.({ ok: true, sp: spiritView() });
+  });
+  socket.on('spiritHide', (data = {}, ack) => {
+    const sp = spiritOf();
+    if (!sp) return ack?.({ ok: false });
+    sp.off = !!data.off;
+    saveJson('players.json', players);
+    spiritSync();
+    ack?.({ ok: true, sp: spiritView() });
   });
 
   // ---------- 🥕 帳篷前的小菜園 ----------
@@ -3364,7 +3618,7 @@ io.on('connection', (socket) => {
       }
     }
     bump('fish');
-    if (!JUNK.has(fish)) chal('fish');
+    if (!JUNK.has(fish)) chal('fish'), spiritGain('fish');
     // 🌰 釣魚松果：每天前 FISH_DAILY_FULL 條照算（營火時間加倍）；之後每條固定 1 顆，稀有魚（四星以上）照算
     {
       const gain = catchGain(FISH[fish]);
@@ -3474,6 +3728,7 @@ io.on('connection', (socket) => {
     chan.fuel = Math.min(MAX_FUEL, chan.fuel + WOOD_FUEL);
     io.to(rkey).emit('fire', { fuel: chan.fuel, by: player.id, name: player.name });
     miniBonus('wood');
+    spiritGain('fire');
     pushNews('fire');
   });
 
@@ -3495,7 +3750,7 @@ io.on('connection', (socket) => {
         const list = dms[pairKey(me, f)] ?? [];
         const read = w.dmr?.[f] ?? 0;
         const last = list.at(-1);
-        return { hid: homeId(f), name: nameOfVid(f), plot: homes[f]?.tent ? homes[f].plot ?? null : null, online: socketsOf(f).length > 0, mutual: friendsOf(players[f]).includes(me), unread: list.filter((m) => m.f !== me && m.at > read).length, last: last ? { t: last.t.slice(0, 40), at: last.at, me: last.f === me } : null };
+        return { hid: homeId(f), name: nameOfVid(f), plot: homes[f]?.tent ? homes[f].plot ?? null : null, online: socketsOf(f).length > 0, away: players[f].last ? Math.max(0, Math.round((Date.parse(`${dayKey()}T00:00:00Z`) - Date.parse(`${players[f].last}T00:00:00Z`)) / 86400000)) : null, mutual: friendsOf(players[f]).includes(me), unread: list.filter((m) => m.f !== me && m.at > read).length, last: last ? { t: last.t.slice(0, 40), at: last.at, me: last.f === me } : null };
       })
       .sort((a, b) => b.unread - a.unread || b.online - a.online || (b.last?.at ?? 0) - (a.last?.at ?? 0));
     const reqs = (w.frq ?? []).filter((f) => players[f]).map((f) => ({ hid: homeId(f), name: nameOfVid(f) }));
@@ -3696,6 +3951,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    clearTimeout(eggTimer);
     if (!player) return;
     leave();
     clearInterval(sitTimer);

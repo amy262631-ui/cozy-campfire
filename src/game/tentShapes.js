@@ -30,8 +30,9 @@ export const CABIN = {
   stairBottom: 2.8, // 樓梯最下面一階（z）
 };
 /**
- * 🎫 月票小屋（11/09 構圖階段，作者確認前不放進小舖 TENT_SHAPES，伺服器也還沒有）
- *   🔭 玻璃星空圓頂屋 300（兩種月票）、🌳 私人樹屋 500（星空月票，有二樓）
+ * 🎫 月票小屋（11/11 上架：小舖「🎫 月票」分頁；伺服器 server/homes.js 的 TENT_SHAPES 也有）
+ *   🔭 玻璃星空圓頂屋 300（兩種月票都能買）、🌳 私人樹屋 500（星空月票，有二樓）
+ *   pass：需要的月票等級（1 小營火以上、2 星空）；買了永久保留，月票到期也能繼續用
  */
 export const PASS_SHAPES = [
   { id: 'stardome', icon: '🔭', name: t('玻璃星空圓頂屋'), price: 300, pass: 1, kind: 'round', R: 3.8, light: 2.4, style: 'log' },
@@ -48,8 +49,9 @@ const GAP = 0.3; // 門口開口（弧度的一半）
  *   outside：true＝從外面看的版本（多了旗子、彩旗、窗戶、營釘這些外部裝飾）
  *   noPole：不要中柱
  */
-export function buildTentShell(shapeId, mats, { outside = false, noPole = false } = {}) {
+export function buildTentShell(shapeId, mats, { outside = false, noPole = false, frame = 'gold', noSwing = false } = {}) {
   const sh = shapeOf(shapeId);
+  frameNow = frame;
   const g = new THREE.Group();
   const add = (geo, mat, x = 0, y = 0, z = 0) => {
     const m = new THREE.Mesh(geo, mat);
@@ -194,7 +196,7 @@ export function buildTentShell(shapeId, mats, { outside = false, noPole = false 
   if (sh.id === 'cabin') buildCabin(sh, mats, add, outside);
   if (sh.id === 'stardome') buildStarDome(sh, mats, add, outside, g);
   if (sh.id === 'treehouse') {
-    if (outside) buildTreeHouseOutside(mats, add, g);
+    if (outside) buildTreeHouseOutside(mats, add, noSwing);
     else buildTreeHouseInside(sh, mats, add, g);
   }
   return g;
@@ -348,7 +350,20 @@ const glassMat = () =>
   pm('glass', () => new THREE.MeshStandardMaterial({ color: 0xbfe2ff, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
 const frostMat = () =>
   pm('frost', () => new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.6, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
-const brassMat = () => pm('brass', () => new THREE.MeshStandardMaterial({ color: 0xd9a84a, roughness: 0.35, metalness: 0.6, flatShading: true }));
+/** 🔭 星空圓頂屋的骨架顏色（玩家可以換；h.frame） */
+export const FRAME_COLORS = [
+  { id: 'gold', icon: '🟡', zh: '金色', color: 0xd9a84a, metal: 0.6 },
+  { id: 'silver', icon: '⚪', zh: '銀色', color: 0xd4d9e0, metal: 0.7 },
+  { id: 'white', icon: '🤍', zh: '奶油白', color: 0xf3ede2, metal: 0.1 },
+  { id: 'black', icon: '⚫', zh: '黑色', color: 0x34302e, metal: 0.4 },
+  { id: 'copper', icon: '🟠', zh: '紅銅', color: 0xc0703f, metal: 0.6 },
+];
+export const FRAME_BY_ID = Object.fromEntries(FRAME_COLORS.map((f) => [f.id, f]));
+let frameNow = 'gold'; // 蓋殼的時候用哪個骨架顏色（buildTentShell 設定）
+const brassMat = () => {
+  const f = FRAME_BY_ID[frameNow] ?? FRAME_COLORS[0];
+  return pm(`brass-${f.id}`, () => new THREE.MeshStandardMaterial({ color: f.color, roughness: 0.35, metalness: f.metal, flatShading: true }));
+};
 const glowMat = (c = 0xffd98a) => pm(`glow${c}`, () => new THREE.MeshBasicMaterial({ color: c }));
 const leafMat = (i) => pm(`leaf${i}`, () => new THREE.MeshStandardMaterial({ color: [0x4f8a3c, 0x5f9c45, 0x3f7533, 0x6aa84f][i % 4], roughness: 1, flatShading: true }));
 const barkMat = () => pm('bark', () => new THREE.MeshStandardMaterial({ color: 0x5e4029, roughness: 1, flatShading: true }));
@@ -510,6 +525,7 @@ function buildStarDome(sh, mats, add, outside, g) {
 }
 
 /** 一團葉子 */
+/** 樹冠的一團葉子（11/11 試過圓滑版，作者覺得原本的多角形比較好看，改回來） */
 function leafBall(add, x, y, z, r, i) {
   const m = add(new THREE.IcosahedronGeometry(r, 0), leafMat(i), x, y, z);
   m.rotation.set(i * 0.7, i * 1.3, i * 0.4);
@@ -518,7 +534,9 @@ function leafBall(add, x, y, z, r, i) {
 }
 
 /** 🌳 私人樹屋（外面）：大樹幹撐著一間小木屋，樹冠蓋在屋頂上，繩梯爬上門口，旁邊有鞦韆 */
-function buildTreeHouseOutside(mats, add) {
+/** 🌳 樹屋外面的鞦韆和陽台座位位置（營地用：鞦韆另外做成會盪的、陽台椅子可以坐） */
+export const TREEHOUSE_SPOTS = { branch: { x: -5.8, y: 4.0, z: 2.2 }, table: { x: 2.0, y: 1.6, z: 2.95 }, chairs: [{ x: 1.38, y: 2.0, z: 2.95, face: Math.PI / 2 }, { x: 2.62, y: 2.0, z: 2.95, face: -Math.PI / 2 }] };
+function buildTreeHouseOutside(mats, add, noSwing = false) {
   const P = 1.6; // 平台高度
   const W = 2.7;
   const D = 2.4;
@@ -619,6 +637,7 @@ function buildTreeHouseOutside(mats, add) {
   const branch = add(new THREE.CylinderGeometry(0.1, 0.2, 2.8, 6), barkMat(), (TX + bx) / 2 - 0.2, by + 0.25, TZ + 0.6);
   branch.rotation.z = Math.PI / 2 + 0.2;
   leafBall(add, bx - 0.5, by + 0.4, TZ + 0.6, 0.85, 3);
+  if (noSwing) return; // 營地裡：鞦韆另外做（會盪、可以坐）
   for (const dz of [-0.28, 0.28]) add(new THREE.CylinderGeometry(0.015, 0.015, by - 0.5, 4), ropeMat(), bx, (by + 0.5) / 2, TZ + 0.6 + dz);
   box(0.4, 0.06, 0.7, bx, 0.5, TZ + 0.6, mats.wood);
 }

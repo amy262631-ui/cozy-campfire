@@ -7,4 +7,5 @@
  * 例如：'https://buymeacoffee.com/你的帳號' 或 'https://ko-fi.com/你的帳號'
  * 留空字串時，按鈕會提示「作者還沒設定贊助連結」。
  */
-export const SPONSOR_URL = 'https://p.ecpay.com.tw/9230AF3';
+// 11/11：舊的綠界「贊助連結」不用了（付了錢遊戲裡不會拿到東西），改成「💝 支持營地」
+export const SPONSOR_URL = '';

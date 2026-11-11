@@ -50,6 +50,9 @@ export const TENT_SHAPES = {
   circus: { price: 35, style: 'stripe' },
   mushroom: { price: 40, style: 'redspot' },
   cabin: { price: 500, style: 'log' }, // 🏡 雙層小木屋
+  // 🎫 月票小屋：要有月票才能買（pass＝需要的等級），買了永久保留
+  stardome: { price: 300, style: 'log', pass: 1 }, // 🔭 玻璃星空圓頂屋（兩種月票）
+  treehouse: { price: 500, style: 'log', pass: 2 }, // 🌳 私人樹屋（星空月票）
 };
 
 /** 帳篷的公開代號：不能把 vid（等同登入憑證）給別人看，所以給雜湊過的代號 */

@@ -1,5 +1,4 @@
 import { t } from '../i18n/i18n.js';
-import { SPONSOR_URL } from '../config.js';
 import { trButton, bindTranslate } from '../network/chatTranslate.js';
 import { localPage, pagerHtml, bindPager } from './pager.js';
 import { addCloseX } from './CloseX.js';
@@ -23,8 +22,8 @@ function ago(at) {
 /**
  * 營火告示牌（走到木牌前按 E 打開）：
  *  - 💬 留言板：看大家的便條、自己貼一張（所有分流共用）
- *  - ☕ 支持營地：單純支持這個遊戲（不綁名字、沒有名冊）
- *  - 最下面不起眼的小字：☕ 請作者喝杯熱可可
+ *  - 💡 給建議
+ *  （11/11：「☕ 支持營地」分頁拿掉了，改成上方按鈕列的「💝 支持營地」，有年齡確認、付了會自動送東西）
  *
  *   onPost(text, color)  貼出留言
  */
@@ -50,7 +49,6 @@ export class NoticePanel {
           <div class="notice-tabs">
             <button type="button" data-tab="notes" class="on">${t('💬 留言板')}</button>
             <button type="button" data-tab="idea">${t('💡 給建議')}</button>
-            <button type="button" data-tab="support">${t('☕ 支持營地')}</button>
           </div>
 
           <div class="notice-page" data-page="notes">
@@ -73,17 +71,6 @@ export class NoticePanel {
               <textarea id="idea-text" maxlength="200" rows="4" placeholder="${t('例如：希望多一種魚、手機按鈕太小⋯（200 字內）')}"></textarea>
               <button type="button" class="notice-post" id="idea-send">${t('💡 送出建議（每天第一則送 3 顆松果）')}</button>
               <div class="notice-hint" id="idea-msg">${t('只有作者看得到，不會公開')}</div>
-            </div>
-          </div>
-
-          <div class="notice-page" data-page="support" hidden>
-            <div class="notice-support">
-              <div class="support-wig" id="support-wig" hidden></div>
-              <div class="support-cup">☕</div>
-              <p>${t('這座小營地是一個人慢慢做出來的。')}<br />${t('伺服器和網址都需要一點費用。')}</p>
-              <p>${t('如果你喜歡在這裡坐一下，可以請我喝杯熱可可，讓這團營火繼續燒下去 🔥')}</p>
-              <a class="support-btn" id="notice-cocoa" href="${SPONSOR_URL ? esc(SPONSOR_URL) : '#'}" ${SPONSOR_URL ? 'target="_blank" rel="noopener"' : ''}>☕ ${t('請作者喝杯熱可可')}</a>
-              <div class="notice-hint">${t('支援信用卡、ATM、超商代碼 · 金額隨意，心意最重要 💛')}</div>
             </div>
           </div>
 
@@ -147,12 +134,6 @@ export class NoticePanel {
       } else msg.textContent = res?.reason === 'tooFast' ? t('慢慢來，一分鐘後再送一則 🙂') : res?.reason === 'offline' ? t('連上伺服器後才能送出') : t('沒送成，再試一次吧');
     });
 
-    $('#notice-cocoa').addEventListener('click', (e) => {
-      if (SPONSOR_URL) return;
-      e.preventDefault();
-      this.hud.toast(t('作者還沒設定贊助連結，謝謝你的心意 💛'));
-    });
-
     window.addEventListener('keydown', (e) => {
       if (this.isOpen && e.code === 'Escape') this.close();
     });
@@ -181,7 +162,6 @@ export class NoticePanel {
 
   #setTab(tab) {
     this.tab = tab;
-    if (tab === 'support') this.onSupport?.(this.el.querySelector('#support-wig'));
     this.el.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
     this.el.querySelectorAll('[data-page]').forEach((p) => (p.hidden = p.dataset.page !== tab));
   }

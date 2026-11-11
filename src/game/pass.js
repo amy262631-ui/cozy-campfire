@@ -11,6 +11,17 @@ export const PASS_TIERS = {
   star: { id: 'star', rank: 2, icon: '✨', zh: '星空', price: 150, days: 30, first: 150, daily: 40, fish: 50, sit: 60, style: 'ember', item: '營火月票・星空 30 天' },
 };
 export const PASS_TIER_LIST = [PASS_TIERS.ember, PASS_TIERS.star];
+/**
+ * 💝 支持營地頁的月票方案（作者 11/10 定案）：兩種月票 × 1 個月／3 個月
+ *   days 天數（疊加在剩下的天數上）　first 買的當天一次送的松果　save 比買 3 次 1 個月省多少
+ * ⚠️ id 存在訂單裡，不能改
+ */
+export const PASS_PLANS = {
+  ember1: { id: 'ember1', tier: 'ember', months: 1, price: 60, days: 30, first: 50, item: '營火月票・小營火 30 天' },
+  ember3: { id: 'ember3', tier: 'ember', months: 3, price: 160, days: 90, first: 150, save: 20, item: '營火月票・小營火 3 個月（90 天）' },
+  star1: { id: 'star1', tier: 'star', months: 1, price: 150, days: 30, first: 150, item: '營火月票・星空 30 天' },
+  star3: { id: 'star3', tier: 'star', months: 3, price: 400, days: 90, first: 450, save: 50, item: '營火月票・星空 3 個月（90 天）' },
+};
 /** 免費玩家：釣魚每天前 30 條照價算、掛機每天最多 30 顆 */
 export const FREE = { fish: 30, sit: 30 };
 /** 舊程式用（預設小營火） */
@@ -21,7 +32,16 @@ export const PASS = PASS_TIERS.ember;
  * 小黃花、四葉草是作者親友團的心意，不是贊助贈品（還是手動寫在 server/data/sponsors.json）。
  */
 export const SPONSOR = {
-  amounts: [60, 100, 150, 200], // 可以選的金額（新台幣）；NT$60 只是請喝咖啡，沒有假髮
+  amounts: [60, 100, 150, 200], // 可以選的金額（新台幣）
   min: 100, // 這個金額以上送假髮
-  item: '請作者喝咖啡（迷霧森林露營地）',
+  item: '支持迷霧森林露營地（贊助）',
 };
+/**
+ * 🎁 本月禮盒的家具（12 月起才有）。還沒有禮盒家具的月份：NT$60 選項先藏起來，只有「贊助 NT$100 以上送假髮」
+ *   { 'YYYY-MM': [家具 id, ...] }
+ */
+export const SPONSOR_BOX = {};
+/** 這個月可以選的金額（都可以選） */
+export const sponsorAmounts = () => SPONSOR.amounts;
+/** 這個月贊助多少以上送假髮：還沒有禮盒家具的月份（11 月）NT$60 以上都送（作者 11/11）；12 月起有禮盒後 NT$60 是小東西、NT$100 以上才有假髮 */
+export const sponsorMin = (month) => (SPONSOR_BOX[month]?.length ? SPONSOR.min : SPONSOR.amounts[0]);

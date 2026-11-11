@@ -13,6 +13,7 @@ export const SOURCES = [
   { id: 'ig', zh: 'Instagram', match: ['instagram'] },
   { id: 'line', zh: 'LINE', match: ['line.me', 'line.naver'] },
   { id: 'fb', zh: 'Facebook', match: ['facebook', 'fb.com'] },
+  { id: 'x', zh: 'X（推特）', match: ['twitter', '=x.com', '=t.co'] }, // 「=」開頭＝整個網域要一樣（t.co 不能比對到 reddit.com）
   { id: 'search', zh: '搜尋引擎', match: ['google.', 'bing.', 'yahoo.', 'duckduckgo', 'naver.com', 'daum.net'] },
   { id: 'pwa', zh: '📲 手機桌面捷徑', match: [] },
   { id: 'invite', zh: '朋友邀請連結', match: [] },
@@ -32,7 +33,8 @@ export function matchSource(text) {
   const s = String(text ?? '').toLowerCase();
   if (!s) return null;
   if (IDS.has(s)) return s;
-  return SOURCES.find((x) => x.match.some((m) => s.includes(m)))?.id ?? null;
+  const hit = (m) => (m.startsWith('=') ? s === m.slice(1) || s.endsWith(`.${m.slice(1)}`) : s.includes(m));
+  return SOURCES.find((x) => x.match.some(hit))?.id ?? null;
 }
 
 /**

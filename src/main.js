@@ -1,7 +1,7 @@
 import { randomName, isAutoName } from './social/names.js';
 import * as THREE from 'three';
 import './style.css';
-import { t, translateStatic } from './i18n/i18n.js';
+import { t, translateStatic, lang } from './i18n/i18n.js';
 import { Player } from './player/Player.js';
 import { InputController } from './player/InputController.js';
 import { ActionStateMachine } from './player/ActionStateMachine.js';
@@ -16,7 +16,10 @@ import { MixerPanel } from './ui/MixerPanel.js';
 import { PomodoroPanel } from './ui/PomodoroPanel.js';
 import { JukeboxPanel } from './ui/JukeboxPanel.js';
 import { NetworkClient } from './network/NetworkClient.js';
-import { RemotePlayers, setRemoteHeight, setCharScale } from './network/RemotePlayers.js';
+import { RemotePlayers, setRemoteHeight, setRemoteSpot, setCharScale } from './network/RemotePlayers.js';
+import { SpiritFollower } from './player/spiritFollower.js';
+import { buildSpirit, SPIRIT_TYPES, SPIRIT_BY_ID } from './player/spirit.js';
+import { parseSpirit } from './game/spiritRules.js';
 import { AudioEngine } from './audio/AudioEngine.js';
 import { SONGS } from './audio/music.js';
 import { CHALLENGE_BY_ID } from './game/dailyChallenge.js';
@@ -80,7 +83,7 @@ import { RECIPES } from './game/crafting.js';
 import { DISHES, DISH_BY_ID, activeBuff, DISH_FX, BUFFS } from './game/cooking.js';
 import { MUSEUM_ITEMS, MUSEUM_CATS, MUSEUM_BY_ID } from './game/museum.js';
 import { TRASH, TRASH_BY_ID, RECYCLE_DAILY_CAP } from './game/trash.js';
-import { PASS, PASS_TIERS, PASS_TIER_LIST, FREE } from './game/pass.js';
+import { PASS, PASS_TIERS, PASS_TIER_LIST, PASS_PLANS, FREE } from './game/pass.js';
 import { detectSource, inAppKind, isStandalone, installKind } from './game/sources.js';
 
 // 網址參數（開發測試用）
@@ -854,7 +857,7 @@ async function init() {
     weekly: [t('每週限定：朋友真的透過你的連結來玩才拿得到'), t('朋友透過連結來玩')],
     date: [t('營火之約限定：朋友在早上或晚上 9:30 營火時間透過你的連結進來，兩個人都拿到'), t('9:30 營火時間約朋友')],
     eco: [t('垃圾圖鑑全部收集完就拿到'), t('垃圾圖鑑收集完')],
-    sponsor: [t('贊助限定：那個月贊助 NT$100 以上自動拿到（告示牌 → ☕ 支持營地）'), t('贊助限定')],
+    sponsor: [t('贊助限定：那個月贊助就送一頂（上方「💝 支持營地」→ 🎁）'), t('贊助限定')],
   };
   fishingUI.extraTabs.push({
     id: 'outfit',
@@ -1462,6 +1465,212 @@ async function init() {
     );
   }
   document.getElementById('bag-btn').addEventListener('click', () => openBag());
+  // ---------- ✨ 小精靈（作者 11/11：跟在肩膀旁邊飄、玩遊戲會長大） ----------
+  const mySpirit = new SpiritFollower(scene);
+  let spiritSt = null; // 伺服器給的小精靈資料
+  const SPIRIT_NAME = { light: '小光點', drop: '水滴', flame: '火苗', leaf: '葉子', cloud: '雲朵', star: '星星', mush: '蘑菇' };
+  const spiritKind = (sp) => (sp.stage === 0 ? t('✨ 小光點') : `${SPIRIT_BY_ID[sp.t]?.icon ?? '✨'} ${t(SPIRIT_NAME[sp.t])}${t('小精靈')}`);
+  const spiritLabel = (sp) => (sp.nm ? `${sp.nm}（${spiritKind(sp)}）` : spiritKind(sp));
+  const spiritCodeOf = (sp) => (!sp || sp.off ? '' : sp.stage === 0 ? 'light0' : `${sp.t}${sp.stage}`);
+  const applySpirit = (sp) => {
+    if (!sp) return;
+    spiritSt = sp;
+    mySpirit.setCode(spiritCodeOf(sp));
+    mySpirit.hungry = sp.stage > 0 && sp.feed === 0;
+  };
+  const spiritNight = () => {
+    const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+    return h >= 23 || h < 6;
+  };
+  let spiritNightNow = spiritNight();
+  setInterval(() => (spiritNightNow = spiritNight()), 60000);
+  const SPIRIT_SIT = new Set(['sofa', 'eat', 'sit', 'fish', 'reel', 'roast', 'showFish', 'swing', 'stargaze']);
+  const spiritParty = (x, z) => world.eventShower && roomMgr.current?.id === 'forest_main' && Math.hypot(x, z) < 7;
+  const spiritCam = new THREE.Vector3();
+  const updateSpirits = (dt) => {
+    camera.getWorldPosition(spiritCam);
+    const a = player.actionState;
+    const m = player.mesh.position;
+    mySpirit.update(dt, { x: m.x, y: m.y, z: m.z, ry: player.rotationY, scale: player.mesh.scale.x, speed: Math.hypot(player.velocity.x, player.velocity.z), state: a === 'sleep' || a === 'blanket' ? 'sleep' : SPIRIT_SIT.has(a) ? 'sit' : 'idle', cam: spiritCam, night: spiritNightNow, party: spiritParty(m.x, m.z) });
+    return { cam: spiritCam, night: spiritNightNow, party: spiritParty };
+  };
+  net.on('spiritMe', (sp) => {
+    const was = spiritSt?.stage ?? 0;
+    applySpirit(sp);
+    if (sp.grew) {
+      mySpirit.react('wow', 3, { hop: true, spin: true });
+      audio.sfx('bell');
+      hud.toast(sp.grew === 1 ? t('✨ 你的小光點變成了{name}！（看你最常做什麼決定的）', { name: spiritLabel(sp) }) : t('🌟 你的{name}長大了！長出小翅膀和光環', { name: spiritLabel(sp) }), 7000);
+      if (spiritOpen) openSpirit();
+    } else if (sp.kind === 'fish') mySpirit.react('wow', 1.2, { hop: true }), setTimeout(() => mySpirit.react('happy', 1.5, { hop: true }), 1200);
+    else if (sp.kind === 'cook') mySpirit.react('love', 2.5, { hop: true });
+    else if (sp.kind === 'feed') mySpirit.react('love', 3, { hop: true });
+    else mySpirit.react('happy', 1.2, { hop: true });
+    void was;
+  });
+  net.on('spirit', ({ id, sr }) => id !== net.id && remotes.setSpirit(id, sr));
+  net.on('spiritHatch', (sp) => {
+    applySpirit(sp);
+    audio.sfx('bell');
+    hud.toast(t('🥚 蛋孵出來了！一顆新的小光點，點「✨ 小精靈」帶它出門'), 7000);
+    if (modal.isOpen && spiritOpen) openSpirit();
+  });
+  net.on('spiritAte', ({ id }) => id !== net.id && remotes.spiritReact(id, 'love', 3, { hop: true }));
+  net.on('cooked', ({ id }) => id !== net.id && remotes.spiritReact(id, 'love', 2.5, { hop: true }));
+  net.on('caught', ({ id }) => id !== net.id && remotes.spiritReact(id, 'wow', 2, { hop: true }));
+  net.on('joined', (res) => {
+    if (!res.spirit) return;
+    const first = !spiritSt;
+    applySpirit(res.spirit);
+    // 好幾天沒來：小精靈從遠遠的地方衝過來
+    if (first && res.spirit.away >= 2 && !res.spirit.off) {
+      setTimeout(() => {
+        const m = player.mesh.position;
+        mySpirit.rushFrom(m.x + 6, m.z - 6);
+        hud.toast(t('✨ {name}好想你！衝過來找你了', { name: spiritLabel(res.spirit) }), 5000);
+      }, 2500);
+    }
+  });
+
+  /** 小精靈的小視窗：看它、餵它、摸摸、換樣子 */
+  let spiritOpen = false;
+  let spiritPrev = null;
+  const spiritPreview = () => {
+    if (spiritPrev) return spiritPrev;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'spirit-cv';
+    const r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    r.setSize(150, 150, false);
+    const s = new THREE.Scene();
+    s.add(new THREE.HemisphereLight(0xfff2dd, 0x404060, 1.5));
+    const d = new THREE.DirectionalLight(0xffefcc, 1.2);
+    d.position.set(2, 4, 3);
+    s.add(d);
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 10);
+    cam.position.set(0, 0.12, 1.3);
+    cam.lookAt(0, 0.08, 0);
+    let obj = null;
+    let code = '';
+    let raf = 0;
+    const t0 = performance.now();
+    const loop = () => {
+      if (!canvas.isConnected) return (raf = 0);
+      const tm = (performance.now() - t0) / 1000;
+      if (obj) {
+        obj.rotation.y = Math.sin(tm * 0.6) * 0.35;
+        obj.userData.update(0.016, tm, cam.position);
+        obj.userData.setFace(mySpirit.face);
+      }
+      r.render(s, cam);
+      raf = requestAnimationFrame(loop);
+    };
+    spiritPrev = {
+      canvas,
+      show(c) {
+        if (c !== code) {
+          if (obj) s.remove(obj);
+          const p = parseSpirit(c);
+          obj = p ? buildSpirit(p.type, p.stage, 'happy') : null;
+          if (obj) s.add(obj);
+          code = c;
+        }
+        if (!raf) raf = requestAnimationFrame(loop);
+      },
+    };
+    return spiritPrev;
+  };
+  async function openSpirit() {
+    if (!net.online) return hud.toast(t('連上伺服器才能看小精靈'));
+    const res = await net.request('spiritInfo', {});
+    if (!res?.ok) return;
+    applySpirit(res.sp);
+    dishes = res.dish ?? dishes;
+    const sp = res.sp;
+    spiritOpen = true;
+    const pct = sp.next ? Math.round(((sp.xp - sp.prev) / (sp.next - sp.prev)) * 100) : 100;
+    const nextTxt = sp.stage === 0 ? t('再 {n} 點變成小精靈', { n: sp.next - sp.xp }) : sp.stage === 1 ? t('再 {n} 點就會長大', { n: sp.next - sp.xp }) : t('已經長大了 🌟');
+    const c = sp.c ?? {};
+    const style = sp.stage === 0 ? `<div class="sp-style">${t('現在最像：')}<b>${[['💧', c.fish ?? 0], ['🔥', c.fire ?? 0], ['🍃', c.gather ?? 0]].map(([i, n]) => `${i} ${n}`).join('　')}</b><small>${t('變成小精靈時，看你最常做什麼：釣魚 💧、顧火・煮菜 🔥、採集 🍃')}</small></div>` : '';
+    const favs = new Set(sp.fav ?? []);
+    const mine = DISHES.filter((d) => dishes[d.id] > 0).sort((a, b) => favs.has(b.id) - favs.has(a.id));
+    const feedLeft = sp.feedMax - sp.feed;
+    const feed = mine.length
+      ? `<div class="inv-grid sp-feed">${mine.map((d) => `<button type="button" class="inv-cell${favs.has(d.id) ? ' fav' : ''}" data-feed="${d.id}" ${feedLeft > 0 ? '' : 'disabled'}><i>${d.icon}</i><em>${dishes[d.id]}</em><small>${favs.has(d.id) ? '💗 ' : ''}${t(d.zh)}</small></button>`).join('')}</div>`
+      : `<div class="dex-note">${t('還沒有料理。到營火旁的「🍲 營火料理」鍋子煮一道吧！')}</div>`;
+    const favLine = sp.fav ? `<div class="dex-note">${t('💗 最喜歡：')}${sp.fav.map((id) => DISH_BY_ID[id]).filter(Boolean).map((d) => `${d.icon} ${t(d.zh)}`).join('、')}${t('（長得比較快）')}</div>` : '';
+    const forms = sp.stage === 2
+      ? `<div class="dex-note">${t('🌟 長大以後可以換樣子（每次 {n} 🌰）', { n: sp.price })}</div><div class="sp-forms">${SPIRIT_TYPES.map((x) => `<button type="button" data-form="${x.id}" class="${x.id === sp.t ? 'on' : ''}" ${x.id === sp.t ? 'disabled' : ''}>${x.icon}<small>${t(x.zh)}</small></button>`).join('')}</div>`
+      : `<div class="dex-note">${t('🌟 長大以後可以花 {n} 🌰 換成任何樣子（☁️ 雲朵、⭐ 星星、🍄 蘑菇只能這樣換到）', { n: sp.price })}</div>`;
+    modal.open(
+      t('✨ 我的小精靈'),
+      `<div class="sp-top"><div class="sp-cv"></div><div class="sp-info"><b>${spiritLabel(sp)}</b>
+        <div class="sp-bar"><i style="width:${pct}%"></i></div><small>${t('親密度')} ${sp.xp}${sp.next ? ` / ${sp.next}` : ''}・${nextTxt}</small>
+        <small>${t('今天玩遊戲 +{a}／{b}・今天餵了 {c}／{d} 次', { a: sp.dayXp, b: sp.dayCap, c: sp.feed, d: sp.feedMax })}</small>
+        <div class="sp-btns"><button type="button" class="mini-btn" data-rename>${t('✏️ 取名字')}</button><button type="button" class="mini-btn" data-pet>${t('🤲 摸摸')}</button><button type="button" class="mini-btn" data-hide>${sp.off ? t('✨ 叫它出來') : t('🙈 先收起來')}</button></div></div></div>
+      ${style}
+      <div class="dex-note">${t('怎麼長大：🎣 釣到魚、🔥 添柴、🍲 煮菜、🍄 採集，都會加親密度；餵料理長最快')}</div>
+      <div class="dex-note"><b>${t('🍱 餵它吃料理')}</b>${feedLeft > 0 ? t('（今天還能餵 {n} 次）', { n: feedLeft }) : t('（今天吃飽了，明天再餵）')}</div>
+      ${favLine}${feed}${forms}
+      <div class="dex-note"><b>${t('🏡 收起來的小精靈')}</b>（${1 + sp.box.length}／${sp.max}）</div>
+      ${sp.box.length ? `<div class="sp-box">${sp.box.map((b, i) => `<button type="button" data-pick="${i}"><b>${b.stage ? SPIRIT_BY_ID[b.t]?.icon : '✨'}</b><small>${b.nm || t(SPIRIT_NAME[b.t])}</small><em>${t('帶出門')}</em></button>`).join('')}</div>` : ''}
+      <div class="dex-note">${sp.egg ? t('🥚 蛋正在孵，大約再 {n} 分鐘', { n: Math.max(1, Math.ceil(sp.egg.left / 60000)) }) : t('想多養一隻？到「🏪 營地小舖 → ✨ 小精靈」買 🥚 孵蛋器（{n} 🌰）', { n: sp.eggPrice })}</div>
+      ${sp.egg ? '' : `<button type="button" class="mini-btn" data-eggshop>${t('🥚 去買孵蛋器')}</button>`}
+      <div class="dex-note">${t('沒來玩也不會生病、不會離開，它會一直等你 💛')}</div>`,
+      (body) => {
+        const pv = spiritPreview();
+        body.querySelector('.sp-cv').appendChild(pv.canvas);
+        pv.show(spiritCodeOf(sp) || (sp.stage === 0 ? 'light0' : `${sp.t}${sp.stage}`));
+        body.querySelector('[data-rename]').addEventListener('click', async () => {
+          const nm = prompt(t('幫小精靈取個名字（最多 8 個字）'), sp.nm || '');
+          if (nm == null) return;
+          const r = await net.request('spiritName', { nm });
+          if (r?.ok) applySpirit(r.sp), mySpirit.react('love', 2.5, { hop: true }), openSpirit();
+        });
+        for (const b of body.querySelectorAll('[data-pick]'))
+          b.addEventListener('click', async () => {
+            const r = await net.request('spiritPick', { i: Number(b.dataset.pick) });
+            if (!r?.ok) return hud.toast(t('沒換成功，再試一次'));
+            applySpirit(r.sp);
+            mySpirit.placed = false;
+            mySpirit.react('happy', 2, { hop: true, spin: true });
+            openSpirit();
+          });
+        body.querySelector('[data-eggshop]')?.addEventListener('click', () => (modal.close(), shopPanel.open('spirit')));
+        body.querySelector('[data-pet]').addEventListener('click', () => {
+          mySpirit.react('shy', 2.2);
+          setTimeout(() => mySpirit.react('love', 2, { hop: true }), 2200);
+          audio.sfx?.('pop');
+        });
+        body.querySelector('[data-hide]').addEventListener('click', async () => {
+          const r = await net.request('spiritHide', { off: !sp.off });
+          if (r?.ok) applySpirit(r.sp), openSpirit();
+        });
+        for (const b of body.querySelectorAll('[data-feed]'))
+          b.addEventListener('click', async () => {
+            const r = await net.request('spiritFeed', { id: b.dataset.feed });
+            if (!r?.ok) return hud.toast(r?.reason === 'full' ? t('今天吃飽了，明天再餵吧') : t('沒餵成功，再試一次'));
+            dishes = r.dishes ?? dishes;
+            hud.toast(r.fav ? t('💗 是它最喜歡的！親密度 +{n}', { n: 12 }) : t('😋 吃得好開心！親密度 +{n}', { n: 6 }));
+            openSpirit();
+          });
+        for (const b of body.querySelectorAll('[data-form]'))
+          b.addEventListener('click', async () => {
+            const x = SPIRIT_BY_ID[b.dataset.form];
+            if ((pinecones ?? 0) < sp.price) return hud.toast(t('松果不夠，需要 {n} 🌰', { n: sp.price }));
+            if (!confirm(t('花 {n} 🌰 把小精靈換成{icon} {name}？', { n: sp.price, icon: x.icon, name: t(x.zh) }))) return;
+            const r = await net.request('spiritForm', { t: x.id });
+            if (!r?.ok) return hud.toast(r?.reason === 'poor' ? t('松果不夠，需要 {n} 🌰', { n: sp.price }) : t('沒換成功，再試一次'));
+            applySpirit(r.sp);
+            mySpirit.react('wow', 2.5, { hop: true, spin: true });
+            openSpirit();
+          });
+      },
+    );
+  }
+  document.getElementById('spirit-chip')?.addEventListener('click', () => openSpirit());
+  fishingUI.el.modal.addEventListener('transitionend', () => (spiritOpen = modal.isOpen && spiritOpen));
+
   net.on('ate', ({ id, dish }) => {
     const d = DISH_BY_ID[dish];
     if (!d) return;
@@ -1646,7 +1855,17 @@ async function init() {
     const opts = [];
     const sitN = seats.filter((x) => !x.sleep).length;
     let k = 0;
-    for (const st of seats) {
+    // 🌳 樹屋鞦韆：坐上去時選盪的力道（3 段）
+    if (yard.treeSwing) {
+      for (const [lv, label] of [[1, t('🪢 坐上去・輕輕盪')], [2, t('🪢 坐上去・盪高一點')], [3, t('🪢 坐上去・用力盪')]])
+        opts.push({
+          label,
+          fn: () => {
+            if (sitYard(seats[0])) yard.treeSwing.userData.level = lv;
+          },
+        });
+    }
+    for (const st of yard.treeSwing ? [] : seats) {
       if (!st.sleep) k++;
       const label = st.sleep ? (st.inside ? t('🛏️ 進車裡睡一下') : t('🛏️ 躺下')) : st.driver ? t('🚙 坐駕駛座') : sitN > 1 ? t('🪑 坐第 {n} 個位置', { n: k }) : t('🪑 坐下');
       opts.push({ label, fn: () => sitYard(st) });
@@ -1699,7 +1918,7 @@ async function init() {
     }
     const live = opts.filter((o) => !o.off);
     if (opts.length === 1 && live.length === 1) return live[0].fn();
-    const y = YARD_BY_ID[id];
+    const y = YARD_BY_ID[id] ?? { icon: yard.icon, zh: yard.name };
     modal.open(
       `${y?.icon ?? ''} ${mine ? t(y?.zh ?? '') : t('{name} 的{item}', { name: owner, item: t(y?.zh ?? '') })}`,
       `<div class="yard-opts">${opts.map((o, i) => `<button type="button" class="mini-btn" data-yo="${i}" ${o.off ? 'disabled' : ''}>${o.label}</button>`).join('')}</div>`,
@@ -1829,88 +2048,7 @@ async function init() {
     hud.setMe(myName);
   }
   const fmtDate = (ms) => new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric' }).format(new Date(ms));
-  async function openPass() {
-    const info = net.online ? await net.request('passInfo') : null;
-    if (info?.ok) setPass(info);
-    // 剩幾天：用台北的日期算（跟括號裡的「到 幾月幾日」一致），不用小時數無條件進位
-    const tpDay = (ms) => Date.parse(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date(ms)));
-    const left = passState.active ? Math.max(1, Math.round((tpDay(passState.until) - tpDay(Date.now())) / 86400000)) : 0;
-    const cur = passState.active ? PASS_TIERS[passState.tier] ?? PASS : null;
-    const status = cur
-      ? t('✅ {icon} {name}月票使用中：到 {date}（還有 {n} 天）', { icon: cur.icon, name: t(cur.zh), date: fmtDate(passState.until), n: left }) + '　' + (passState.today ? t('今天的 {n} 顆已經領了', { n: cur.daily }) : '')
-      : t('目前沒有月票');
-    const off = info && !info.on;
-    // 兩種月票並排：買的當天、每天、釣魚照價算的條數、掛機上限（免費玩家：30 條、30 顆）
-    const tierCard = (T) => {
-      let btn;
-      if (cur?.id === 'star' && T.id === 'ember') btn = `<button type="button" disabled>${t('星空月票使用中')}</button>`;
-      else if (cur?.id === 'ember' && T.id === 'star' && passState.upgrade) btn = `<button type="button" data-buy="star" data-up="1">${t('⬆️ 升級星空（補差價 NT$ {p}）', { p: passState.upgrade })}</button>`;
-      else btn = `<button type="button" data-buy="${T.id}">${cur?.id === T.id ? t('再買一次（往後延 {n} 天）', { n: T.days }) : t('購買 NT$ {p}', { p: T.price })}</button>`;
-      return `<div class="pass-tier pass-${T.id}${cur?.id === T.id ? ' on' : ''}">
-        <div class="pass-tier-name">${T.icon} ${t(T.zh)}</div>
-        <div class="pass-price">NT$ ${T.price} <small>/ ${t('{n} 天', { n: T.days })}</small></div>
-        <ul class="pass-list">
-          <li>${t('🌰 買的當天 +{n}', { n: T.first })}</li>
-          <li>${t('🌰 每天第一次進來 +{n}', { n: T.daily })}</li>
-          <li>${t('🎣 釣魚照價算 每天 {n} 條', { n: T.fish })}</li>
-          <li>${t('💤 掛機每天上限 {n} 顆', { n: T.sit })}</li>
-          <li>${t('{icon} 名字前面的徽章', { icon: T.icon })}</li>
-        </ul>
-        <div class="outfit-today" ${off ? 'hidden' : ''}>${btn}</div>
-      </div>`;
-    };
-    modal.open(
-      t('🎫 營火月票'),
-      `<div class="pass-card">
-        <div class="pass-tiers">${PASS_TIER_LIST.map(tierCard).join('')}</div>
-        <div class="dex-note">${t('免費玩家：釣魚每天前 {f} 條照價算、掛機每天最多 {s} 顆。月票期間上限提高，越常玩多拿越多；到期後回到原本的上限，買過的東西都保留。⛺ 月票限定帳篷花色「營火之夜」買過就一直留著。', { f: FREE.fish, s: FREE.sit })}</div>
-        <div class="outfit-today">${status}</div>
-        ${info && !info.account ? `<div class="dex-note">${t('購買前要先建立帳號（👤 存檔），換手機登入月票才不會不見')}</div>` : ''}
-        ${info?.test && info?.on ? `<div class="dex-note">${t('⚠️ 目前是綠界測試模式，不會真的扣款')}</div>` : ''}
-        ${off ? `<div class="outfit-today">${t('🎫 月票即將推出，敬請期待！')}</div>` : ''}
-        <div class="dex-note">${t('付款由綠界處理（信用卡、ATM、超商代碼），付款完成後自動開通，不用等人工。月票只會加快松果累積，遊戲裡所有東西不買也都拿得到。')}</div>
-      </div>`,
-      (body) => {
-        for (const b of body.querySelectorAll('[data-buy]')) {
-          b.addEventListener('click', async () => {
-            if (info && !info.account) {
-              modal.close();
-              return hud.onMeClick?.({ focusAccount: true });
-            }
-            const T = PASS_TIERS[b.dataset.buy];
-            const up = b.dataset.up === '1';
-            const price = up ? passState.upgrade : T.price;
-            // 先跳確認（金額、內容），按確定才去付款
-            const ok = await confirmBuy.ask({
-              icon: T.icon,
-              name: up ? t('升級成星空月票') : t('{name}月票 {n} 天', { name: t(T.zh), n: T.days }),
-              money: `NT$ ${price}`,
-              desc: up ? t('剩下的天數不變，改成星空月票的待遇，並補送 {n} 顆松果', { n: PASS_TIERS.star.first - PASS_TIERS.ember.first }) : t('買的當天 +{a}、每天 +{b} 顆松果', { a: T.first, b: T.daily }),
-            });
-            if (!ok) return;
-            // 先開好新分頁（手機上非同步之後才開會被擋）
-            let win = null;
-            try {
-              win = window.open('', '_blank');
-            } catch {
-              /* 被擋就在同一頁開 */
-            }
-            const res = await net.request('passOrder', { tier: T.id, upgrade: up });
-            if (!res?.ok) {
-              win?.close();
-              return hud.toast(res?.reason === 'account' ? t('購買前要先建立帳號（👤 存檔）') : t('現在不能購買，等一下再試'));
-            }
-            if (win) win.location.href = res.url;
-            else location.href = res.url;
-            hud.toast(t('🎫 已經打開綠界付款頁，付款完成後回到遊戲就會自動開通'), 6000);
-          });
-        }
-      },
-    );
-  }
-  hud.onPass = () => openPass();
-
-  // ---------- ☕ 贊助：NT$100 以上自動拿到這個月的限定假髮 ----------
+  // ---------- 💇 假髮的照片（支持營地頁用） ----------
   const wigPics = new Map();
   /** 假髮的樣子：用一隻小貓戴著拍一張照（只畫一次，存成圖片） */
   const wigPicture = (id, yaw = 0.45) => {
@@ -1948,67 +2086,206 @@ async function init() {
     return url;
   };
   let wigPick = null;
-  noticePanel.onSupport = async (el) => {
-    if (!el || !net.online) return;
-    const info = await net.request('sponsorInfo');
-    if (!info?.ok || !info.wigs?.length || !info.on) return void (el.hidden = true); // 還沒開放：先不顯示假髮
-    if (!info.wigs.includes(wigPick)) wigPick = info.wigs.find((id) => !info.owned.includes(id)) ?? info.wigs[0];
-    const allOwned = info.wigs.every((id) => info.owned.includes(id));
-    const card = (id) => {
-      const o = OUTFIT_BY_ID[id];
-      const pic = wigPicture(id);
-      const picB = wigPicture(id, 2.6);
-      const has = info.owned.includes(id);
-      return `<button type="button" class="sw-card${id === wigPick ? ' on' : ''}${has ? ' has' : ''}" data-wig="${id}">
-        ${pic ? `<span class="sw-pics"><img class="sw-pic" src="${pic}" alt=""><img class="sw-pic" src="${picB}" alt=""></span><small>${t('正面　　背面')}</small>` : `<div class="sw-emoji">${o.icon}</div>`}
-        <span class="sw-name">${o.icon} ${t(o.zh)}</span>
-        <small>${has ? t('✅ 已經有了') : o.sex === 'm' ? t('短髮款') : t('長髮款')}</small>
-      </button>`;
-    };
-    el.hidden = false;
-    el.innerHTML = `
-      <div class="sw-title">${t('💇 這個月的贊助限定假髮（二選一）')}</div>
-      <div class="sw-cards">${info.wigs.map(card).join('')}</div>
-      <p>${t('先點選喜歡的那一款，贊助 NT${n} 以上，付款完成自動拿到，戴在頭上大家都看得到。每個月換新的兩款，男生女生都可以挑。', { n: info.min })}</p>
-      ${
-        allOwned
-          ? `<div class="sw-has">${t('✅ 這個月的兩款你都有了，謝謝你的支持 💛')}</div>`
-          : info.on
-            ? `<div class="sw-amts">${info.amounts.map((a) => `<button type="button" data-amt="${a}">☕ NT$${a}${a >= info.min ? ' 💇' : ''}</button>`).join('')}</div>
-               ${info.test ? `<div class="notice-hint">${t('⚠️ 測試模式：用綠界測試卡，不會真的扣款')}</div>` : ''}
-               ${info.account ? '' : `<div class="notice-hint">${t('贊助前要先建立帳號（👤 存檔），假髮才不會不見')}</div>`}`
-            : `<div class="sw-has">${t('☕ 贊助功能即將推出，敬請期待！')}</div>`
-      }`;
-    for (const b of el.querySelectorAll('[data-wig]')) {
-      b.addEventListener('click', () => {
-        wigPick = b.dataset.wig;
-        for (const x of el.querySelectorAll('[data-wig]')) x.classList.toggle('on', x === b);
-      });
+  // ---------- 💝 支持營地（🎫 月票、🎁 本月支持營地）：選好 → 確認畫面（年齡勾選）→ 綠界付款 ----------
+  let payTab = 'pass';
+  /** 🌏 看起來不是台灣的玩家（遊戲語言不是中文、或手機時區不在台灣）：先提醒目前只能用台灣的卡 */
+  const looksForeign = () => {
+    let tz = '';
+    try {
+      tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? '';
+    } catch {
+      /* 舊瀏覽器 */
     }
-    for (const b of el.querySelectorAll('[data-amt]')) {
-      b.addEventListener('click', async () => {
-        if (!info.account) {
-          noticePanel.close();
-          return hud.onMeClick?.({ focusAccount: true });
-        }
-        if (Number(b.dataset.amt) >= info.min && info.owned.includes(wigPick)) return hud.toast(t('這一款你已經有了，選另一款吧'));
-        let win = null;
-        try {
-          win = window.open('', '_blank');
-        } catch {
-          /* 被擋就在同一頁開 */
-        }
-        const res = await net.request('sponsorOrder', { amt: Number(b.dataset.amt), wig: wigPick });
-        if (!res?.ok) {
-          win?.close();
-          return hud.toast(res?.reason === 'account' ? t('贊助前要先建立帳號（👤 存檔）') : t('現在不能贊助，等一下再試'));
-        }
-        if (win) win.location.href = res.url;
-        else location.href = res.url;
-        hud.toast(t('☕ 已經打開綠界付款頁，付款完成後回到遊戲就會自動拿到假髮'), 6000);
-      });
-    }
+    return !String(lang).startsWith('zh') || (tz && tz !== 'Asia/Taipei');
   };
+  const askForeign = () =>
+    new Promise((resolve) => {
+      if (!looksForeign()) return resolve(true);
+      net.request('foreignTry', {});
+      modal.open(
+        t('🌏 付款方式提醒'),
+        `<div class="pay-foreign"><p>${t('目前只能用台灣發行的信用卡或台灣的 ATM 付款。')}</p><p>${t('國外的卡還在準備中，謝謝你的耐心 🙏')}</p></div>
+        <div class="pay-btns"><button type="button" class="mini-btn ghost" id="pf-no">${t('取消')}</button><button type="button" class="mini-btn" id="pf-go">${t('我有台灣的卡，繼續付款')}</button></div>`,
+        (body) => {
+          body.querySelector('#pf-no').addEventListener('click', () => {
+            modal.close();
+            resolve(false);
+          });
+          body.querySelector('#pf-go').addEventListener('click', () => {
+            net.request('foreignTry', { go: true });
+            resolve(true);
+          });
+        },
+      );
+    });
+  /** 確認畫面：金額、會拿到什麼、（月票）到期日、不會自動續扣、年齡勾選 → 前往付款 */
+  function payConfirm({ icon, name, price, lines, onPay, back }) {
+    modal.open(
+      t('💝 確認一下'),
+      `<div class="pay-confirm">
+        <div class="pay-what">${icon} <b>${escapeHtml(name)}</b></div>
+        <div class="pay-money">💳 NT$ ${price}</div>
+        <ul class="pay-lines">${lines.map((x) => `<li>${x}</li>`).join('')}</ul>
+        <label class="pay-age"><input type="checkbox" id="pay-age" /><span>${t('我已滿 18 歲；或未滿 18 歲，已經問過爸爸媽媽，他們同意我購買。')}</span></label>
+        <div class="pay-small">${t('未成年請先問爸爸媽媽。虛擬商品付款後立即送達，送達後不提供退款；重複扣款或沒有收到，請到「👫 好友 → ✉️ 聯絡作者」告訴我們。')}</div>
+      </div>
+      <div class="pay-btns"><button type="button" class="mini-btn ghost" id="pay-back">${t('‹ 返回')}</button><button type="button" class="mini-btn pay-go" id="pay-go" disabled>${t('前往付款')}</button></div>`,
+      (body) => {
+        const age = body.querySelector('#pay-age');
+        const go = body.querySelector('#pay-go');
+        age.addEventListener('change', () => (go.disabled = !age.checked));
+        body.querySelector('#pay-back').addEventListener('click', back);
+        go.addEventListener('click', async () => {
+          if (!age.checked) return;
+          go.disabled = true;
+          // 先開好新分頁（手機上非同步之後才開會被擋）
+          let win = null;
+          try {
+            win = window.open('', '_blank');
+          } catch {
+            /* 被擋就在同一頁開 */
+          }
+          const res = await onPay();
+          if (!res?.ok) {
+            win?.close();
+            go.disabled = false;
+            return hud.toast(res?.reason === 'account' ? t('購買前要先建立帳號（👤 存檔）') : res?.reason === 'age' ? t('請先勾選年齡確認') : t('現在不能付款，等一下再試'));
+          }
+          if (win) win.location.href = res.url;
+          else location.href = res.url;
+          modal.close();
+          hud.toast(t('💝 已經打開綠界付款頁，付款完成後回到遊戲就會自動送達'), 6000);
+        });
+      },
+    );
+  }
+  async function openPass(tab) {
+    if (tab) payTab = tab;
+    const [info, sp] = net.online ? await Promise.all([net.request('passInfo'), net.request('sponsorInfo')]) : [null, null];
+    if (info?.ok) setPass(info);
+    const off = !info?.on;
+    const month = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', month: 'numeric' }).format(new Date()));
+    // 剩幾天：用台北的日期算（跟括號裡的「到 幾月幾日」一致）
+    const tpDay = (ms) => Date.parse(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date(ms)));
+    const left = passState.active ? Math.max(1, Math.round((tpDay(passState.until) - tpDay(Date.now())) / 86400000)) : 0;
+    const cur = passState.active ? PASS_TIERS[passState.tier] ?? PASS : null;
+    const tabs = `<div class="pay-tabs"><button type="button" data-ptab="pass" class="${payTab === 'pass' ? 'on' : ''}">${t('🎫 月票')}</button><button type="button" data-ptab="gift" class="${payTab === 'gift' ? 'on' : ''}">${t('🎁 {m} 月支持營地', { m: month })}</button></div>`;
+    let html = '';
+    if (payTab === 'pass') {
+      const status = cur ? t('✅ {icon} {name}月票使用中：到 {date}（還有 {n} 天）', { icon: cur.icon, name: t(cur.zh), date: fmtDate(passState.until), n: left }) : t('目前沒有月票');
+      const plansOf = (T) => Object.values(PASS_PLANS).filter((p) => p.tier === T.id);
+      const card = (T) => {
+        let btns;
+        if (cur?.id === 'star' && T.id === 'ember') btns = `<button type="button" disabled>${t('星空月票使用中')}</button>`;
+        else
+          btns = plansOf(T)
+            .map((P) => `<button type="button" class="pay-plan" data-plan="${P.id}"><b>${P.months === 1 ? t('1 個月') : t('3 個月')}　NT$ ${P.price}</b>${P.save ? `<small>${t('省 {s} 元・先送 {n} 🌰', { s: P.save, n: P.first })}</small>` : `<small>${t('先送 {n} 🌰', { n: P.first })}</small>`}</button>`)
+            .join('');
+        if (cur?.id === 'ember' && T.id === 'star' && passState.upgrade) btns += `<button type="button" class="pay-plan" data-up="1"><b>${t('⬆️ 升級星空　NT$ {p}', { p: passState.upgrade })}</b><small>${t('剩下的天數不變')}</small></button>`;
+        return `<div class="pass-tier pass-${T.id}${cur?.id === T.id ? ' on' : ''}">
+          <div class="pass-tier-name">${T.icon} ${t(T.zh)}</div>
+          <ul class="pass-list">
+            <li>${t('🌰 每天第一次進來 +{n}', { n: T.daily })}</li>
+            <li>${t('🎣 釣魚照價算 每天 {n} 條', { n: T.fish })}</li>
+            <li>${t('💤 掛機每天上限 {n} 顆', { n: T.sit })}</li>
+            <li>${t('🎫 可以買月票家具、跳色')}</li>
+            ${T.id === 'star' ? `<li>${t('🌌 星空門牌、每月搬家免費 2 次')}</li>` : ''}
+            <li>${t('{icon} 名字前面的徽章', { icon: T.icon })}</li>
+          </ul>
+          <div class="pay-plans" ${off ? 'hidden' : ''}>${btns}</div>
+        </div>`;
+      };
+      html = `<div class="pass-card">
+        <div class="pass-tiers">${PASS_TIER_LIST.map(card).join('')}</div>
+        <div class="outfit-today">${status}</div>
+        <div class="dex-note">${t('免費玩家：釣魚每天前 {f} 條照價算、掛機每天最多 {s} 顆。月票只會加快松果累積，遊戲裡的東西不買也拿得到；到期後買過的東西都保留。', { f: FREE.fish, s: FREE.sit })}</div>
+        <div class="dex-note">${t('一次付清，不會自動續扣。天數接在剩下的天數後面。目前僅支援台灣的信用卡／ATM。')}</div>
+        ${info && !info.account ? `<div class="dex-note">${t('購買前要先建立帳號（👤 存檔），換手機登入月票才不會不見')}</div>` : ''}
+        ${info?.test && !off ? `<div class="dex-note">${t('⚠️ 目前是綠界測試模式，不會真的扣款')}</div>` : ''}
+        ${off ? `<div class="outfit-today">${t('🎫 月票即將推出，敬請期待！')}</div>` : ''}
+      </div>`;
+    } else {
+      const wigs = sp?.wigs ?? [];
+      const owned = sp?.owned ?? [];
+      if (!wigs.includes(wigPick)) wigPick = wigs.find((id) => !owned.includes(id)) ?? wigs[0];
+      const allOwned = wigs.length && wigs.every((id) => owned.includes(id));
+      const card = (id) => {
+        const o = OUTFIT_BY_ID[id];
+        const pic = wigPicture(id);
+        const picB = wigPicture(id, 2.6);
+        const has = owned.includes(id);
+        return `<button type="button" class="sw-card${id === wigPick ? ' on' : ''}${has ? ' has' : ''}" data-wig="${id}">
+          ${pic ? `<span class="sw-pics"><img class="sw-pic" src="${pic}" alt=""><img class="sw-pic" src="${picB}" alt=""></span><small>${t('正面　　背面')}</small>` : `<div class="sw-emoji">${o.icon}</div>`}
+          <span class="sw-name">${o.icon} ${t(o.zh)}</span>
+          <small>${has ? t('✅ 已經有了') : o.sex === 'm' ? t('男生款') : t('女生款')}</small>
+        </button>`;
+      };
+      html = `<div class="pay-gift">
+        <div class="pay-gift-head">${t('謝謝你支持營地 🔥')}</div>
+        <p>${t('這座營地是一個人慢慢做出來的，伺服器需要一點費用。贊助 NT${n} 以上，送你 {m} 月限定假髮（2 選 1）。', { n: sp?.min ?? 60, m: month })}</p>
+        ${wigs.length ? `<div class="sw-cards">${wigs.map(card).join('')}</div>` : ''}
+        <div class="dex-note">${t('先點選喜歡的那一款。同一個月再贊助一次，送你另一款。')}</div>
+        ${allOwned ? `<div class="sw-has">${t('✅ 這個月的兩款你都有了，謝謝你的支持 💛')}</div>` : ''}
+        ${off ? `<div class="sw-has">${t('🎁 即將推出，敬請期待！')}</div>` : `<div class="sw-amts">${(sp?.amounts ?? []).map((a) => `<button type="button" data-amt="${a}"><small>💝 ${t('贊助')}</small><b>NT$ ${a}</b></button>`).join('')}</div>`}
+        <div class="dex-note">${t('一次付清，不會自動續扣。目前僅支援台灣的信用卡／ATM。')}</div>
+        ${sp && !sp.account ? `<div class="dex-note">${t('贊助前要先建立帳號（👤 存檔），假髮才不會不見')}</div>` : ''}
+      </div>`;
+    }
+    modal.open(t('💝 支持營地'), tabs + html, (body) => {
+      for (const b of body.querySelectorAll('[data-ptab]')) b.addEventListener('click', () => openPass(b.dataset.ptab));
+      const needAcct = (acc) => {
+        if (acc) return false;
+        modal.close();
+        hud.onMeClick?.({ focusAccount: true });
+        return true;
+      };
+      for (const b of body.querySelectorAll('[data-plan], [data-up]')) {
+        b.addEventListener('click', async () => {
+          if (needAcct(info?.account)) return;
+          if (!(await askForeign())) return;
+          const up = b.dataset.up === '1';
+          const P = PASS_PLANS[b.dataset.plan];
+          const T = up ? PASS_TIERS.star : PASS_TIERS[P.tier];
+          const until = Math.max(Date.now(), passState.active ? passState.until : 0) + (up ? 0 : P.days * 86400000);
+          payConfirm({
+            icon: T.icon,
+            name: up ? t('升級成星空月票') : t('{name}月票 {m}', { name: t(T.zh), m: P.months === 1 ? t('1 個月') : t('3 個月（90 天）') }),
+            price: up ? passState.upgrade : P.price,
+            lines: up
+              ? [t('🌰 補送 {n} 顆松果', { n: PASS_TIERS.star.first - PASS_TIERS.ember.first }), t('📅 剩下的天數不變（到 {date}）', { date: fmtDate(passState.until) }), t('🔁 一次付清，不會自動續扣')]
+              : [t('🌰 付款後先送 {n} 顆松果', { n: P.first }), t('📅 用到 {date}', { date: fmtDate(until) }), t('🔁 一次付清，不會自動續扣')],
+            back: () => openPass('pass'),
+            onPay: () => net.request('passOrder', { plan: up ? null : P.id, upgrade: up, age: true }),
+          });
+        });
+      }
+      for (const b of body.querySelectorAll('[data-wig]')) {
+        b.addEventListener('click', () => {
+          wigPick = b.dataset.wig;
+          for (const x of body.querySelectorAll('[data-wig]')) x.classList.toggle('on', x === b);
+        });
+      }
+      for (const b of body.querySelectorAll('[data-amt]')) {
+        b.addEventListener('click', async () => {
+          if (needAcct(sp?.account)) return;
+          if (!(await askForeign())) return;
+          const amt = Number(b.dataset.amt);
+          const owned = sp?.owned ?? [];
+          // 選的那款已經有了 → 送另一款；兩款都有了 → 單純支持
+          const give = amt >= (sp?.min ?? 60) ? ([wigPick, ...(sp?.wigs ?? [])].find((id) => id && !owned.includes(id)) ?? null) : null;
+          payConfirm({
+            icon: '💝',
+            name: t('支持營地'),
+            price: amt,
+            lines: [give ? t('🎁 送你：{name}', { name: outfitName(give) }) : t('💛 單純支持營地（這個月的假髮你都有了）'), t('🔁 一次付清，不會自動續扣')],
+            back: () => openPass('gift'),
+            onPay: () => net.request('sponsorOrder', { amt, wig: give ?? wigPick, age: true }),
+          });
+        });
+      }
+    });
+  }
+  hud.onPass = () => openPass();
   net.on('sponsored', ({ wig, got }) => {
     audio.sfx('bell');
     hud.toast(wig && got ? t('💛 謝謝你的贊助！拿到這個月的限定假髮「{name}」（到「👒 造型 → 💇 頭髮」戴上）', { name: t(OUTFIT_BY_ID[wig]?.zh ?? '') }) : t('💛 謝謝你的贊助！營火會一直燒下去 🔥'), 8000);
@@ -2606,6 +2883,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       cairnPanel.close();
       lakeNews.setRoom(room.id);
       setRemoteHeight(room.id === 'home' ? rooms.home.heightAt : room.id === 'campground' ? rooms.campground.heightAt : null); // 坐在門口擺設上的人高度
+      setRemoteSpot(room.id === 'campground' ? rooms.campground.remoteSpot : null); // 🪢 別人坐在樹屋鞦韆上也跟著盪
       // 🛋️ 帳篷裡角色縮小一點，跟家具（沙發、床）的比例才對
       const cs = room.id === 'home' ? 0.78 : 1;
       player.mesh.scale.setScalar(cs);
@@ -2668,6 +2946,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     refreshOnline();
   };
   const updNews = new UpdateNews();
+  updNews.payOn = () => payOn; // 💝 月票開通了才顯示月票的公告
   // 📢 更新紀錄：隨時可以重看最近一次的更新說明（11/07 作者：點哪邊就能看到紀錄）
   document.getElementById('news-chip')?.addEventListener('click', () => updNews.show());
   const welcome = new WelcomeCard({
@@ -2939,7 +3218,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     return {
       ...player.getNetworkState(),
       actionState: actionState ?? ((actions.state === 'fish' && fishing.netAction) || player.actionState), // 拉竿、舉魚
-      doneness: actions.state === 'roast' ? actions.doneness : actions.state === 'eat' ? actions.eatDone : 0, // 吃棉花糖：讓別人看到烤得怎樣的反應
+      doneness: actions.state === 'roast' ? actions.doneness : actions.state === 'eat' ? actions.eatDone : actions.state === 'sofa' && actions.seat?.treeSwing ? (actions.seat.treeSwing.userData.level || 1) / 2 : 0, // 🪢 樹屋鞦韆：盪的段數（別人看到一樣的力道） // 吃棉花糖：讓別人看到烤得怎樣的反應
       // 舉起來的魚（魚種＋公分）：釣魚中舉著、或舉著到處走；不然就是頭上頂著石頭
       extra: fishing.netExtra || (trophy ? packFish(trophy.index, trophy.size) : 0) || (forest.carrying ? STONE_FLAG : 0),
     };
@@ -2998,6 +3277,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       ['🍲', t('第一次煮出新料理、收成新蔬菜')],
       ['🎉', t('晚上 7～11 點的小活動')],
       ['👫', t('邀請新朋友來玩（每位 10 顆）')],
+      ...(payOn ? [['🎫', t('有月票：每天第一次進來多 20～40 顆')]] : []),
     ];
     modal.open(
       t('🌰 怎麼拿松果？'),
@@ -3019,7 +3299,9 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     coins: () => pinecones,
     home: () => myHome,
     plotName,
+    payOn: () => payOn, // 🎫 月票開通後，手冊、常見問題才說明月票
     go: {
+      pass: () => openPass('pass'),
       shop: () => shopPanel.open(),
       home: () => goHome(),
       move: () => openMoveMap(myHome?.plot?.z ?? 0),
@@ -3399,8 +3681,32 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     };
   }
   shopPanel.passStar = () => !!(passState?.active && passState?.tier === 'star'); // 🌌 星空門牌
+  // ✨ 小精靈分類：🥚 孵蛋器
+  shopPanel.spirit = () => spiritSt;
+  shopPanel.onSpirit = () => openSpirit();
+  shopPanel.onEgg = async () => {
+    const x = spiritSt;
+    if (!x || !confirm(t('花 {n} 🌰 買一個孵蛋器？10 分鐘後孵出一顆新的小光點', { n: x.eggPrice }))) return;
+    const r = await net.request('spiritEgg', {});
+    if (!r?.ok) return hud.toast(r?.reason === 'poor' ? t('松果不夠，需要 {n} 🌰', { n: x.eggPrice }) : r?.reason === 'egg' ? t('已經有一顆蛋在孵了') : r?.reason === 'max' ? t('已經養滿了') : t('沒買成功，再試一次'));
+    applySpirit(r.sp);
+    audio.sfx('bell');
+    hud.toast(t('🥚 放好蛋了！10 分鐘後就會孵出來'), 5000);
+  };
   shopPanel.passOn = () => payOn; // 🎫 月票開通了才有「月票」分頁
   shopPanel.passRank = () => (passState?.active ? (PASS_TIERS[passState.tier] ?? PASS).rank : 0);
+  // 🎁 星空月票每月免費挑 1 件月票家具
+  shopPanel.passFree = () => (passState?.active && passState.tier === 'star' ? { star: true, ok: !!passState.freeOk, next: passState.freeNext ? fmtDate(passState.freeNext) : '' } : null);
+  shopPanel.onFree = async (id, c) => {
+    const f = FURNITURE_BY_ID[id];
+    if (!confirm(t('用這個月的免費名額拿「{name}」嗎？（30 天後可以再挑一件）', { name: f?.name ?? '' }))) return;
+    const res = await net.request('passFree', { id, c });
+    if (!res?.ok) return hud.toast(res?.reason === 'used' ? t('這個月的免費家具已經拿過了') : res?.reason === 'noTent' ? t('先買帳篷，才能放家具 ⛺') : t('現在不能拿，等一下再試'));
+    if (res.home) setMyHome(res.home);
+    if (res.pass) setPass(res.pass);
+    audio.sfx('bell');
+    hud.toast(t('🎁 拿到「{icon} {name}」了！回帳篷按「🛠️ 布置」擺出來', { icon: f?.icon ?? '', name: f?.name ?? '' }), 5000);
+  };
   shopPanel.onNeedPass = () => {
     hud.toast(t('🎫 這是月票限定，有月票才能買'));
     openPass();
@@ -3447,11 +3753,11 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       .sort((a, b) => (b.f.unread ? 1 : 0) - (a.f.unread ? 1 : 0) || (b.f.online ? 1 : 0) - (a.f.online ? 1 : 0) || (b.f.last?.at ?? 0) - (a.f.last?.at ?? 0) || a.i - b.i)
       .map((x) => x.f);
     const chips = mutual
-      .map((f) => `<button type="button" class="fr-chip${f.unread ? ' has-new' : ''}" data-chat="${f.hid}"><b><i class="fr-dot${f.online ? ' on' : ''}"></i>${escapeHtml(f.name)}</b>${f.plot ? `<small>🏕️ ${plotName(f.plot)}</small>` : ''}${f.unread ? `<i class="fr-new">${f.unread}</i>` : ''}</button>`)
+      .map((f) => `<button type="button" class="fr-chip${f.unread ? ' has-new' : ''}" data-chat="${f.hid}"><b><i class="fr-dot${f.online ? ' on' : ''}"></i>${escapeHtml(f.name)}</b>${f.plot ? `<small>🏕️ ${plotName(f.plot)}</small>` : ''}${!f.online && f.away >= 1 ? `<small class="fr-away${f.away >= 7 ? ' long' : ''}">${f.away >= 30 ? t('💤 很久沒來了') : t('💤 {n} 天沒來', { n: f.away })}</small>` : ''}${f.unread ? `<i class="fr-new">${f.unread}</i>` : ''}</button>`)
       .join('');
     const fr =
       pending.map((f) => `<div class="craft-row fr-row" data-chat="${f.hid}"><div class="craft-info"><b><i class="fr-dot${f.online ? ' on' : ''}"></i>${escapeHtml(f.name)}${f.plot ? ` <span class="fr-plot">🏕️ ${plotName(f.plot)}</span>` : ''}</b><small>${t('⏳ 等對方同意')}</small></div><span class="fr-go">›</span></div>`).join('') +
-      (chips ? `<div class="dex-note fr-sub">${t('點名字打開密頻、看聊天紀錄')}</div><div class="fr-chips">${chips}</div>` : '');
+      (chips ? `<div class="dex-note fr-sub">${t('點名字打開密頻、看聊天紀錄（最下面可以刪除好友）')}</div><div class="fr-chips">${chips}</div>` : '');
     modal.open(
       t('👫 好友'),
       `<div class="dex-note">${t('🆔 我的玩家編號：{id}', { id: `<b class="gift-id-inline">${r.code}</b>` })}</div>
@@ -4230,7 +4536,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const action = actions.update(dt, input.hasMoveInput);
     player.update(dt, input, cameraRig.yaw, room, elapsed, action);
     if (!actions.seat) remotes.pushOut(player.position, player.radius); // 坐在圓木上不要被旁邊的人推走
-    remotes.update(dt, elapsed);
+    remotes.update(dt, elapsed, updateSpirits(dt));
     net.update(dt, netState());
     cameraRig.showOff = fishing.showingOff;
     // 坐著釣魚：手機版左上的即時動態、活動時間先收起來，拉竿框、釣到的卡片才不會被擋

@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { makeResolver, makeSign, lowpoly } from './shared.js';
 import { FOG_COLOR } from '../scene/World.js';
 import { seededRandom, makeRadialTexture } from '../scene/textures.js';
-import { buildTentShell, shapeOf } from '../game/tentShapes.js';
+import { buildTentShell, shapeOf, TREEHOUSE_SPOTS } from '../game/tentShapes.js';
 import { styleOf, tentTexture } from '../game/tentStyles.js';
 import { t } from '../i18n/i18n.js';
 import { LAYOUT, CAMP_SIZE, ENTRY_Z, BOUNDS, LOOP_CENTER, plotSpots, frame, zoneName } from './campLayout.js';
@@ -62,10 +62,10 @@ function tentMats(styleId) {
 
 /** 帳篷外殼：同材質的零件合併成一塊，32 頂帳篷也不會拖慢手機 */
 const shellCache = new Map();
-function tentShell(shape, style) {
-  const key = `${shape}|${style}`;
+function tentShell(shape, style, frame = 'gold') {
+  const key = `${shape}|${style}|${shape === 'stardome' ? frame : ''}`;
   if (!shellCache.has(key)) {
-    const shell = buildTentShell(shape, tentMats(style), { outside: true });
+    const shell = buildTentShell(shape, tentMats(style), { outside: true, frame, noSwing: true }); // 🌳 樹屋的鞦韆另外做（會盪）
     shell.updateMatrixWorld(true);
     const byMat = new Map();
     let ok = true;
@@ -546,6 +546,18 @@ export function createCampgroundRoom() {
   const gate = makeSign(t('🏕️ 帳篷營地'), { height: 0.42 });
   gate.position.set(0, 3.6, ENTRY_Z - 1.2);
   group.add(gate);
+  // 🚲 公用腳踏車（作者 11/11）：每區入口停一台，大家都能騎（同時騎、不用排隊），按 E 騎、再按 E 下車
+  const PUB_BIKE = { x: 3.3, z: ENTRY_Z - 2.4 };
+  {
+    const bk = buildYard('bike');
+    bk.position.set(PUB_BIKE.x, 0, PUB_BIKE.z);
+    bk.rotation.y = -0.5;
+    group.add(bk);
+    const tag = makeSign(t('🚲 公用腳踏車・大家都能騎'), { height: 0.26 });
+    tag.position.set(PUB_BIKE.x, 1.55, PUB_BIKE.z);
+    group.add(tag);
+  }
+  const nearPubBike = (pos) => Math.hypot(pos.x - PUB_BIKE.x, pos.z - PUB_BIKE.z) < 1.5;
   const back = makeSign(t('回到營火'), { height: 0.3 });
   back.position.set(0, 2.1, ENTRY_Z + 0.3);
   group.add(back);
@@ -566,10 +578,14 @@ export function createCampgroundRoom() {
 
   let zoneNow = 0; // 🏕️ 現在顯示哪一區（門牌寫「A 區 7 號」用）
   const plotTitle = (i) => t('{z} 區 {n} 號', { z: zoneName(zoneNow), n: i + 1 });
-  const tentKey = (tent) => (tent ? [zoneNow, tent.sign ?? '', tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.open, tent.likes, tent.n, tent.yard ?? '', (tent.sm ?? []).join(','), JSON.stringify(tent.garden ?? null)].join('|') : `empty:${zoneNow}`);
+  const tentKey = (tent) => (tent ? [zoneNow, tent.sign ?? '', tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.frame ?? '', tent.open, tent.likes, tent.n, tent.yard ?? '', (tent.sm ?? []).join(','), JSON.stringify(tent.garden ?? null)].join('|') : `empty:${zoneNow}`);
   const trash = createTrashLayer(group);
   const ridePicked = new Set(); // 騎車自動撿過的垃圾（避免同一件一直送）
+  const _sw = new THREE.Vector3();
+  const _sw2 = new THREE.Vector3();
+  let clockNow = 0;
   const rockers = new Set(); // 會搖的門口擺設（鞦韆）
+  const treeSwings = new Set(); // 🌳 樹屋的鞦韆：level 0 沒人、1～3 盪的力道
   const _rp = new THREE.Vector3();
   /** 🥕 小菜園的作物（世界座標，跟帳篷分開放） */
   const gardensGroup = new THREE.Group();
@@ -607,7 +623,7 @@ export function createCampgroundRoom() {
       const sp = doorAt(0.7);
       return { g, door: sp.door, out: sp.out, collider: null, yards: [] };
     }
-    const shell = tentShell(tent.shape, tent.style);
+    const shell = tentShell(tent.shape, tent.style, tent.frame);
     shell.scale.setScalar(SCALE);
     g.add(shell);
     const sh = shapeOf(tent.shape);
@@ -693,6 +709,40 @@ export function createCampgroundRoom() {
       const f = frame(p.ry);
       yards.push({ id, obj: y, col: { x: p.x + f.fx * lz + f.rx * lx, z: p.z + f.fz * lz + f.rz * lx, r: yardRadius(id) * yardScale(id) } });
     }
+    // 🌳 私人樹屋：樹枝下的鞦韆（會盪、可以坐，3 段力道）、陽台的小桌椅（可以坐）
+    if (sh.id === 'treehouse') {
+      const f = frame(p.ry);
+      const toWorld = (lx, lz) => ({ x: p.x + f.fx * lz + f.rx * lx, z: p.z + f.fz * lz + f.rz * lx });
+      const B = TREEHOUSE_SPOTS.branch;
+      const pivot = new THREE.Group();
+      pivot.position.set(B.x * SCALE, B.y * SCALE, B.z * SCALE);
+      const L = B.y * SCALE - 0.42; // 繩子長度：座板離地 0.42
+      const rope = lowpoly(0xc9a46a);
+      for (const dx of [-0.3, 0.3]) {
+        const r = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, L, 4), rope);
+        r.position.set(dx, -L / 2, 0);
+        pivot.add(r);
+      }
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.05, 0.32), lowpoly(0x9a6a40));
+      seat.position.y = -L;
+      pivot.add(seat);
+      const anchor = new THREE.Object3D(); // 坐的位置（跟著鞦韆一起盪）
+      anchor.position.set(0, -L + 0.06, 0);
+      pivot.add(anchor);
+      pivot.traverse((o) => o.isMesh && (o.userData.ownGeo = true));
+      g.add(pivot);
+      pivot.userData.level = 0;
+      treeSwings.add(pivot);
+      const sw = toWorld(B.x * SCALE, B.z * SCALE);
+      pivot.userData.rest = sw; // 坐的位置（不盪的時候）：認出別人是不是坐在這個鞦韆上
+      yards.push({ id: 'th_swing', icon: '🪢', name: t('樹屋鞦韆'), obj: pivot, treeSwing: pivot, seats: [{ x: 0, y: -L + 0.06, z: 0, face: 0, swing: true, anchor }], col: { x: sw.x, z: sw.z, r: 0.35 } });
+      const T = TREEHOUSE_SPOTS.table;
+      const tw = toWorld(T.x * SCALE, T.z * SCALE);
+      const balc = new THREE.Object3D();
+      balc.scale.setScalar(SCALE);
+      g.add(balc);
+      yards.push({ id: 'th_table', icon: '☕', name: t('樹屋陽台的小桌椅'), obj: balc, seats: TREEHOUSE_SPOTS.chairs, col: { x: tw.x, z: tw.z, r: 0.45 } });
+    }
     return { g, gg, door: sp.door, out: sp.out, collider: { x: p.x, z: p.z, r: front * 0.92 }, yards };
   }
 
@@ -736,13 +786,13 @@ export function createCampgroundRoom() {
   const UP = new THREE.Vector3();
   /** 某一格門口擺設的座位（世界座標＋面向） */
   function yardSeats(p, y) {
-    const u = y && YARD_USES[y.id];
-    if (!u?.seats || !y.obj) return [];
+    const list = y?.seats ?? (y && YARD_USES[y.id]?.seats);
+    if (!list || !y.obj) return [];
     y.obj.updateMatrixWorld(true);
-    return u.seats.map((st, i) => {
+    return list.map((st, i) => {
       const w = y.obj.localToWorld(new THREE.Vector3(st.x, st.y, st.z));
       const dir = UP.set(Math.sin(st.face), 0, Math.cos(st.face)).transformDirection(y.obj.matrixWorld);
-      return { i, x: w.x, y: w.y, z: w.z, face: Math.atan2(dir.x, dir.z), sleep: !!st.sleep, driver: !!st.driver, inside: !!st.inside, swing: !!st.swing, hid: p.tent.hid, item: y.id };
+      return { i, x: w.x, y: w.y, z: w.z, face: Math.atan2(dir.x, dir.z), sleep: !!st.sleep, driver: !!st.driver, inside: !!st.inside, swing: !!st.swing, hid: p.tent.hid, item: y.id, anchor: st.anchor ?? null, treeSwing: y.treeSwing ?? null };
     });
   }
   /** 站在哪一格的門口擺設旁邊 */
@@ -775,6 +825,12 @@ export function createCampgroundRoom() {
   function resolveCollision(pos, r) {
     const st = seatedOn();
     if (st) {
+      if (st.anchor) {
+        // 🪢 樹屋鞦韆：人跟著鞦韆一起盪
+        st.anchor.getWorldPosition(_sw);
+        pos.copy(_sw);
+        return;
+      }
       pos.set(st.x, st.y, st.z);
       return;
     }
@@ -784,7 +840,7 @@ export function createCampgroundRoom() {
   /** 其他玩家坐在門口擺設上的高度（遠端角色用；坐、躺本身會再加一點） */
   function heightAt(x, z) {
     for (const p of plots) for (const y of p.yards ?? []) {
-      if (!YARD_USES[y.id]?.seats) continue;
+      if (!(y.seats ?? YARD_USES[y.id]?.seats)) continue;
       if (Math.hypot(x - y.col.x, z - y.col.z) > y.col.r + 0.5) continue;
       for (const st of yardSeats(p, y)) if (Math.hypot(x - st.x, z - st.z) < 0.15) return Math.max(0, st.y - (st.sleep ? 0.26 : 0.2));
     }
@@ -993,6 +1049,20 @@ export function createCampgroundRoom() {
     audio: { fire: 0.15, wind: 0.9, ambient: 1, water: 0, music: 0.5, song: 0 },
     resolveCollision,
     heightAt,
+    /** 🪢 別人坐在樹屋鞦韆上：回傳他現在該在的位置（跟著鞦韆盪）；d＝他選的段數 ÷ 2 */
+    remoteSpot(x, z, d) {
+      for (const sw of treeSwings) {
+        const r = sw.userData.rest;
+        if (!r || Math.hypot(x - r.x, z - r.z) > 0.8) continue;
+        sw.userData.remoteLevel = Math.min(3, Math.max(1, Math.round((d || 0.5) * 2)));
+        sw.userData.remoteAt = clockNow;
+        const a = sw.children.find((o) => !o.isMesh);
+        if (!a) return null;
+        a.getWorldPosition(_sw2);
+        return _sw2;
+      }
+      return null;
+    },
     yardSeats,
     /** 目前的營位（除錯、測試用） */
     get plots() {
@@ -1036,6 +1106,24 @@ export function createCampgroundRoom() {
       returnSpawn.home = outSpot(plotSpots(PLOTS[Math.min(idx, PLOTS.length - 1)], front));
     },
     update(dt, time, camera) {
+      clockNow = time;
+      // 🌳 樹屋鞦韆：自己坐著照選的力道盪（1 輕輕、2 高一點、3 用力）；別人坐著輕輕盪；沒人慢慢停
+      const me = seatedOn();
+      for (const sw of treeSwings) {
+        if (!sw.parent) {
+          treeSwings.delete(sw);
+          continue;
+        }
+        let want = 0;
+        if (me?.treeSwing === sw) want = [0, 0.22, 0.4, 0.58][sw.userData.level || 1];
+        else {
+          // 別人坐著：照他選的段數盪（remoteSpot 收到的）；超過 1 秒沒收到就當沒人
+          if (time - (sw.userData.remoteAt ?? -9) < 1) want = [0, 0.22, 0.4, 0.58][sw.userData.remoteLevel || 1];
+          sw.userData.level = 0;
+        }
+        sw.userData.amp = (sw.userData.amp ?? 0) + (want - (sw.userData.amp ?? 0)) * Math.min(1, dt * 1.2);
+        sw.rotation.x = Math.sin(time * 2.1) * sw.userData.amp;
+      }
       // 🪢 鞦韆：附近有人坐著就前後輕輕搖，沒人就慢慢停下來
       for (const y of rockers) {
         if (!y.parent) {
@@ -1104,6 +1192,10 @@ export function createCampgroundRoom() {
         actions.onTrash?.(tb);
         return true;
       }
+      if (nearPubBike(actions.player.position)) {
+        actions.ride();
+        return true;
+      }
       const tg = targetAt(actions.player.position);
       // 🚙 門口擺設比門口、菜園近的話：打開擺設的選單
       const yd = pickYard(actions.player.position);
@@ -1119,9 +1211,10 @@ export function createCampgroundRoom() {
     prompt(actions) {
       lastActions = actions;
       if (trash.near(actions.player.position)) return t('<kbd>E</kbd> ♻️ 撿起垃圾');
+      if (actions.state === 'free' && nearPubBike(actions.player.position)) return t('<kbd>E</kbd> 🚲 騎公用腳踏車（再按 E 下車）');
       const tg = targetAt(actions.player.position);
       const yd = pickYard(actions.player.position);
-      if (yd) return t('<kbd>E</kbd> {icon} {name}', { icon: YARD_ICON[yd.yard.id] ?? '🚙', name: t(YARD_NAME[yd.yard.id] ?? '') });
+      if (yd) return t('<kbd>E</kbd> {icon} {name}', { icon: yd.yard.icon ?? YARD_ICON[yd.yard.id] ?? '🚙', name: yd.yard.name ?? t(YARD_NAME[yd.yard.id] ?? '') });
       if (tg?.garden) return tg.garden.tent.mine ? t('<kbd>E</kbd> 🥕 我的小菜園') : t('<kbd>E</kbd> 💧 看看「{name}」的菜園', { name: tg.garden.tent.name || t('旅人') });
       const p = tg?.door;
       if (!p) return null;
@@ -1135,8 +1228,9 @@ export function createCampgroundRoom() {
       if (actions.state === 'ride' && trash.near(actions.player.position)) return ['♻️', t('撿起來')];
       if (seatedOn() || actions.state === 'ride') return ['🧍', t('起身')];
       if (trash.near(actions.player.position)) return ['♻️', t('撿起來')];
+      if (nearPubBike(actions.player.position)) return ['🚲', t('騎車')];
       const yd0 = pickYard(actions.player.position);
-      if (yd0) return [YARD_ICON[yd0.yard.id] ?? '🚙', t('使用')];
+      if (yd0) return [yd0.yard.icon ?? YARD_ICON[yd0.yard.id] ?? '🚙', t('使用')];
       const tg = targetAt(actions.player.position);
       if (tg?.garden) return ['🥕', t('菜園')];
       return tg ? ['🚪', t('拜訪')] : null;

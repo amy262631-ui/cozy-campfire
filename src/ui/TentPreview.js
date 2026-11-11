@@ -44,8 +44,8 @@ export class TentPreview {
     this.running = false;
   }
 
-  set(shape, style) {
-    const key = `${shape}|${style}`;
+  set(shape, style, frame = 'gold') {
+    const key = `${shape}|${style}|${frame}`;
     if (key === this.key) return;
     this.key = key;
     const st = styleOf(style);
@@ -58,7 +58,7 @@ export class TentPreview {
     this.floorMat.color.setHex(st.floor);
     for (const c of this.tent.children) c.traverse((o) => o.geometry?.dispose());
     this.tent.clear();
-    this.tent.add(buildTentShell(shape, this.mats, { outside: true }));
+    this.tent.add(buildTentShell(shape, this.mats, { outside: true, frame }));
     const floor = buildTentFloor(shape, this.floorMat);
     floor.position.y = 0.01;
     this.tent.add(floor);

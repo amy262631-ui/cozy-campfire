@@ -91,7 +91,7 @@
             var ref = '';
             try { ref = document.referrer ? new URL(document.referrer).hostname : ''; } catch (e) {}
             var u = srv.replace(/\/$/, '') + (srv ? '/' : '') + 'api/hit?src=' + encodeURIComponent(q.get('src') || q.get('utm_source') || q.get('ref') || '') +
-              '&w=' + (q.get('with') ? 1 : 0) + '&h=' + encodeURIComponent(location.hostname) + '&r=' + encodeURIComponent(ref) + (extra || '');
+              '&w=' + (q.get('with') ? 1 : 0) + '&h=' + encodeURIComponent(location.hostname) + '&r=' + encodeURIComponent(ref) + '&l=' + encodeURIComponent((navigator.language || '').slice(0, 10)) + (extra || '');
             if (navigator.sendBeacon) navigator.sendBeacon(u);
             else fetch(u, { mode: 'no-cors', keepalive: true });
           } catch (e) {}

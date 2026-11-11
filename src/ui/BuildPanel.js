@@ -164,7 +164,7 @@ export class BuildPanel {
   render() {
     if (!this.active) return;
     const home = this.getHome() ?? { inv: {}, items: [] };
-    const loft = home.shape === 'cabin';
+    const loft = home.shape === 'cabin' || home.shape === 'treehouse';
     this.floorEl.hidden = !loft;
     if (!loft && this.floor !== 1) {
       this.floor = 1;

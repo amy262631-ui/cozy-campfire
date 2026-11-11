@@ -5,6 +5,7 @@ import { ProceduralFox } from '../player/characters/ProceduralFox.js';
 import { lerpAngle } from '../player/Player.js';
 import { unpackFish } from '../fishing/fishData.js';
 import { outfitOfCode } from '../game/outfits.js';
+import { SpiritFollower } from '../player/spiritFollower.js';
 
 /** 線上同步的造型代號 [頭, 背, 脖子] → { head, back, neck } */
 export const wearOfCodes = (ot) => {
@@ -170,6 +171,11 @@ class RemotePlayer {
       this._y = heightFn(this.pos.x, this.pos.z, this._y ?? 0);
       this.group.position.y = this._y + (this.target?.a === 'sleep' ? 0.26 : this.target?.a === 'sofa' ? 0.2 : 0);
     } else this._y = 0;
+    // 🪢 坐在會盪的鞦韆上（樹屋鞦韆）：跟著鞦韆一起盪（位置由房間算，盪的力道＝對方選的段數）
+    if (spotFn && this.target?.a === 'sofa') {
+      const s = spotFn(this.pos.x, this.pos.z, this.target.d ?? 0);
+      if (s) this.group.position.copy(s);
+    }
     this.group.rotation.y = this.ry;
   }
 
@@ -182,9 +188,15 @@ class RemotePlayer {
   }
 }
 
+const SIT_STATES = new Set(['sofa', 'eat', 'sit', 'fish', 'reel', 'roast', 'showFish', 'swing']);
 /** 管理所有遠端玩家：加入、離開、狀態更新、碰撞資料 */
 /** 目前房間的地面高度（小木屋才有）；null＝平地 */
 let heightFn = null;
+let spotFn = null;
+/** 房間給的「會動的座位」：回傳那個人現在該在的位置（沒有就 null） */
+export const setRemoteSpot = (fn) => {
+  spotFn = fn;
+};
 export const setRemoteHeight = (fn) => {
   heightFn = fn;
 };
@@ -218,6 +230,11 @@ export class RemotePlayers {
     if (this.players.has(info.id)) this.remove(info.id);
     const p = new RemotePlayer(info);
     p.group.scale.setScalar(charScale);
+    // ✨ 小精靈（營地居民沒有）
+    if (!p.npc) {
+      p.spirit = new SpiritFollower(this.scene);
+      p.spirit.setCode(info.sr);
+    }
     this.players.set(info.id, p);
     this.scene.add(p.group);
     return p;
@@ -227,6 +244,7 @@ export class RemotePlayers {
     const p = this.players.get(id);
     if (!p) return null;
     this.scene.remove(p.group);
+    p.spirit?.dispose();
     p.dispose();
     this.players.delete(id);
     return p;
@@ -254,8 +272,23 @@ export class RemotePlayers {
     this.players.get(id)?.character.setOutfit(wearOfCodes(ot));
   }
 
-  update(dt, elapsed) {
-    for (const p of this.players.values()) p.update(dt, elapsed, this.zzz);
+  /** ✨ 別人的小精靈換了樣子 */
+  setSpirit(id, sr) {
+    this.players.get(id)?.spirit?.setCode(sr);
+  }
+  spiritReact(id, face, sec, opts) {
+    this.players.get(id)?.spirit?.react(face, sec, opts);
+  }
+
+  /** env：{ cam 鏡頭位置, night, party(x, z) 營火時間在營火旁 } */
+  update(dt, elapsed, env = {}) {
+    for (const p of this.players.values()) {
+      p.update(dt, elapsed, this.zzz);
+      if (!p.spirit?.obj) continue;
+      const a = p.target.a;
+      const g = p.group.position;
+      p.spirit.update(dt, { x: g.x, y: g.y, z: g.z, ry: p.ry, scale: p.group.scale.x, speed: p.speed, state: a === 'sleep' || a === 'blanket' ? 'sleep' : SIT_STATES.has(a) ? 'sit' : 'idle', cam: env.cam, night: env.night, party: env.party?.(g.x, g.z) });
+    }
   }
 
   /** 讓本地玩家不會跟其他小動物重疊（輕微推開） */

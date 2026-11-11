@@ -90,9 +90,9 @@ export function createHomeRoom() {
   const bounds = [tentBounds('bell'), { type: 'rect', minX: -0.6, maxX: 0.6, minZ: 2.6, maxZ: R + 0.2 }];
   const entrance = { to: 'forest_main', x: 0, z: R - 0.05, r: 0.5, label: t('回到營火') };
   const spawn = { x: 0, z: 2.75, ry: Math.PI, camYaw: 0.25, camPitch: 0.62 };
-  function buildShape(id, g = GRID_BASE) {
+  function buildShape(id, g = GRID_BASE, frame = 'gold') {
     const sh = shapeOf(id);
-    const key = `${sh.id}|${g}`;
+    const key = `${sh.id}|${g}|${sh.id === 'stardome' ? frame : ''}`;
     if (key === shapeKey) return;
     shapeKey = key;
     grid = g;
@@ -101,7 +101,7 @@ export function createHomeRoom() {
     shell.clear();
     // 奇數格時正中間那格要能擺東西，就不放中柱
     const noPole = g % 2 === 1;
-    const body = buildTentShell(sh.id, mats, { noPole });
+    const body = buildTentShell(sh.id, mats, { noPole, frame });
     body.scale.setScalar(k);
     shell.add(body);
     floor = buildTentFloor(sh.id, floorMat);
@@ -379,11 +379,17 @@ export function createHomeRoom() {
     level = 0;
     applyStyle(home.style);
     furnitureGroup.clear();
-    buildShape(home.shape, gridOf(home));
+    buildShape(home.shape, gridOf(home), home.frame);
     colliders.length = hasPole ? 1 : 0;
     if (hasPole) colliders[0] = { x: 0, z: 0, r: 0.12 };
+    // 🌳 私人樹屋：穿過屋子的樹幹（左後角），一樓、二樓都擋
+    if (loftShape?.id === 'treehouse') {
+      const trunk = { x: (-loftShape.W + 0.75) * scale, z: (-loftShape.D + 0.75) * scale, r: 0.55 * scale };
+      colliders.push(trunk);
+    }
     const cells = new Map();
     colliders2.length = 0;
+    if (loftShape?.id === 'treehouse') colliders2.push({ x: (-loftShape.W + 0.75) * scale, z: (-loftShape.D + 0.75) * scale, r: 0.5 * scale }); // 二樓也有樹幹
     swimmers.length = 0;
     rockingChairs.length = 0;
     swingers.length = 0;
