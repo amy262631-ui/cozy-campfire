@@ -234,6 +234,7 @@ export class RemotePlayers {
     if (!p.npc) {
       p.spirit = new SpiritFollower(this.scene);
       p.spirit.setCode(info.sr);
+      p.spirit.setName(info.sn);
     }
     this.players.set(info.id, p);
     this.scene.add(p.group);
@@ -273,8 +274,22 @@ export class RemotePlayers {
   }
 
   /** ✨ 別人的小精靈換了樣子 */
-  setSpirit(id, sr) {
-    this.players.get(id)?.spirit?.setCode(sr);
+  setSpirit(id, sr, sn) {
+    const sp = this.players.get(id)?.spirit;
+    sp?.setCode(sr);
+    sp?.setName(sn);
+  }
+  /** 點到別人的小精靈（回傳那隻）：螢幕座標 x, y 附近 r 像素內最近的 */
+  spiritAt(x, y, camera, w, h, r = 48) {
+    let best = null;
+    let bd = r;
+    for (const p of this.players.values()) {
+      const q = p.spirit?.screenPos(camera, w, h);
+      if (!q) continue;
+      const d = Math.hypot(q.x - x, q.y - y);
+      if (d < bd) [best, bd] = [p.spirit, d];
+    }
+    return best;
   }
   spiritReact(id, face, sec, opts) {
     this.players.get(id)?.spirit?.react(face, sec, opts);
@@ -287,6 +302,7 @@ export class RemotePlayers {
       if (!p.spirit?.obj) continue;
       const a = p.target.a;
       const g = p.group.position;
+      p.spirit.near = !!env.me && Math.hypot(g.x - env.me.x, g.z - env.me.z) < 3; // 靠近才顯示名字
       p.spirit.update(dt, { x: g.x, y: g.y, z: g.z, ry: p.ry, scale: p.group.scale.x, speed: p.speed, state: a === 'sleep' || a === 'blanket' ? 'sleep' : SIT_STATES.has(a) ? 'sit' : 'idle', cam: env.cam, night: env.night, party: env.party?.(g.x, g.z) });
     }
   }

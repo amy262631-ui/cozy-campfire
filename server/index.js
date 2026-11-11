@@ -42,7 +42,7 @@ import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS } from '../src/game/furnit
 import { YARD_BY_ID, hasYard, isBigYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
 import { CHALLENGE_BY_ID, challengesOf } from '../src/game/dailyChallenge.js';
-import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_FIRST_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, SPIRIT_ACT_KIND, SPIRIT_NIGHT_STAR, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
+import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_FIRST_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, SPIRIT_ACT_KIND, SPIRIT_NIGHT_STAR, SPIRIT_PLAY_DAY, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
 import { FUR_TOTAL, BASE_FUR, PREMIUM_FUR, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from '../src/game/looks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1789,7 +1789,7 @@ const packState = (p) => [
   p.e | 0,
 ];
 
-const publicInfo = (p) => ({ id: p.id, name: p.name, fur: p.fur, sp: p.sp, tl: p.tl || undefined, er: p.er || undefined, rw: p.rw, ot: p.ot, pb: p.pb, sr: p.sr || undefined, s: packState(p) });
+const publicInfo = (p) => ({ id: p.id, name: p.name, fur: p.fur, sp: p.sp, tl: p.tl || undefined, er: p.er || undefined, rw: p.rw, ot: p.ot, pb: p.pb, sr: p.sr || undefined, sn: (p.sr && p.sn) || undefined, s: packState(p) });
 
 /** 某個分流的某個房間，給新進玩家的完整資料 */
 function roomSnapshot(c, rid, selfId) {
@@ -1902,14 +1902,19 @@ io.on('connection', (socket) => {
     const st = spiritStage(sp.xp);
     const d = dayKey();
     const day = sp.day?.d === d ? sp.day : { xp: 0, feed: 0 };
-    return { nm: sp.nm ?? '', xp: sp.xp, stage: st, t: st ? (sp.t ?? 'leaf') : 'light', next: SPIRIT_STAGE_AT[st + 1] ?? null, prev: SPIRIT_STAGE_AT[st], c: sp.c, off: !!sp.off, dayXp: day.xp, dayCap: SPIRIT_DAY_CAP, feed: day.feed, feedMax: SPIRIT_FEED_DAY, fav: st ? SPIRIT_FAV[sp.t ?? 'leaf'] : null, price: SPIRIT_CHANGE_PRICE, away: sp.away ?? 0, box: (wal.spiritBox ?? []).map((b) => ({ nm: b.nm ?? '', t: spiritStage(b.xp) ? (b.t ?? 'leaf') : 'light', stage: spiritStage(b.xp), xp: b.xp })), egg: wal.egg ? { left: Math.max(0, wal.egg.at - Date.now()) } : null, eggPrice: SPIRIT_EGG_PRICE, max: SPIRIT_MAX };
+    const gk = st ? (sp.t ?? 'leaf') : 'light';
+    const playLeft = Math.max(0, SPIRIT_PLAY_DAY - (day.play?.[gk] ?? 0));
+    return { playLeft, nm: sp.nm ?? '', xp: sp.xp, stage: st, t: st ? (sp.t ?? 'leaf') : 'light', next: SPIRIT_STAGE_AT[st + 1] ?? null, prev: SPIRIT_STAGE_AT[st], c: sp.c, off: !!sp.off, dayXp: day.xp, dayCap: SPIRIT_DAY_CAP, feed: day.feed, feedMax: SPIRIT_FEED_DAY, fav: st ? SPIRIT_FAV[sp.t ?? 'leaf'] : null, price: SPIRIT_CHANGE_PRICE, away: sp.away ?? 0, box: (wal.spiritBox ?? []).map((b) => ({ nm: b.nm ?? '', t: spiritStage(b.xp) ? (b.t ?? 'leaf') : 'light', stage: spiritStage(b.xp), xp: b.xp })), egg: wal.egg ? { left: Math.max(0, wal.egg.at - Date.now()) } : null, eggPrice: SPIRIT_EGG_PRICE, max: SPIRIT_MAX };
   };
   /** 小精靈外型變了：告訴同一區的人 */
   const spiritSync = () => {
-    const code = spiritCode(spiritOf());
-    if (!player || player.sr === code) return;
+    const sp = spiritOf();
+    const code = spiritCode(sp);
+    const nm = code ? String(sp?.nm ?? '') : '';
+    if (!player || (player.sr === code && (player.sn ?? '') === nm)) return;
     player.sr = code;
-    if (rkey) socket.to(rkey).emit('spirit', { id: socket.id, sr: code });
+    player.sn = nm; // ✏️ 名字（別人靠近或點它時顯示）
+    if (rkey) socket.to(rkey).emit('spirit', { id: socket.id, sr: code, sn: nm });
   };
   /** kind：fish／fire／gather／cook；feed：餵食直接加 xp（不算每日上限） */
   const spiritGain = (kind, feedXp = 0) => {
@@ -1919,9 +1924,11 @@ io.on('connection', (socket) => {
     if (sp.day?.d !== d) sp.day = { d, xp: 0, feed: 0 };
     let add = feedXp;
     if (kind) {
-      const ck = SPIRIT_ACT_KIND[kind] ?? kind; // 這個活動算哪一種小精靈
-      sp.c[ck] = (sp.c[ck] ?? 0) + 1;
-      if (ck !== 'star' && (isNight() || eventInfo().active)) sp.c.star = (sp.c.star ?? 0) + SPIRIT_NIGHT_STAR; // ⭐ 晚上、營火時間玩
+      const ck = kind in SPIRIT_ACT_KIND ? SPIRIT_ACT_KIND[kind] : kind; // 這個活動算哪一種小精靈（null＝不算）
+      if (ck) {
+        sp.c[ck] = (sp.c[ck] ?? 0) + 1;
+        if (ck !== 'star' && (isNight() || eventInfo().active)) sp.c.star = (sp.c.star ?? 0) + SPIRIT_NIGHT_STAR; // ⭐ 晚上、營火時間玩
+      }
       add = Math.min(SPIRIT_XP[kind] ?? 0, SPIRIT_DAY_CAP - sp.day.xp);
       if (add > 0) sp.day.xp += add;
     }
@@ -2134,6 +2141,7 @@ io.on('connection', (socket) => {
         sp.last = now;
       }
       player.sr = spiritCode(sp);
+      player.sn = player.sr ? String(sp?.nm ?? '') : '';
       setTimeout(checkEgg, 3000);
     }
     // 🐾 特殊毛色、尾巴、耳朵：沒買過的不能用（動物本來的形狀免費）
@@ -3243,6 +3251,28 @@ io.on('connection', (socket) => {
     lastSpiritAct = now;
     spiritGain(k);
   });
+  // 🎮 跟小精靈玩完小遊戲：每種一天 3 次，加一點親密度（遊戲要是現在帶著的那種）
+  let lastPlay = 0;
+  socket.on('spiritPlay', (data = {}, ack) => {
+    const sp = spiritOf();
+    if (!sp) return ack?.({ ok: false });
+    const st = spiritStage(sp.xp);
+    const gk = st ? (sp.t ?? 'leaf') : 'light';
+    if (String(data.g) !== gk) return ack?.({ ok: false, reason: 'kind' });
+    const now = Date.now();
+    if (now - lastPlay < 10000) return ack?.({ ok: false, reason: 'tooFast' });
+    lastPlay = now;
+    const d = dayKey();
+    if (sp.day?.d !== d) sp.day = { d, xp: 0, feed: 0 };
+    sp.day.play ??= {};
+    if ((sp.day.play[gk] ?? 0) >= SPIRIT_PLAY_DAY) return ack?.({ ok: false, reason: 'full', sp: spiritView() });
+    sp.day.play[gk] = (sp.day.play[gk] ?? 0) + 1;
+    const before = sp.xp;
+    bump('spiritPlay');
+    spiritGain('play');
+    saveJson('players.json', players);
+    ack?.({ ok: true, gain: sp.xp - before, sp: spiritView() });
+  });
   socket.on('spiritInfo', (_d, ack) => ack?.(wal ? { ok: true, sp: spiritView(), dish: wal.dish ?? {} } : { ok: false }));
   socket.on('spiritFeed', (data = {}, ack) => {
     if (!wal || !player) return ack?.({ ok: false });
@@ -3329,6 +3359,7 @@ io.on('connection', (socket) => {
     if (!sp) return ack?.({ ok: false });
     sp.nm = String(data.nm ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 8);
     saveJson('players.json', players);
+    spiritSync();
     ack?.({ ok: true, sp: spiritView() });
   });
   socket.on('spiritHide', (data = {}, ack) => {

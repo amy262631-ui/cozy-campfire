@@ -20,6 +20,7 @@ import { RemotePlayers, setRemoteHeight, setRemoteSpot, setCharScale } from './n
 import { SpiritFollower } from './player/spiritFollower.js';
 import { buildSpirit, SPIRIT_TYPES, SPIRIT_BY_ID } from './player/spirit.js';
 import { parseSpirit } from './game/spiritRules.js';
+import { SpiritGames, SPIRIT_GAMES } from './game/spiritGames.js';
 import { AudioEngine } from './audio/AudioEngine.js';
 import { SONGS } from './audio/music.js';
 import { CHALLENGE_BY_ID } from './game/dailyChallenge.js';
@@ -1467,6 +1468,24 @@ async function init() {
   document.getElementById('bag-btn').addEventListener('click', () => openBag());
   // ---------- ✨ 小精靈（作者 11/11：跟在肩膀旁邊飄、玩遊戲會長大） ----------
   const mySpirit = new SpiritFollower(scene);
+  // 🎮 跟小精靈玩的小遊戲
+  const spiritGames = new SpiritGames({ scene, player, spirit: mySpirit, actions, audio, root: document.getElementById('ui'), roomHeight: (x, z) => roomMgr.current?.heightAt?.(x, z) ?? player.position.y });
+  const startSpiritGame = () => {
+    const sp = spiritSt;
+    if (!sp || sp.none) return;
+    const kind = sp.stage ? sp.t : 'light';
+    if (sp.off) return hud.toast(t('小精靈收起來了，先叫它出來再一起玩'));
+    if (sp.playLeft <= 0) return hud.toast(t('今天玩過 3 次了，明天再一起玩吧'));
+    if (actions.state !== 'free') actions.stop?.();
+    modal.close();
+    spiritGames.start(kind, async (score) => {
+      const r = await net.request('spiritPlay', { g: kind, score });
+      if (r?.sp) applySpirit(r.sp);
+      if (r?.ok) hud.toast(r.gain > 0 ? t('🎮 玩得好開心！得分 {s}，親密度 +{n}', { s: score, n: r.gain }) : t('🎮 玩得好開心！得分 {s}（今天的親密度已經加滿了）', { s: score }), 5000);
+      else if (r?.reason === 'full') hud.toast(t('今天玩過 3 次了，明天再一起玩吧'));
+      else hud.toast(t('🎮 玩得好開心！得分 {s}', { s: score }));
+    });
+  };
   let spiritSt = null; // 伺服器給的小精靈資料
   const SPIRIT_NAME = { light: '小光點', drop: '水滴', flame: '火苗', leaf: '葉子', cloud: '雲朵', star: '星星', mush: '蘑菇' };
   const spiritKind = (sp) => (sp.stage === 0 ? t('✨ 小光點') : `${SPIRIT_BY_ID[sp.t]?.icon ?? '✨'} ${t(SPIRIT_NAME[sp.t])}${t('小精靈')}`);
@@ -1483,6 +1502,7 @@ async function init() {
     }
     mySpirit.setCode(spiritCodeOf(sp));
     mySpirit.hungry = sp.stage > 0 && sp.feed === 0;
+    mySpirit.setName(sp.nm);
   };
   const spiritNight = () => {
     const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
@@ -1508,7 +1528,7 @@ async function init() {
     }
     const m = player.mesh.position;
     mySpirit.update(dt, { x: m.x, y: m.y, z: m.z, ry: player.rotationY, scale: player.mesh.scale.x, speed: Math.hypot(player.velocity.x, player.velocity.z), state: a === 'sleep' || a === 'blanket' ? 'sleep' : SPIRIT_SIT.has(a) ? 'sit' : 'idle', cam: spiritCam, night: spiritNightNow, party: spiritParty(m.x, m.z) });
-    return { cam: spiritCam, night: spiritNightNow, party: spiritParty };
+    return { cam: spiritCam, night: spiritNightNow, party: spiritParty, me: m };
   };
   net.on('spiritMe', (sp) => {
     const was = spiritSt?.stage ?? 0;
@@ -1524,7 +1544,27 @@ async function init() {
     else mySpirit.react('happy', 1.2, { hop: true });
     void was;
   });
-  net.on('spirit', ({ id, sr }) => id !== net.id && remotes.setSpirit(id, sr));
+  net.on('spirit', ({ id, sr, sn }) => id !== net.id && remotes.setSpirit(id, sr, sn));
+  // 🤲 直接點小精靈＝摸摸（作者 11/11）：自己的、別人的都可以摸（別人的只有自己看得到反應）；點了名字會出現幾秒
+  {
+    let down = null;
+    renderer.domElement.addEventListener('pointerdown', (e) => (down = { x: e.clientX, y: e.clientY }));
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      if (!down) return;
+      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+      down = null;
+      if (moved > 8 || buildPanel?.active) return;
+      const r = renderer.domElement.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+      const mine = mySpirit.screenPos(camera, r.width, r.height);
+      const hit = mine && Math.hypot(mine.x - x, mine.y - y) < 48 ? mySpirit : remotes.spiritAt(x, y, camera, r.width, r.height);
+      if (!hit) return;
+      const kind = hit.pet();
+      audio.sfx?.('pop');
+      if (hit === mySpirit) bubbles.show('self', kind === 'sneeze' ? '🤧' : '💕', { emoji: true });
+    });
+  }
   net.on('spiritHatch', (sp) => {
     applySpirit(sp);
     audio.sfx('bell');
@@ -1577,6 +1617,9 @@ async function init() {
         obj.rotation.y = Math.sin(tm * 0.6) * 0.35;
         obj.userData.update(0.016, tm, cam.position);
         obj.userData.setFace(mySpirit.face);
+        // 跟遊戲裡的小精靈同步跳一下、轉圈（視窗擋住也看得到反應）
+        obj.position.y = mySpirit.hop > 0 ? Math.sin((1 - mySpirit.hop) * Math.PI) * 0.12 : 0;
+        obj.userData.body.rotation.y = mySpirit.spin;
       }
       r.render(s, cam);
       raf = requestAnimationFrame(loop);
@@ -1639,10 +1682,15 @@ async function init() {
       t('✨ 我的小精靈'),
       `<div class="sp-top"><div class="sp-cv"></div><div class="sp-info"><b>${spiritLabel(sp)}</b>
         <div class="sp-bar"><i style="width:${pct}%"></i></div><small>${t('親密度')} ${sp.xp}${sp.next ? ` / ${sp.next}` : ''}・${nextTxt}</small>
-        <small>${t('今天玩遊戲 +{a}／{b}・今天餵了 {c}／{d} 次', { a: sp.dayXp, b: sp.dayCap, c: sp.feed, d: sp.feedMax })}</small>
+        <small>${t('今天在營地活動（釣魚、採集⋯）加了 {a} 點（一天最多 {b}）・今天餵了 {c}／{d} 次', { a: sp.dayXp, b: sp.dayCap, c: sp.feed, d: sp.feedMax })}</small>
+        <small>${t('💡 在遊戲裡直接點小精靈也能摸摸它')}</small>
         <div class="sp-btns"><button type="button" class="mini-btn" data-rename>${t('✏️ 取名字')}</button><button type="button" class="mini-btn" data-pet>${t('🤲 摸摸')}</button><button type="button" class="mini-btn" data-hide>${sp.off ? t('✨ 叫它出來') : t('🙈 先收起來')}</button></div></div></div>
       ${style}
       <div class="dex-note">${t('怎麼長大：釣魚、添柴、煮菜、採集、休息、聊天、看星星、許願、種菜收成，都會加親密度；餵料理長最快')}</div>
+      ${(() => {
+        const g = SPIRIT_GAMES[sp.stage ? sp.t : 'light'];
+        return `<div class="sp-play"><button type="button" class="shop-buy-tent" data-play ${sp.playLeft > 0 && !sp.off ? '' : 'disabled'}>${t('🎮 跟它玩：{icon} {name}', { icon: g.icon, name: t(g.zh) })}</button><small>${sp.playLeft > 0 ? t('今天還能玩 {n} 次・{how}', { n: sp.playLeft, how: t(g.how) }) : t('今天玩過 3 次了，明天再一起玩吧')}</small><small>${t('每種小精靈的小遊戲都不一樣，多養幾隻都玩玩看！')}</small></div>`;
+      })()}
       <div class="dex-note"><b>${t('🍱 餵它吃料理')}</b>${feedLeft > 0 ? t('（今天還能餵 {n} 次）', { n: feedLeft }) : t('（今天吃飽了，明天再餵）')}</div>
       ${favLine}${feed}${forms}
       <div class="dex-note"><b>${t('🏡 收起來的小精靈')}</b>（${1 + sp.box.length}／${sp.max}）</div>
@@ -1654,6 +1702,7 @@ async function init() {
         const pv = spiritPreview();
         body.querySelector('.sp-cv').appendChild(pv.canvas);
         pv.show(spiritCodeOf(sp) || (sp.stage === 0 ? 'light0' : `${sp.t}${sp.stage}`));
+        body.querySelector('[data-play]')?.addEventListener('click', () => startSpiritGame());
         body.querySelector('[data-rename]').addEventListener('click', async () => {
           const nm = prompt(t('幫小精靈取個名字（最多 8 個字）'), sp.nm || '');
           if (nm == null) return;
@@ -1671,9 +1720,20 @@ async function init() {
           });
         body.querySelector('[data-eggshop]')?.addEventListener('click', () => (modal.close(), shopPanel.open('spirit')));
         body.querySelector('[data-pet]').addEventListener('click', () => {
-          mySpirit.react('shy', 2.2);
-          setTimeout(() => mySpirit.react('love', 2, { hop: true }), 2200);
+          const kind = mySpirit.pet(); // 每次隨機：害羞、轉圈、蹭蹭、打噴嚏
           audio.sfx?.('pop');
+          // 小視窗裡飄出小愛心；遊戲裡角色頭上也冒愛心
+          const box = body.querySelector('.sp-cv');
+          for (let i = 0; i < 5; i++) {
+            const h = document.createElement('i');
+            h.className = 'sp-heart';
+            h.textContent = kind === 'sneeze' ? (i % 2 ? '💨' : '✨') : i % 2 ? '💕' : '💗';
+            h.style.left = `${20 + Math.random() * 60}%`;
+            h.style.animationDelay = `${0.2 + i * 0.25}s`;
+            box.appendChild(h);
+            setTimeout(() => h.remove(), 2800);
+          }
+          bubbles.show('self', kind === 'sneeze' ? '🤧' : '💕', { emoji: true });
         });
         body.querySelector('[data-hide]').addEventListener('click', async () => {
           const r = await net.request('spiritHide', { off: !sp.off });
@@ -4576,6 +4636,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
 
     const action = actions.update(dt, input.hasMoveInput);
     player.update(dt, input, cameraRig.yaw, room, elapsed, action);
+    // 🍄 蘑菇彈跳：角色跳起來（只是畫面上跳，位置不變）
+    if (player.hopT > 0) {
+      player.hopT = Math.max(0, player.hopT - dt);
+      player.mesh.position.y += Math.sin(Math.min(1, player.hopT / 0.8) * Math.PI) * 0.9;
+    }
+    spiritGames.update(dt);
     if (!actions.seat) remotes.pushOut(player.position, player.radius); // 坐在圓木上不要被旁邊的人推走
     remotes.update(dt, elapsed, updateSpirits(dt));
     net.update(dt, netState());
@@ -4779,7 +4845,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
 
   // 方便在瀏覽器 console 除錯（開發模式或網址加 ?debug）
   if (import.meta.env.DEV || params.has('debug')) {
-    window.__cozy = { renderer, forest, scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world, shopPanel, buildPanel, homeRoom: rooms.home, goHome, openBag, showDailyCard, sharePop, openMoveMap, openFriends, inviteUrl, _setBag: (d, bk) => ((dishes = d), (basket = bk)) };
+    window.__cozy = { renderer, forest, scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world, shopPanel, buildPanel, homeRoom: rooms.home, goHome, openBag, mySpirit, spiritGames, showDailyCard, sharePop, openMoveMap, openFriends, inviteUrl, _setBag: (d, bk) => ((dishes = d), (basket = bk)) };
   }
 }
 

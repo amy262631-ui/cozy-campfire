@@ -9,7 +9,7 @@
  * ⚠️ 存檔欄位（wal.spirit）：xp 親密度、c 各活動次數、t 種類、day 今天的上限紀錄、last 上次來、off 隱藏
  */
 export const SPIRIT_STAGE_AT = [0, 60, 400]; // 親密度到多少變下一階段
-export const SPIRIT_XP = { fish: 2, fire: 1, gather: 1, cook: 2, mushGather: 1, harvest: 2, forest: 1, rest: 1, chat: 1, wish: 1, stargaze: 1 }; // 每做一次加多少
+export const SPIRIT_XP = { fish: 2, fire: 1, gather: 1, cook: 2, mushGather: 1, harvest: 2, forest: 1, rest: 1, chat: 1, wish: 1, stargaze: 1, play: 3 }; // 每做一次加多少
 /**
  * 每種活動算在哪一種小精靈（作者 11/11：6 種都能玩出來）：
  *   💧 水滴：釣魚　🔥 火苗：添柴、煮菜　🍃 葉子：採集（花、果子、石頭⋯）
@@ -17,7 +17,8 @@ export const SPIRIT_XP = { fish: 2, fire: 1, gather: 1, cook: 2, mushGather: 1, 
  *   ⭐ 星星：看星星、許願（繪馬、抽籤、流星）；晚上或營火時間做任何事也會多算一點星星
  *   🍄 蘑菇：採蘑菇、在迷霧森林採集、去迷霧森林、種菜收成
  */
-export const SPIRIT_ACT_KIND = { fish: 'fish', fire: 'fire', cook: 'fire', gather: 'gather', mushGather: 'mush', harvest: 'mush', forest: 'mush', rest: 'cloud', chat: 'cloud', wish: 'star', stargaze: 'star' };
+export const SPIRIT_ACT_KIND = { fish: 'fish', fire: 'fire', cook: 'fire', gather: 'gather', mushGather: 'mush', harvest: 'mush', forest: 'mush', rest: 'cloud', chat: 'cloud', wish: 'star', stargaze: 'star', play: null }; // play＝跟它玩小遊戲：只加親密度，不影響變成哪一種
+export const SPIRIT_PLAY_DAY = 3; // 🎮 每種小遊戲一天 3 次
 export const SPIRIT_NIGHT_STAR = 0.5; // 晚上（18～6 點）或營火時間做事，星星多算 0.5
 export const SPIRIT_DAY_CAP = 40; // 一天玩遊戲最多加這麼多（餵食另外算）
 export const SPIRIT_FEED_DAY = 3; // 一天最多餵 3 次
