@@ -15,7 +15,10 @@ export const SPIRIT_FEED_DAY = 3; // 一天最多餵 3 次
 export const SPIRIT_FEED_XP = 6;
 export const SPIRIT_FAV_XP = 12; // 喜歡的料理
 export const SPIRIT_CHANGE_PRICE = 300;
-// 🥚 孵蛋器（作者 11/11）：第一隻免費；在商店「✨ 小精靈」買孵蛋器，放一顆蛋，10 分鐘後孵出新的小光點，再靠玩遊戲養大
+// 🥚 孵蛋器（作者 11/11 改）：一開始沒有小精靈（有的人養、有的人不養）。到商店「✨ 小精靈」買「小精靈蛋＋孵蛋器」：
+//    第一顆 100 松果、買了馬上孵出來；之後每顆 300、10 分鐘孵好。（舊註解：第一隻免費，已取消）
+export const SPIRIT_FIRST_PRICE = 100;
+// 以下是第二隻以後：在商店「✨ 小精靈」買孵蛋器，放一顆蛋，10 分鐘後孵出新的小光點，再靠玩遊戲養大
 // 養好幾隻可以收起來，挑一隻帶在身邊。存檔：wal.spiritBox（收起來的）、wal.egg = { at 孵出來的時間 }
 export const SPIRIT_EGG_PRICE = 300;
 export const SPIRIT_EGG_MS = 10 * 60 * 1000;

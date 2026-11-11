@@ -1475,6 +1475,12 @@ async function init() {
   const applySpirit = (sp) => {
     if (!sp) return;
     spiritSt = sp;
+    if (sp.none) {
+      // 還沒有小精靈（11/11 改：要到小舖買蛋）
+      mySpirit.setCode('');
+      mySpirit.hungry = false;
+      return;
+    }
     mySpirit.setCode(spiritCodeOf(sp));
     mySpirit.hungry = sp.stage > 0 && sp.feed === 0;
   };
@@ -1523,7 +1529,7 @@ async function init() {
     const first = !spiritSt;
     applySpirit(res.spirit);
     // 好幾天沒來：小精靈從遠遠的地方衝過來
-    if (first && res.spirit.away >= 2 && !res.spirit.off) {
+    if (first && !res.spirit.none && res.spirit.away >= 2 && !res.spirit.off) {
       setTimeout(() => {
         const m = player.mesh.position;
         mySpirit.rushFrom(m.x + 6, m.z - 6);
@@ -1588,6 +1594,22 @@ async function init() {
     dishes = res.dish ?? dishes;
     const sp = res.sp;
     spiritOpen = true;
+    if (sp.none) {
+      // 還沒有小精靈：介紹＋去小舖買蛋
+      return modal.open(
+        t('✨ 小精靈'),
+        `<div class="sp-top"><div class="sp-cv"></div><div class="sp-info"><b>${t('你還沒有小精靈')}</b><small>${t('到「🏪 營地小舖 → ✨ 小精靈」買一顆小精靈蛋（附孵蛋器），第一顆 {n} 🌰，買了馬上孵出來！', { n: sp.eggPrice })}</small></div></div>
+        <div class="dex-note">${t('孵出來是一顆小光點，飄在你肩膀旁邊。釣魚、添柴、煮菜、採集、餵料理，它就會慢慢長大，看你怎麼玩變成 💧 水滴、🔥 火苗或 🍃 葉子。')}</div>
+        <div class="dex-note">${t('可以取名字、摸摸它；不養也沒關係，想養再買就好。')}</div>
+        <button type="button" class="shop-buy-tent" data-eggshop>${t('🥚 去小舖買小精靈蛋')}</button>`,
+        (body) => {
+          const pv = spiritPreview();
+          body.querySelector('.sp-cv').appendChild(pv.canvas);
+          pv.show('light0');
+          body.querySelector('[data-eggshop]').addEventListener('click', () => (modal.close(), shopPanel.open('spirit')));
+        },
+      );
+    }
     const pct = sp.next ? Math.round(((sp.xp - sp.prev) / (sp.next - sp.prev)) * 100) : 100;
     const nextTxt = sp.stage === 0 ? t('再 {n} 點變成小精靈', { n: sp.next - sp.xp }) : sp.stage === 1 ? t('再 {n} 點就會長大', { n: sp.next - sp.xp }) : t('已經長大了 🌟');
     const c = sp.c ?? {};
@@ -3686,11 +3708,18 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   shopPanel.onSpirit = () => openSpirit();
   shopPanel.onEgg = async () => {
     const x = spiritSt;
-    if (!x || !confirm(t('花 {n} 🌰 買一個孵蛋器？10 分鐘後孵出一顆新的小光點', { n: x.eggPrice }))) return;
+    if (!x || !confirm(x.none ? t('花 {n} 🌰 買小精靈蛋（附孵蛋器）？買了馬上孵出來', { n: x.eggPrice }) : t('花 {n} 🌰 買一個孵蛋器？10 分鐘後孵出一顆新的小光點', { n: x.eggPrice }))) return;
     const r = await net.request('spiritEgg', {});
     if (!r?.ok) return hud.toast(r?.reason === 'poor' ? t('松果不夠，需要 {n} 🌰', { n: x.eggPrice }) : r?.reason === 'egg' ? t('已經有一顆蛋在孵了') : r?.reason === 'max' ? t('已經養滿了') : t('沒買成功，再試一次'));
     applySpirit(r.sp);
     audio.sfx('bell');
+    if (r.first) {
+      // 第一顆：馬上孵出來，從蛋的位置飛到肩膀旁
+      const m = player.mesh.position;
+      mySpirit.rushFrom(m.x + 1.2, m.z + 1.2);
+      mySpirit.react('wow', 2.5, { hop: true, spin: true });
+      return hud.toast(t('✨ 孵出來了！一顆小光點跟著你了，點上方「✨ 小精靈」看看它'), 7000);
+    }
     hud.toast(t('🥚 放好蛋了！10 分鐘後就會孵出來'), 5000);
   };
   shopPanel.passOn = () => payOn; // 🎫 月票開通了才有「月票」分頁

@@ -195,8 +195,9 @@ export class ShopPanel {
   #renderSpirit(coins, hasTent) {
     this.preview.stop();
     const sp = this.spirit?.() ?? null;
+    const none = !!sp?.none; // 還沒有小精靈：第一顆便宜、馬上孵
     const price = sp?.eggPrice ?? 300;
-    const total = sp ? 1 + (sp.box?.length ?? 0) : 1;
+    const total = !sp || none ? 0 : 1 + (sp.box?.length ?? 0);
     const max = sp?.max ?? 12;
     const block = sp?.egg ? t('🥚 蛋正在孵，大約再 {n} 分鐘', { n: Math.max(1, Math.ceil(sp.egg.left / 60000)) }) : total >= max ? t('已經養滿 {n} 隻了', { n: max }) : coins != null && coins < price ? t('還差 {n} 顆松果', { n: price - coins }) : '';
     const tabs = hasTent
@@ -205,13 +206,13 @@ export class ShopPanel {
     this.body.innerHTML = `${tabs}
       <div class="shop-egg">
         <div class="egg-pic">🥚</div>
-        <div class="shop-pv-name">${t('🥚 孵蛋器')}</div>
-        <div class="shop-hint">${t('放一顆小精靈蛋，10 分鐘後孵出一顆新的小光點，再靠玩遊戲把它養大。')}</div>
-        <button type="button" class="shop-buy-tent" data-egg ${!sp || block ? 'disabled' : ''}>${t('買孵蛋器 🌰 {p}', { p: price })}</button>
+        <div class="shop-pv-name">${none ? t('🥚 小精靈蛋（附孵蛋器）') : t('🥚 孵蛋器')}</div>
+        <div class="shop-hint">${none ? t('買了馬上孵出一顆小光點，飄在你肩膀旁邊；玩遊戲、餵料理就會慢慢長大。') : t('放一顆小精靈蛋，10 分鐘後孵出一顆新的小光點，再靠玩遊戲把它養大。')}</div>
+        <button type="button" class="shop-buy-tent" data-egg ${!sp || block ? 'disabled' : ''}>${none ? t('買小精靈蛋 🌰 {p}', { p: price }) : t('買孵蛋器 🌰 {p}', { p: price })}</button>
         ${block ? `<div class="shop-hint">${block}</div>` : ''}
-        <div class="shop-hint">${t('現在養了 {n}／{m} 隻。第一隻小精靈免費，大家一進來就有。', { n: total, m: max })}</div>
+        <div class="shop-hint">${none ? t('第一顆 {a} 🌰，之後想多養一隻，每顆 {b} 🌰（10 分鐘孵好）。', { a: price, b: 300 }) : t('現在養了 {n}／{m} 隻。', { n: total, m: max })}</div>
         <div class="shop-hint">${t('養好幾隻可以收起來，挑一隻帶在身邊；每一隻都可以取名字。')}</div>
-        <button type="button" class="mini-btn" data-spgo>${t('✨ 看我的小精靈')}</button>
+        ${none ? '' : `<button type="button" class="mini-btn" data-spgo>${t('✨ 看我的小精靈')}</button>`}
       </div>`;
   }
 

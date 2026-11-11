@@ -42,7 +42,7 @@ import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS } from '../src/game/furnit
 import { YARD_BY_ID, hasYard, isBigYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
 import { CHALLENGE_BY_ID, challengesOf } from '../src/game/dailyChallenge.js';
-import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
+import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_FIRST_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
 import { FUR_TOTAL, BASE_FUR, PREMIUM_FUR, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from '../src/game/looks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1800,15 +1800,17 @@ io.on('connection', (socket) => {
     }
   };
   /** ✨ 小精靈：存檔、加親密度、長大（規則在 src/game/spiritRules.js） */
+  /** 有沒有小精靈（11/11 改：要到商店買蛋才有；xp>0 的是之前就在養的，也算有） */
   const spiritOf = () => {
-    if (!wal) return null;
-    wal.spirit ??= { xp: 0, c: {} };
-    wal.spirit.c ??= {};
-    return wal.spirit;
+    const sp = wal?.spirit;
+    if (!sp || !(sp.own || sp.xp > 0)) return null;
+    sp.c ??= {};
+    return sp;
   };
   const spiritView = () => {
+    if (!wal) return null;
     const sp = spiritOf();
-    if (!sp) return null;
+    if (!sp) return { none: true, eggPrice: SPIRIT_FIRST_PRICE, max: SPIRIT_MAX };
     const st = spiritStage(sp.xp);
     const d = dayKey();
     const day = sp.day?.d === d ? sp.day : { xp: 0, feed: 0 };
@@ -1855,7 +1857,7 @@ io.on('connection', (socket) => {
     const left = wal.egg.at - Date.now();
     if (left > 0) return (eggTimer = setTimeout(checkEgg, left + 500));
     wal.spiritBox ??= [];
-    wal.spiritBox.push({ xp: 0, c: {}, born: Date.now() });
+    wal.spiritBox.push({ xp: 0, c: {}, own: true, born: Date.now() });
     wal.egg = null;
     saveJson('players.json', players);
     bump('spiritHatch');
@@ -2035,8 +2037,10 @@ io.on('connection', (socket) => {
       // ✨ 小精靈：好幾天沒來，它會衝過來（前端看 away）
       const sp = spiritOf();
       const now = Date.now();
-      sp.away = sp.last ? Math.floor((now - sp.last) / 86400000) : 0;
-      sp.last = now;
+      if (sp) {
+        sp.away = sp.last ? Math.floor((now - sp.last) / 86400000) : 0;
+        sp.last = now;
+      }
       player.sr = spiritCode(sp);
       setTimeout(checkEgg, 3000);
     }
@@ -3138,6 +3142,7 @@ io.on('connection', (socket) => {
     const d = DISH_BY_ID[String(data.id ?? '')];
     if (!d || !(wal.dish?.[d.id] > 0)) return ack?.({ ok: false, reason: 'none' });
     const sp = spiritOf();
+    if (!sp) return ack?.({ ok: false, reason: 'noSpirit' });
     const day = dayKey();
     if (sp.day?.d !== day) sp.day = { d: day, xp: 0, feed: 0 };
     if (sp.day.feed >= SPIRIT_FEED_DAY) return ack?.({ ok: false, reason: 'full' });
@@ -3155,7 +3160,7 @@ io.on('connection', (socket) => {
     if (!wal || !player) return ack?.({ ok: false });
     const t = String(data.t ?? '');
     const sp = spiritOf();
-    if (!SPIRIT_KINDS.includes(t)) return ack?.({ ok: false });
+    if (!sp || !SPIRIT_KINDS.includes(t)) return ack?.({ ok: false });
     if (spiritStage(sp.xp) < 2) return ack?.({ ok: false, reason: 'young' });
     if (sp.t === t) return ack?.({ ok: false, reason: 'same' });
     if (wal.pc < SPIRIT_CHANGE_PRICE) return ack?.({ ok: false, reason: 'poor' });
@@ -3169,6 +3174,17 @@ io.on('connection', (socket) => {
   });
   socket.on('spiritEgg', (_d, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
+    // 第一顆：100 松果，買了馬上孵出來、直接跟在身邊
+    if (!spiritOf()) {
+      if (wal.pc < SPIRIT_FIRST_PRICE) return ack?.({ ok: false, reason: 'poor' });
+      wal.pc -= SPIRIT_FIRST_PRICE;
+      wal.spirit = { xp: 0, c: {}, own: true, last: Date.now(), away: 0 };
+      saveJson('players.json', players);
+      socket.emit('wallet', { pc: wal.pc, delta: -SPIRIT_FIRST_PRICE, reason: 'egg' });
+      bump('spiritFirst');
+      spiritSync();
+      return ack?.({ ok: true, first: true, sp: spiritView() });
+    }
     if (wal.egg) return ack?.({ ok: false, reason: 'egg' });
     if (1 + (wal.spiritBox?.length ?? 0) >= SPIRIT_MAX) return ack?.({ ok: false, reason: 'max' });
     if (wal.pc < SPIRIT_EGG_PRICE) return ack?.({ ok: false, reason: 'poor' });
@@ -3187,8 +3203,10 @@ io.on('connection', (socket) => {
     const box = wal.spiritBox ?? [];
     if (!(i >= 0 && i < box.length)) return ack?.({ ok: false });
     const cur = spiritOf();
+    if (!cur) return ack?.({ ok: false });
     const next = box[i];
     next.c ??= {};
+    next.own = true;
     next.off = false;
     delete cur.off;
     box[i] = cur;
