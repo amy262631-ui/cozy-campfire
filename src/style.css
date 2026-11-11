@@ -6981,6 +6981,7 @@ body.touch .share-pop { bottom: calc(215px + env(safe-area-inset-bottom, 0px)); 
 .shop-colors button.pass-c { border-color: rgba(190, 170, 255, 0.55); }
 .shop-colors button.pass-lock { opacity: 0.75; border-style: dashed; border-color: rgba(190, 170, 255, 0.5); }
 /* 小舖分頁多了「🎫 月票」：字不要折行；格子不被標籤撐開 */
+.shop-tabs { flex-wrap: wrap; } /* 11/11：多了「✨ 小精靈」分頁，放不下就換行，不要整個視窗變寬 */
 .shop-tabs button { flex: 1 0 auto; white-space: nowrap; padding: 7px 4px; }
 .shop-grid > * { min-width: 0; }
 .si-pass { white-space: normal; text-align: center; line-height: 1.25; }
