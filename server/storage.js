@@ -30,18 +30,28 @@ export async function init(dir) {
   if (/^["'\s]|["'\s]$/.test(URL_) || /^["'\s]|["'\s]$/.test(TOKEN)) {
     console.warn('[存檔] ⚠️ UPSTASH 網址或 token 前後有引號或空格，請到 Render 的 Environment 刪掉');
   }
-  try {
-    const stamp = String(Date.now());
-    await redis(['SET', PREFIX + '_check', stamp]);
-    const back = await redis(['GET', PREFIX + '_check']);
-    if (back !== stamp) throw new Error('寫入後讀回的值不一樣');
-    status.ok = true;
-    console.log('[存檔] Upstash 連線測試：可以寫入、讀取 ✅ 重新部署也不會遺失資料');
-  } catch (err) {
-    status.ok = false;
-    status.lastError = err.message;
-    console.error(`[存檔] ❌ Upstash 連線測試失敗：${err.message}`);
-    console.error('[存檔] ❌ 請檢查 Render 的 UPSTASH_REDIS_REST_URL／TOKEN（不要用「只讀令牌」、不要有引號或空格）');
+  // 11/11：部署卡在「Deploying...」什麼字都沒有 → 先印一行，連不上就每 5 秒重試並寫出原因。
+  // 一直連不上（約 2 分鐘）就停止啟動：Render 會判定部署失敗、繼續用舊版，不會用空的資料蓋掉存檔。
+  console.log('[存檔] 連線 Upstash 中⋯');
+  for (let i = 1; ; i++) {
+    try {
+      const stamp = String(Date.now());
+      await redis(['SET', PREFIX + '_check', stamp]);
+      const back = await redis(['GET', PREFIX + '_check']);
+      if (back !== stamp) throw new Error('寫入後讀回的值不一樣');
+      status.ok = true;
+      console.log('[存檔] Upstash 連線測試：可以寫入、讀取 ✅ 重新部署也不會遺失資料');
+      return;
+    } catch (err) {
+      status.ok = false;
+      status.lastError = err.message;
+      console.error(`[存檔] ❌ Upstash 連線測試失敗（第 ${i} 次）：${err.message}`);
+      if (i >= 24) {
+        console.error('[存檔] ❌ 請檢查 Render 的 UPSTASH_REDIS_REST_URL／TOKEN（不要用「只讀令牌」、不要有引號或空格），或 Upstash 的用量是不是滿了');
+        throw new Error('Upstash 連不上，停止啟動（舊版會繼續運作）');
+      }
+      await new Promise((r) => setTimeout(r, 5000));
+    }
   }
 }
 
@@ -54,8 +64,9 @@ const gzip = (buf) => new Promise((ok, no) => zlib.gzip(buf, (err, out) => (err 
 const pack = async (data) => 'gz:' + (await gzip(JSON.stringify(data))).toString('base64');
 const unpack = (raw) => (typeof raw === 'string' && raw.startsWith('gz:') ? JSON.parse(zlib.gunzipSync(Buffer.from(raw.slice(3), 'base64')).toString('utf8')) : JSON.parse(raw));
 
-async function redis(args) {
+async function redis(args, ms = 15000) {
   const res = await fetch(URL_.trim().replace(/^["']|["']$/g, ''), {
+    signal: AbortSignal.timeout(ms), // 等太久就報錯（不要卡住不動）
     method: 'POST',
     headers: { Authorization: `Bearer ${TOKEN.trim().replace(/^["']|["']$/g, '')}` },
     body: JSON.stringify(args),
@@ -92,17 +103,21 @@ function writeLocal(file, data) {
 export async function load(file) {
   const local = readLocal(file);
   if (!remote) return local;
-  try {
-    const raw = await redis(['GET', PREFIX + file]);
-    if (raw != null) return unpack(raw);
-    if (local !== undefined) {
-      await redis(['SET', PREFIX + file, await pack(local)]);
-      console.log(`[存檔] 已把 ${file} 匯入 Upstash`);
+  // 11/11：讀不到不能改用本機檔案（Render 上本機是空的，之後一存檔就會把 Upstash 的真資料蓋掉）→ 重試，還是不行就停止啟動
+  for (let i = 1; ; i++) {
+    try {
+      const raw = await redis(['GET', PREFIX + file], 30000);
+      if (raw != null) return unpack(raw);
+      if (local !== undefined) {
+        await redis(['SET', PREFIX + file, await pack(local)]);
+        console.log(`[存檔] 已把 ${file} 匯入 Upstash`);
+      }
+      return local;
+    } catch (err) {
+      console.error(`[存檔] ❌ 讀取 Upstash 的 ${file} 失敗（第 ${i} 次）：`, err.message);
+      if (i >= 5) throw new Error(`讀不到 ${file}，停止啟動（舊版會繼續運作）`);
+      await new Promise((r) => setTimeout(r, 3000));
     }
-    return local;
-  } catch (err) {
-    console.warn(`[存檔] 讀取 Upstash 的 ${file} 失敗，先用本機檔案：`, err.message);
-    return local;
   }
 }
 
