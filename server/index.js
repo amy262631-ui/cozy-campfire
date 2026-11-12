@@ -889,6 +889,12 @@ function today() {
   }
   return stats[k];
 }
+// 📣 大聲公
+const SHOUT_PRICE = 30;
+const SHOUT_MY_MS = 3 * 60 * 1000;
+const SHOUT_ALL_MS = 20 * 1000;
+let shoutAt = 0;
+const shouts = []; // 最近 50 則（/admin 看得到，重開伺服器會清空）
 const bump = (field, n = 1) => {
   const d = today();
   d[field] = (d[field] ?? 0) + n;
@@ -1050,7 +1056,7 @@ function refundOrder(no) {
     if (o.kind !== 'sponsor') s.emit('pass', passView(w));
   }
   console.log(`[退款] ${o.name} ${no}：${what}`);
-  return { ok: true, what, name: o.name, amt: o.amt };
+  return { ok: true, what, name: nameOfVid(o.vid), amt: o.amt };
 }
 /**
  * 💝 付款成功 → 送東西（共用：以後接國外付款平台，付款成功也呼叫這一段）
@@ -1340,7 +1346,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
       ? `<div class="wrap"><table><tr><th>付款時間</th><th>名字</th><th>項目</th><th>金額</th><th>付款方式</th><th>訂單編號</th></tr>${paid
           .sort((a, b) => b[1].paidAt - a[1].paidAt)
           .slice(0, 50)
-          .map(([no, o]) => `<tr><td>${new Date(o.paidAt).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td>${String(o.name).replace(/[<>&]/g, '')}</td><td>${o.kind === 'sponsor' ? '🎁 支持營地' : o.upgrade ? '⬆️ 升級星空' : `${o.tier === 'star' ? '✨ 星空月票' : '🔥 小營火月票'} ${planOf(o)} 個月`}</td><td>${o.amt}</td><td>${o.pay ?? ''}</td><td>${no}</td></tr>`)
+          .map(([no, o]) => `<tr><td>${new Date(o.paidAt).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td>${(() => { const now = nameOfVid(o.vid); const was = String(o.name ?? ''); return `${escH(now)}${was && was !== now ? `<br><small style="opacity:.65">付款時叫：${escH(was)}</small>` : ''}<br><small style="opacity:.55">${escH(homeId(o.vid))}</small>`; })()}</td><td>${o.kind === 'sponsor' ? '🎁 支持營地' : o.upgrade ? '⬆️ 升級星空' : `${o.tier === 'star' ? '✨ 星空月票' : '🔥 小營火月票'} ${planOf(o)} 個月`}</td><td>${o.amt}</td><td>${o.pay ?? ''}</td><td>${no}</td></tr>`)
           .join('')}</table></div>`
       : ''
   }`;
@@ -1607,6 +1613,7 @@ app.get('/admin', (req, res) => {
 <div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>內容</th><th>回覆</th></tr>${supRows || '<tr><td colspan="4">還沒有來信</td></tr>'}</table></div>
 <h3>👫 邀請紀錄（最近 200 筆）</h3><p class="hint">點名字可以直接查那位玩家。「同網路」＝邀請人和朋友用同一個網路（同事、家人），要待 ${Math.round(SAMENET_STAY_MS / 60000)} 分鐘、朋友要玩一下（釣魚、採集、撿垃圾、做任務），同一個網路每天最多算 ${SAMENET_DAILY} 位。</p>
 <div class="wrap"><table><tr><th>時間</th><th>種類</th><th>邀請人</th><th>朋友</th><th></th><th>結果</th></tr>${invRows || '<tr><td colspan="6">還沒有紀錄（這版上線後才開始記）</td></tr>'}</table></div>
+<h3>📣 大聲公紀錄（最近 ${shouts.length} 則，伺服器重開會清空）</h3><div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>內容</th></tr>${shouts.slice().reverse().map((x) => `<tr><td>${new Date(x.at).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td><a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a></td><td>${escH(x.text)}</td></tr>`).join('') || '<tr><td colspan="3">還沒有</td></tr>'}</table></div>
 <h3>🎁 補償紀錄</h3><div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>送了</th><th>備註</th></tr>${grantRows || '<tr><td colspan="4">還沒有</td></tr>'}</table></div>
 <script>
 (function () {
@@ -2411,6 +2418,28 @@ io.on('connection', (socket) => {
 
   // 聊天：專注帳篷裡不能聊；每 0.8 秒最多一則；最多 40 字
   let lastChat = 0;
+  // 📣 大聲公（作者 11/12）：30 松果，全營地（所有分流、所有地方）都看得到；每人 3 分鐘一次，全營地 20 秒最多一則
+  let lastShout = 0;
+  socket.on('shout', (data = {}, ack) => {
+    if (!wal || !player?.vid) return ack?.({ ok: false });
+    const text = String(data.text ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40);
+    if (!text) return ack?.({ ok: false, reason: 'empty' });
+    const now = Date.now();
+    if (now - lastShout < SHOUT_MY_MS) return ack?.({ ok: false, reason: 'wait', sec: Math.ceil((SHOUT_MY_MS - (now - lastShout)) / 1000) });
+    if (now - shoutAt < SHOUT_ALL_MS) return ack?.({ ok: false, reason: 'busy', sec: Math.ceil((SHOUT_ALL_MS - (now - shoutAt)) / 1000) });
+    if (wal.pc < SHOUT_PRICE) return ack?.({ ok: false, reason: 'poor' });
+    wal.pc -= SHOUT_PRICE;
+    lastShout = shoutAt = now;
+    saveJson('players.json', players);
+    socket.emit('wallet', { pc: wal.pc, delta: -SHOUT_PRICE, reason: 'shout' });
+    const msg = { name: player.name, hid: homeId(player.vid), text, at: now };
+    shouts.push(msg);
+    if (shouts.length > 50) shouts.splice(0, shouts.length - 50);
+    bump('shouts');
+    io.emit('shout', { name: msg.name, text, at: now });
+    console.log(`[大聲公] ${player.name}：${text}`);
+    ack?.({ ok: true, pc: wal.pc });
+  });
   let lastSpiritChat = 0;
   socket.on('chat', (data = {}) => {
     if (!player || roomId === 'tent_focus') return;
@@ -4055,6 +4084,8 @@ io.on('connection', (socket) => {
     if (cat === 'furn' && !th?.tent) return ack?.({ ok: false, reason: 'noTent' });
     const store = cat === 'dish' ? (wal.dish ??= {}) : cat === 'furn' ? h?.inv : (wal.bk ??= {});
     if (!store || (store[id] ?? 0) < n) return ack?.({ ok: false, reason: 'none' });
+    // 🪑 家具：擺在家裡的、有配色的不能送（只送收在背包、原色的），免得送出去家裡的東西不見
+    if (cat === 'furn' && available(h, id, 0) < n) return ack?.({ ok: false, reason: 'placed' });
     store[id] -= n;
     if (store[id] <= 0) delete store[id];
     // 放進對方那邊

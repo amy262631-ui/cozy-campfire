@@ -50,7 +50,8 @@ function makeNameTag(name, npc = false) {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }),
+    // 11/12：名字一律畫在最上層（不會被帽子、假髮、前面的人、釣竿擋住）
+    new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false, fog: false }),
   );
   const h = 0.2;
   sprite.scale.set((h * w) / 56, h, 1);
@@ -85,7 +86,8 @@ class RemotePlayer {
 
     // 🔥 營火月票的支持者：名字前面一個小營火
     this.tag = makeNameTag(npc ? npcName(name) : pb === 2 ? `✨ ${name}` : pb ? `🔥 ${name}` : name, npc); // 月票徽章：🔥 小營火、✨ 星空
-    this.tag.position.y = 1.55;
+    this.tagBase = this.#headTop();
+    this.tag.position.y = this.tagBase;
     this.group.add(this.tag);
 
     this.target = { x: 0, z: 0, ry: 0, a: 'idle', d: 0, e: 0 };
@@ -96,6 +98,33 @@ class RemotePlayer {
     this.stateTime = 0;
     this._zzzTimer = 0.6;
     this.setState(s, true);
+  }
+
+  /** 名字放多高：頭頂（含帽子、假髮）再高一點，最低 1.55（戴高帽子時名字跟著往上，不會被擋住） */
+  #headTop() {
+    // 只算看得到的東西（釣竿、木柴這些沒拿出來的道具不算）
+    const box = new THREE.Box3();
+    const tmp = new THREE.Box3();
+    this.character.root.updateWorldMatrix(true, true);
+    const walk = (o) => {
+      if (!o.visible) return;
+      if (o.isMesh && o.geometry) {
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        tmp.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+        box.union(tmp);
+      }
+      for (const c of o.children) walk(c);
+    };
+    walk(this.character.root);
+    this.group.updateWorldMatrix(true, false);
+    const gy = this.group.getWorldPosition(new THREE.Vector3()).y;
+    const sc = this.group.scale.y || 1;
+    if (!Number.isFinite(box.max.y)) return 1.55;
+    return Math.max(1.55, (box.max.y - gy) / sc + 0.16);
+  }
+  /** 換了造型：名字高度重算 */
+  refreshTag() {
+    this.tagBase = this.#headTop();
   }
 
   setState(s, snap = false) {
@@ -163,7 +192,7 @@ class RemotePlayer {
     }
 
     // 裹毯時名牌稍微低一點
-    this.tag.position.y += ((t.a === 'blanket' ? 1.45 : 1.55) - this.tag.position.y) * k;
+    this.tag.position.y += ((t.a === 'blanket' ? this.tagBase - 0.1 : this.tagBase) - this.tag.position.y) * k;
 
     this.group.position.copy(this.pos);
     // 🏡 小木屋的樓梯、二樓：用目前房間的高度規則算（伺服器只傳平面位置）
@@ -270,7 +299,9 @@ export class RemotePlayers {
 
   /** 別人換了造型 */
   setOutfit(id, ot) {
-    this.players.get(id)?.character.setOutfit(wearOfCodes(ot));
+    const p = this.players.get(id);
+    p?.character.setOutfit(wearOfCodes(ot));
+    p?.refreshTag();
   }
 
   /** ✨ 別人的小精靈換了樣子 */

@@ -13,7 +13,7 @@ import { DISH_BY_ID } from './cooking.js';
 import { CATALOG_BY_ID } from './furnitureCatalog.js';
 
 export const GIFT_DAILY_CAP = 50; // 每人每天收禮總價值上限（松果）
-export const GIFT_MIN_DAYS = 7; // 送禮的人要玩滿幾天
+export const GIFT_MIN_DAYS = 0; // 送禮的人要玩滿幾天（作者 11/12：加好友就能送，不用等 7 天）
 export const GIFT_SEND_MAX = 20; // 每人每天最多送幾次（防洗版）
 export const GIFT_MAX_N = 10; // 一次最多送幾個
 

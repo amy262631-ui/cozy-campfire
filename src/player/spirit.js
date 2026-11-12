@@ -451,7 +451,7 @@ export function buildSpirit(type = 'light', stage = 0, face = 'happy', variant =
   faceSp.scale.set(fs, fs, 1);
   faceSp.position.set(0, faceY, R * 0.2);
   // 臉離中心多遠（貼在表面前面一點）
-  const faceDist = stage === 0 || type === 'light' ? R * 1.05 : type === 'star' ? R * 0.7 : type === 'mush' ? R * 0.88 : R * 1.05;
+  const faceDist = R * 1.6; // 比身體最外面（星星的角、蘑菇帽子）還遠一點
   faceSp.renderOrder = 6;
   body.add(faceSp);
   // 長大（第 3 階段）：小翅膀＋光環
@@ -485,7 +485,9 @@ export function buildSpirit(type = 'light', stage = 0, face = 'happy', variant =
         body.worldToLocal(_c);
         _c.y -= faceY;
         _c.normalize().multiplyScalar(faceDist);
-        faceSp.position.set(_c.x, faceY + _c.y * 0.3, _c.z);
+        // 11/12：臉沿著「臉中心→鏡頭」那條線往前推到身體外面（螢幕上位置不變），
+        // 星星的角、蘑菇帽子這些就不會從斜的角度擋住一隻眼睛
+        faceSp.position.set(_c.x, faceY + _c.y, _c.z);
       }
       body.traverse((o) => {
         if (o.userData.wing) o.rotation.y = o.userData.wing * (0.9 + Math.sin(time * 14) * 0.35);

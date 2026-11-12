@@ -1428,7 +1428,7 @@ async function init() {
     const info = {}; // 點格子後下面顯示的說明
     if (tab === 'dish') {
       const mine = DISHES.filter((d) => dishes[d.id] > 0);
-      for (const d of mine) info[d.id] = `<b>${d.icon} ${t(d.zh)} ×${dishes[d.id]}</b>${fxTag(d.id)}<button type="button" class="mini-btn" data-eat="${d.id}">${t('😋 吃')}</button>`;
+      for (const d of mine) info[d.id] = `<b>${d.icon} ${t(d.zh)} ×${dishes[d.id]}</b>${fxTag(d.id)}<button type="button" class="mini-btn" data-eat="${d.id}">${t('😋 吃')}</button>${giftInfo('dish', d.id) ? `<button type="button" class="mini-btn" data-giftfr="dish|${d.id}">${t('🎁 送朋友')}</button>` : ''}`;
       html = mine.length
         ? `<div class="inv-grid">${mine.map((d) => cell(d.icon, t(d.zh), dishes[d.id], d.id)).join('')}</div>`
         : `<div class="dex-note">${t('還沒有料理。到營火旁的「🍲 營火料理」鍋子煮一道吧！')}</div>`;
@@ -1438,7 +1438,11 @@ async function init() {
         [t('🥕 蔬菜'), CROPS.filter((c) => basket[c.id] > 0)],
         [t('♻️ 回收材料'), TRASH.filter((x) => basket[x.id] > 0)],
       ].filter(([, list]) => list.length);
-      for (const [, list] of groups) for (const x of list) info[x.id] = `<b>${x.icon} ${t(x.zh)} ×${basket[x.id]}</b>${x.hint ? `<small class="fx-tag">${t(x.hint)}</small>` : ''}`;
+      for (const [, list] of groups)
+        for (const x of list) {
+          const gc = basketCat(x.id);
+          info[x.id] = `<b>${x.icon} ${t(x.zh)} ×${basket[x.id]}</b>${x.hint ? `<small class="fx-tag">${t(x.hint)}</small>` : ''}${gc && giftInfo(gc, x.id) ? `<button type="button" class="mini-btn" data-giftfr="${gc}|${x.id}">${t('🎁 送朋友')}</button>` : ''}`;
+        }
       html = groups.length
         ? groups.map(([title, list]) => `<div class="dex-note">${title}</div><div class="inv-grid">${list.map((x) => cell(x.icon, t(x.zh), basket[x.id], x.id)).join('')}</div>`).join('')
         : `<div class="dex-note">${t('採集籃是空的。去迷霧森林、湖邊採採看吧 🍄')}</div>`;
@@ -1458,6 +1462,10 @@ async function init() {
             box.innerHTML = info[c.dataset.inv] ?? '';
             box.hidden = false;
             bindEat(box);
+            box.querySelector('[data-giftfr]')?.addEventListener('click', (e) => {
+              const [cat, id] = e.currentTarget.dataset.giftfr.split('|');
+              pickFriendToGift(cat, id, tab);
+            });
           });
         }
         // 料理：一打開就先選第一格，吃東西不用多點一下
@@ -1465,7 +1473,80 @@ async function init() {
       },
     );
   }
+  /** 🎁 背包裡點東西 →「送朋友」→ 選一位好友送 1 個（作者 11/12：背包、密頻兩邊都能送） */
+  async function pickFriendToGift(cat, id, backTab) {
+    if (!net.online) return hud.toast(t('連上伺服器才能送禮'));
+    const g = giftInfo(cat, id);
+    const r = await net.request('friendList');
+    if (!r?.ok || !g) return hud.toast(t('沒有成功，再試一次'));
+    const mutual = r.friends.filter((f) => f.mutual).sort((a, b) => (b.online ? 1 : 0) - (a.online ? 1 : 0));
+    modal.open(
+      t('🎁 把 {icon} {item} 送給誰？', { icon: g.icon, item: t(g.zh) }),
+      `<div class="dm-top"><button type="button" class="mini-btn ghost" id="gfp-back">‹ ${t('回到背包')}</button></div>
+      ${mutual.length ? `<div class="dex-note">${t('選一位好友，送 1 個（價值 {v} 🌰）', { v: g.value })}</div><div class="fr-chips">${mutual.map((f) => `<button type="button" class="fr-chip" data-to="${f.hid}" data-name="${escapeHtml(f.name)}"><b><i class="fr-dot${f.online ? ' on' : ''}"></i>${escapeHtml(f.name)}</b>${f.plot ? `<small>🏕️ ${plotName(f.plot)}</small>` : ''}</button>`).join('')}</div>` : `<div class="dex-note">${t('還沒有好友。點下面「👫 好友」加朋友，就能互相送禮了')}</div>`}`,
+      (body) => {
+        body.querySelector('#gfp-back').addEventListener('click', () => openBag(backTab));
+        for (const b of body.querySelectorAll('[data-to]'))
+          b.addEventListener('click', async () => {
+            const name = b.dataset.name;
+            if (!(await confirmBuy.ask({ icon: '🎁', name: t('送 {icon} {item} 給 {name}', { icon: g.icon, item: t(g.zh), name }), price: 0, desc: t('送出去就會從你的身上拿走喔'), title: t('🎁 要送這個嗎？'), yes: t('送出') }))) return pickFriendToGift(cat, id, backTab);
+            const res = await net.request('giftSend', { hid: b.dataset.to, cat, id, n: 1 });
+            if (!res?.ok) {
+              hud.toast(
+                ({
+                  account: t('要先建立帳號才能送禮'),
+                  cap: t('{name} 今天收的禮物已經夠多了，明天再送吧 🎁', { name }),
+                  sendMax: t('今天已經送很多次了，明天再送吧'),
+                  notFriend: t('要互相加好友才能送禮'),
+                  tooFast: t('慢慢來 🙂'),
+                })[res?.reason] ?? t('沒有成功，再試一次'),
+                4000,
+              );
+              return;
+            }
+            basket = res.basket ?? basket;
+            dishes = res.dishes ?? dishes;
+            audio.sfx?.('bell');
+            hud.toast(t('🎁 送給 {name} 了！', { name }), 3500);
+            openBag(backTab);
+          });
+      },
+    );
+  }
   document.getElementById('bag-btn').addEventListener('click', () => openBag());
+  // ---------- 📣 大聲公（作者 11/12：30 松果，全營地都看得到） ----------
+  const shoutBox = document.createElement('div');
+  shoutBox.className = 'shout-banner';
+  shoutBox.hidden = true;
+  document.getElementById('ui').appendChild(shoutBox);
+  const shoutQ = [];
+  let shoutBusy = false;
+  const nextShout = () => {
+    const m = shoutQ.shift();
+    if (!m) return void ((shoutBusy = false), (shoutBox.hidden = true));
+    shoutBusy = true;
+    shoutBox.innerHTML = `<span>📣</span><b>${escapeHtml(m.name)}</b><em>${escapeHtml(m.text)}</em>`;
+    shoutBox.hidden = false;
+    shoutBox.classList.remove('in');
+    void shoutBox.offsetWidth;
+    shoutBox.classList.add('in');
+    setTimeout(nextShout, 8000);
+  };
+  net.on('shout', (m) => {
+    social.addLog(`📣 ${m.name}`, m.text);
+    shoutQ.push(m);
+    if (!shoutBusy) nextShout();
+  });
+  social.onShout = async (text, done) => {
+    if (!net.online) return hud.toast(t('連上伺服器才能用大聲公'));
+    if (!text) return hud.toast(t('📣 先在輸入框打想說的話，再按 📣'));
+    if ((pinecones ?? 0) < 30) return hud.toast(t('松果不夠，需要 {n} 🌰', { n: 30 }));
+    if (!confirm(t('花 30 🌰 用大聲公說：「{text}」？全營地的人都看得到', { text }))) return;
+    const r = await net.request('shout', { text });
+    if (r?.ok) return done?.();
+    hud.toast(r?.reason === 'wait' ? t('📣 大聲公每 3 分鐘可以用一次，再等 {n} 秒', { n: r.sec }) : r?.reason === 'busy' ? t('📣 剛剛有人用過大聲公，{n} 秒後再試', { n: r.sec }) : r?.reason === 'poor' ? t('松果不夠，需要 {n} 🌰', { n: 30 }) : t('沒送出去，再試一次'));
+  };
+
   // ---------- ✨ 小精靈（作者 11/11：跟在肩膀旁邊飄、玩遊戲會長大） ----------
   const mySpirit = new SpiritFollower(scene);
   // 🎮 跟小精靈玩的小遊戲
@@ -3396,6 +3477,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     go: {
       pass: () => openPass('pass'),
       spirit: () => openSpirit(),
+      chat: () => social.openChat?.(),
       shop: () => shopPanel.open(),
       home: () => goHome(),
       move: () => openMoveMap(myHome?.plot?.z ?? 0),
@@ -3953,7 +4035,15 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     // 自己身上能送的東西
     const own = [];
     if (cat === 'dish') for (const [id, n] of Object.entries(dishes ?? {})) n > 0 && own.push({ id, n });
-    else if (cat === 'furn') for (const [id, n] of Object.entries(myHome?.inv ?? {})) n > 0 && own.push({ id, n });
+    else if (cat === 'furn')
+      for (const [id, n] of Object.entries(myHome?.inv ?? {})) {
+        if (!(n > 0)) continue;
+        // 🪑 家裡擺了幾個、有配色的幾個：只能送收在背包的原色那些
+        const placed = (myHome?.items ?? []).filter((x) => x.i === id).length;
+        const colored = Object.entries(myHome?.cinv ?? {}).reduce((a, [k, v]) => (k.startsWith(`${id}~`) ? a + v : a), 0);
+        const spare = Math.max(0, n - colored - (myHome?.items ?? []).filter((x) => x.i === id && !x.c).length);
+        own.push({ id, n, placed, colored, spare });
+      }
     else for (const [id, n] of Object.entries(basket ?? {})) n > 0 && basketCat(id) === cat && own.push({ id, n });
     const rows = own
       .map((o) => ({ ...o, g: giftInfo(cat, o.id) }))
@@ -3961,7 +4051,10 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       .sort((a, b) => a.g.value - b.g.value)
       .map((o) => {
         const tooMuch = o.g.value > info.left;
-        return `<div class="craft-row"><i class="dex-emoji">${o.g.icon}</i><div class="craft-info"><b>${t(o.g.zh)} ×${o.n}</b><small>${t('價值 {v} 🌰', { v: o.g.value })}</small></div><button type="button" class="mini-btn" data-give="${o.id}" ${tooMuch ? 'disabled' : ''}>${t('送 1 個')}</button></div>`;
+        const furn = o.spare != null;
+        const note = furn && (o.placed || o.colored) ? `<small class="gf-placed">${o.placed ? t('🏠 家裡擺了 {n} 個', { n: o.placed }) : ''}${o.placed && o.colored ? '・' : ''}${o.colored ? t('🎨 有配色的 {n} 個不能送', { n: o.colored }) : ''}・${t('可以送 {n} 個', { n: o.spare })}</small>` : '';
+        const none = furn && o.spare <= 0;
+        return `<div class="craft-row"><i class="dex-emoji">${o.g.icon}</i><div class="craft-info"><b>${t(o.g.zh)} ×${o.n}</b><small>${t('價值 {v} 🌰', { v: o.g.value })}</small>${note}</div><button type="button" class="mini-btn" data-give="${o.id}" ${tooMuch || none ? 'disabled' : ''}>${none ? t('都擺在家裡了') : t('送 1 個')}</button></div>`;
       })
       .join('');
     const block = !info.account
@@ -3990,6 +4083,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
                 ({
                   account: t('要先建立帳號才能送禮'),
                   young: t('玩滿 {d} 天才能送禮（還差 {n} 天）', { d: GIFT_MIN_DAYS, n: res?.days ?? 1 }),
+                  placed: t('這件擺在家裡（或是有配色的），要先收起來才能送'),
                   cap: t('{name} 今天收的禮物已經夠多了，明天再送吧 🎁', { name }),
                   sendMax: t('今天已經送很多次了，明天再送吧'),
                   noTent: t('對方還沒有帳篷，家具先不能送'),

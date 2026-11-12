@@ -38,6 +38,7 @@ export class SocialPanel {
       <form class="chat-input" id="chat-input" autocomplete="off">
         <input id="chat-text" maxlength="40" placeholder="${t('說點什麼⋯（最多 40 字）')}" enterkeyhint="send" />
         <button type="button" class="chat-tr-toggle" id="chat-tr-toggle" title="${t('自動翻譯其他語言的聊天')}">🌐</button>
+        <button type="button" class="chat-shout" id="chat-shout" title="${t('📣 大聲公：全營地都看得到（30 🌰）')}">📣</button>
         <button type="submit">${t('送出')}</button>
       </form>
       `,
@@ -99,6 +100,14 @@ export class SocialPanel {
       if (text) this.onChat?.(text);
       this.el.input.value = '';
       this.closeChat();
+    });
+    // 📣 大聲公：把輸入框的字用大聲公送出（全營地都看得到，30 松果）
+    root.querySelector('#chat-shout').addEventListener('click', () => {
+      const text = this.el.input.value.trim();
+      this.onShout?.(text, () => {
+        this.el.input.value = '';
+        this.closeChat();
+      });
     });
     this.el.input.addEventListener('keydown', (e) => {
       e.stopPropagation(); // 打字時不要觸發遊戲按鍵
