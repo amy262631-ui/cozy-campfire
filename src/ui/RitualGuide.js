@@ -267,7 +267,8 @@ export class RitualGuide {
    * @param {{ scene, hud, touch?: boolean, onDone?: (id) => Promise<number|null> }} opts
    *   onDone：任務完成時呼叫，回傳「今天第幾位完成」（單人模式回傳 null）
    */
-  constructor({ scene, hud, touch = false, onDone, canPick, onShare, onComplete, onIntroDone, root = document.getElementById('ui') }) {
+  constructor({ scene, hud, touch = false, onDone, canPick, onShare, onComplete, onIntroDone, onKidStep, root = document.getElementById('ui') }) {
+    this.onKidStep = onKidStep;
     this.onIntroDone = onIntroDone;
     this.hud = hud;
     /** 任務完成時通知 main.js（第一次來的人完成第一個任務後，才跳出歡迎卡） */
@@ -447,6 +448,7 @@ export class RitualGuide {
   }
 
   #start(id) {
+    if (id === INTRO[0] && !this.#introDone().length) this.onKidStep?.('start'); // 📊 統計：新朋友看到第 1 步
     this.id = id;
     this.task = this.tasks[id];
     this.active = true;
@@ -588,7 +590,7 @@ export class RitualGuide {
     if (!done.includes(this.id)) done.push(this.id);
     store(INTRO_KEY, JSON.stringify(done));
     const firstTime = done.length === 1;
-    this.onComplete?.(this.task, firstTime);
+    this.onComplete?.(this.task, firstTime, this.id);
     const next = this.nextIntro();
     if (next) {
       setTimeout(() => this.done && this.id !== next && this.#start(next), 1800);

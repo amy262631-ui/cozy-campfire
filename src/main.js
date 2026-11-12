@@ -65,6 +65,7 @@ import { zoneName, LAYOUT as CAMP_LAYOUT } from './rooms/campLayout.js';
 import { RitualGuide } from './ui/RitualGuide.js';
 import { HelpPanel, spiritRuleLines } from './ui/HelpPanel.js';
 import { isXmas } from './game/season.js';
+import { setupFrameFocus } from './ui/FrameFocus.js';
 import { GIFT_CATS, giftInfo, basketCat, GIFT_DAILY_CAP, GIFT_MIN_DAYS } from './game/gifts.js';
 import { FIRE_SEATS } from './rooms/fireSeats.js';
 import { SHOP_FRONT } from './rooms/shop.js';
@@ -239,6 +240,7 @@ async function init() {
   setTimeout(() => setStage(2), 10 * 60000); // 玩滿 10 分鐘
   if (safeMode && crashCount >= 1) setTimeout(() => hud.toast(t('🛟 上次好像沒有順利載入，這次先用省電畫質，比較不會被關掉'), 6000), 4000);
   const mobile = isTouchDevice() ? new MobileControls(input) : null;
+  setupFrameFocus(); // 🖱️ 被遊戲入口網站嵌進去時：先「點一下開始」，鍵盤才收得到
 
   const audio = new AudioEngine();
   // 手機瀏覽器只允許在「點擊的當下」開始播放聲音，所以每次觸控／點擊／按鍵都順便確認一次
@@ -2693,6 +2695,11 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       setTimeout(() => document.body.appendChild(el), 2500);
     }
   }
+  // 📊 新手小任務統計：還沒連上伺服器就等一下再送（最多等 1 分鐘）
+  const kidStep = (id, tries = 0) => {
+    if (net.online && net.socket) net.socket.emit('kidStep', { id });
+    else if (tries < 20) setTimeout(() => kidStep(id, tries + 1), 3000);
+  };
   ritual = new RitualGuide({
     scene,
     hud,
@@ -2725,9 +2732,11 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
         sharePop(t('✏️ 幫自己取個名字吧'), null, () => hud.onMeClick?.());
       }, 20000);
     },
-    onComplete: (_task, firstTime) => {
+    onComplete: (task, firstTime, id) => {
       if (firstTime) setStage(1);
+      if (task?.kid) kidStep(id); // 📊 新手小任務每一步（/stats 看卡在哪）
     },
+    onKidStep: (id) => kidStep(id),
   });
   const garden = forest.cairnGarden;
   const ritualState = {

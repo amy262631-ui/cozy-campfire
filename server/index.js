@@ -1365,6 +1365,19 @@ app.get(['/stats', '/api/stats'], (req, res) => {
 <p>來 3 天以上（固定玩家）<b>${bw.reg}</b> 人${trend(bw.reg, bp.reg)}・其中 5 天以上（常客）<b>${bw.fan}</b> 人${trend(bw.fan, bp.fan)}・來 2 天 ${bw.two} 人・只來 1 天 ${bw.one} 人<br><small>箭頭是跟再前一週比。名字是帳篷門牌上的名字；沒買帳篷的顯示「（沒帳篷）」。</small></p>
 <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start"><div class="wrap"><table><tr><th>名字</th><th>這週來了</th><th>連續天數</th><th>營位</th><th>上週來了</th></tr>${regs || '<tr><td colspan="5">這週還沒有來 3 天以上的玩家</td></tr>'}</table></div>
 <div class="wrap"><b style="color:#9fe39f">🟢 現在在線（${onNow.length} 人）</b><small>　打開這頁那一刻，重新整理才更新</small><table><tr><th>名字</th><th>在哪裡</th><th>分流</th><th>第一次來</th><th>營位</th><th>月票</th></tr>${onNow.map((r) => r.row).join('') || '<tr><td colspan="6">現在沒有人在線上</td></tr>'}</table></div></div>`;
+  // 🌱 新手小任務每一步＋👤 新帳號（作者 11/12）
+  const acctDay = {};
+  for (const a of Object.values(accounts)) if (a.at) acctDay[dayKey(new Date(a.at))] = (acctDay[dayKey(new Date(a.at))] ?? 0) + 1;
+  const KID_COLS = [['start', '看到第 1 步'], ['k_fire', '①走到營火'], ['k_sit', '②坐下'], ['k_wood', '③丟木頭'], ['k_roast', '④烤棉花糖'], ['k_fish', '⑤釣魚'], ['k_shop', '⑥看小舖'], ['done', '🎉 做完']];
+  const kidRows = allDays.slice(0, 7).map((k) => {
+    const kd = stats[k]?.kid ?? {};
+    const base = kd.start || 0;
+    const cell = (id) => (kd[id] ? `${kd[id]}${base && id !== 'start' ? `<small>（${Math.round((kd[id] / base) * 100)}%）</small>` : ''}` : '-');
+    return `<tr><td>${k}</td>${KID_COLS.map(([id]) => `<td>${cell(id)}</td>`).join('')}<td>${acctDay[k] ?? 0}</td></tr>`;
+  }).join('');
+  const kidTable = `<h3>🌱 新手小任務：每一步走到幾個人（最近 7 天）</h3>
+<p><small>第一次來的新朋友，每一步做完算一次（括號是從「看到第 1 步」走到這裡的比例）。哪一步掉最多，就是新朋友卡住的地方。11/12 之後才開始記。</small><br>👤 帳號總數 <b>${Object.keys(accounts).length}</b> 個（最右邊一欄是那天新辦的帳號）</p>
+<div class="wrap"><table><tr><th>日期</th>${KID_COLS.map(([, n]) => `<th>${n}</th>`).join('')}<th>👤 新帳號</th></tr>${kidRows}</table></div>`;
   // 🎫 營火月票的收入：這個月（台北時間）付款成功的訂單
   const month = dayKey().slice(0, 7);
   const paid = Object.entries(orders).filter(([, o]) => o.status === 'paid' && !o.sim && dayKey(new Date(o.paidAt)).startsWith(month));
@@ -1466,7 +1479,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   };
 })();
 </script><p>伺服器已經連續醒著 <b>${awakeText()}</b>（從 ${new Date(BOOT_AT).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })} 起；正常只有重新部署時才會歸零，如果常常歸零，代表定時叫醒沒有生效、伺服器睡著過）</p><p>現在在線：${online} 人（名單在下面「👥 固定玩家」右邊）· 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好；「新旅人」是第一次來的人（從 11/3 開始統計）。</p>
-<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="${head.length}">還沒有資料</td></tr>'}</table></div>${regTable}${srcTable}${passTable}${spiritTable}</body></html>`);
+<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="${head.length}">還沒有資料</td></tr>'}</table></div>${regTable}${kidTable}${srcTable}${passTable}${spiritTable}</body></html>`);
 });
 
 // 📍 網頁一打開就記一次（還沒載入遊戲）：算「載入完成前就離開」；遊戲畫出第一張畫面再記一次 loaded
@@ -2152,6 +2165,7 @@ io.on('connection', (socket) => {
     const src = cleanSource(data.src);
     // 統計：第一次進來才算一次來訪（斷線重連、改名字不重複算）
     // 🙈 作者自己的裝置（在 /stats 按過「這台裝置不算進統計」）：來訪、停留、新旅人都不算
+    socket.data.staff = !!data.staff; // 📊 作者自己的裝置：新手小任務統計也不算
     if (!data.rejoin && !data.staff) {
       session = { at: Date.now() };
       const d = today();
@@ -2603,11 +2617,26 @@ io.on('connection', (socket) => {
     ack?.({ ok: true, n: d.quests[id] });
   });
 
+  // 📊 新手小任務每一步走到幾個人（作者 11/12：看新朋友卡在哪一步）；同一個錢包每一步只算一次
+  const KID_STEPS = ['start', 'k_fire', 'k_sit', 'k_wood', 'k_roast', 'k_fish', 'k_shop'];
+  socket.on('kidStep', (data = {}) => {
+    if (!wal || !player?.vid || socket.data.staff) return;
+    const id = String(data.id ?? '');
+    if (!KID_STEPS.includes(id)) return;
+    wal.ks ??= [];
+    if (wal.ks.includes(id)) return;
+    wal.ks.push(id);
+    const d = today();
+    d.kid ??= {};
+    d.kid[id] = (d.kid[id] ?? 0) + 1;
+    saveJson('stats.json', stats);
+  });
   // 🌱 新手小任務 6 步做完：送 20 顆松果（每個錢包一次）
   socket.on('kidDone', (_d, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
     if (wal.kid) return ack?.({ ok: true, again: true });
     wal.kid = 1;
+    { const d = today(); d.kid ??= {}; d.kid.done = (d.kid.done ?? 0) + 1; saveJson('stats.json', stats); }
     award(20, 'kid', true);
     ack?.({ ok: true });
   });

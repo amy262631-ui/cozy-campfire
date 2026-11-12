@@ -7285,3 +7285,14 @@ body.spg-on .notice-panel {
 .chat-input .chat-shout { display: flex; align-items: center; gap: 4px; padding: 0 10px; background: linear-gradient(180deg, #ff7a6b, #e0483c); color: #fff8ec; border: 2px solid #ffd56b; white-space: nowrap; box-shadow: 0 0 10px rgba(255, 120, 90, 0.45); }
 .chat-input .chat-shout .cs-ic { font-size: 20px; line-height: 1; }
 .chat-input .chat-shout .cs-tx { font-size: 13px; }
+
+/* 🖱️ 被別的網站嵌進去（iframe）時：點一下開始，鍵盤才收得到 */
+.frame-focus { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; background: rgba(10, 12, 24, 0.45); cursor: pointer; transition: opacity 0.3s; }
+.frame-focus.out { opacity: 0; pointer-events: none; }
+.frame-focus .ff-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 34px; border-radius: 22px; background: linear-gradient(180deg, #ffb46b, #f08a45); color: #3a1d0c; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); animation: ffPulse 1.6s ease-in-out infinite; }
+.frame-focus .ff-ic { font-size: 40px; line-height: 1; }
+.frame-focus b { font-size: 24px; }
+.frame-focus small { font-size: 14px; opacity: 0.85; }
+@keyframes ffPulse { 50% { transform: scale(1.05); } }
+.frame-pill { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); z-index: 9998; padding: 8px 16px; border-radius: 999px; background: rgba(240, 138, 60, 0.95); color: #2a1608; font-weight: 700; font-size: 14px; pointer-events: none; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
+.frame-pill[hidden] { display: none; }
