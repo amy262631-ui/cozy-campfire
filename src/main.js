@@ -64,6 +64,7 @@ import { CairnPanel } from './ui/CairnPanel.js';
 import { zoneName, LAYOUT as CAMP_LAYOUT } from './rooms/campLayout.js';
 import { RitualGuide } from './ui/RitualGuide.js';
 import { HelpPanel, spiritRuleLines } from './ui/HelpPanel.js';
+import { isXmas } from './game/season.js';
 import { GIFT_CATS, giftInfo, basketCat, GIFT_DAILY_CAP, GIFT_MIN_DAYS } from './game/gifts.js';
 import { FIRE_SEATS } from './rooms/fireSeats.js';
 import { SHOP_FRONT } from './rooms/shop.js';
@@ -859,21 +860,24 @@ async function init() {
     date: [t('營火之約限定：朋友在早上或晚上 9:30 營火時間透過你的連結進來，兩個人都拿到'), t('9:30 營火時間約朋友')],
     eco: [t('垃圾圖鑑全部收集完就拿到'), t('垃圾圖鑑收集完')],
     sponsor: [t('贊助限定：那個月贊助就送一頂（上方「💝 支持營地」→ 🎁）'), t('贊助限定')],
+    xmas: [t('聖誕限定：12/1～1/6 連續上線每滿 3 天送一款'), t('聖誕期間連續上線 3 天')],
   };
+  // 🎄 聖誕造型：聖誕期間、或已經拿到的才顯示（11 月先不出現，也不算在總數裡）
+  const showOutfit = (o) => (payOn || o.src !== 'sponsor') && (o.src !== 'xmas' || isXmas() || look.outfits.includes(o.id));
   fishingUI.extraTabs.push({
     id: 'outfit',
     label: t('👒 造型'),
-    title: () => t('👒 造型 {n}／{total}', { n: look.outfits.length, total: OUTFITS.filter((o) => payOn || o.src !== 'sponsor').length }),
+    title: () => t('👒 造型 {n}／{total}', { n: look.outfits.length, total: OUTFITS.filter(showOutfit).length }),
     render: () => {
       if (lookSlot === 'body') return renderBody();
       const owned = new Set(look.outfits);
       const today = look.daily ? OUTFIT_BY_ID[look.daily] : null;
       const week = look.weekly ? OUTFIT_BY_ID[look.weekly] : null;
-      const cards = OUTFITS.filter((o) => o.slot === lookSlot)
+      const cards = OUTFITS.filter((o) => o.slot === lookSlot && (o.src !== 'xmas' || isXmas() || owned.has(o.id)))
         .map((o) => {
           const has = owned.has(o.id);
           const worn = look.wear?.[o.slot] === o.id;
-          const tag = o.src === 'weekly' ? t('每週限定') : o.src === 'date' ? t('營火之約') : o.src === 'eco' ? t('淨灘小隊') : o.src === 'sponsor' ? t('{m} 贊助限定', { m: o.month }) : o.id === look.daily ? t('今天的') : t('每日');
+          const tag = o.src === 'weekly' ? t('每週限定') : o.src === 'date' ? t('營火之約') : o.src === 'eco' ? t('淨灘小隊') : o.src === 'sponsor' ? t('{m} 贊助限定', { m: o.month }) : o.src === 'xmas' ? t('聖誕限定') : o.id === look.daily ? t('今天的') : t('每日');
           return has
             ? `<div class="dex-card outfit${worn ? ' worn' : ''}" data-id="${o.id}"><i class="dex-emoji">${o.icon}</i><b>${t(o.zh)}</b><small>${tag}</small><em>${worn ? t('穿著中・點一下脫掉') : t('點一下穿上')}</em></div>`
             : `<div class="dex-card unknown" title="${HOW[o.src][0]}"><i class="dex-emoji">${o.icon}</i><b>${t('？？？')}</b><small>${tag}</small><em>${HOW[o.src][1]}</em></div>`;
