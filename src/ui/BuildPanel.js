@@ -2,7 +2,7 @@ import { t } from '../i18n/i18n.js';
 import { ALL_FURNITURE, FURNITURE_BY_ID } from '../game/furniture.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TENT_SHAPES } from '../game/tentShapes.js';
-import { CATALOG_BY_ID, canAddTo, fishFits, stackAt, gridOf, expandPrice, MAX_STACK, ALL_COLORS } from '../game/furnitureCatalog.js';
+import { CATALOG_BY_ID, canAddTo, fishFits, stackAt, gridOf, expandPrice, MAX_STACK, ALL_COLORS, hasLoft } from '../game/furnitureCatalog.js';
 import { FISH } from '../fishing/fishData.js';
 
 /**
@@ -164,7 +164,7 @@ export class BuildPanel {
   render() {
     if (!this.active) return;
     const home = this.getHome() ?? { inv: {}, items: [] };
-    const loft = home.shape === 'cabin' || home.shape === 'treehouse';
+    const loft = hasLoft(home);
     this.floorEl.hidden = !loft;
     if (!loft && this.floor !== 1) {
       this.floor = 1;

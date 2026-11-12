@@ -22,6 +22,19 @@ export const NEWS = {
   ],
 };
 
+/** 🏕️ 新帳篷（作者 11/12：下次週更新上傳就開賣，公告寫新增帳篷）——最新的一則，月票開不開都先給這則 */
+export const NEWS_TENTS = {
+  id: '2026-11-13',
+  title: () => t('🏕️ 新帳篷上架了！'),
+  items: () => [
+    { pic: '🐌', title: t('蝸牛殼屋　🌰 120'), text: t('直立的大圓殼加上閉眼微笑的蝸牛，觸角上是會發光的小燈') },
+    { pic: '🌸', title: t('花園溫室　🌰 200'), text: t('紅磚矮牆、白框玻璃，屋簷掛著爬藤小花，屋裡有一整排花架') },
+    { pic: '🏮', title: t('和風小屋　🌰 250'), text: t('深色木板牆、格子窗透出暖暖的燈光，架高的木頭平台') },
+    { pic: '🛒', title: t('到小舖「⛺ 帳篷外觀」看看'), text: t('買了可以隨時換回原本的帳篷，家具都會留著') },
+    { pic: '🎄', title: t('12 月聖誕活動準備中'), text: t('敬請期待 ✨') },
+  ],
+};
+
 /** 💝 月票開賣的公告（伺服器 PASS_ON 開了才用這份，沒開之前還是上面那份） */
 export const NEWS_PASS = {
   id: '2026-11-14',
@@ -91,7 +104,7 @@ export class UpdateNews {
 
   /** 現在要顯示的公告 */
   get news() {
-    return this.payOn() ? NEWS_PASS : NEWS;
+    return this.payOn() ? NEWS_PASS : NEWS; // 🏕️ 新帳篷下週推出時改回 NEWS_TENTS（作者 11/12：先隱藏）
   }
 
   get visible() {
@@ -118,7 +131,7 @@ export class UpdateNews {
 
   /** 全部的公告（新的在前面）：月票開了才有月票那份 */
   get pages() {
-    return [...(this.payOn() ? [NEWS_PASS] : []), NEWS, ...NEWS_OLD];
+    return [...(this.payOn() ? [NEWS_PASS] : []), NEWS, ...NEWS_OLD]; // 新帳篷推出時前面加回 NEWS_TENTS
   }
 
   /** page：0＝最新；往前翻看以前的更新 */

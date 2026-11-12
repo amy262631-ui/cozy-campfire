@@ -1501,6 +1501,112 @@ export function buildFurniture(id, opts = {}) {
       top.rotation.x = -Math.PI / 2;
       break;
     }
+    // ---- 🎁 12 月聖誕禮盒（支持營地送的，作者 11/10：聖誕樹、薑餅屋、禮物盒堆、聖誕襪掛架） ----
+    case 'box12_tree': {
+      // 🎄 室內聖誕樹（大件）：木盆＋三層圓錐，掛彩球、繞燈串、樹頂星星
+      const h = pot(0.22, 0.2, 0xb0473c);
+      box(0.5, 0.03, 0.5, mat(0xf3ead8), 0, h + 0.015, 0);
+      cyl(0.05, 0.06, 0.2, mat(0x6a4a30), 0, h + 0.1);
+      const greens = [0x2f7a45, 0x358a4f, 0x3d9658];
+      [[0.52, 0.62, h + 0.18], [0.42, 0.52, h + 0.55], [0.3, 0.44, h + 0.88]].forEach(([r, hh, y], i) => cone(r, hh, mat(greens[i]), 0, y + hh / 2, 0, 9));
+      const top = h + 1.32;
+      const ornCols = [0xd8433a, 0xf2c14e, 0x6aa8e0, 0xffffff, 0xb06ad8];
+      for (let i = 0; i < 16; i++) {
+        const y = h + 0.3 + (i / 16) * 0.9;
+        const r = 0.5 - (i / 16) * 0.38;
+        const a = i * 2.2;
+        ball(0.04, mat(ornCols[i % 5], { metalness: 0.3, roughness: 0.35 }), Math.sin(a) * r, y, Math.cos(a) * r);
+      }
+      for (let i = 0; i < 26; i++) {
+        const k = i / 26;
+        const y = h + 0.24 + k * 0.95;
+        const r = 0.5 - k * 0.4 + 0.02;
+        const a = k * Math.PI * 7;
+        ball(0.022, glow([0xffd27a, 0xff9a9a, 0xb8e4ff][i % 3]), Math.sin(a) * r, y, Math.cos(a) * r).userData.bulb = i % 3;
+      }
+      const sh = new THREE.Shape();
+      for (let i = 0; i < 10; i++) {
+        const a = Math.PI / 2 + (i / 10) * Math.PI * 2;
+        const rr = i % 2 ? 0.05 : 0.12;
+        if (i) sh.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+        else sh.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      const star = add(new THREE.ExtrudeGeometry(sh, { depth: 0.03, bevelEnabled: false }), glow(0xffe066), 0, top + 0.06, -0.015);
+      star.userData.spin = true;
+      break;
+    }
+    case 'box12_ginger': {
+      // 🏠 薑餅屋（小東西）：餅乾色小屋、白色糖霜屋頂邊、糖果門窗、旁邊一個薑餅人
+      const cookie = mat(0xb87a45);
+      const icing = mat(0xfffaf2, { roughness: 0.6 });
+      box(0.36, 0.24, 0.3, cookie, 0, 0.12, 0);
+      // 屋頂下的三角形牆（前後都封起來）
+      const gable = new THREE.Shape();
+      gable.moveTo(-0.18, 0);
+      gable.lineTo(0.18, 0);
+      gable.lineTo(0, 0.16);
+      gable.closePath();
+      stand(gable, 0.3, cookie, 0, 0.24, 0);
+      for (const s of [-1, 1]) {
+        const roof = box(0.24, 0.025, 0.36, mat(0x9a5f33), s * 0.09, 0.3, 0);
+        roof.rotation.z = -s * 0.75;
+        const edge = box(0.025, 0.03, 0.37, icing, s * 0.175, 0.225, 0);
+        edge.rotation.z = -s * 0.75;
+      }
+      box(0.025, 0.04, 0.34, icing, 0, 0.385, 0);
+      box(0.09, 0.13, 0.01, mat(0xd8433a), 0, 0.065, 0.152);
+      for (const s of [-1, 1]) box(0.06, 0.06, 0.01, mat(0x8ac4ff), s * 0.11, 0.15, 0.152);
+      [0xd8433a, 0x6ac46a, 0xf2c14e, 0xff9ccf].forEach((c, i) => ball(0.018, mat(c), -0.14 + i * 0.09, 0.235, 0.155));
+      // 薑餅人
+      const man = mat(0xc4864a);
+      ball(0.045, man, 0.27, 0.16, 0.1);
+      box(0.07, 0.09, 0.03, man, 0.27, 0.085, 0.1);
+      for (const s of [-1, 1]) {
+        box(0.025, 0.06, 0.025, man, 0.27 + s * 0.02, 0.025, 0.1);
+        const arm = box(0.06, 0.022, 0.025, man, 0.27 + s * 0.045, 0.11, 0.1);
+        arm.rotation.z = s * 0.4;
+      }
+      for (const s of [-1, 1]) ball(0.007, mat(0x2a1a14), 0.27 + s * 0.015, 0.17, 0.14);
+      for (let i = 0; i < 2; i++) ball(0.008, mat(0xd8433a), 0.27, 0.1 - i * 0.03, 0.118);
+      break;
+    }
+    case 'box12_gifts': {
+      // 🎁 禮物盒堆（小東西）：大中小三個禮物盒疊在一起，緞帶蝴蝶結
+      const stackBox = (w, h, c, rib, x, y, z, ry) => {
+        const b = box(w, h, w, mat(c), x, y + h / 2, z);
+        b.rotation.y = ry;
+        const r1 = box(w * 1.02, h * 1.02, w * 0.16, mat(rib), x, y + h / 2, z);
+        const r2 = box(w * 0.16, h * 1.02, w * 1.02, mat(rib), x, y + h / 2, z);
+        r1.rotation.y = r2.rotation.y = ry;
+        for (const s of [-1, 1]) {
+          const bow = torus(w * 0.12, w * 0.035, mat(rib), x + s * w * 0.1, y + h + w * 0.06, z, Math.PI * 2, 10);
+          bow.rotation.set(Math.PI / 2, 0, s * 0.6 + ry);
+        }
+      };
+      stackBox(0.34, 0.24, 0xd8433a, 0xf2c14e, 0, 0, 0, 0.2);
+      stackBox(0.24, 0.17, 0x2f9a5a, 0xffffff, 0.02, 0.24, -0.01, -0.3);
+      stackBox(0.15, 0.12, 0x6aa8e0, 0xd8433a, -0.01, 0.41, 0.01, 0.5);
+      stackBox(0.16, 0.13, 0xf2c14e, 0xd8433a, 0.27, 0, 0.12, 0.7);
+      break;
+    }
+    case 'box12_stocking': {
+      // 🧦 聖誕襪掛架（小東西）：木頭小架子，橫桿掛三隻聖誕襪、上面一圈綠葉和小燈
+      const wood = mat(0x8a5a36);
+      for (const s of [-1, 1]) box(0.04, 0.62, 0.04, wood, s * 0.3, 0.31, 0);
+      box(0.18, 0.03, 0.18, wood, -0.3, 0.015, 0);
+      box(0.18, 0.03, 0.18, wood, 0.3, 0.015, 0);
+      box(0.66, 0.035, 0.04, wood, 0, 0.6, 0);
+      for (let i = 0; i < 9; i++) ball(0.035, mat(i % 2 ? 0x2f7a45 : 0x3d9658), -0.28 + i * 0.07, 0.63, 0.01);
+      for (let i = 0; i < 5; i++) ball(0.016, glow([0xffd27a, 0xff9a9a, 0xb8e4ff][i % 3]), -0.24 + i * 0.12, 0.66, 0.04).userData.bulb = i % 3;
+      [[0xd8433a, -0.18], [0x2f9a5a, 0], [0x6aa8e0, 0.18]].forEach(([c, x]) => {
+        box(0.004, 0.06, 0.004, mat(0xf3ead8), x, 0.56, 0);
+        box(0.1, 0.17, 0.05, mat(c), x, 0.43, 0);
+        box(0.13, 0.06, 0.05, mat(c), x + 0.025, 0.34, 0);
+        box(0.12, 0.045, 0.06, mat(0xfffaf2), x, 0.52, 0);
+        ball(0.018, mat(0xfffaf2), x + 0.08, 0.34, 0.02);
+      });
+      break;
+    }
     case 'pass_glowtree': {
       // 🌳 發光室內小樹：陶盆＋彎彎的樹幹，樹冠裡掛滿會亮的小燈球（按 E 換顏色）
       const h = pot(0.2, 0.26, 0xe8dccb);

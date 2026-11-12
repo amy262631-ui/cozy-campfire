@@ -83,6 +83,11 @@ export const OUTFITS = [
   { id: 'wig_bowl', slot: 'hair', kind: 'hair', hair: 'bowl', sex: 'm', c1: 0x7a4a2a, c2: 0x7a4a2a, icon: '🍉', zh: '西瓜頭', src: 'sponsor', month: '2027-03' },
   { id: 'wig_fluffy', slot: 'hair', kind: 'hair', hair: 'fluffy', sex: 'm', c1: 0x4a3a6a, c2: 0x4a3a6a, icon: '🌬️', zh: '蓬鬆短髮', src: 'sponsor', month: '2027-04' },
   { id: 'wig_braids', slot: 'hair', kind: 'hair', hair: 'braids', sex: 'f', c1: 0x6a4030, c2: 0xd2453c, icon: '🧶', zh: '麻花雙辮', src: 'sponsor', month: '2027-05' },
+  // ---- 🎄 聖誕限定（12/1～1/6，src: 'xmas'；怎麼拿還在跟作者討論） ----
+  { id: 'xmas_santa', slot: 'head', kind: 'santa', c1: 0xd2392f, c2: 0xfffaf2, icon: '🎅', zh: '聖誕帽', src: 'xmas' },
+  { id: 'xmas_antlers', slot: 'head', kind: 'antlers', c1: 0x8a5a3a, c2: 0xd2392f, icon: '🦌', zh: '馴鹿角＋紅鼻子', src: 'xmas' }, // 作者 11/12：不要髮箍，耳朵直接變成鹿角、鼻子變紅
+  { id: 'xmas_scarf', slot: 'neck', kind: 'scarf', c1: 0xd2392f, c2: 0xd2392f, snowman: true, icon: '🧣', zh: '紅色小雪人圍巾', src: 'xmas' }, // 作者 11/12：改成跟綠色那條一樣，只是紅色
+  { id: 'xmas_scarf2', slot: 'neck', kind: 'scarf', c1: 0x2f7a45, c2: 0x2f7a45, snowman: true, icon: '⛄', zh: '綠色小雪人圍巾', src: 'xmas' }, // 作者 11/12：綠色也不錯，配小雪人
 ];
 
 export const OUTFIT_BY_ID = Object.fromEntries(OUTFITS.map((o) => [o.id, o]));
@@ -90,6 +95,8 @@ export const OUTFIT_BY_ID = Object.fromEntries(OUTFITS.map((o) => [o.id, o]));
 export const outfitCode = (id) => (OUTFIT_BY_ID[id] ? OUTFITS.indexOf(OUTFIT_BY_ID[id]) + 1 : 0);
 export const outfitOfCode = (n) => OUTFITS[n - 1] ?? null;
 
+import { isXmasDay } from './season.js';
+export const XMAS_OUTFITS = OUTFITS.filter((o) => o.src === 'xmas');
 export const DAILY_OUTFITS = OUTFITS.filter((o) => o.src === 'daily');
 export const WEEKLY_OUTFITS = OUTFITS.filter((o) => o.src === 'weekly');
 export const DATE_OUTFITS = OUTFITS.filter((o) => o.src === 'date');
@@ -108,6 +115,11 @@ export const sponsorOutfits = (month) => {
 const dayNum = (dayKey) => Math.floor(Date.parse(`${dayKey}T00:00:00Z`) / 86400000);
 /** 今天的每日造型（dayKey 是台北日期 'YYYY-MM-DD'） */
 export const dailyOutfit = (dayKey) => DAILY_OUTFITS[((dayNum(dayKey) % DAILY_OUTFITS.length) + DAILY_OUTFITS.length) % DAILY_OUTFITS.length];
+/**
+ * 🎄 聖誕造型（作者 11/12 改）：每日造型照常輪；聖誕期間（12/1～1/6）**連續上線每滿 3 天送 1 款**聖誕造型，
+ *   照順序送還沒有的那款（4 款＝連續 12 天）。斷一天就從第 1 天重算（已經送的不會收回）。
+ */
+export const XMAS_STREAK = 3;
 /** 這週的每週限定（週一換） */
 export const weekNum = (dayKey) => Math.floor((dayNum(dayKey) + 3) / 7); // 1970-01-01 是週四，+3 讓週一換週
 export const weeklyOutfit = (dayKey) => WEEKLY_OUTFITS[weekNum(dayKey) % WEEKLY_OUTFITS.length];

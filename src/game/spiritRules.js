@@ -58,12 +58,25 @@ export function autoKind(c = {}) {
   return s[0][0];
 }
 /** 給別人看的代碼：'drop1'、'light0'；隱藏＝'' */
-export function spiritCode(sp) {
+/** acc：戴著的配件（'santa'…），代碼後面加「+santa」 */
+export function spiritCode(sp, acc = '') {
   if (!sp || sp.off) return '';
   const st = spiritStage(sp.xp);
-  return st === 0 ? 'light0' : `${sp.t ?? 'leaf'}${st}`;
+  const base = st === 0 ? 'light0' : `${sp.t ?? 'leaf'}${st}`;
+  return SPIRIT_ACC_BY_ID[acc] ? `${base}+${acc}` : base;
 }
 export function parseSpirit(code) {
-  const m = /^(light|drop|flame|leaf|cloud|star|mush)([0-2])$/.exec(String(code ?? ''));
-  return m ? { type: m[1], stage: +m[2] } : null;
+  const m = /^(light|drop|flame|leaf|cloud|star|mush)([0-2])(?:\+(\w+))?$/.exec(String(code ?? ''));
+  return m ? { type: m[1], stage: +m[2], acc: SPIRIT_ACC_BY_ID[m[3]] ? m[3] : null } : null;
 }
+/**
+ * 🎄 小精靈配件（作者 11/12：用松果買，買了每隻小精靈都能戴、永久保留）。
+ *   season：只在這個季節的小舖賣（xmas＝12/1～1/6）；戴不限時間
+ *   存檔：wal.spiritAcc = { own: [id…], wear: id }
+ */
+export const SPIRIT_ACCS = [
+  { id: 'santa', icon: '🎅', zh: '小精靈聖誕帽', price: 60, season: 'xmas' },
+  { id: 'scarf', icon: '🧣', zh: '小精靈紅色雪人圍巾', price: 60, season: 'xmas' },
+  { id: 'scarf2', icon: '⛄', zh: '小精靈綠色雪人圍巾', price: 60, season: 'xmas' }, // 作者 11/12：拿掉鹿角，圍巾紅綠兩款
+];
+export const SPIRIT_ACC_BY_ID = Object.fromEntries(SPIRIT_ACCS.map((a) => [a.id, a]));

@@ -38,7 +38,7 @@ export class SocialPanel {
       <form class="chat-input" id="chat-input" autocomplete="off">
         <input id="chat-text" maxlength="40" placeholder="${t('說點什麼⋯（最多 40 字）')}" enterkeyhint="send" />
         <button type="button" class="chat-tr-toggle" id="chat-tr-toggle" title="${t('自動翻譯其他語言的聊天')}">🌐</button>
-        <button type="button" class="chat-shout" id="chat-shout" title="${t('📣 大聲公：全營地都看得到（30 🌰）')}">📣</button>
+        <button type="button" class="chat-shout" id="chat-shout" title="${t('📣 大聲公：全營地都看得到（30 🌰）')}"><span class="cs-ic">📣</span><span class="cs-tx">${t('大聲公')}</span></button>
         <button type="submit">${t('送出')}</button>
       </form>
       `,

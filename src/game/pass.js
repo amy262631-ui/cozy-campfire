@@ -37,11 +37,26 @@ export const SPONSOR = {
   item: '支持迷霧森林露營地（贊助）',
 };
 /**
- * 🎁 本月禮盒的家具（12 月起才有）。還沒有禮盒家具的月份：NT$60 選項先藏起來，只有「贊助 NT$100 以上送假髮」
- *   { 'YYYY-MM': [家具 id, ...] }
+ * 🎁 本月禮盒的家具（12 月起才有）。還沒有禮盒家具的月份：只有「送假髮」
+ *   { 'YYYY-MM': { small: [小東西 id ×3], big: 大件 id } }
+ * 作者 11/12 定案的分級（shop.html 也這樣寫）：
+ *   NT$60：小東西 3 選 1
+ *   NT$100：小東西 1 件＋（假髮 或 大件 二選一）
+ *   NT$150：小東西 1 件＋假髮＋大件
+ *   NT$200：小東西 3 件全拿＋假髮＋大件
  */
-export const SPONSOR_BOX = {};
+export const SPONSOR_BOX = {
+  '2026-12': { small: ['box12_ginger', 'box12_gifts', 'box12_stocking'], big: 'box12_tree' },
+};
 /** 這個月可以選的金額（都可以選） */
 export const sponsorAmounts = () => SPONSOR.amounts;
 /** 這個月贊助多少以上送假髮：還沒有禮盒家具的月份（11 月）NT$60 以上都送（作者 11/11）；12 月起有禮盒後 NT$60 是小東西、NT$100 以上才有假髮 */
-export const sponsorMin = (month) => (SPONSOR_BOX[month]?.length ? SPONSOR.min : SPONSOR.amounts[0]);
+export const sponsorMin = (month) => (SPONSOR_BOX[month] ? SPONSOR.min : SPONSOR.amounts[0]);
+/** 這個金額可以拿什麼：small 小東西幾件、wig/big 有沒有、pick＝假髮跟大件要二選一 */
+export function sponsorTier(month, amt) {
+  if (!SPONSOR_BOX[month]) return { small: 0, wig: amt >= sponsorMin(month), big: false, pick: false };
+  if (amt >= 200) return { small: 3, wig: true, big: true, pick: false };
+  if (amt >= 150) return { small: 1, wig: true, big: true, pick: false };
+  if (amt >= 100) return { small: 1, wig: false, big: false, pick: true };
+  return { small: 1, wig: false, big: false, pick: false };
+}

@@ -23,7 +23,7 @@ import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
 import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM, rollFish, rollSize } from '../src/fishing/fishData.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
-import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateOutfit, sponsorOutfits } from '../src/game/outfits.js';
+import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateOutfit, sponsorOutfits, XMAS_OUTFITS, XMAS_STREAK } from '../src/game/outfits.js';
 import { GATHER_SPOTS, GATHER_ITEMS, regrowMs, GATHER_FIRST_GAIN, GATHER_DEX_BONUS, gatherItemAt, isNight, GATHER_R, NET_PRICE, BUG_WANDER, BUG_CATCH_R } from '../src/game/gathering.js';
 import { SOURCES, cleanSource, sourceFrom } from '../src/game/sources.js';
 import { GATHER_BY_ID, treasureTime, TREASURE_MAX, taipeiMonth } from '../src/game/gathering.js';
@@ -35,14 +35,16 @@ import { DISH_BY_ID, dishFirstGain, BUFF_MS, DISH_FX, activeBuff } from '../src/
 import { MUSEUM_BY_ID, DONATE_PER_DAY } from '../src/game/museum.js';
 import { TRASH, TRASH_BY_ID, TRASH_MAX, TRASH_ROOM, RECYCLE_GAIN, RECYCLE_DAILY_CAP, TRASH_FIRST_GAIN, TRASH_DEX_OUTFIT, pickTrash } from '../src/game/trash.js';
 import { LAYOUT as CAMP_LAYOUT } from '../src/rooms/campLayout.js';
-import { PASS, PASS_TIERS, PASS_PLANS, FREE, SPONSOR, sponsorAmounts, sponsorMin } from '../src/game/pass.js';
+import { PASS, PASS_TIERS, PASS_PLANS, FREE, SPONSOR, SPONSOR_BOX, sponsorAmounts, sponsorMin, sponsorTier } from '../src/game/pass.js';
 import crypto from 'node:crypto';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack, hasLoft } from './homes.js';
 import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS } from '../src/game/furnitureCatalog.js';
 import { YARD_BY_ID, hasYard, isBigYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
 import { CHALLENGE_BY_ID, challengesOf } from '../src/game/dailyChallenge.js';
-import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_FIRST_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, SPIRIT_ACT_KIND, SPIRIT_NIGHT_STAR, SPIRIT_PLAY_DAY, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
+import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_FIRST_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, SPIRIT_ACT_KIND, SPIRIT_NIGHT_STAR, SPIRIT_PLAY_DAY, SPIRIT_ACCS, SPIRIT_ACC_BY_ID, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
+import { isXmasDay as isXmasDay0 } from '../src/game/season.js';
+const isXmasDay = (k) => process.env.XMAS_TEST === '1' || isXmasDay0(k); // 本機測試用：XMAS_TEST=1 假裝現在是聖誕期間（Render 不要設）
 import { FUR_TOTAL, BASE_FUR, PREMIUM_FUR, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from '../src/game/looks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -994,17 +996,32 @@ function activateSponsor(vid, order) {
   const w = players[vid];
   if (!w) return;
   w.spons = (w.spons ?? 0) + (order?.amt ?? 0);
+  const month = dayKey(new Date(order.paidAt ?? Date.now())).slice(0, 7); // 付款那個月（台北時間）
+  const tier = sponsorTier(month, order.amt);
+  const box = SPONSOR_BOX[month];
+  // 🎁 12 月起：依金額送禮盒家具（放進背包）。100 元要二選一：order.pick＝'big' 拿大件，否則拿假髮
+  const wantWig = tier.wig || (tier.pick && order.pick !== 'big');
+  const wantBig = !!box && (tier.big || (tier.pick && order.pick === 'big'));
   // 送他選的那一款（要是付款那個月的）；沒選或對不上就送那個月的第一款
-  const list = sponsorOutfits(dayKey(new Date(order.paidAt ?? Date.now())).slice(0, 7));
+  const list = sponsorOutfits(month);
   // 選的那款已經有了（同一個月再贊助一次）→ 改送另一款；兩款都有了就不重複給
   const owned = w.outfits ?? [];
   const picked = list.find((o) => o.id === order.wig) ?? list[0];
-  const wig = order.amt >= sponsorMin(dayKey(new Date(order.paidAt ?? Date.now())).slice(0, 7)) ? (picked && !owned.includes(picked.id) ? picked : list.find((o) => !owned.includes(o.id)) ?? null) : null;
+  const wig = wantWig ? (picked && !owned.includes(picked.id) ? picked : list.find((o) => !owned.includes(o.id)) ?? null) : null;
+  const furn = [];
+  if (box) {
+    if (tier.small >= 3) furn.push(...box.small);
+    else if (tier.small) furn.push(box.small.includes(order.small) ? order.small : box.small[0]);
+    if (wantBig) furn.push(box.big);
+    const h = (homes[vid] ??= newHome());
+    for (const id of furn) h.inv[id] = (h.inv[id] ?? 0) + 1;
+    if (furn.length) saveJson('homes.json', homes);
+  }
   saveJson('players.json', players);
   const got = wig ? grantOutfit(vid, wig.id, 'sponsor') : null;
-  if (order) order.gave = { wig: got ? wig.id : null }; // 退款時照這個收回
-  for (const s of io.sockets.sockets.values()) if (s.data.vid === vid) s.emit('sponsored', { amt: order.amt, wig: wig?.id ?? null, got: !!got });
-  console.log(`[贊助] ${order.name} NT$${order.amt}${wig ? ` → ${wig.zh}` : ''}`);
+  if (order) order.gave = { wig: got ? wig.id : null, furn }; // 退款時照這個收回
+  for (const s of io.sockets.sockets.values()) if (s.data.vid === vid) s.emit('sponsored', { amt: order.amt, wig: wig?.id ?? null, got: !!got, furn });
+  console.log(`[贊助] ${order.name} NT$${order.amt}${wig ? ` → ${wig.zh}` : ''}${furn.length ? ` ＋ ${furn.map((id) => CATALOG_BY_ID[id]?.zh ?? id).join('、')}` : ''}`);
 }
 /**
  * 💸 退款後收回（11/11）：作者在綠界退款後，到 /admin 輸入訂單編號，把這筆送的東西收回
@@ -1027,6 +1044,23 @@ function refundOrder(no) {
       syncRack(o.vid);
       what = `收回假髮 ${OUTFIT_BY_ID[wig]?.zh ?? wig}`;
     } else what = '（這筆沒有送假髮）';
+    // 🎁 禮盒家具：背包裡還沒擺的先收；擺出來了就從家裡拿掉
+    const h = homes[o.vid];
+    const took = [];
+    for (const id of g.furn ?? []) {
+      if (!h?.inv[id]) continue;
+      if (available(h, id, 0) <= 0) {
+        const i = h.items.findIndex((x) => x.i === id);
+        if (i >= 0) h.items.splice(i, 1);
+      }
+      h.inv[id] -= 1;
+      if (h.inv[id] <= 0) delete h.inv[id];
+      took.push(CATALOG_BY_ID[id]?.zh ?? id);
+    }
+    if (took.length) {
+      what += `、收回家具 ${took.join('、')}`;
+      saveJson('homes.json', homes);
+    }
     w.spons = Math.max(0, (w.spons ?? 0) - o.amt);
   } else {
     w.pass ??= {};
@@ -1902,21 +1936,27 @@ io.on('connection', (socket) => {
     sp.c ??= {};
     return sp;
   };
+  /** 🎄 小精靈配件：有哪些、戴哪個、現在小舖賣不賣（季節限定） */
+  const accView = () => {
+    const a = wal?.spiritAcc ?? {};
+    const xmas = isXmasDay(dayKey());
+    return { own: a.own ?? [], wear: a.wear ?? '', list: SPIRIT_ACCS.map((x) => ({ ...x, sell: x.season === 'xmas' ? xmas : true })) };
+  };
   const spiritView = () => {
     if (!wal) return null;
     const sp = spiritOf();
-    if (!sp) return { none: true, eggPrice: SPIRIT_FIRST_PRICE, max: SPIRIT_MAX };
+    if (!sp) return { none: true, eggPrice: SPIRIT_FIRST_PRICE, max: SPIRIT_MAX, acc: accView() };
     const st = spiritStage(sp.xp);
     const d = dayKey();
     const day = sp.day?.d === d ? sp.day : { xp: 0, feed: 0 };
     const gk = st ? (sp.t ?? 'leaf') : 'light';
     const playLeft = Math.max(0, SPIRIT_PLAY_DAY - (day.play?.[gk] ?? 0));
-    return { playLeft, nm: sp.nm ?? '', xp: sp.xp, stage: st, t: st ? (sp.t ?? 'leaf') : 'light', next: SPIRIT_STAGE_AT[st + 1] ?? null, prev: SPIRIT_STAGE_AT[st], c: sp.c, off: !!sp.off, dayXp: day.xp, dayCap: SPIRIT_DAY_CAP, feed: day.feed, feedMax: SPIRIT_FEED_DAY, fav: st ? SPIRIT_FAV[sp.t ?? 'leaf'] : null, price: SPIRIT_CHANGE_PRICE, away: sp.away ?? 0, box: (wal.spiritBox ?? []).map((b) => ({ nm: b.nm ?? '', t: spiritStage(b.xp) ? (b.t ?? 'leaf') : 'light', stage: spiritStage(b.xp), xp: b.xp })), egg: wal.egg ? { left: Math.max(0, wal.egg.at - Date.now()) } : null, eggPrice: SPIRIT_EGG_PRICE, max: SPIRIT_MAX };
+    return { acc: accView(), playLeft, nm: sp.nm ?? '', xp: sp.xp, stage: st, t: st ? (sp.t ?? 'leaf') : 'light', next: SPIRIT_STAGE_AT[st + 1] ?? null, prev: SPIRIT_STAGE_AT[st], c: sp.c, off: !!sp.off, dayXp: day.xp, dayCap: SPIRIT_DAY_CAP, feed: day.feed, feedMax: SPIRIT_FEED_DAY, fav: st ? SPIRIT_FAV[sp.t ?? 'leaf'] : null, price: SPIRIT_CHANGE_PRICE, away: sp.away ?? 0, box: (wal.spiritBox ?? []).map((b) => ({ nm: b.nm ?? '', t: spiritStage(b.xp) ? (b.t ?? 'leaf') : 'light', stage: spiritStage(b.xp), xp: b.xp })), egg: wal.egg ? { left: Math.max(0, wal.egg.at - Date.now()) } : null, eggPrice: SPIRIT_EGG_PRICE, max: SPIRIT_MAX };
   };
   /** 小精靈外型變了：告訴同一區的人 */
   const spiritSync = () => {
     const sp = spiritOf();
-    const code = spiritCode(sp);
+    const code = spiritCode(sp, wal?.spiritAcc?.wear);
     const nm = code ? String(sp?.nm ?? '') : '';
     if (!player || (player.sr === code && (player.sn ?? '') === nm)) return;
     player.sr = code;
@@ -2147,7 +2187,7 @@ io.on('connection', (socket) => {
         sp.away = sp.last ? Math.floor((now - sp.last) / 86400000) : 0;
         sp.last = now;
       }
-      player.sr = spiritCode(sp);
+      player.sr = spiritCode(sp, wal.spiritAcc?.wear);
       player.sn = player.sr ? String(sp?.nm ?? '') : '';
       setTimeout(checkEgg, 3000);
     }
@@ -2231,7 +2271,22 @@ io.on('connection', (socket) => {
         wal.tot += gain;
         saveJson('players.json', players);
         const tomorrow = dayKey(new Date(Date.now() + 86400000));
-        daily = { gain, streak: wal.streak, ld: wal.ld, gift, next: LOGIN_GIFTS.find((id) => !(homes[myVid]?.gifts ?? []).includes(id)) ?? null, tmr: dailyOutfit(tomorrow).id };
+        // 🎄 聖誕期間：連續上線每滿 3 天送 1 款聖誕造型（斷一天重算）
+        let xmas = null;
+        if (isXmasDay(d)) {
+          wal.xs = wal.xsd === yesterday ? (wal.xs ?? 0) + 1 : 1;
+          wal.xsd = d;
+          const owned = wal.outfits ?? [];
+          let got = null;
+          if (wal.xs % XMAS_STREAK === 0) {
+            const next = XMAS_OUTFITS.find((o) => !owned.includes(o.id));
+            if (next) got = grantOutfit(myVid, next.id, 'xmas');
+          }
+          const left = XMAS_OUTFITS.filter((o) => !(wal.outfits ?? []).includes(o.id));
+          xmas = { n: wal.xs % XMAS_STREAK || XMAS_STREAK, need: XMAS_STREAK, got, next: left[0]?.id ?? null, left: left.length };
+          saveJson('players.json', players);
+        }
+        daily = { gain, streak: wal.streak, ld: wal.ld, gift, xmas, next: LOGIN_GIFTS.find((id) => !(homes[myVid]?.gifts ?? []).includes(id)) ?? null, tmr: dailyOutfit(tomorrow).id };
       }
       // 🔥 營火月票：每天第一次進來多領松果
       const tier = passTier(wal);
@@ -2623,7 +2678,7 @@ io.on('connection', (socket) => {
       saveJson('players.json', players);
       saveJson('homes.json', homes);
       bump('buys');
-      socket.emit('wallet', { pc: wal.pc, delta: -price, reason: 'buy' });
+      socket.emit('wallet', { pc: wal.pc, delta: -cost, reason: 'buy' });
       io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) });
       return ack?.({ ok: true, pc: wal.pc, home: publicHome(h) });
     }
@@ -2633,11 +2688,13 @@ io.on('connection', (socket) => {
       h.shapes ??= ['bell'];
       if (h.shapes.includes(shapeId)) return ack?.({ ok: false, reason: 'owned' });
       // 🎫 月票小屋：月票開通（PASS_ON）而且等級夠才能買；買了永久保留
+      if (shape.from && dayKey() < shape.from && process.env.XMAS_TEST !== '1') return ack?.({ ok: false, reason: 'soon' }); // 🎄 還沒開賣
       if (shape.pass && !PASS_ON) return ack?.({ ok: false, reason: 'off' });
       if (shape.pass && (passTier(wal)?.rank ?? 0) < shape.pass) return ack?.({ ok: false, reason: 'needPass' });
-      if (wal.pc < price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
+      const cost = price;
+      if (wal.pc < cost) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
       lastBuy = now;
-      wal.pc -= price;
+      wal.pc -= cost;
       h.shapes.push(shapeId);
       h.shape = shapeId;
       if (shape.style) h.style = shape.style;
@@ -2963,7 +3020,7 @@ io.on('connection', (socket) => {
   // ☕ 贊助：這個月的假髮、能不能付款
   socket.on('sponsorInfo', (data, ack) => {
     const wigs = sponsorOutfits(dayKey().slice(0, 7)).map((o) => o.id);
-    ack?.({ ok: true, on: PASS_ON, test: !ECPAY.prod, amounts: sponsorAmounts(dayKey().slice(0, 7)), min: sponsorMin(dayKey().slice(0, 7)), wigs, owned: wigs.filter((id) => wal?.outfits?.includes(id)), account: hasAccount(), total: wal?.spons ?? 0 });
+    ack?.({ ok: true, on: PASS_ON, test: !ECPAY.prod, amounts: sponsorAmounts(dayKey().slice(0, 7)), min: sponsorMin(dayKey().slice(0, 7)), box: SPONSOR_BOX[dayKey().slice(0, 7)] ?? null, wigs, owned: wigs.filter((id) => wal?.outfits?.includes(id)), account: hasAccount(), total: wal?.spons ?? 0 });
   });
   socket.on('sponsorOrder', (data = {}, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
@@ -2978,7 +3035,10 @@ io.on('connection', (socket) => {
     const no = `CS${now.toString(36)}${crypto.randomBytes(3).toString('hex')}`.slice(0, 20).toUpperCase();
     const wigs = sponsorOutfits(dayKey().slice(0, 7)).map((o) => o.id);
     const wig = wigs.includes(data.wig) ? data.wig : wigs[0];
-    orders[no] = { vid: player.vid, name: player.name, amt, at: now, status: 'new', kind: 'sponsor', wig, age: { at: now, acct: acctOfVid(player.vid) } };
+    const box = SPONSOR_BOX[dayKey().slice(0, 7)];
+    const small = box?.small.includes(data.small) ? data.small : box?.small[0];
+    const pick = data.pick === 'big' ? 'big' : 'wig';
+    orders[no] = { vid: player.vid, name: player.name, amt, at: now, status: 'new', kind: 'sponsor', wig, ...(box ? { small, pick } : {}), age: { at: now, acct: acctOfVid(player.vid) } };
     saveJson('orders.json', orders);
     const proto = socket.handshake.headers['x-forwarded-proto']?.split(',')[0] || 'http';
     ack?.({ ok: true, no, url: `${proto}://${socket.handshake.headers.host}/api/pay/go/${no}` });
@@ -3301,6 +3361,31 @@ io.on('connection', (socket) => {
     spiritGain('play');
     saveJson('players.json', players);
     ack?.({ ok: true, gain: sp.xp - before, sp: spiritView() });
+  });
+  // 🎄 小精靈配件：買（季節限定、松果）、戴／拿下
+  socket.on('spiritAcc', (data = {}, ack) => {
+    if (!wal || !player?.vid) return ack?.({ ok: false });
+    const a = (wal.spiritAcc ??= { own: [], wear: '' });
+    a.own ??= [];
+    const id = String(data.id ?? '');
+    if (data.op === 'buy') {
+      const x = SPIRIT_ACC_BY_ID[id];
+      if (!x) return ack?.({ ok: false });
+      if (a.own.includes(id)) return ack?.({ ok: false, reason: 'have' });
+      if (x.season === 'xmas' && !isXmasDay(dayKey())) return ack?.({ ok: false, reason: 'season' });
+      if (wal.pc < x.price) return ack?.({ ok: false, reason: 'poor' });
+      wal.pc -= x.price;
+      a.own.push(id);
+      a.wear = id; // 買了直接戴上
+      socket.emit('wallet', { pc: wal.pc, delta: -x.price, reason: 'spiritAcc' });
+      bump('spiritAcc');
+    } else if (data.op === 'wear') {
+      if (id && !a.own.includes(id)) return ack?.({ ok: false });
+      a.wear = id;
+    } else return ack?.({ ok: false });
+    saveJson('players.json', players);
+    spiritSync();
+    ack?.({ ok: true, sp: spiritView() });
   });
   socket.on('spiritInfo', (_d, ack) => ack?.(wal ? { ok: true, sp: spiritView(), dish: wal.dish ?? {} } : { ok: false }));
   socket.on('spiritFeed', (data = {}, ack) => {

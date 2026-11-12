@@ -612,10 +612,21 @@ export class ProceduralFox {
       this.outfit.head.scale.setScalar(1 + vol * 1.5);
       this.outfit.head.position.y += vol * 0.6;
     }
+    // 🦌 馴鹿角：耳朵收起來（耳朵變成鹿角）；紅鼻子不管帽子怎麼縮放、移動，都對準臉上的鼻子
+    const hideEars = !!this.outfit.head?.userData.hideEars;
+    for (const e of this.ears ?? []) e.visible = !hideEars;
+    const nose = this.outfit.head?.getObjectByName('rednose');
+    if (nose) {
+      const h = this.outfit.head;
+      nose.position.set(-h.position.x / h.scale.x, (-0.078 - h.position.y) / h.scale.y, (0.37 - h.position.z) / h.scale.z);
+      nose.scale.set(1.1 / h.scale.x, 0.9 / h.scale.y, 0.75 / h.scale.z);
+    }
     // 🪨 頂石頭：戴帽子時放在帽子頂上（不然石頭會陷在帽子裡、看起來像不見了）；有頭髮就放在頭髮上面
     const hat = this.outfit.head;
     const hatTop = hat?.userData.hatTop ?? 0;
     this.headStone.position.y = hatTop ? hat.position.y + hatTop * hat.scale.y + 0.07 : 0.4 + vol;
+    // 🐟 舉魚炫耀：戴帽子（尤其大大的蘑菇帽）時魚舉高一點，不會卡在帽子裡（作者 11/12 回報）
+    this.fishY = Math.max(1.42, 0.82 + (hatTop ? hat.position.y + hatTop * hat.scale.y + 0.3 : 0.4 + vol + 0.2));
     this.#placeAccessory();
   }
 
@@ -836,7 +847,7 @@ export class ProceduralFox {
       eyesOpen = 0.12; // 閉眼貼圖是彎彎的笑眼
       tailWag = Math.sin(t * 11) * 0.6;
       this.heldFish.rotation.z = Math.sin(t * 9) * 0.15; // 魚在手上扭來扭去
-      this.heldFish.position.y = 1.42 + bounce * 0.03;
+      this.heldFish.position.y = (this.fishY ?? 1.42) + bounce * 0.03;
     } else if (P === 'pick') {
       // 0~0.4 蹲下伸手、0.4~0.75 用力往上拔（身體往後仰一下）、之後開心地拿起來
       const pt = this.poseTime;
@@ -938,7 +949,7 @@ export class ProceduralFox {
     if (this.heldFish.visible && P !== 'showOff' && !sitting) {
       ARMS_SHOW.forEach((p, i) => armsT[i].set(...p));
       this.heldFish.rotation.z = Math.sin(t * 9) * 0.15;
-      this.heldFish.position.y = 1.42;
+      this.heldFish.position.y = this.fishY ?? 1.42;
     }
 
     // 套用（插值讓姿勢切換平滑）

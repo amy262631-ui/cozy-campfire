@@ -40,7 +40,7 @@ import { ConfirmBuy } from './ui/ConfirmBuy.js';
 import { buildYard } from './rooms/yardModels.js';
 import { buildSign } from './rooms/signModels.js';
 import { SIGN_BY_ID } from './game/signCatalog.js';
-import { ALL_COLORS, gridOf, expandPrice, fishFits } from './game/furnitureCatalog.js';
+import { ALL_COLORS, CATALOG_BY_ID, gridOf, expandPrice, fishFits } from './game/furnitureCatalog.js';
 import { YARD_BY_ID, YARD_USES } from './game/yardCatalog.js';
 import { FUR_PALETTES } from './player/characters/furPalettes.js';
 import { BASE_FUR, PREMIUM_FUR, TAILS, EARS, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from './game/looks.js';
@@ -84,7 +84,7 @@ import { RECIPES } from './game/crafting.js';
 import { DISHES, DISH_BY_ID, activeBuff, DISH_FX, BUFFS } from './game/cooking.js';
 import { MUSEUM_ITEMS, MUSEUM_CATS, MUSEUM_BY_ID } from './game/museum.js';
 import { TRASH, TRASH_BY_ID, RECYCLE_DAILY_CAP } from './game/trash.js';
-import { PASS, PASS_TIERS, PASS_TIER_LIST, PASS_PLANS, FREE } from './game/pass.js';
+import { PASS, PASS_TIERS, PASS_TIER_LIST, PASS_PLANS, FREE, sponsorTier } from './game/pass.js';
 import { detectSource, inAppKind, isStandalone, installKind } from './game/sources.js';
 
 // 網址參數（開發測試用）
@@ -1043,6 +1043,8 @@ async function init() {
         ? t('🌟 朋友透過你的連結來玩了！拿到每週限定造型：{name}', { name: outfitName(id) })
         : why === 'date'
           ? t('🔥 營火之約成立！拿到限定造型：{name}', { name: outfitName(id) })
+          : why === 'xmas'
+            ? t('🎄 連續上線 3 天！拿到聖誕造型：{name}', { name: outfitName(id) })
           : why === 'daily'
             ? t('👒 朋友點了你的連結！拿到今天的每日造型：{name}', { name: outfitName(id) })
             : why === 'chal'
@@ -1571,7 +1573,7 @@ async function init() {
   const SPIRIT_NAME = { light: '小光點', drop: '水滴', flame: '火苗', leaf: '葉子', cloud: '雲朵', star: '星星', mush: '蘑菇' };
   const spiritKind = (sp) => (sp.stage === 0 ? t('✨ 小光點') : `${SPIRIT_BY_ID[sp.t]?.icon ?? '✨'} ${t(SPIRIT_NAME[sp.t])}${t('小精靈')}`);
   const spiritLabel = (sp) => (sp.nm ? `${sp.nm}（${spiritKind(sp)}）` : spiritKind(sp));
-  const spiritCodeOf = (sp) => (!sp || sp.off ? '' : sp.stage === 0 ? 'light0' : `${sp.t}${sp.stage}`);
+  const spiritCodeOf = (sp) => (!sp || sp.off || sp.none ? '' : `${sp.stage === 0 ? 'light0' : `${sp.t}${sp.stage}`}${sp.acc?.wear ? `+${sp.acc.wear}` : ''}`);
   const applySpirit = (sp) => {
     if (!sp) return;
     spiritSt = sp;
@@ -1711,7 +1713,7 @@ async function init() {
         if (c !== code) {
           if (obj) s.remove(obj);
           const p = parseSpirit(c);
-          obj = p ? buildSpirit(p.type, p.stage, 'happy') : null;
+          obj = p ? buildSpirit(p.type, p.stage, 'happy', undefined, p.acc) : null;
           if (obj) s.add(obj);
           code = c;
         }
@@ -1774,6 +1776,12 @@ async function init() {
       })()}
       <div class="dex-note"><b>${t('🍱 餵它吃料理')}</b>${feedLeft > 0 ? t('（今天還能餵 {n} 次）', { n: feedLeft }) : t('（今天吃飽了，明天再餵）')}</div>
       ${favLine}${feed}${forms}
+      ${(() => {
+        const a = sp.acc ?? { own: [], list: [] };
+        const rows = a.list.filter((x) => x.sell || a.own.includes(x.id));
+        if (!rows.length) return '';
+        return `<div class="dex-note"><b>${t('🎄 小精靈配件')}</b>${t('（買了每隻小精靈都能戴）')}</div><div class="sp-forms">${rows.map((x) => { const own = a.own.includes(x.id); const on = a.wear === x.id; return `<button type="button" data-acc="${x.id}" data-own="${own ? 1 : 0}" class="${on ? 'on' : ''}">${x.icon}<small>${t(x.zh)}</small><small>${on ? t('戴著') : own ? t('戴上') : `🌰 ${x.price}`}</small></button>`; }).join('')}${a.wear ? `<button type="button" data-acc="" data-own="1">🙅<small>${t('拿下來')}</small></button>` : ''}</div>`;
+      })()}
       <div class="dex-note"><b>${t('🏡 收起來的小精靈')}</b>（${1 + sp.box.length}／${sp.max}）</div>
       ${sp.box.length ? `<div class="sp-box">${sp.box.map((b, i) => `<button type="button" data-pick="${i}"><b>${b.stage ? SPIRIT_BY_ID[b.t]?.icon : '✨'}</b><small>${b.nm || t(SPIRIT_NAME[b.t])}</small><em>${t('帶出門')}</em></button>`).join('')}</div>` : ''}
       <div class="dex-note">${sp.egg ? t('🥚 蛋正在孵，大約再 {n} 分鐘', { n: Math.max(1, Math.ceil(sp.egg.left / 60000)) }) : t('想多養一隻？到「🏪 營地小舖 → ✨ 小精靈」買 🥚 孵蛋器（{n} 🌰）', { n: sp.eggPrice })}</div>
@@ -1784,6 +1792,21 @@ async function init() {
         body.querySelector('.sp-cv').appendChild(pv.canvas);
         pv.show(spiritCodeOf(sp) || (sp.stage === 0 ? 'light0' : `${sp.t}${sp.stage}`));
         body.querySelector('[data-play]')?.addEventListener('click', () => startSpiritGame());
+        for (const b of body.querySelectorAll('[data-acc]'))
+          b.addEventListener('click', async () => {
+            const id = b.dataset.acc;
+            const own = b.dataset.own === '1';
+            if (!own) {
+              const x = sp.acc.list.find((v) => v.id === id);
+              if ((pinecones ?? 0) < x.price) return hud.toast(t('松果不夠，需要 {n} 🌰', { n: x.price }));
+              if (!confirm(t('花 {n} 🌰 買{icon} {name}？買了每隻小精靈都能戴', { n: x.price, icon: x.icon, name: t(x.zh) }))) return;
+            }
+            const r = await net.request('spiritAcc', { op: own ? 'wear' : 'buy', id });
+            if (!r?.ok) return hud.toast(r?.reason === 'season' ? t('這個配件現在沒有賣了') : r?.reason === 'poor' ? t('松果不夠') : t('沒有成功，再試一次'));
+            applySpirit(r.sp);
+            mySpirit.react('love', 2, { hop: true, spin: true });
+            openSpirit();
+          });
         body.querySelector('[data-rename]').addEventListener('click', async () => {
           const nm = prompt(t('幫小精靈取個名字（最多 8 個字）'), sp.nm || '');
           if (nm == null) return;
@@ -2260,6 +2283,8 @@ async function init() {
     return url;
   };
   let wigPick = null;
+  let smallPick = null; // 🎁 禮盒小東西 3 選 1
+  let bigPick = 'wig'; // NT$100：假髮（wig）或大件（big）二選一
   // ---------- 💝 支持營地（🎫 月票、🎁 本月支持營地）：選好 → 確認畫面（年齡勾選）→ 綠界付款 ----------
   let payTab = 'pass';
   /** 🌏 看起來不是台灣的玩家（遊戲語言不是中文、或手機時區不在台灣）：先提醒目前只能用台灣的卡 */
@@ -2383,6 +2408,23 @@ async function init() {
       const owned = sp?.owned ?? [];
       if (!wigs.includes(wigPick)) wigPick = wigs.find((id) => !owned.includes(id)) ?? wigs[0];
       const allOwned = wigs.length && wigs.every((id) => owned.includes(id));
+      // 🎁 12 月起的禮盒：依金額送不同東西（pass.js 的 sponsorTier）
+      const box = sp?.box ?? null;
+      if (box && !box.small.includes(smallPick)) smallPick = box.small[0];
+      const fz = (id) => `${CATALOG_BY_ID[id]?.icon ?? '🎁'} ${t(CATALOG_BY_ID[id]?.zh ?? id)}`;
+      const boxHtml = box
+        ? `<p>${t('這座營地是一個人慢慢做出來的，伺服器需要一點費用。{m} 月的聖誕禮盒，依金額送你不同的東西：', { m: month })}</p>
+          <table class="box-tiers">
+            <tr><td><b>NT$ 60</b></td><td>${t('小東西 1 件（3 選 1）')}</td></tr>
+            <tr><td><b>NT$ 100</b></td><td>${t('小東西 1 件＋假髮或{big}（2 選 1）', { big: fz(box.big) })}</td></tr>
+            <tr><td><b>NT$ 150</b></td><td>${t('小東西 1 件＋假髮＋{big}', { big: fz(box.big) })}</td></tr>
+            <tr><td><b>NT$ 200</b></td><td>${t('小東西 3 件全部＋假髮＋{big}', { big: fz(box.big) })}</td></tr>
+          </table>
+          <div class="pay-gift-sub">${t('🎁 小東西選一件（NT$200 三件都送）')}</div>
+          <div class="box-smalls">${box.small.map((id) => `<button type="button" data-small="${id}" class="${id === smallPick ? 'on' : ''}"><span>${CATALOG_BY_ID[id]?.icon ?? '🎁'}</span><small>${t(CATALOG_BY_ID[id]?.zh ?? id)}</small></button>`).join('')}</div>
+          <div class="pay-gift-sub">${t('NT$100 想要哪一個？')}</div>
+          <div class="box-smalls box-pick"><button type="button" data-bpick="wig" class="${bigPick === 'wig' ? 'on' : ''}"><span>💇</span><small>${t('限定假髮')}</small></button><button type="button" data-bpick="big" class="${bigPick === 'big' ? 'on' : ''}"><span>${CATALOG_BY_ID[box.big]?.icon ?? '🎁'}</span><small>${t(CATALOG_BY_ID[box.big]?.zh ?? box.big)}</small></button></div>`
+        : '';
       const card = (id) => {
         const o = OUTFIT_BY_ID[id];
         const pic = wigPicture(id);
@@ -2396,7 +2438,8 @@ async function init() {
       };
       html = `<div class="pay-gift">
         <div class="pay-gift-head">${t('謝謝你支持營地 🔥')}</div>
-        <p>${t('這座營地是一個人慢慢做出來的，伺服器需要一點費用。贊助 NT${n} 以上，送你 {m} 月限定假髮（2 選 1）。', { n: sp?.min ?? 60, m: month })}</p>
+        ${box ? boxHtml : `<p>${t('這座營地是一個人慢慢做出來的，伺服器需要一點費用。贊助 NT${n} 以上，送你 {m} 月限定假髮（2 選 1）。', { n: sp?.min ?? 60, m: month })}</p>`}
+        ${box ? `<div class="pay-gift-sub">${t('💇 選一款假髮（NT$100 選假髮、NT$150 以上會送）')}</div>` : ''}
         ${wigs.length ? `<div class="sw-cards">${wigs.map(card).join('')}</div>` : ''}
         <div class="dex-note">${t('先點選喜歡的那一款。同一個月再贊助一次，送你另一款。')}</div>
         ${allOwned ? `<div class="sw-has">${t('✅ 這個月的兩款你都有了，謝謝你的支持 💛')}</div>` : ''}
@@ -2439,6 +2482,16 @@ async function init() {
           for (const x of body.querySelectorAll('[data-wig]')) x.classList.toggle('on', x === b);
         });
       }
+      for (const b of body.querySelectorAll('[data-small]'))
+        b.addEventListener('click', () => {
+          smallPick = b.dataset.small;
+          for (const x of body.querySelectorAll('[data-small]')) x.classList.toggle('on', x === b);
+        });
+      for (const b of body.querySelectorAll('[data-bpick]'))
+        b.addEventListener('click', () => {
+          bigPick = b.dataset.bpick;
+          for (const x of body.querySelectorAll('[data-bpick]')) x.classList.toggle('on', x === b);
+        });
       for (const b of body.querySelectorAll('[data-amt]')) {
         b.addEventListener('click', async () => {
           if (needAcct(sp?.account)) return;
@@ -2446,22 +2499,34 @@ async function init() {
           const amt = Number(b.dataset.amt);
           const owned = sp?.owned ?? [];
           // 選的那款已經有了 → 送另一款；兩款都有了 → 單純支持
-          const give = amt >= (sp?.min ?? 60) ? ([wigPick, ...(sp?.wigs ?? [])].find((id) => id && !owned.includes(id)) ?? null) : null;
+          const box = sp?.box ?? null;
+          const ym = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit' }).format(new Date());
+          const tier = box ? sponsorTier(ym.slice(0, 7), amt) : null;
+          const wantWig = box ? tier.wig || (tier.pick && bigPick === 'wig') : amt >= (sp?.min ?? 60);
+          const give = wantWig ? ([wigPick, ...(sp?.wigs ?? [])].find((id) => id && !owned.includes(id)) ?? null) : null;
+          const fz = (id) => `${CATALOG_BY_ID[id]?.icon ?? '🎁'} ${t(CATALOG_BY_ID[id]?.zh ?? id)}`;
+          const gifts = [];
+          if (box) {
+            gifts.push(...(tier.small >= 3 ? box.small : [smallPick ?? box.small[0]]).map(fz));
+            if (tier.big || (tier.pick && bigPick === 'big')) gifts.push(fz(box.big));
+          }
+          if (give) gifts.push(outfitName(give));
           payConfirm({
             icon: '💝',
             name: t('支持營地'),
             price: amt,
-            lines: [give ? t('🎁 送你：{name}', { name: outfitName(give) }) : t('💛 單純支持營地（這個月的假髮你都有了）'), t('🔁 一次付清，不會自動續扣')],
+            lines: [gifts.length ? t('🎁 送你：{name}', { name: gifts.join('、') }) : t('💛 單純支持營地（這個月的假髮你都有了）'), ...(box ? [t('🎒 家具會放進背包，到帳篷就能擺')] : []), t('🔁 一次付清，不會自動續扣')],
             back: () => openPass('gift'),
-            onPay: () => net.request('sponsorOrder', { amt, wig: give ?? wigPick, age: true }),
+            onPay: () => net.request('sponsorOrder', { amt, wig: give ?? wigPick, small: smallPick, pick: bigPick, age: true }),
           });
         });
       }
     });
   }
   hud.onPass = () => openPass();
-  net.on('sponsored', ({ wig, got }) => {
+  net.on('sponsored', ({ wig, got, furn }) => {
     audio.sfx('bell');
+    if (furn?.length) return hud.toast(t('💛 謝謝你的贊助！聖誕禮盒送到了：{list}（家具在背包裡，到帳篷就能擺）', { list: [...furn.map((id) => `${CATALOG_BY_ID[id]?.icon ?? ''} ${t(CATALOG_BY_ID[id]?.zh ?? id)}`), ...(wig && got ? [`💇 ${t(OUTFIT_BY_ID[wig]?.zh ?? '')}`] : [])].join('、') }), 9000);
     hud.toast(wig && got ? t('💛 謝謝你的贊助！拿到這個月的限定假髮「{name}」（到「👒 造型 → 💇 頭髮」戴上）', { name: t(OUTFIT_BY_ID[wig]?.zh ?? '') }) : t('💛 謝謝你的贊助！營火會一直燒下去 🔥'), 8000);
   });
   net.on('pass', (p) => {
@@ -3602,7 +3667,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       else hud.toast(t('{icon} 買了{name}，回帳篷按「🛠️ 布置」擺出來', { icon: FURNITURE_BY_ID[id]?.icon ?? '', name: FURNITURE_BY_ID[id]?.name ?? '' }));
       return true;
     }
-    const why = { poor: t('松果不夠喔 🌰'), owned: t('你已經有帳篷了'), noTent: t('先買帳篷，才能放家具 ⛺'), tooMany: t('這個已經買很多了'), tooFast: t('慢慢來 🙂'), maxed: t('已經是最大的帳篷了 🎉'), needPass: t('🎫 這是月票限定，有月票才能買'), off: t('🎫 月票商品還沒開放喔') };
+    const why = { poor: t('松果不夠喔 🌰'), owned: t('你已經有帳篷了'), noTent: t('先買帳篷，才能放家具 ⛺'), tooMany: t('這個已經買很多了'), tooFast: t('慢慢來 🙂'), maxed: t('已經是最大的帳篷了 🎉'), needPass: t('🎫 這是月票限定，有月票才能買'), off: t('🎫 月票商品還沒開放喔'), soon: t('🎄 12/1 才開賣喔') };
     hud.toast(why[res?.reason] ?? t('沒買成，再試一次吧'));
     return false;
   };
@@ -3717,6 +3782,13 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       rows.push(`<div class="lc-row lc-gift">${img ? `<img src="${img}" alt="">` : `<span class="ic">${f.icon}</span>`}<div><b>${t('🎉 第 7 天大禮：🌰 30＋{icon} {name}', { icon: f.icon, name: f.name })}</b><small>${t('已經放進你的帳篷背包')}</small></div></div>`);
     }
     if (today) rows.push(`<div class="lc-row" data-prev="outfit:${today.id}"><span class="ic">${today.icon}</span><div><b>${t('今天的每日造型：{name}', { name: t(today.zh) })} 🔍</b><small>${outfit?.dailyGot ? t('✅ 已經拿到了') : t('約朋友或做完今日挑戰就拿到')}</small></div></div>`);
+    const xm = daily.xmas;
+    if (xm) {
+      const go = xm.got ? OUTFIT_BY_ID[xm.got] : null;
+      const nx = xm.next ? OUTFIT_BY_ID[xm.next] : null;
+      if (go) rows.push(`<div class="lc-row lc-gift"><span class="ic">${go.icon}</span><div><b>${t('🎄 連續上線 3 天！送你聖誕造型：{name}', { name: t(go.zh) })}</b><small>${t('到「👒 造型」穿上')}</small></div></div>`);
+      else if (nx) rows.push(`<div class="lc-row"><span class="ic lc-sil">${nx.icon}</span><div><b>${t('🎄 連續上線 {n}／{need} 天', { n: xm.n, need: xm.need })}</b><small>${t('連續滿 3 天送一款聖誕造型（斷一天要重算）')}</small></div></div>`);
+    }
     if (tmr) rows.push(`<div class="lc-row"><span class="ic lc-sil">${tmr.icon}</span><div><b>${t('明天的每日造型：？？？')}</b><small>${t('明天來揭曉 ✨')}</small></div></div>`);
     if (!daily.gift) {
       const left = 7 - ld;

@@ -188,6 +188,11 @@ export const FURNITURE_CATALOG = [
   { id: 'pass_gramophone', icon: '📀', zh: '唱片機', price: 50, cat: 'deco', pass: 1 },
   { id: 'pass_chandelier', icon: '💎', zh: '水晶吊燈', price: 70, cat: 'light', walk: true, pass: 1 }, // 吊在半空，底下走得過去
   { id: 'pass_canopybed', icon: '🛏️', zh: '四柱紗帳床', price: 90, cat: 'sit', seat: 0.32, sleep: true, long: 0.6, pass: 1 },
+  // ---- 🎁 12 月聖誕禮盒（支持營地送的，不賣、不能送人；box: 1）：小東西 3 選 1＋大件 ----
+  { id: 'box12_tree', icon: '🎄', zh: '室內聖誕樹', cat: 'plant', box: 1, big: 1, gift: 'box' },
+  { id: 'box12_ginger', icon: '🏠', zh: '薑餅屋', cat: 'deco', kind: 'small', box: 1, gift: 'box' },
+  { id: 'box12_gifts', icon: '🎁', zh: '禮物盒堆', cat: 'deco', box: 1, gift: 'box' },
+  { id: 'box12_stocking', icon: '🧦', zh: '聖誕襪掛架', cat: 'deco', box: 1, gift: 'box' },
 ];
 /** 🌅 早安卡第 7 天大禮的小家具（照順序一輪送一件，全部拿完就只送松果） */
 export const LOGIN_GIFTS = ['login_lantern', 'login_terrarium', 'login_candle', 'login_foxpillow'];
@@ -278,7 +283,7 @@ export const LOFT_FRONT = 0.2;
 export const loftRows = (grid) => Math.floor(((LOFT_FRONT + 2.4) * grid) / 6 / 0.8 + 1e-6);
 export const isLoftCell = (z) => z >= LOFT_Z;
 /** 這頂帳篷有沒有二樓 */
-export const hasLoft = (home) => home?.shape === 'cabin' || home?.shape === 'treehouse'; // 🏡 雙層小木屋、🌳 私人樹屋有二樓
+export const hasLoft = (home) => home?.shape === 'cabin' || home?.shape === 'treehouse' || home?.shape === 'houseboat'; // 🏡 雙層小木屋、🌳 私人樹屋、⛵ 船屋有二樓
 
 // ---------- 帳篷擴建 ----------
 /** 帳篷地板一開始 6×6 格，用松果一次擴一圈，最大 20×20 */

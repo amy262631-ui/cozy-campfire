@@ -10,6 +10,8 @@ import { buildPond } from './pond.js';
 import { ENTRANCE_GEO } from '../game/entrances.js';
 import { POND_CLEARINGS } from '../game/pondShape.js';
 import { buildWishTree, WISH_TREE_CLEARING } from './wishTree.js';
+import { buildXmasDecor } from './xmasDecor.js';
+import { isXmas } from '../game/season.js';
 import { buildShop, nearShop, SHOP_FRONT, SHOP_CLEARING } from './shop.js';
 import { buildCampExtras, createTreasures, EXTRA_CLEARINGS } from './campExtras.js';
 import { buildFireSeats } from './fireSeats.js';
@@ -565,6 +567,16 @@ export function createForestRoom() {
   // ---------- 心願大樹（大家用松果換裝飾掛上去） ----------
   const wishTree = buildWishTree(world);
   group.add(wishTree.group);
+  // 🎄 聖誕造景（12/1～1/6 自動出現；網址 ?xmas=1 可以先看）
+  const xmas = buildXmasDecor();
+  group.add(xmas.group);
+  const xmasCheck = () => {
+    const on = isXmas();
+    xmas.group.visible = on;
+    if (wishTree.xmas !== on) wishTree.setXmas(on);
+  };
+  xmasCheck();
+  setInterval(xmasCheck, 10 * 60 * 1000); // 跨日（12/1、1/7）不用重新整理也會換
 
   // ---------- 石塔祈願（祈福處步道旁） ----------
   const cairnGarden = buildCairnGarden(world);
@@ -820,6 +832,7 @@ export function createForestRoom() {
       shrine.update(dt, t);
       cairnGarden.update(dt, t);
       wishTree.update(dt, t);
+      if (xmas.group.visible) xmas.update(dt, t, camera?.position);
       mini.update(dt, t);
       pond.update(dt, t);
       // 營火河畔的釣魚：離開釣魚狀態（移動、換房間）就收竿

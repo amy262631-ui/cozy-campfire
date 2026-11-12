@@ -90,9 +90,10 @@ export function createHomeRoom() {
   const bounds = [tentBounds('bell'), { type: 'rect', minX: -0.6, maxX: 0.6, minZ: 2.6, maxZ: R + 0.2 }];
   const entrance = { to: 'forest_main', x: 0, z: R - 0.05, r: 0.5, label: t('回到營火') };
   const spawn = { x: 0, z: 2.75, ry: Math.PI, camYaw: 0.25, camPitch: 0.62 };
-  function buildShape(id, g = GRID_BASE, frame = 'gold') {
+  let shellUpdate = null; // ❄️ 雪屋窗外飄雪之類的動畫
+  function buildShape(id, g = GRID_BASE, frame = 'gold', plus = false) {
     const sh = shapeOf(id);
-    const key = `${sh.id}|${g}|${sh.id === 'stardome' ? frame : ''}`;
+    const key = `${sh.id}|${g}|${sh.id === 'stardome' ? frame : ''}|${plus ? 1 : 0}`;
     if (key === shapeKey) return;
     shapeKey = key;
     grid = g;
@@ -101,7 +102,8 @@ export function createHomeRoom() {
     shell.clear();
     // 奇數格時正中間那格要能擺東西，就不放中柱
     const noPole = g % 2 === 1;
-    const body = buildTentShell(sh.id, mats, { noPole, frame });
+    const body = buildTentShell(sh.id, mats, { noPole, frame, plus });
+    shellUpdate = body.userData.update ?? null;
     body.scale.setScalar(k);
     shell.add(body);
     floor = buildTentFloor(sh.id, floorMat);
@@ -687,6 +689,7 @@ export function createHomeRoom() {
       return mine ? t('<kbd>E</kbd> 布置帳篷') : null;
     },
     update(dt, time) {
+      shellUpdate?.(dt, time);
       // 🌱 澆水後植物晃一晃
       for (const gd of gadgets) {
         const m = gd.mesh;

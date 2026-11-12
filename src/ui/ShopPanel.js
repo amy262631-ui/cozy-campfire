@@ -1,7 +1,7 @@
 import { t } from '../i18n/i18n.js';
 import { FURNITURE, TENT_PRICE, CATS } from '../game/furniture.js';
 import { gridOf, expandPrice, EXPAND_PRICES, GRID_MAX, ALL_COLORS, hasColors } from '../game/furnitureCatalog.js';
-import { TENT_SHAPES, TENT_SHAPE_BY_ID, PASS_SHAPES, FRAME_COLORS } from '../game/tentShapes.js';
+import { TENT_SHAPES, TENT_SHAPE_BY_ID, PASS_SHAPES, FRAME_COLORS, shapeOnSale } from '../game/tentShapes.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TentPreview } from './TentPreview.js';
 import { YARD_ITEMS, normYard, isBigYard, YARD_SMALL_MAX } from '../game/yardCatalog.js';
@@ -308,7 +308,7 @@ export class ShopPanel {
         <div class="shop-pv"></div>
         <div class="shop-pv-name">${sh.icon} ${sh.name}</div>
         <div class="shop-shapes">
-          ${[...TENT_SHAPES, ...(this.passOn?.() || PASS_SHAPES.some((x) => owned.includes(x.id)) ? PASS_SHAPES : [])].map(
+          ${[...TENT_SHAPES.filter((x) => shapeOnSale(x) || owned.includes(x.id)), ...(this.passOn?.() || PASS_SHAPES.some((x) => owned.includes(x.id)) ? PASS_SHAPES : [])].map(
             (x) => `<button type="button" class="shop-shape${x.id === pick ? ' on' : ''}${x.id === cur ? ' cur' : ''}${x.pass ? ' pass-item' : ''}" data-shape="${x.id}">
               <span class="ss-icon">${x.icon}</span><span class="ss-name">${x.name}</span>
               <span class="ss-price">${owned.includes(x.id) ? '✓' : `${x.pass ? '🎫 ' : ''}🌰 ${x.price}`}</span></button>`,

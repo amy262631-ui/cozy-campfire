@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildMidShape } from './midShapes.js';
 import { t } from '../i18n/i18n.js';
 import { LOFT_FRONT } from './furnitureCatalog.js';
 
@@ -8,6 +9,8 @@ import { LOFT_FRONT } from './furnitureCatalog.js';
  *   style：剛買下時自動換上的花色（之後可以自己改）
  *   kind：'round' 圓形地板／'rect' 方形地板
  */
+/** 🏕️ 中價位新帳篷開賣日（作者 11/12：先隱藏，下週再推出 → 到時候改成那天的日期，例如 '2026-11-19'；server/homes.js 也要一起改） */
+export const TENTS_LAUNCH = '2099-01-01';
 export const TENT_SHAPES = [
   { id: 'bell', icon: '⛺', name: t('鐘形帳'), price: 0, kind: 'round', R: 3.8, light: 3.0 },
   { id: 'aframe', icon: '🏕️', name: t('野營三角帳'), price: 15, kind: 'rect', W: 3.3, D: 3.4, light: 2.6, style: 'forest' },
@@ -16,9 +19,28 @@ export const TENT_SHAPES = [
   { id: 'circus', icon: '🎪', name: t('馬戲團大帳'), price: 35, kind: 'round', R: 3.8, light: 3.3, style: 'stripe' },
   { id: 'mushroom', icon: '🍄', name: t('蘑菇小屋'), price: 40, kind: 'round', R: 3.6, light: 2.6, style: 'redspot' },
   // 🏡 雙層小木屋：有樓梯可以走上二樓的閣樓（要存很久的松果）
+  // 🏕️ 中間價位（作者 11/12：100～300 多幾種；外型在 midShapes.js）
+  { id: 'snail', icon: '🐌', name: t('蝸牛殼屋'), price: 120, kind: 'round', R: 3.6, light: 2.6, style: 'classic', from: TENTS_LAUNCH },
+  { id: 'pumpkin', icon: '🎃', name: t('南瓜屋'), price: 180, kind: 'round', R: 3.7, light: 2.6, style: 'classic', from: '2027-10-01' }, // 萬聖節才上架
+  { id: 'greenhouse', icon: '🌸', name: t('花園溫室'), price: 200, kind: 'rect', W: 3.4, D: 3.4, light: 3.2, style: 'classic', from: TENTS_LAUNCH },
+  { id: 'wafu', icon: '🏮', name: t('和風小屋'), price: 250, kind: 'rect', W: 3.4, D: 3.4, light: 3.0, style: 'log', from: TENTS_LAUNCH },
   { id: 'cabin', icon: '🏡', name: t('雙層小木屋'), price: 500, kind: 'rect', W: 3.4, D: 3.4, light: 3.6, style: 'log', loft: true },
+  // 🏔️ 高級小屋（12 月，作者 11/10：1,000～1,500 松果，先做 2 間）
+  // 作者 11/12：雪屋要更可愛 → 北極熊雪屋（胖胖雪球、粉嫩色、冰柱、門口小雪人雪橇）；湖畔木屋太像現有木屋 → 改成船屋
+  { id: 'igloo', icon: '🐻‍❄️', name: t('北極熊雪屋'), price: 800, kind: 'round', R: 3.8, light: 2.4, style: 'classic', from: '2026-12-01' },
+  { id: 'houseboat', icon: '⛵', name: t('船屋'), price: 1500, kind: 'rect', W: 3.4, D: 3.4, light: 3.6, style: 'log', loft: true, from: '2026-12-01' }, // 作者 11/12：兩層（跟雙層小木屋一樣有樓梯、閣樓）
 ];
 
+/** 🎄 這個造型現在有沒有在賣（from：台北日期開賣）；測試：網址加 ?xmas=1 提早看到 */
+export function shapeOnSale(sh) {
+  if (!sh?.from) return true;
+  try {
+    if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('xmas') === '1') return true;
+  } catch {
+    /* 伺服器沒有 location */
+  }
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date()) >= sh.from;
+}
 /** 小木屋二樓（閣樓）的尺寸：沒放大前的座標，跟著擴建一起放大 */
 export const CABIN = {
   wall: 4.4, // 牆高（兩層樓）
@@ -49,7 +71,7 @@ const GAP = 0.3; // 門口開口（弧度的一半）
  *   outside：true＝從外面看的版本（多了旗子、彩旗、窗戶、營釘這些外部裝飾）
  *   noPole：不要中柱
  */
-export function buildTentShell(shapeId, mats, { outside = false, noPole = false, frame = 'gold', noSwing = false } = {}) {
+export function buildTentShell(shapeId, mats, { outside = false, noPole = false, frame = 'gold', noSwing = false, plus = false } = {}) {
   const sh = shapeOf(shapeId);
   frameNow = frame;
   const g = new THREE.Group();
@@ -193,13 +215,396 @@ export function buildTentShell(shapeId, mats, { outside = false, noPole = false,
       }
     }
   }
+  buildMidShape(sh, add, outside); // 🏕️ 中間價位的小屋
   if (sh.id === 'cabin') buildCabin(sh, mats, add, outside);
+  if (sh.id === 'igloo') buildIgloo(sh, mats, add, outside, plus, g);
+  if (sh.id === 'houseboat') buildHouseboat(sh, mats, add, outside);
   if (sh.id === 'stardome') buildStarDome(sh, mats, add, outside, g);
   if (sh.id === 'treehouse') {
     if (outside) buildTreeHouseOutside(mats, add, noSwing);
     else buildTreeHouseInside(sh, mats, add, g);
   }
   return g;
+}
+
+/**
+ * ❄️ 雪屋屋裡特色（作者 11/12：800 直接就有）
+ *   冰塊燈（會發光的小冰塊）、毛茸茸的雪地毯、圓窗外一直飄雪
+ *   都貼著牆邊或地板，不擋路、不佔格子
+ */
+function buildIglooPlus(R, H, add, root) {
+  const ice = (iglooMats.ice ??= new THREE.MeshStandardMaterial({ color: 0xbfe9ff, emissive: 0x8fd4ff, emissiveIntensity: 1.0, transparent: true, opacity: 0.9, roughness: 0.15 }));
+  const glow = (iglooMats.iceGlow ??= new THREE.MeshBasicMaterial({ color: 0xfff1c8 }));
+  // 🧊 冰塊燈：左右、後面各一盞
+  for (const a of [1.6, Math.PI, -1.6]) { // 作者 11/12：冰塊太多 → 只留 3 盞
+    const r = R - 0.45;
+    const x = Math.sin(a) * r;
+    const z = Math.cos(a) * r;
+    const b = add(new THREE.BoxGeometry(0.34, 0.34, 0.34), ice, x, 0.17, z);
+    b.rotation.y = a + 0.3;
+    add(new THREE.SphereGeometry(0.08, 8, 6), glow, x, 0.2, z);
+  }
+  // 屋頂中間吊一盞冰燈（照亮整間）
+  const top = R * H - 0.5;
+  add(new THREE.CylinderGeometry(0.01, 0.01, 0.4, 4), ice, 0, top + 0.2, 0);
+  add(new THREE.IcosahedronGeometry(0.2, 0), ice, 0, top - 0.05, 0);
+  add(new THREE.SphereGeometry(0.09, 8, 6), glow, 0, top - 0.05, 0);
+  if (root) {
+    const l = new THREE.PointLight(0xcfeaff, 6, 7, 1.6);
+    l.position.set(0, top - 0.2, 0);
+    root.add(l);
+  }
+  // ☁️ 毛茸茸的雪地毯：地板上一大片白色、邊緣一圈小毛球（很薄，家具可以擺上去）
+  const rugMat = (iglooMats.rug ??= new THREE.MeshStandardMaterial({ color: 0xfbfdff, roughness: 1 }));
+  const rug = add(new THREE.CircleGeometry(R * 0.55, 40), rugMat, 0, 0.012, -0.2);
+  rug.rotation.x = -Math.PI / 2;
+  for (let i = 0; i < 36; i++) {
+    const a = (i / 36) * Math.PI * 2;
+    const p = add(new THREE.SphereGeometry(0.09, 8, 6), rugMat, Math.sin(a) * R * 0.55, 0.02, Math.cos(a) * R * 0.55 - 0.2);
+    p.scale.y = 0.35;
+  }
+  // 🌨️ 圓窗：外面是夜空，雪一直飄下來
+  const sky = (iglooMats.winSky ??= new THREE.MeshBasicMaterial({ color: 0x2c3f72 }));
+  const frame = (iglooMats.winFrame ??= new THREE.MeshStandardMaterial({ color: 0xbfe6ff, emissive: 0x6fb6e8, emissiveIntensity: 0.3, roughness: 0.3 }));
+  const flakesMat = (iglooMats.flake ??= new THREE.PointsMaterial({ color: 0xffffff, size: 0.035, transparent: true, depthWrite: false }));
+  const wins = [];
+  for (const a of [Math.PI - 0.75, Math.PI, Math.PI + 0.75]) { // 都放在後半圈：鏡頭那一側的牆會透明，窗戶放前面會浮在空中
+    // 貼著圓頂的弧面（朝圓心、跟著牆往內斜），往內一點點才不會被牆蓋住
+    const k = 1.45 / (R * H);
+    const rr = R * Math.sqrt(1 - k * k);
+    const p0 = new THREE.Vector3(Math.sin(a) * rr, 1.45, Math.cos(a) * rr);
+    const n = new THREE.Vector3(p0.x / (R * R), p0.y / (R * H * R * H), p0.z / (R * R)).normalize(); // 橢球面的法線（朝外）
+    p0.addScaledVector(n, -0.12);
+    const { x, y, z } = p0;
+    const w = add(new THREE.CircleGeometry(0.45, 20), sky, x, y, z);
+    w.lookAt(x - n.x, y - n.y, z - n.z);
+    const f = add(new THREE.TorusGeometry(0.47, 0.07, 6, 20), frame, x, y, z);
+    f.quaternion.copy(w.quaternion);
+    // 窗子裡的雪：一小團點點，在窗戶的平面上往下飄
+    const N = 22;
+    const pos = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) {
+      pos[i * 3] = (Math.random() - 0.5) * 0.8;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 0.8;
+      pos[i * 3 + 2] = 0.01;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const pts = new THREE.Points(geo, flakesMat);
+    pts.position.copy(w.position);
+    pts.quaternion.copy(w.quaternion);
+    if (root) root.add(pts);
+    wins.push(geo);
+  }
+  if (root) {
+    root.userData.update = (dt, time) => {
+      for (const geo of wins) {
+        const a = geo.attributes.position;
+        for (let i = 0; i < a.count; i++) {
+          let y = a.getY(i) - dt * (0.12 + (i % 4) * 0.04);
+          let x = a.getX(i) + Math.sin(time + i) * dt * 0.05;
+          if (y < -0.4) y += 0.8;
+          // 只留在圓窗裡面
+          if (x * x + y * y > 0.4 * 0.4) {
+            if (y < 0) y = Math.sqrt(Math.max(0, 0.16 - x * x)) - 0.01;
+            else x *= 0.9;
+          }
+          a.setXY(i, x, y);
+        }
+        a.needsUpdate = true;
+      }
+    };
+  }
+}
+
+/** 🧊 雪屋：一塊一塊雪磚疊成的圓頂（門口一段拱形雪隧道），冰塊窗、門口小燈籠 */
+const iglooMats = {};
+function buildIgloo(sh, mats, add, outside, plus = false, root = null) {
+  const R = sh.R;
+  const H = 0.86;
+  const key = outside ? 'out' : 'in';
+  const M = (k, color, extra = {}) => (iglooMats[k] ??= new THREE.MeshStandardMaterial({ color, roughness: 0.9, ...extra }));
+  const snow = M(key, 0xf4f8ff, { side: outside ? THREE.FrontSide : THREE.BackSide }); // 屋裡用 BackSide：鏡頭在圓頂外面時才看得進來（跟其他圓帳篷一樣）
+  const dark = (iglooMats.doorPink ??= new THREE.MeshStandardMaterial({ color: 0xf6bccb, roughness: 0.8 })); // 作者 11/12：門改粉嫩色（單面：屋裡鏡頭在門外時不會擋住）
+  // 圓頂＝北極熊的頭（整顆雪白、壓扁一點）
+  add(new THREE.SphereGeometry(R, 40, 18, 0, Math.PI * 2, 0, Math.PI / 2), snow, 0, 0, 0).scale.y = H;
+  // 門（熊的嘴巴）：圓圓的拱門
+  const dz = R - 0.05;
+  const doorShape = new THREE.Shape();
+  doorShape.moveTo(-0.8, 0);
+  doorShape.lineTo(0.8, 0);
+  doorShape.lineTo(0.8, 1.2);
+  doorShape.absarc(0, 1.2, 0.8, 0, Math.PI, false);
+  doorShape.closePath();
+  const door = add(new THREE.ShapeGeometry(doorShape), dark, 0, 0, dz + (outside ? 0.08 : -0.06));
+  if (!outside) door.rotation.y = Math.PI;
+  if (!outside) {
+    buildIglooPlus(R, H, add, root); // 作者 11/12：直接含屋裡特色（不另外加錢）
+    return;
+  }
+  // 門把（小小的金色圓點）、門的粉色拱框
+  add(new THREE.SphereGeometry(0.07, 10, 8), M('knob', 0xe8b04a, { metalness: 0.4, roughness: 0.4 }), 0.5, 0.9, dz + 0.12);
+  const arch = add(new THREE.TorusGeometry(0.8, 0.09, 8, 24, Math.PI), M('archPink', 0xf39bb4), 0, 1.2, dz + 0.1);
+  for (const sx of [-1, 1]) add(new THREE.BoxGeometry(0.18, 1.2, 0.18), M('archPink', 0xf39bb4), sx * 0.8, 0.6, dz + 0.1);
+  void arch;
+  // （作者 11/12：不要一球一球的雪球，拿掉）
+  // 🐻‍❄️ 熊耳朵（頭頂兩顆圓耳朵，裡面粉紅）
+  for (const sx of [-1, 1]) {
+    const ex = sx * 1.9;
+    const ey = R * H * Math.sqrt(1 - (1.9 / R) ** 2) + 0.15;
+    add(new THREE.SphereGeometry(0.62, 16, 12), snow, ex, ey, 0.3).scale.set(1, 1, 0.6);
+    add(new THREE.SphereGeometry(0.38, 14, 10), M('earIn', 0xffc4d4), ex, ey + 0.02, 0.62).scale.set(1, 1, 0.35);
+  }
+  // 臉：眼睛、腮紅、鼻子（在門的上方兩邊）
+  const faceAt = (x, y, dzOff = 0) => {
+    const k = y / (R * H);
+    const rr = R * Math.sqrt(Math.max(0, 1 - k * k - (x / R) ** 2));
+    return [x, y, rr + 0.05 + dzOff];
+  };
+  for (const sx of [-1, 1]) {
+    const [ex, ey, ez] = faceAt(sx * 1.05, 2.25);
+    const eye = add(new THREE.SphereGeometry(0.17, 12, 10), M('eye', 0x2a1a14), ex, ey, ez);
+    eye.scale.z = 0.5;
+    add(new THREE.SphereGeometry(0.05, 8, 6), M('eyeHi', 0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.6 }), ex - 0.05, ey + 0.06, ez + 0.08);
+    const [bx, by, bz] = faceAt(sx * 1.55, 1.75);
+    const blush = add(new THREE.SphereGeometry(0.26, 12, 10), M('blush', 0xffa3b8), bx, by, bz);
+    blush.scale.set(1, 0.6, 0.3);
+  }
+  // 白白的嘴巴鼓鼓（在鼻子下面、門的上方）
+  const [mx, my, mz] = faceAt(0, 2.0, -0.12);
+  add(new THREE.SphereGeometry(0.55, 16, 12), M('muzzle', 0xffffff), mx, my, mz).scale.set(1.2, 0.7, 0.45);
+  const [nx, ny, nz] = faceAt(0, 2.15, 0.12);
+  add(new THREE.SphereGeometry(0.2, 12, 10), M('nose', 0x3a2a2a), nx, ny, nz).scale.set(1.3, 0.9, 0.7);
+  // ❄️ 屋簷一圈晶亮小冰柱＋小燈串
+  const ice = (iglooMats.ice ??= new THREE.MeshStandardMaterial({ color: 0xd8f0ff, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.85 }));
+  for (let i = 0; i < 26; i++) {
+    const a = (i / 26) * Math.PI * 2;
+    if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) < 0.32) continue;
+    const y = 1.62;
+    const k = y / (R * H);
+    const rr = R * Math.sqrt(1 - k * k) + 0.05;
+    const len = 0.22 + ((i * 5) % 4) * 0.07;
+    const c = add(new THREE.ConeGeometry(0.05, len, 6), ice, Math.sin(a) * rr, y - len / 2, Math.cos(a) * rr);
+    c.rotation.x = Math.PI;
+    if (i % 2 === 0) add(new THREE.SphereGeometry(0.06, 8, 6), mats.window ?? mats.accent, Math.sin(a) * rr, y + 0.06, Math.cos(a) * rr);
+  }
+  // ⛄ 門口小雪人＋🛷 雪橇
+  const sx0 = -2.1;
+  const sz0 = dz + 1.0;
+  add(new THREE.SphereGeometry(0.42, 14, 12), snow, sx0, 0.4, sz0);
+  add(new THREE.SphereGeometry(0.3, 14, 12), snow, sx0, 0.98, sz0);
+  for (const ex of [-0.1, 0.1]) add(new THREE.SphereGeometry(0.04, 6, 4), M('eye', 0x2a1a14), sx0 + ex, 1.05, sz0 + 0.27);
+  const nose = add(new THREE.ConeGeometry(0.05, 0.2, 6), M('carrot', 0xf08a3c), sx0, 0.98, sz0 + 0.36);
+  nose.rotation.x = Math.PI / 2;
+  const scarf = add(new THREE.TorusGeometry(0.27, 0.06, 6, 14), M('scarf', 0xff9ccf), sx0, 0.74, sz0);
+  scarf.rotation.x = Math.PI / 2;
+  add(new THREE.ConeGeometry(0.22, 0.35, 10), M('hat', 0x8ac4ff), sx0, 1.38, sz0);
+  const sled = M('sled', 0xd8433a);
+  const runner = M('runner', 0x8a5a36);
+  add(new THREE.BoxGeometry(0.7, 0.08, 1.2), sled, 2.1, 0.3, dz + 0.9);
+  for (const s2 of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.05, 0.05, 1.3), runner, 2.1 + s2 * 0.3, 0.06, dz + 0.9);
+    for (const zz of [-0.4, 0.4]) add(new THREE.BoxGeometry(0.05, 0.25, 0.05), runner, 2.1 + s2 * 0.3, 0.17, dz + 0.9 + zz);
+  }
+  const curl = add(new THREE.TorusGeometry(0.15, 0.03, 6, 10, Math.PI), runner, 2.1, 0.2, dz + 1.55);
+  curl.rotation.y = Math.PI / 2;
+  // 門口兩盞小燈籠
+  for (const s2 of [-1, 1]) {
+    add(new THREE.CylinderGeometry(0.04, 0.05, 0.9, 6), mats.wood, s2 * 1.2, 0.45, dz + 0.5);
+    add(new THREE.SphereGeometry(0.14, 10, 8), mats.window ?? mats.accent, s2 * 1.2, 0.98, dz + 0.5);
+  }
+}
+
+/** ⛵ 船屋（作者 11/12：湖畔木屋太像現有木屋 → 船屋）：圓圓的木頭船身上蓋一間小屋，
+ *  圓弧屋頂、圓窗、救生圈、船舵、桅桿小旗子，浮在一小片水上。屋裡是木板牆、圓窗。 */
+const boatMats = {};
+function buildHouseboat(sh, mats, add, outside) {
+  const { W, D } = sh;
+  const M = (k, color, extra = {}) => (boatMats[k] ??= new THREE.MeshStandardMaterial({ color, roughness: 0.8, ...extra }));
+  const glass = (iglooMats.boatGlass ??= new THREE.MeshStandardMaterial({ color: 0xcdeeff, emissive: 0x7fb6d6, emissiveIntensity: 0.35, roughness: 0.15, side: THREE.DoubleSide })); // 作者 11/12：船窗不要木紋，用淡藍玻璃
+  const brass = M('brass', 0xd9a84a, { metalness: 0.5, roughness: 0.35 });
+  const port = (x, y, z, ry, r = 0.36) => {
+    const g2 = add(new THREE.CircleGeometry(r, 18), glass, x, y, z);
+    g2.rotation.y = ry;
+    const ring = add(new THREE.TorusGeometry(r + 0.02, 0.06, 6, 18), brass, x, y, z);
+    ring.rotation.y = ry;
+  };
+  // 🏠 屋裡（作者 11/12：船屋 1500 要有兩層）＝跟雙層小木屋一樣的格局（樓梯、二樓閣樓），窗戶換成圓圓的船窗
+  if (!outside) {
+    buildCabin(sh, { ...mats, windowIn: glass }, add, false);
+    for (const [x, y, z, ry] of [[W - 0.03, 1.4, 1.6, -Math.PI / 2], [-W + 0.03, 1.4, 1.6, Math.PI / 2], [-W + 0.03, 1.4, -1.0, Math.PI / 2], [-W + 0.03, CABIN.loftY + 1.2, -1.8, Math.PI / 2], [W - 0.03, CABIN.loftY + 1.2, -2.2, -Math.PI / 2]]) port(x, y, z, ry, 0.34);
+    return;
+  }
+  // ⛵ 外面：兩層的船。一樓整層；二樓蓋在後半段（跟屋裡的閣樓同一塊），前半段是有欄杆的屋頂甲板
+  const lift = 0.45; // 小屋蓋在船上（高一點）
+  const WALL = 2.4; // 一樓牆高
+  const UP = 2.1; // 二樓牆高
+  const ZF = CABIN.loftFront; // 二樓前緣（跟屋裡一樣）
+  // 作者 11/12：地中海配色、選 D1（粉藍白條紋屋頂、白牆、粉藍門和船身）
+  const P = { roof: { a: '#7fb8e6', b: '#fffaf2' }, wall: 0xffffff, door: 0x7fb8e6, hull: 0x6a9fd0, stripe: 0xfffaf2, deck: 0xe8dcc4 };
+  const wallMat = M(`wallOut${P.wall}`, P.wall, { side: THREE.DoubleSide });
+  const box = (w, h, d, mat, x, y, z) => add(new THREE.BoxGeometry(w, h, d), mat, x, y, z);
+  // 一樓：四面牆（前面留門）
+  const DOOR = 0.7;
+  const DOOR_H = 2.0;
+  const T = 0.12;
+  box(T, WALL, D * 2, wallMat, W, lift + WALL / 2, 0);
+  box(T, WALL, D * 2, wallMat, -W, lift + WALL / 2, 0);
+  box(W * 2, WALL, T, wallMat, 0, lift + WALL / 2, -D);
+  box(W - DOOR, WALL, T, wallMat, -(W + DOOR) / 2, lift + WALL / 2, D);
+  box(W - DOOR, WALL, T, wallMat, (W + DOOR) / 2, lift + WALL / 2, D);
+  box(DOOR * 2, WALL - DOOR_H, T, wallMat, 0, lift + DOOR_H + (WALL - DOOR_H) / 2, D);
+  // 一樓屋頂＝二樓地板（粉藍邊）
+  const y1 = lift + WALL;
+  box(W * 2 + 0.3, 0.16, D * 2 + 0.3, M('deckTop', 0xf4ede0), 0, y1 + 0.08, 0);
+  box(W * 2 + 0.34, 0.08, D * 2 + 0.34, M(`door${P.door}`, P.door), 0, y1 + 0.02, 0);
+  // 二樓小屋（後半段）
+  const z0 = -D;
+  const zl = ZF;
+  const dd = zl - z0;
+  const y2 = y1 + 0.16;
+  box(T, UP, dd, wallMat, W - 0.15, y2 + UP / 2, (z0 + zl) / 2);
+  box(T, UP, dd, wallMat, -W + 0.15, y2 + UP / 2, (z0 + zl) / 2);
+  box(W * 2 - 0.3, UP, T, wallMat, 0, y2 + UP / 2, z0 + 0.15);
+  box(W * 2 - 0.3, UP, T, wallMat, 0, y2 + UP / 2, zl);
+  // 二樓的門（通往屋頂甲板）
+  box(0.9, 1.7, 0.06, M(`door${P.door}`, P.door), 0, y2 + 0.85, zl + 0.07);
+  add(new THREE.SphereGeometry(0.05, 8, 6), brass, 0.3, y2 + 0.85, zl + 0.12);
+  // 圓弧屋頂（粉藍白條紋，蓋在二樓上）
+  const RC = P.roof;
+  let roofMat = iglooMats.boatRoof;
+  if (!roofMat) {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 16;
+    const g = c.getContext('2d');
+    for (let i = 0; i < 16; i++) {
+      g.fillStyle = i % 2 ? RC.b : RC.a;
+      g.fillRect(i * 16, 0, 16, 16);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    roofMat = iglooMats.boatRoof = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, side: THREE.DoubleSide });
+  }
+  const RW = W - 0.15 + 0.3;
+  const roof = add(new THREE.CylinderGeometry(RW, RW, dd + 0.5, 24, 1, true, Math.PI / 2, Math.PI), roofMat, 0, y2 + UP, (z0 + zl) / 2 + 0.1);
+  roof.rotation.x = Math.PI / 2;
+  roof.scale.set(1, 1, 0.42);
+  const half = new THREE.Shape();
+  half.absarc(0, 0, W - 0.15, 0, Math.PI, false);
+  half.closePath();
+  for (const z of [zl, z0 + 0.15]) {
+    const m = add(new THREE.ShapeGeometry(half), wallMat, 0, y2 + UP, z);
+    m.scale.y = 0.42;
+  }
+  // 屋頂甲板的白色欄杆（前半段三面）
+  const wht = M('white', 0xfaf6ee);
+  const railY = y1 + 0.16;
+  const posts = [];
+  for (let x = -W; x <= W + 1e-6; x += (W * 2) / 6) posts.push([x, D]);
+  for (let z = zl + 0.4; z < D; z += 0.7) posts.push([W, z], [-W, z]);
+  for (const [x, z] of posts) box(0.05, 0.55, 0.05, wht, x, railY + 0.27, z);
+  box(W * 2, 0.05, 0.06, wht, 0, railY + 0.56, D);
+  for (const sx of [-1, 1]) box(0.06, 0.05, D - zl, wht, sx * W, railY + 0.56, (D + zl) / 2);
+  // 屋頂甲板上：兩張小躺椅、一把遮陽傘
+  for (const sx of [-1, 1]) {
+    const ch = box(0.55, 0.08, 1.0, M(`door${P.door}`, P.door), sx * 1.7, railY + 0.25, 1.9);
+    ch.rotation.x = -0.12;
+    box(0.55, 0.45, 0.08, M(`door${P.door}`, P.door), sx * 1.7, railY + 0.45, 1.38).rotation.x = -0.5;
+  }
+  add(new THREE.CylinderGeometry(0.03, 0.03, 1.6, 6), wht, 0, railY + 0.8, 1.9);
+  add(new THREE.ConeGeometry(0.9, 0.35, 12, 1, true), roofMat, 0, railY + 1.65, 1.9);
+  // 門框、圓窗（一樓三面、二樓兩側）
+  for (const sx of [-1, 1]) box(0.14, DOOR_H, 0.16, mats.wood, sx * DOOR, DOOR_H / 2 + lift, D);
+  box(DOOR * 2 + 0.14, 0.16, 0.16, mats.wood, 0, DOOR_H + lift, D);
+  for (const zz of [-1.8, 0, 1.8]) {
+    port(W + T / 2 + 0.01, lift + 1.4, zz, Math.PI / 2);
+    port(-W - T / 2 - 0.01, lift + 1.4, zz, -Math.PI / 2);
+  }
+  for (const xx of [-2.1, 2.1]) port(xx, lift + 1.4, D + T / 2 + 0.01, 0);
+  for (const zz of [-2.3, -0.9]) {
+    port(W - 0.15 + T / 2 + 0.01, y2 + 1.05, zz, Math.PI / 2, 0.3);
+    port(-W + 0.15 - T / 2 - 0.01, y2 + 1.05, zz, -Math.PI / 2, 0.3);
+  }
+  // 一樓門（粉藍）、門把、門口燈
+  box(DOOR * 2 - 0.1, DOOR_H - 0.06, 0.08, M(`door${P.door}`, P.door), 0, DOOR_H / 2 + lift, D + 0.02);
+  add(new THREE.SphereGeometry(0.06, 8, 6), brass, 0.45, 1.0 + lift, D + 0.08);
+  add(new THREE.SphereGeometry(0.14, 10, 8), glass, 1.1, 2.15 + lift, D + 0.2);
+  // 側邊小梯子（甲板爬上二樓）
+  for (const sz of [-0.25, 0.25]) box(0.05, WALL + 0.2, 0.05, mats.wood, W + 0.25, lift + (WALL + 0.2) / 2, 1.2 + sz);
+  for (let y = 0.35; y < WALL; y += 0.35) box(0.05, 0.04, 0.5, mats.wood, W + 0.25, lift + y, 1.2);
+  if (!outside) return;
+  // ---- 外面：船身、甲板、水 ----
+  const water = add(new THREE.CircleGeometry(W * 2.3, 32), M('water', 0x4fa3c9, { transparent: true, opacity: 0.85, roughness: 0.2 }), 0, 0.03, 0.6);
+  water.rotation.x = -Math.PI / 2;
+  // 船身：從上面看是前尖後圓的形狀，往下收
+  const hullShape = new THREE.Shape();
+  const HW = W + 0.9;
+  const HL = D + 1.0;
+  hullShape.moveTo(-HW, -HL);
+  hullShape.lineTo(HW, -HL);
+  hullShape.lineTo(HW, HL - 0.2);
+  hullShape.quadraticCurveTo(HW * 0.6, HL + 1.6, 0, HL + 2.2);
+  hullShape.quadraticCurveTo(-HW * 0.6, HL + 1.6, -HW, HL - 0.2);
+  hullShape.closePath();
+  const hullGeo = new THREE.ExtrudeGeometry(hullShape, { depth: 0.75, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.2, bevelSegments: 3 });
+  const hull = add(hullGeo, M(`hull${P.hull}`, P.hull), 0, -0.3, 0);
+  hull.rotation.x = -Math.PI / 2;
+  hull.position.y = -0.3;
+  // 船身一圈紅色條紋、甲板
+  const stripe = add(new THREE.ExtrudeGeometry(hullShape, { depth: 0.12, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.24, bevelSegments: 1 }), M(`stripe${P.stripe}`, P.stripe), 0, 0.12, 0);
+  stripe.rotation.x = -Math.PI / 2;
+  const deck = add(new THREE.ShapeGeometry(hullShape), M(`deck${P.deck}`, P.deck), 0, lift + 0.01, 0);
+  deck.rotation.x = -Math.PI / 2;
+  // 甲板欄杆（白色）
+  const white = M('white', 0xfaf6ee);
+  const rail = new THREE.CurvePath();
+  void rail;
+  for (const sx of [-1, 1]) {
+    for (let i = 0; i <= 8; i++) add(new THREE.CylinderGeometry(0.03, 0.03, 0.55, 6), white, sx * (HW - 0.05), lift + 0.28, -HL + 0.1 + i * ((HL * 2 - 0.4) / 8));
+    add(new THREE.BoxGeometry(0.06, 0.05, HL * 2 - 0.2), white, sx * (HW - 0.05), lift + 0.56, 0);
+  }
+  // 救生圈（橘白相間）掛在牆上
+  const ringGeo = new THREE.TorusGeometry(0.34, 0.1, 8, 16);
+  for (const sx of [-1, 1]) {
+    const lr = add(ringGeo, M('buoy', 0xf26b3a), sx * 1.85, 1.0 + lift, D + 0.06);
+    void lr;
+    for (let k = 0; k < 4; k++) {
+      const seg = add(new THREE.TorusGeometry(0.34, 0.105, 8, 4, Math.PI / 8), white, sx * 1.85, 1.0 + lift, D + 0.065);
+      seg.rotation.z = (k * Math.PI) / 2;
+    }
+  }
+  // 船舵（船頭甲板上）
+  const wheelZ = HL - 0.35; // 放在甲板上（之前超出船邊）
+  const wheelX = -1.7; // 放門的左邊，不擋路
+  add(new THREE.CylinderGeometry(0.06, 0.08, 0.9, 8), mats.wood, wheelX, lift + 0.45, wheelZ);
+  const wheel = add(new THREE.TorusGeometry(0.38, 0.05, 6, 16), mats.wood, wheelX, lift + 1.0, wheelZ + 0.08);
+  for (let k = 0; k < 8; k++) {
+    const sp = add(new THREE.BoxGeometry(0.05, 0.95, 0.05), mats.wood, wheelX, lift + 1.0, wheelZ + 0.08);
+    sp.rotation.z = (k * Math.PI) / 8;
+  }
+  void wheel;
+  // 桅桿＋三角小旗子
+  const mastY = y2 + UP + RW * 0.42; // 桅桿立在二樓屋頂上
+  add(new THREE.CylinderGeometry(0.05, 0.07, 1.8, 8), mats.wood, -0.9, mastY + 0.5, z0 + 0.7);
+  const flag = new THREE.Shape();
+  flag.moveTo(0, 0);
+  flag.lineTo(0.9, -0.28);
+  flag.lineTo(0, -0.56);
+  flag.closePath();
+  add(new THREE.ShapeGeometry(flag), M('flag', 0xffd166, { side: THREE.DoubleSide }), -0.86, mastY + 1.35, z0 + 0.7);
+  // 船邊的捲繩、木頭小碼頭（從岸邊走上船）
+  const rope = add(new THREE.TorusGeometry(0.2, 0.06, 6, 14), M('rope', 0xd9c08a), 2.6, lift + 0.07, HL - 0.3);
+  rope.rotation.x = Math.PI / 2;
+  // 作者 11/12：碼頭要接到船上 → 從甲板前緣一路鋪到岸邊，再一小段斜坡下到草地
+  const dz0 = HL + 0.15; // 甲板前緣
+  const dz1 = HL + 3.9; // 岸邊
+  const plank = M('plank', 0x8a5a3a);
+  add(new THREE.BoxGeometry(1.5, 0.1, dz1 - dz0), plank, 0, lift - 0.04, (dz0 + dz1) / 2);
+  for (let z = dz0 + 0.35; z < dz1; z += 0.45) add(new THREE.BoxGeometry(1.52, 0.02, 0.04), mats.wood, 0, lift + 0.02, z); // 木板縫
+  for (const sx of [-1, 1]) for (const z of [dz0 + 0.6, (dz0 + dz1) / 2, dz1 - 0.3]) add(new THREE.CylinderGeometry(0.07, 0.08, lift + 0.5, 7), mats.wood, sx * 0.7, (lift + 0.5) / 2 - 0.2, z); // 木樁
+  const ramp = add(new THREE.BoxGeometry(1.5, 0.1, 1.3), plank, 0, lift / 2 - 0.04, dz1 + 0.6);
+  ramp.rotation.x = Math.atan2(lift, 1.2);
 }
 
 /** 🏡 雙層小木屋：原木牆、斜屋頂；裡面有樓梯和二樓閣樓（外面看得到上下兩排窗戶、小陽台、煙囪） */

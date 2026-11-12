@@ -27,6 +27,51 @@ function mat(color, glow = false) {
 }
 
 /** opts（頭髮用）：{ hat, back, neck } 同時戴了哪些，頭髮會自己讓開（不會跟帽子、背包、圍巾卡在一起） */
+/** 🔴 圓點圍巾（作者 11/12：紅底白色圓點點）：紅色圍巾，上面貼一顆一顆白色小圓點 */
+function buildDotScarf(g, add, sphere, base, dotM) {
+  const ring = add(new THREE.TorusGeometry(0.25, 0.085, 10, 28), base, 0, 0.535, 0.03);
+  ring.rotation.x = Math.PI / 2 - 0.12;
+  ring.scale.set(1.18, 1, 1);
+  // 脖子那圈：沿著圈圈一排排小白點（交錯排）
+  const dotGeo = new THREE.SphereGeometry(0.018, 8, 6);
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2;
+    for (const [bb, off] of [[0.6, 0], [-0.6, 0.5], [1.6, 0.25]]) {
+      const aa = a + (off / 22) * Math.PI * 2;
+      const d = new THREE.Mesh(dotGeo, dotM);
+      const rr = 0.25 + 0.085 * Math.cos(bb);
+      d.position.set(Math.cos(aa) * rr, Math.sin(aa) * rr, 0.085 * Math.sin(bb));
+      d.scale.set(1, 1, 0.45);
+      d.lookAt(d.position.clone().multiplyScalar(2));
+      ring.add(d);
+    }
+  }
+  const path = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0.12, 0.52, 0.32),
+    new THREE.Vector3(0.16, 0.43, 0.375),
+    new THREE.Vector3(0.19, 0.33, 0.39),
+    new THREE.Vector3(0.2, 0.24, 0.37),
+  ]);
+  const hg = new THREE.TubeGeometry(path, 20, 0.062, 12, false);
+  hg.translate(-0.17, 0, -0.36).scale(1.55, 1, 0.5).translate(0.17, 0, 0.36);
+  const hang = new THREE.Mesh(hg, base);
+  hang.castShadow = true;
+  g.add(hang);
+  // 垂下來那段：正面兩排小白點
+  for (let i = 0; i < 6; i++) {
+    const p = path.getPointAt(0.08 + i * 0.16);
+    for (const dx of [-0.045, 0.045]) {
+      const d = new THREE.Mesh(dotGeo, dotM);
+      d.position.set(0.17 + (p.x - 0.17) * 1.55 + dx + (i % 2 ? 0.02 : -0.02), p.y, 0.36 + (p.z - 0.36) * 0.5 + 0.034);
+      d.scale.set(1, 1, 0.4);
+      g.add(d);
+    }
+  }
+  sphere(0.062, base, 0.2, 0.24, 0.37, 1.55, 1, 0.5);
+  sphere(0.07, base, 0.12, 0.52, 0.31, 1, 0.9, 0.8);
+  return g;
+}
+
 export function buildOutfit(id, opts = {}) {
   const o = OUTFIT_BY_ID[id];
   if (!o) return null;
@@ -105,6 +150,51 @@ export function buildOutfit(id, opts = {}) {
       g.userData.hatTop = 0.48;
       break;
     }
+    case 'santa': {
+      // 🎅 聖誕帽：白色毛毛邊＋紅色軟軟的尖帽（一整塊，尖端往後彎垂下來）＋白毛球
+      torus(0.36, 0.075, m2, 0.16).scale.set(1.12, 1, 1);
+      const pts = [];
+      for (let i = 0; i <= 16; i++) {
+        const k = i / 16;
+        pts.push(new THREE.Vector2(Math.max(0.012, 0.37 * Math.pow(1 - k, 1.25)), k * 0.5));
+      }
+      const geo = new THREE.LatheGeometry(pts, 20);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const k = pos.getY(i) / 0.5;
+        pos.setZ(i, pos.getZ(i) - k * k * 0.32); // 往後彎
+        pos.setY(i, pos.getY(i) - k * k * k * 0.12); // 尖端垂一點
+      }
+      geo.computeVertexNormals();
+      const hat = add(geo, m1, 0, 0.19, 0);
+      hat.scale.set(1.12, 1, 1);
+      sphere(0.075, m2, 0, 0.19 + 0.5 - 0.12, -0.32);
+      g.userData.hatTop = 0.62;
+      break;
+    }
+    case 'antlers': {
+      // 🦌 馴鹿角（作者 11/12 改：不要髮箍、不要另外的鹿耳朵 → 動物自己的耳朵直接變成鹿角，鼻子變紅色，看起來是一體的）
+      //   耳朵在 ProceduralFox.setOutfit 收起來；紅鼻子也在那邊對準臉上的鼻子
+      const branch = (r, len, x, y, z, rz) => {
+        const c = add(new THREE.CapsuleGeometry(r, len, 4, 10), m1, x, y, z);
+        c.rotation.z = rz;
+        return c;
+      };
+      for (const s of [-1, 1]) {
+        // 從耳朵的位置長出來：主幹往上、往外彎
+        branch(0.05, 0.16, s * 0.22, 0.34, -0.03, -s * 0.35);
+        branch(0.044, 0.13, s * 0.3, 0.5, -0.03, -s * 0.05);
+        // 分岔：往外兩根、往內一根
+        branch(0.038, 0.08, s * 0.37, 0.43, -0.03, -s * 1.15);
+        branch(0.036, 0.07, s * 0.38, 0.58, -0.03, -s * 0.85);
+        branch(0.034, 0.06, s * 0.23, 0.58, -0.03, s * 0.55);
+      }
+      const nose = sphere(0.05, new THREE.MeshStandardMaterial({ color: o.c2 ?? 0xd2392f, emissive: 0x801010, emissiveIntensity: 0.35, roughness: 0.5 }), 0, -0.078, 0.37, 1.1, 0.9, 0.75);
+      nose.name = 'rednose';
+      g.userData.hatTop = 0.62;
+      g.userData.hideEars = true;
+      break;
+    }
     case 'earmuff': {
       const band = add(new THREE.TorusGeometry(0.38, 0.025, 8, 24, Math.PI), m2, 0, 0.02, 0);
       band.scale.set(1.12, 1, 1);
@@ -142,6 +232,22 @@ export function buildOutfit(id, opts = {}) {
     // 11/07 改版：原本放在 y 0.6，剛好在下巴裡面（看不到、跟頭穿模）→ 往下移到下巴和胸口之間，
     // 頸圈在 y 0.54（頭和身體交界）、前面的領結／墜子在胸口 y 0.40～0.50，整體放大約 1.5 倍，比較明顯可愛。
     case 'scarf': {
+      // 🔴 圓點圍巾（作者 11/12：聖誕圍巾＝紅底白色圓點點）：整條用圓點貼圖
+      if (o.dots) return buildDotScarf(g, add, sphere, m1, m2);
+      if (o.snowman) {
+        // ⛄ 綠色針織圍巾＋前面一個小雪人吊飾（作者 11/12 參考）
+        const w = mat(0xfffaf2);
+        const S = 1.5; // 大一點，遠遠也看得到
+        const sx = 0.12, sy = 0.44, sz = 0.39;
+        sphere(0.05 * S, w, sx, sy, sz);
+        sphere(0.037 * S, w, sx, sy + 0.075 * S, sz);
+        const hatC = o.c1 === 0xd2392f ? 0x2f7a45 : 0xd2392f; // 紅圍巾配綠帽子雪人、綠圍巾配紅帽子
+        add(new THREE.ConeGeometry(0.032 * S, 0.06 * S, 8), mat(hatC), sx, sy + 0.135 * S, sz);
+        sphere(0.012 * S, w, sx, sy + 0.17 * S, sz);
+        for (const ex of [-0.013, 0.013]) sphere(0.007 * S, mat(0x2a1a14), sx + ex * S, sy + 0.083 * S, sz + 0.05);
+        sphere(0.008 * S, mat(0xf08a3c), sx, sy + 0.07 * S, sz + 0.055);
+        sphere(0.016 * S, mat(hatC), sx, sy + 0.035 * S, sz + 0.04, 1.6, 0.8, 0.6);
+      }
       const ring = add(new THREE.TorusGeometry(0.25, 0.085, 10, 28), m1, 0, 0.535, 0.03);
       ring.rotation.x = Math.PI / 2 - 0.12;
       ring.scale.set(1.18, 1, 1);

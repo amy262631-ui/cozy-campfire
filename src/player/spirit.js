@@ -158,7 +158,7 @@ function faceTex(face) {
 /**
  * 做一隻小精靈。回傳 Group；userData：{ body, face, setFace(face), update(dt, time) }
  */
-export function buildSpirit(type = 'light', stage = 0, face = 'happy', variant = SPIRIT_LOOK[type] ?? 0) {
+export function buildSpirit(type = 'light', stage = 0, face = 'happy', variant = SPIRIT_LOOK[type] ?? 0, acc = null) {
   const g = new THREE.Group();
   const T = SPIRIT_BY_ID[type] ?? { color: 0xfff1b8, glow: 0xfff6d0 };
   const body = new THREE.Group();
@@ -454,6 +454,35 @@ export function buildSpirit(type = 'light', stage = 0, face = 'happy', variant =
   const faceDist = R * 1.6; // 比身體最外面（星星的角、蘑菇帽子）還遠一點
   faceSp.renderOrder = 6;
   body.add(faceSp);
+  // 🎄 小精靈配件（12 月：聖誕帽、紅／綠小雪人圍巾；作者 11/12 拿掉鹿角）：戴在頭頂（top）或繞在身體中間
+  if (acc) {
+    const red = soft(0xd2392f, { emissiveIntensity: 0.15 });
+    const white = soft(0xfffaf2, { emissiveIntensity: 0.15 });
+    const hy = type === 'leaf' && stage > 0 ? R * 0.88 : top - R * 0.15; // 戴的高度（頭頂往下一點）；葉子：帽子直接蓋住頭上的小芽（作者 11/12）
+    if (acc === 'santa') {
+      const rim = add(new THREE.TorusGeometry(R * 0.55, R * 0.13, 8, 20), white, 0, hy, 0);
+      rim.rotation.x = Math.PI / 2;
+      const hat = add(new THREE.ConeGeometry(R * 0.55, R * 1.1, 14), red, 0, hy + R * 0.5, -R * 0.08);
+      hat.rotation.x = -0.35;
+      add(new THREE.SphereGeometry(R * 0.16, 10, 8), white, 0, hy + R * 1.0, -R * 0.38);
+    } else if (acc === 'scarf' || acc === 'scarf2') {
+      // 🧣 圍巾（作者 11/12：跟玩家的一樣，紅色、綠色兩款，前面一個小雪人）
+      const red2 = acc === 'scarf';
+      const knit = red2 ? red : soft(0x2f7a45, { emissiveIntensity: 0.15 });
+      const sc = add(new THREE.TorusGeometry(R * 0.82, R * 0.15, 8, 22), knit, 0, faceY - R * 0.58, 0);
+      sc.rotation.x = Math.PI / 2;
+      const tail = add(new THREE.CapsuleGeometry(R * 0.12, R * 0.4, 4, 8), knit, -R * 0.5, faceY - R * 0.92, R * 0.6);
+      tail.rotation.z = -0.2;
+      tail.scale.z = 0.5;
+      // 小雪人吊飾
+      const sx = R * 0.42;
+      const sy = faceY - R * 0.62;
+      const sz = R * 0.92;
+      add(new THREE.SphereGeometry(R * 0.11, 8, 6), white, sx, sy, sz);
+      add(new THREE.SphereGeometry(R * 0.08, 8, 6), white, sx, sy + R * 0.15, sz);
+      add(new THREE.ConeGeometry(R * 0.07, R * 0.12, 8), red2 ? soft(0x2f7a45, { emissiveIntensity: 0.15 }) : red, sx, sy + R * 0.27, sz);
+    }
+  }
   // 長大（第 3 階段）：小翅膀＋光環
   if (stage >= 2) {
     const wing = once(`wing${type}`, () => new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: T.glow, emissiveIntensity: 0.5, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
@@ -464,6 +493,7 @@ export function buildSpirit(type = 'light', stage = 0, face = 'happy', variant =
       w.userData.wing = sx;
     }
     const ring = add(new THREE.TorusGeometry(R * 0.55, R * 0.08, 8, 24), new THREE.MeshBasicMaterial({ color: 0xfff1a8 }), 0, top + R * 0.3, 0);
+    if (acc === 'santa') ring.visible = false; // 戴帽子時光環先收起來
     ring.rotation.x = Math.PI / 2;
     ring.userData.halo = true;
   }

@@ -99,7 +99,7 @@ export class SpiritFollower {
     this.obj = null;
     const p = parseSpirit(code);
     if (!p) return;
-    this.obj = buildSpirit(p.type, p.stage, this.face);
+    this.obj = buildSpirit(p.type, p.stage, this.face, undefined, p.acc);
     this.size = p.stage === 0 ? 1 : SIZE; // 小光點本來就很小，不用再縮
     this.obj.position.copy(this.pos);
     this.scene.add(this.obj);

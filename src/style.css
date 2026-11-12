@@ -7269,3 +7269,19 @@ body.spg-on .notice-panel {
 @keyframes shoutIn { from { opacity: 0; transform: translate(-50%, -14px) scale(0.92); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
 @keyframes shoutOut { to { opacity: 0; transform: translate(-50%, -10px); } }
 @media (max-width: 600px) { .shout-banner { top: 132px; font-size: 13px; width: calc(100vw - 24px); border-radius: 18px; } }
+/* 🎁 12 月起的禮盒分級（支持營地） */
+.box-tiers { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 14px; }
+.box-tiers td { padding: 6px 8px; border-bottom: 1px solid rgba(255, 210, 160, 0.15); vertical-align: top; }
+.box-tiers td:first-child { white-space: nowrap; color: #ffcf8f; }
+.pay-gift-sub { margin: 10px 0 6px; font-weight: 700; color: #ffe3b8; font-size: 14px; }
+.box-smalls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.box-smalls.box-pick { grid-template-columns: repeat(2, 1fr); }
+.box-smalls button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px; border-radius: 14px; border: 2px solid rgba(255, 210, 160, 0.2); background: rgba(255, 255, 255, 0.05); color: inherit; font: inherit; cursor: pointer; }
+.box-smalls button span { font-size: 28px; line-height: 1; }
+.box-smalls button small { font-size: 12px; }
+.box-smalls button.on { border-color: #ffc46b; background: rgba(255, 196, 107, 0.16); }
+
+/* 📣 大聲公按鈕（作者 11/12：圖案不夠明顯）→ 跟「送出」不同顏色、加上字 */
+.chat-input .chat-shout { display: flex; align-items: center; gap: 4px; padding: 0 10px; background: linear-gradient(180deg, #ff7a6b, #e0483c); color: #fff8ec; border: 2px solid #ffd56b; white-space: nowrap; box-shadow: 0 0 10px rgba(255, 120, 90, 0.45); }
+.chat-input .chat-shout .cs-ic { font-size: 20px; line-height: 1; }
+.chat-input .chat-shout .cs-tx { font-size: 13px; }
