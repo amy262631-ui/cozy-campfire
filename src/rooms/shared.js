@@ -1,6 +1,32 @@
 import * as THREE from 'three';
 
 /** 浮在空中的文字招牌（不受霧影響，遠遠就看得到） */
+/**
+ * 👀 離鏡頭太近就變透明的東西（木牌、柱子）：手機直向時，出生點剛好在木牌後面，
+ * 會看到一大塊字和黑柱子擋住半個畫面（作者 11/13 同意）。main.js 每幀呼叫 updateNearFade(camera)。
+ */
+export const NEAR_FADE = new Set();
+export function fadeNear(o) {
+  o.traverse((m) => {
+    if (!m.material) return;
+    m.material = m.material.clone();
+    m.material.transparent = true;
+  });
+  NEAR_FADE.add(o);
+  return o;
+}
+const _fp = new THREE.Vector3();
+export function updateNearFade(camera) {
+  for (const o of NEAR_FADE) {
+    o.getWorldPosition(_fp);
+    const d = _fp.distanceTo(camera.position);
+    const a = d < 1.4 ? 0.08 : d > 3.4 ? 1 : 0.08 + ((d - 1.4) / 2) * 0.92;
+    o.traverse((m) => {
+      if (m.material && m.material.opacity !== a) m.material.opacity = a;
+    });
+  }
+}
+
 export function makeSign(text, { height = 0.32, bg = 'rgba(30, 20, 14, 0.7)', color = '#ffe9c8' } = {}) {
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
@@ -29,6 +55,7 @@ export function makeSign(text, { height = 0.32, bg = 'rgba(30, 20, 14, 0.7)', co
   );
   sprite.scale.set((height * w) / 68, height, 1);
   sprite.renderOrder = 5;
+  NEAR_FADE.add(sprite);
   return sprite;
 }
 

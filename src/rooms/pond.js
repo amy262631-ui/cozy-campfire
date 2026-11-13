@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GlowLight } from '../scene/GlowLight.js'; // 裝飾小燈用光暈代替真的光源（效能）
-import { makeSign, lowpoly } from './shared.js';
+import { makeSign, lowpoly, fadeNear } from './shared.js';
 import { POND, POND_U, POND_V, pondQ, pondLocal, pondWorld } from '../game/pondShape.js';
 import { t } from '../i18n/i18n.js';
 
@@ -102,9 +102,12 @@ export function buildPond(world, forestGroup) {
   const [sx, sz] = edge(-Math.PI / 2 + 0.9, 1.3);
   const sign = makeSign(t('🎣 營火河畔'), { height: 0.34 });
   sign.position.set(sx, 1.9, sz);
+  sign.name = 'pondSign';
   group.add(sign);
   const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.5, 6), lowpoly(0x5a3c26));
   post.position.set(sx, 0.75, sz);
+  post.name = 'pondPost';
+  fadeNear(post); // 離鏡頭太近就變透明
   group.add(post);
 
   // 碰撞：沿長軸排幾個圓，近似橢圓（水不能走進去）

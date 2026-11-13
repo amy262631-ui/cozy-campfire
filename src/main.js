@@ -52,7 +52,7 @@ import { TENT_STYLE_BY_ID, styleOf, tentTexture } from './game/tentStyles.js';
 import { createCampgroundRoom } from './rooms/campgroundRoom.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN } from './game/miniSpots.js';
 import { TENT_SHAPE_BY_ID, buildTentShell } from './game/tentShapes.js';
-import { lowpoly } from './rooms/shared.js';
+import { lowpoly, updateNearFade } from './rooms/shared.js';
 import { FURNITURE_BY_ID, TENT_PRICE, buildFurniture } from './game/furniture.js';
 import { SpeechBubbles } from './fx/SpeechBubbles.js';
 import { SocialPanel } from './ui/SocialPanel.js';
@@ -2683,26 +2683,38 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   };
   // 📱 在 LINE、IG、FB、Threads 的內建瀏覽器（或被嵌在別的網站裡）玩，常常存不了進度，
   //    下次進來又變成新的人。跳一次小提示，請他用 Safari／Chrome 打開（11/08 作者同意）
+  // 🐣 11/13 作者：新人一進來就跳「用瀏覽器打開」會把人推走（小雞秒玩來的人每個都看到）
+  //    → 改成做完新手小任務、或玩滿 10 分鐘，才提醒一次（那時已經喜歡上了，比較會照做）
+  let showInappTip = () => {};
   {
     const kind = inAppKind();
     let seen = false;
     try {
       seen = sessionStorage.getItem('cozy-inapp-tip') === '1';
-      sessionStorage.setItem('cozy-inapp-tip', '1');
     } catch {
       /* 存不了也沒關係 */
     }
     if (kind && !seen) {
-      const name = { line: 'LINE', ig: 'Instagram', fb: 'Facebook', threads: 'Threads', wechat: t('微信'), iframe: '' }[kind] ?? '';
-      const el = document.createElement('div');
-      el.className = 'inapp-tip';
-      const url = new URL(location.href);
-      if (kind === 'line') url.searchParams.set('openExternalBrowser', '1'); // LINE 支援：加這個參數會改用手機的瀏覽器打開
-      el.innerHTML = `<b>${kind === 'iframe' ? t('📌 用完整版玩，進度才會保存') : t('📌 在 {app} 裡玩，進度可能存不起來', { app: name })}</b>
+      showInappTip = () => {
+        showInappTip = () => {};
+        try {
+          sessionStorage.setItem('cozy-inapp-tip', '1');
+        } catch {
+          /* 同上 */
+        }
+        const name = { line: 'LINE', ig: 'Instagram', fb: 'Facebook', threads: 'Threads', wechat: t('微信'), iframe: '' }[kind] ?? '';
+        const el = document.createElement('div');
+        el.className = 'inapp-tip';
+        const url = new URL(location.href);
+        if (kind === 'line') url.searchParams.set('openExternalBrowser', '1'); // LINE 支援：加這個參數會改用手機的瀏覽器打開
+        el.innerHTML = `<b>${kind === 'iframe' ? t('📌 用完整版玩，進度才會保存') : t('📌 在 {app} 裡玩，進度可能存不起來', { app: name })}</b>
         <span>${kind === 'line' || kind === 'iframe' ? t('點下面的按鈕，用瀏覽器打開') : t('點右上角「⋯」→「用瀏覽器開啟」')}</span>
         <div class="inapp-btns">${kind === 'line' || kind === 'iframe' ? `<a class="mini-btn" href="${url.href}" target="${kind === 'iframe' ? '_blank' : '_self'}" rel="noopener">${t('👉 用瀏覽器打開')}</a>` : ''}<button type="button" class="mini-btn ghost">${t('知道了')}</button></div>`;
-      el.querySelector('button').addEventListener('click', () => el.remove());
-      setTimeout(() => document.body.appendChild(el), 2500);
+        el.querySelector('button').addEventListener('click', () => el.remove());
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 30000); // 不理它也會自己收起來，不一直擋著
+      };
+      setTimeout(() => showInappTip(), 10 * 60 * 1000);
     }
   }
   // 📊 新手小任務統計：還沒連上伺服器就等一下再送（最多等 1 分鐘）
@@ -2729,6 +2741,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     // 🌱 新手小任務 6 步做完：送 20 松果，再跳歡迎卡
     onIntroDone: async () => {
       if (net.online) await net.request('kidDone', {});
+      setTimeout(() => showInappTip(), 25000); // 歡迎卡、取名提醒之後再說
       setTimeout(showSeeYou, 8000);
       setTimeout(() => !welcome.visible && welcome.maybeShow(), 9000);
       // ✏️ 11/09 作者：隨機名字常撞名 → 新手小任務做完，如果還是隨機名字，輕輕提醒一次去取名（只提醒一次）
@@ -4989,6 +5002,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       if (!zoneBusy) switchZone(z, z > campZone ? 'next' : 'prev');
     } else if (goTo) roomMgr.switchTo(goTo, switchOnServer);
 
+    updateNearFade(camera);
     updateDozeZzz(dt);
     zzz.update(dt);
     bubbles.update(dt, headOf);
