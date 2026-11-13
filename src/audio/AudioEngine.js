@@ -696,6 +696,10 @@ export class AudioEngine {
           tone(2349, now + d, 0.9, { amp: 0.035 });
         });
         break;
+      case 'ding': // 🎲 桌遊：輕輕「叮」一下（作者 11/13：原本的鈴聲三下太吵）
+        tone(1568, now, 0.8, { amp: 0.045 });
+        tone(2349, now, 0.5, { amp: 0.018 });
+        break;
       case 'stone': // 石頭疊上去：兩聲輕輕的「喀、喀」
         noise(now, 0.04, 2600, 0.3);
         tone(310, now, 0.08, { type: 'triangle', amp: 0.1, to: 220 });

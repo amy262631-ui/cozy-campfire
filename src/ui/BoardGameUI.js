@@ -35,6 +35,12 @@ export class BoardGameUI {
     this.blowing = false;
     this.mySize = 0;
     this.sentAt = 0;
+    // 🔕 桌遊聲音開關（作者 11/13：噹噹噹太吵）；記在這台裝置
+    try {
+      this.quiet = localStorage.getItem('cozy-bg-quiet') === '1';
+    } catch {
+      this.quiet = false;
+    }
     this.el = document.createElement('div');
     this.el.className = 'bg-panel';
     this.el.hidden = true;
@@ -72,6 +78,10 @@ export class BoardGameUI {
     if (r?.ok) this.#onGame(r.game ?? { state: 'gone' });
   }
 
+  #sfx(name) {
+    if (!this.quiet) this.audio?.sfx?.(name);
+  }
+
   #mine() {
     const me = this.self();
     return this.g?.players?.find((p) => p.id === me.id) ?? null;
@@ -92,13 +102,14 @@ export class BoardGameUI {
       this.mySize = 0;
       this.blowing = false;
     }
-    // 音效：有人邀請、開始、輪到我、結果
+    // 音效（作者 11/13：小聲一點、只在跟自己有關時響）：坐著的人收到邀請、輪到我、我有玩的那局結束、我戳的那一下
     const me = this.self();
-    if (v.state === 'invite' && (!prev || prev.id !== v.id) && v.host.id !== me.id) this.audio?.sfx?.('bell');
-    if (v.state === 'play' && v.turn === me.id && prev?.turn !== me.id) this.audio?.sfx?.('bell');
-    if (v.game === 'frog' && prev?.id === v.id && (v.holes ?? []).filter(Boolean).length > (prev.holes ?? []).filter(Boolean).length) this.audio?.sfx?.('tap'); // 有人戳了一下
+    const inIt = v.players?.some((p) => p.id === me.id);
+    if (v.state === 'invite' && (!prev || prev.id !== v.id) && v.host.id !== me.id && me.sitting) this.#sfx('ding');
+    if (v.state === 'play' && v.turn === me.id && prev?.turn !== me.id) this.#sfx('ding');
+    if (v.game === 'frog' && prev?.id === v.id && (v.holes ?? []).some((h, i) => h === me.id && prev.holes?.[i] !== me.id)) this.#sfx('tap'); // 我戳了一下
     if (v.state === 'done' && prev?.state !== 'done') {
-      this.audio?.sfx?.('bell');
+      if (inIt) this.#sfx('ding');
       const gain = v.gain?.[me.id];
       if (v.game === 'frog' && v.loser === me.id) this.hud.toast(t('🐸 啵！青蛙跳到你頭上了 😆'), 4000);
       if (v.winners?.includes(me.id)) this.hud.toast(gain ? t('🏆 你贏了！+{n} 🌰', { n: gain }) : t('🏆 你贏了！（今天桌遊的松果拿滿了）'), 4000);
@@ -142,7 +153,7 @@ export class BoardGameUI {
           pr.obj.userData.pop();
           if (p.id === me.id) {
             this.blowing = false;
-            this.audio?.sfx?.('splash');
+            this.#sfx('splash');
           }
         }
       }
@@ -191,7 +202,16 @@ export class BoardGameUI {
       }
       return r;
     };
-    if (act === 'open') {
+    if (act === 'snd') {
+      this.quiet = !this.quiet;
+      try {
+        localStorage.setItem('cozy-bg-quiet', this.quiet ? '1' : '0');
+      } catch {
+        /* 存不了就算了 */
+      }
+      this.hud.toast(this.quiet ? t('🔕 桌遊聲音關掉了') : t('🔔 桌遊聲音打開了'));
+      this._key = '';
+    } else if (act === 'open') {
       this.picking = true;
       this._key = '';
     } else if (act === 'close') {
@@ -309,12 +329,23 @@ export class BoardGameUI {
     }
     // 小視窗：內容變了才重畫（倒數秒數也算）
     const left = g?.endsAt && g.state !== 'done' ? Math.max(0, Math.ceil((g.endsAt - Date.now()) / 1000)) : 0; // 結束後不再倒數（不然每秒重畫，青蛙動畫一直重來）
-    const key = JSON.stringify([g?.id, g?.state, g?.turn, g?.players?.map((p) => [p.id, p.len, p.popped, p.done]), g?.holes, left, me.sitting, me.inForest, this.picking, this.dismissed, g?.winners]);
+    const key = JSON.stringify([g?.id, g?.state, g?.turn, g?.players?.map((p) => [p.id, p.len, p.popped, p.done]), g?.holes, left, me.sitting, me.inForest, this.picking, this.dismissed, g?.winners, this.quiet]);
     if (key !== this._key && !this.blowing) {
       this._key = key;
       const html = me.inForest ? this.#render(me) : '';
       this.el.innerHTML = html;
       this.el.hidden = !html;
+      // 🔔／🔕 每個小視窗標題右邊都有（✕ 的左邊）
+      const head = this.el.querySelector('.bg-head');
+      if (head) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'bg-x bg-snd';
+        b.dataset.act = 'snd';
+        b.title = t('桌遊聲音');
+        b.textContent = this.quiet ? '🔕' : '🔔';
+        head.insertBefore(b, head.querySelector('.bg-x'));
+      }
     }
     // 站起來就不能選遊戲了
     if (!me.sitting && this.picking) this.picking = false;

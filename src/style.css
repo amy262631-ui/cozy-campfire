@@ -7305,6 +7305,7 @@ body.touch .bg-panel { bottom: 250px; }
 .bg-card { width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 18px; background: rgba(36, 28, 40, 0.93); border: 1px solid rgba(255, 210, 160, 0.28); color: #fff3e0; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); display: flex; flex-direction: column; gap: 8px; }
 .bg-card.bg-mini { font-size: 13px; padding: 8px 12px; }
 .bg-head { font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bg-snd { margin-left: auto; flex: none; font-size: 14px; padding: 0; }
 .bg-x { border: none; background: rgba(255, 255, 255, 0.1); color: inherit; border-radius: 999px; width: 28px; height: 28px; cursor: pointer; }
 .bg-games { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .bg-games button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; border-radius: 14px; border: 2px solid rgba(255, 210, 160, 0.25); background: rgba(255, 255, 255, 0.06); color: inherit; font: inherit; cursor: pointer; }
