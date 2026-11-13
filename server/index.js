@@ -2883,7 +2883,7 @@ io.on('connection', (socket) => {
       saveJson('players.json', players);
       saveJson('homes.json', homes);
       bump('buys');
-      socket.emit('wallet', { pc: wal.pc, delta: -cost, reason: 'buy' });
+      socket.emit('wallet', { pc: wal.pc, delta: -price, reason: 'buy' });
       io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) });
       return ack?.({ ok: true, pc: wal.pc, home: publicHome(h) });
     }
@@ -4540,6 +4540,21 @@ setInterval(() => {
   }
   if (fireSync >= 2) fireSync = 0;
 }, TICK_MS);
+
+// 🛟 保險：某個功能出錯（例如 11/13 擴建帳篷的 cost 打錯字）不要讓整台伺服器當掉、把所有人踢出去。
+//   記下錯誤，伺服器繼續跑；同一種錯誤 1 分鐘內只印一次，免得洗版。
+{
+  const seen = new Map();
+  const report = (kind) => (err) => {
+    const msg = String(err?.stack || err).split('\n').slice(0, 3).join(' | ');
+    const now = Date.now();
+    if (now - (seen.get(msg) ?? 0) < 60000) return;
+    seen.set(msg, now);
+    console.error(`[出錯了但沒當掉] ${kind}：${msg}`);
+  };
+  process.on('uncaughtException', report('uncaughtException'));
+  process.on('unhandledRejection', report('unhandledRejection'));
+}
 
 // 重新部署或關機時：先把還沒存的資料寫完再結束（不然最後幾秒的石頭、留言會不見）
 let closing = false;
