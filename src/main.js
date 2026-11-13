@@ -66,6 +66,7 @@ import { RitualGuide } from './ui/RitualGuide.js';
 import { HelpPanel, spiritRuleLines } from './ui/HelpPanel.js';
 import { isXmas } from './game/season.js';
 import { setupFrameFocus } from './ui/FrameFocus.js';
+import { BoardGameUI } from './ui/BoardGameUI.js';
 import { GIFT_CATS, giftInfo, basketCat, GIFT_DAILY_CAP, GIFT_MIN_DAYS } from './game/gifts.js';
 import { FIRE_SEATS } from './rooms/fireSeats.js';
 import { SHOP_FRONT } from './rooms/shop.js';
@@ -1600,6 +1601,15 @@ async function init() {
   let spiritNightNow = spiritNight();
   setInterval(() => (spiritNightNow = spiritNight()), 60000);
   const SPIRIT_SIT = new Set(['sofa', 'eat', 'sit', 'fish', 'reel', 'roast', 'showFish', 'swing', 'stargaze']);
+  // 🎲 營火桌遊（作者 11/13；boardGames.js 的 BOARD_ON 打開才會出現，?board=1 先試）
+  const boardUI = new BoardGameUI({
+    net,
+    scene,
+    hud,
+    audio,
+    remotes,
+    self: () => ({ id: net.id, pos: player.position, inForest: roomMgr.current?.id === 'forest_main', sitting: roomMgr.current?.id === 'forest_main' && !!actions.seat?.fire && ['sofa', 'roast', 'addWood', 'blanket'].includes(actions.state) }),
+  });
   const spiritParty = (x, z) => world.eventShower && roomMgr.current?.id === 'forest_main' && Math.hypot(x, z) < 7;
   const spiritCam = new THREE.Vector3();
   // ☁️ 休息（坐著、睡覺、裹毯子）滿 1 分鐘、⭐ 看星星滿 10 秒：告訴伺服器（小精靈會往雲朵／星星長）
@@ -3301,7 +3311,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   });
   /** 🗺️ 搬家小地圖的圖（SVG）：草地、小樹、環形小路、入口小徑、營火小爐；帳篷照真正的位置畫 */
   const TENT_TINT = ['#e7a05a', '#7fb3d5', '#e58f8f', '#9fd3a8', '#c7a6e0', '#f0d27a'];
-  function moveMapSvg(tents, mineN, reserved) {
+  function moveMapSvg(tents, mineN, reserved, view = false) {
     const L = CAMP_LAYOUT;
     const ox = -37, oz = -36.5, W = 74, H = 70;
     const P = (p) => `${(p.x - ox).toFixed(1)} ${(p.z - oz).toFixed(1)}`;
@@ -3327,12 +3337,14 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
         const tn = tents[i];
         const at = `transform="translate(${P(p)})"`;
         if (n === mineN)
-          return `<g class="mvp mine" ${at}><circle r="3.6" class="mv-halo"/><path d="M-2.6 1.6 L0 -2.6 L2.6 1.6 Z" fill="#ffb347" stroke="#7a3e10" stroke-width=".35"/><path d="M-.6 1.6 L0 .2 L.6 1.6Z" fill="#7a3e10"/><text y="-3.4" class="mv-star">⭐</text><text y="4.4" class="mv-nm mv-me">${t('我家')}</text></g>`;
+          return `<g class="mvp mine${view ? ' go' : ''}" data-n="${n}" ${at}><circle r="3.6" class="mv-halo"/><path d="M-2.6 1.6 L0 -2.6 L2.6 1.6 Z" fill="#ffb347" stroke="#7a3e10" stroke-width=".35"/><path d="M-.6 1.6 L0 .2 L.6 1.6Z" fill="#7a3e10"/><text y="-3.4" class="mv-star">⭐</text><text y="4.4" class="mv-nm mv-me">${t('我家')}</text></g>`;
         if (tn || reserved.includes(n)) {
           const nm = tn?.name ? escapeHtml(tn.name.slice(0, 6)) : '';
           const c = TENT_TINT[[...(tn?.name ?? '')].reduce((a, ch) => a + ch.charCodeAt(0), n) % TENT_TINT.length];
-          return `<g class="mvp taken" ${at}><path d="M-2.2 1.4 L0 -2.2 L2.2 1.4 Z" fill="${c}" stroke="#5a3a22" stroke-width=".3"/><path d="M-.5 1.4 L0 .2 L.5 1.4Z" fill="#5a3a22"/>${nm ? `<text y="3.9" class="mv-nm">${nm}</text>` : ''}</g>`;
+          const onl = view && tn?.on; // 🗺️ 營地地圖：主人在線上的亮一點
+          return `<g class="mvp taken${view && tn ? ' go' : ''}${onl ? ' onl' : ''}" data-n="${n}" ${at}>${view && tn ? '<circle r="4" fill="transparent"/>' : ''}${onl ? '<circle r="3.4" class="mv-onl"/>' : ''}<path d="M-2.2 1.4 L0 -2.2 L2.2 1.4 Z" fill="${c}" stroke="#5a3a22" stroke-width=".3"/><path d="M-.5 1.4 L0 .2 L.5 1.4Z" fill="#5a3a22"/>${nm ? `<text y="3.9" class="mv-nm">${nm}</text>` : ''}</g>`;
         }
+        if (view) return `<g class="mvp empty" ${at}><circle r="1.4" class="mv-ring2"/><text y="0.6" class="mv-num">${n}</text></g>`;
         return `<g class="mvp free" data-n="${n}" ${at}><circle r="4" fill="transparent"/><circle r="2.7" class="mv-ring2"/><text y="1" class="mv-num">${n}</text><text y="4.6" class="mv-nm mv-free">${t('空位')}</text></g>`;
       })
       .join('');
@@ -3377,6 +3389,84 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       },
     );
   }
+  /**
+   * 🗺️ 營地地圖（作者 11/13：營地入口的地圖看板、「🧭 去哪裡」都能打開）
+   *   看每一區有誰住、誰在線上；點某頂帳篷 → 問「要傳送到 〇〇 的家門口嗎？」→ 確定才傳
+   */
+  async function openCampMap(z = roomMgr.current.id === 'campground' ? campZone : myHome?.plot?.z ?? 0) {
+    if (!net.online) return hud.toast(t('連上伺服器才能看營地地圖'));
+    const list = await net.request('campList', { zone: z });
+    if (!list?.ok) return hud.toast(t('連上伺服器才能看營地地圖'));
+    const mine = myHome?.plot;
+    const maxZ = Math.max((list.zones ?? []).length, mine ? mine.z + 1 : 1, z + 1);
+    const cnt = (k) => list.online?.[k] ?? 0; // 那一區現在幾個人
+    const tabs = Array.from({ length: maxZ }, (_, k) => `<button type="button" class="mini-btn${k === z ? ' on' : ''}" data-mz="${k}">${zoneName(k)}${mine?.z === k ? ' ⭐' : ''}${cnt(k) ? `<small> 👣${cnt(k)}</small>` : ''}</button>`).join('');
+    const tents = list.tents;
+    const svg = moveMapSvg(tents, mine && mine.z === z ? mine.n : 0, list.reserved ?? [], true);
+    const here = roomMgr.current.id === 'campground' && campZone === z;
+    modal.open(
+      t('🗺️ 營地地圖・{z} 區', { z: zoneName(z) }),
+      `<div class="mv-tabs">${tabs}</div><div class="mv-map">${svg}</div>
+       <div class="mv-legend"><span>⭐ ${t('我家')}</span><span>⛺ ${t('有人住')}</span><span><i class="mv-onl-dot"></i> ${t('主人在線上')}</span></div>
+       <div class="dex-note">${t('點一頂帳篷，可以直接傳送到他的家門口')}${here ? '' : `・<button type="button" class="mini-btn" id="mv-zone">${t('🏕️ 走去 {z} 區入口', { z: zoneName(z) })}</button>`}</div>`,
+      (body) => {
+        for (const b of body.querySelectorAll('[data-mz]')) b.addEventListener('click', () => (modal.close(), openCampMap(Number(b.dataset.mz))));
+        body.querySelector('#mv-zone')?.addEventListener('click', () => (modal.close(), hud.onGo(`camp:${z}`)));
+        for (const g of body.querySelectorAll('.mvp.go'))
+          g.addEventListener('click', () => {
+            const n = Number(g.dataset.n);
+            const tn = tents[n - 1];
+            const isMine = mine && mine.z === z && mine.n === n;
+            audio.sfx?.('click');
+            askTeleport(z, n, isMine ? t('我家') : tn?.name ?? t('{z} 區 {n} 號', { z: zoneName(z), n }), isMine);
+          });
+      },
+    );
+  }
+  function askTeleport(z, n, name, isMine) {
+    modal.open(
+      t('🗺️ 傳送'),
+      `<div class="mv-ask">${isMine ? t('要傳送到 <b>我家</b> 門口嗎？') : t('要傳送到 <b>{name}</b> 的家門口嗎？', { name: escapeHtml(name) })}<small>${t('{z} 區 {n} 號', { z: zoneName(z), n })}</small></div><div class="yard-opts"><button type="button" class="mini-btn" id="tp-ok">${t('確定傳送')}</button><button type="button" class="mini-btn" id="tp-no">${t('取消')}</button></div>`,
+      (body) => {
+        body.querySelector('#tp-no').addEventListener('click', () => (modal.close(), openCampMap(z)));
+        body.querySelector('#tp-ok').addEventListener('click', () => (modal.close(), teleportToPlot(z, n)));
+      },
+    );
+  }
+  /** 傳送到某一區某一號的家門口（站在門口前面、面向帳篷） */
+  let pendingPlace = null;
+  async function teleportToPlot(z, n) {
+    const p = CAMP_LAYOUT.plots[n - 1];
+    if (!p) return;
+    const f = { x: Math.sin(p.ry), z: Math.cos(p.ry) };
+    const spot = { x: p.x + f.x * 4.2, z: p.z + f.z * 4.2, ry: p.ry + Math.PI };
+    const place = () => {
+      player.position.set(spot.x, 0, spot.z);
+      player.rotationY = spot.ry;
+      cameraRig.target.yaw = cameraRig.yaw = spot.ry + Math.PI;
+    };
+    if (roomMgr.current.id === 'campground') {
+      // 已經在營地：換區（或同一區）都用 switchRoom 告訴伺服器新位置（不然會被當成瞬移拉回來）
+      if (!net.online) return;
+      if (z !== campZone) camp.setTents(Array(24).fill(null));
+      campZone = z;
+      camp.setZone(z);
+      place();
+      const res = await net.switchRoom('campground', { x: spot.x, z: spot.z, ry: spot.ry, zone: z });
+      roomMgr.onSwitched?.(roomMgr.current, res);
+    } else {
+      shopPanel.close();
+      stopBuild();
+      forceZone = z;
+      pendingPlace = { place, spot };
+      roomMgr.switchTo('campground', (id) => {
+        place();
+        return switchOnServer(id);
+      });
+    }
+    audio.sfx?.('bell');
+    hud.toast(t('🗺️ 來到 {z} 區 {n} 號門口', { z: zoneName(z), n }));
+  }
   function askMove(plot, cost) {
     modal.open(
       t('🚚 搬到 {p}？', { p: plotName(plot) }),
@@ -3399,6 +3489,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     );
   }
   setInterval(refreshCamp, 20000);
+  actions.onCampMap = () => openCampMap(campZone); // 🗺️ 營地入口的地圖看板
   actions.onVisit = async (plot) => {
     const tent = plot.tent;
     if (!tent) {
@@ -3631,6 +3722,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   }, 5 * 60 * 1000);
   hud.onGo = (id) => {
     if (id === 'home') return goHome();
+    if (id === 'map') return openCampMap(); // 🗺️ 營地地圖
     // 🏕️ 帳篷營地的某一區（去哪裡選單）
     if (id.startsWith('camp:')) {
       const z = Number(id.slice(5));
@@ -4821,6 +4913,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       player.mesh.position.y += Math.sin(Math.min(1, player.hopT / 0.8) * Math.PI) * 0.9;
     }
     spiritGames.update(dt);
+    boardUI.update(dt, elapsed);
     if (!actions.seat) remotes.pushOut(player.position, player.radius); // 坐在圓木上不要被旁邊的人推走
     remotes.update(dt, elapsed, updateSpirits(dt));
     net.update(dt, netState());
@@ -5024,7 +5117,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
 
   // 方便在瀏覽器 console 除錯（開發模式或網址加 ?debug）
   if (import.meta.env.DEV || params.has('debug')) {
-    window.__cozy = { renderer, forest, scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world, shopPanel, buildPanel, homeRoom: rooms.home, goHome, openBag, mySpirit, spiritGames, showDailyCard, sharePop, openMoveMap, openFriends, inviteUrl, _setBag: (d, bk) => ((dishes = d), (basket = bk)) };
+    window.__cozy = { boardUI, renderer, forest, scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world, shopPanel, buildPanel, homeRoom: rooms.home, goHome, openBag, mySpirit, spiritGames, showDailyCard, sharePop, openMoveMap, openFriends, inviteUrl, _setBag: (d, bk) => ((dishes = d), (basket = bk)) };
   }
 }
 

@@ -253,7 +253,7 @@ export function createResidents(api) {
         case 'visitLake':
           return travel(n, 'lake_dock');
         case 'visitTent':
-          return travel(n, Math.random() < 0.5 ? 'tent_social' : 'treehouse_music');
+          return travel(n, 'treehouse_music'); // ☕ 交流帳篷 11/13 拿掉了
         default: {
           // 在子房間才會做的事（釣魚、樹屋聽歌⋯）：回到自己的家
           if (n.def.home !== 'forest_main') return travel(n, n.def.home);

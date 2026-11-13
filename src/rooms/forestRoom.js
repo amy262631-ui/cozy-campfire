@@ -24,7 +24,7 @@ const ENTRANCES = [
   { to: 'tent_focus', angle: 2.6, label: t('⛺ 專注帳篷') },
   { to: 'treehouse_music', angle: -2.2, label: t('🎵 森林樹屋') },
   { to: 'lake_dock', angle: 1.15, label: t('🎣 湖畔碼頭') },
-  { to: 'tent_social', angle: -1.25, label: t('☕ 交流帳篷') },
+  // ☕ 交流帳篷：作者 11/13 拿掉（桌遊改放營火旁）
   { to: 'campground', angle: -2.95, label: t('🏕️ 帳篷營地') },
   { to: 'mist_forest', angle: 0.8, label: t('🍄 迷霧森林') },
 ];
@@ -373,7 +373,6 @@ function buildAreaSign() {
     ['campground', '🏕️', t('營地')],
     ['mist_forest', '🍄', t('迷霧')],
     ['treehouse_music', '🎵', t('樹屋')],
-    ['tent_social', '☕', t('交流')],
     ['tent_focus', '📚', t('專注')],
   ];
   const font = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';

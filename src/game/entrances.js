@@ -5,7 +5,7 @@
  */
 export const ENTRANCE_GEO = {
   tent_focus: { angle: 2.6, trigger: 13.6, build: 15.3 },
-  treehouse_music: { angle: -2.2, trigger: 15.6, build: 17.3 },
+  treehouse_music: { angle: -2.2, trigger: 17.4, build: 19.1 }, // 作者 11/13：離營火河畔再退一點
   lake_dock: { angle: 1.15, trigger: 13.6, build: 15.3 },
   tent_social: { angle: -1.25, trigger: 15.6, build: 17.3 },
   campground: { angle: -2.95, trigger: 13.6, build: 15.3 },

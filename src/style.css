@@ -7296,3 +7296,38 @@ body.spg-on .notice-panel {
 @keyframes ffPulse { 50% { transform: scale(1.05); } }
 .frame-pill { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); z-index: 9998; padding: 8px 16px; border-radius: 999px; background: rgba(240, 138, 60, 0.95); color: #2a1608; font-weight: 700; font-size: 14px; pointer-events: none; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
 .frame-pill[hidden] { display: none; }
+/* 🎲 營火桌遊（坐在圓木上發起；畫面下方小視窗，不擋營火） */
+.bg-panel { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 40; width: min(380px, calc(100vw - 24px)); display: flex; justify-content: center; pointer-events: none; }
+.bg-panel[hidden] { display: none; }
+.bg-panel > * { pointer-events: auto; }
+body.touch .bg-panel { bottom: 250px; }
+.bg-open { padding: 9px 18px; border: 2px solid #ffd56b; border-radius: 999px; background: linear-gradient(180deg, #ffb46b, #f08a45); color: #3a1d0c; font: inherit; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
+.bg-card { width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 18px; background: rgba(36, 28, 40, 0.93); border: 1px solid rgba(255, 210, 160, 0.28); color: #fff3e0; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); display: flex; flex-direction: column; gap: 8px; }
+.bg-card.bg-mini { font-size: 13px; padding: 8px 12px; }
+.bg-head { font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bg-x { border: none; background: rgba(255, 255, 255, 0.1); color: inherit; border-radius: 999px; width: 28px; height: 28px; cursor: pointer; }
+.bg-games { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bg-games button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; border-radius: 14px; border: 2px solid rgba(255, 210, 160, 0.25); background: rgba(255, 255, 255, 0.06); color: inherit; font: inherit; cursor: pointer; }
+.bg-games button span { font-size: 30px; line-height: 1; }
+.bg-games button small { font-size: 11px; opacity: 0.8; text-align: center; }
+.bg-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.bg-chips span { padding: 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); font-size: 13px; }
+.bg-chips span.on { outline: 2px solid #ffc46b; }
+.bg-chips span.win { background: rgba(255, 196, 107, 0.3); outline: 2px solid #ffd56b; }
+.bg-go { padding: 10px; border: none; border-radius: 12px; background: linear-gradient(180deg, #ffb46b, #f08a45); color: #3a1d0c; font: inherit; font-weight: 800; font-size: 16px; cursor: pointer; }
+.bg-go:disabled { opacity: 0.5; cursor: default; }
+.bg-sub { padding: 7px; border: none; border-radius: 12px; background: rgba(255, 255, 255, 0.1); color: inherit; font: inherit; cursor: pointer; }
+.bg-note { font-size: 12px; opacity: 0.8; }
+.bg-result { font-size: 17px; font-weight: 800; text-align: center; color: #ffe08a; }
+.bg-blow { align-self: center; width: 120px; height: 120px; border-radius: 50%; border: 4px solid #fff; background: radial-gradient(circle at 35% 35%, #f0fbff, #8fc8f0); color: #123; font: inherit; font-weight: 800; font-size: 19px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
+.bg-blow.on { transform: scale(0.94); box-shadow: 0 0 0 8px rgba(143, 200, 240, 0.35); }
+.bg-meter { height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.bg-meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #9fe39f, #ffd36a, #ff7a6b); }
+/* 🗺️ 營地地圖（看板／去哪裡）：可以點的帳篷、主人在線上 */
+.mvp.go { cursor: pointer; }
+.mvp.go:hover path { filter: brightness(1.15); }
+.mv-onl { fill: rgba(255, 228, 120, 0.55); stroke: #ffd56b; stroke-width: 0.3; }
+.mv-onl-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ffe478; box-shadow: 0 0 6px #ffd56b; vertical-align: middle; margin-right: 2px; }
+.mvp.empty .mv-ring2 { opacity: 0.45; }
+.mv-ask { display: flex; flex-direction: column; gap: 4px; font-size: 16px; text-align: center; padding: 6px 0 10px; }
+.mv-ask small { opacity: 0.7; font-size: 13px; }

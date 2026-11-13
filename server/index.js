@@ -36,6 +36,7 @@ import { MUSEUM_BY_ID, DONATE_PER_DAY } from '../src/game/museum.js';
 import { TRASH, TRASH_BY_ID, TRASH_MAX, TRASH_ROOM, RECYCLE_GAIN, RECYCLE_DAILY_CAP, TRASH_FIRST_GAIN, TRASH_DEX_OUTFIT, pickTrash } from '../src/game/trash.js';
 import { LAYOUT as CAMP_LAYOUT } from '../src/rooms/campLayout.js';
 import { PASS, PASS_TIERS, PASS_PLANS, FREE, SPONSOR, SPONSOR_BOX, sponsorAmounts, sponsorMin, sponsorTier } from '../src/game/pass.js';
+import { BOARD_ON, BOARD_GAMES, BOARD_MIN, BOARD_MAX as BG_MAX, BOARD_WIN, BOARD_DAY_CAP } from '../src/game/boardGames.js';
 import crypto from 'node:crypto';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack, hasLoft } from './homes.js';
 import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS } from '../src/game/furnitureCatalog.js';
@@ -356,6 +357,7 @@ function zoneOnline(ch, len) {
 /** 帳篷營地某一區：長度 24 的陣列，第 i 格＝那一區 i+1 號（沒人住＝null） */
 function campList(zone = 0, selfVid = null) {
   const out = Array(CAMP_PLOTS).fill(null);
+  const onv = new Set([...io.sockets.sockets.values()].map((s) => s.data.vid).filter(Boolean)); // 🗺️ 營地地圖：主人在線上
   for (const [vid, h] of Object.entries(homes)) {
     if (!h?.tent || !h.plot || h.plot.z !== zone) continue;
     out[h.plot.n - 1] = {
@@ -374,6 +376,7 @@ function campList(zone = 0, selfVid = null) {
       garden: gardenView(h),
       yard: normYard(h.yard)?.on ?? null, // 大型擺設
       sm: h.yard?.sm ?? [], // 小型擺設（最多 3 個）
+      on: onv.has(vid),
     };
   }
   return out;
@@ -1896,6 +1899,110 @@ const emitAllChannels = (roomId, ev, data) => {
 const fullMsg = (label) => `${label}人數已滿，請稍後再來`;
 
 // ---------- 連線 ----------
+// ---------- 🎲 營火桌遊（作者 11/13：坐在營火圓木上發起，🪵 抽樹枝、🫧 吹泡泡；規則在 src/game/boardGames.js） ----------
+const BOARD_LIVE = () => BOARD_ON || process.env.BOARD_TEST === '1';
+const bgGames = new Map(); // rkey → 一局（每個分流的營火同時只有一局）
+const BG_INVITE_MS = 30000;
+const BG_TURN_MS = 10000;
+const BG_BLOW_MS = 8000;
+const BG_RATE = 0.16; // 泡泡每秒最多長多大（0～1）
+const bgView = (g) => ({
+  id: g.id,
+  game: g.game,
+  host: g.host,
+  state: g.state,
+  turn: g.turn ?? null,
+  endsAt: g.endsAt ?? null,
+  winners: g.winners ?? null,
+  gain: g.gain ?? null,
+  players: g.players.map((p) => ({ id: p.id, name: p.name, len: p.len ?? null, size: p.size ?? 0, popped: !!p.popped, done: !!p.done })),
+});
+const bgEmit = (g) => io.to(g.rkey).emit('bg', bgView(g));
+const bgClear = (g) => {
+  clearTimeout(g.timer);
+  if (bgGames.get(g.rkey) === g) bgGames.delete(g.rkey);
+  io.to(g.rkey).emit('bg', { id: g.id, state: 'gone' });
+};
+/** 贏家 +2 松果（每天最多 20 顆，上限到了照樣能玩、只是不給） */
+function bgAward(vid) {
+  const w = players[vid];
+  if (!w) return 0;
+  const d = dayKey();
+  if (w.bgd?.d !== d) w.bgd = { d, n: 0 };
+  const n = Math.min(BOARD_WIN, BOARD_DAY_CAP - w.bgd.n);
+  if (n <= 0) return 0;
+  w.bgd.n += n;
+  giveTo(vid, n, 'board');
+  return n;
+}
+function bgFinish(g) {
+  clearTimeout(g.timer);
+  g.state = 'done';
+  let best = [];
+  if (g.game === 'stick') {
+    const max = Math.max(...g.players.map((p) => p.len ?? 0));
+    best = g.players.filter((p) => p.len && p.len === max);
+  } else {
+    const alive = g.players.filter((p) => !p.popped && p.size > 0);
+    const max = Math.max(0, ...alive.map((p) => p.size));
+    best = alive.filter((p) => p.size === max && max > 0);
+  }
+  if (g.players.length < 2) best = []; // 只剩一個人：不算輸贏
+  g.winners = best.map((p) => p.id);
+  g.gain = Object.fromEntries(best.map((p) => [p.id, bgAward(p.vid)]));
+  const d = today();
+  d.bg ??= {};
+  d.bg[g.game] = (d.bg[g.game] ?? 0) + 1;
+  d.bgPlayers = (d.bgPlayers ?? 0) + g.players.length;
+  saveJson('stats.json', stats);
+  bgEmit(g);
+  g.timer = setTimeout(() => bgClear(g), 15000); // 結果留 15 秒（可以按「再來一局」）
+}
+function bgNextTurn(g) {
+  clearTimeout(g.timer);
+  const next = g.players.find((p) => !p.len);
+  if (!next) return bgFinish(g);
+  g.turn = next.id;
+  g.endsAt = Date.now() + BG_TURN_MS;
+  bgEmit(g);
+  g.timer = setTimeout(() => bgDraw(g, next.id), BG_TURN_MS); // 太久沒抽：自動幫他抽
+}
+function bgDraw(g, id) {
+  const p = g.players.find((q) => q.id === id);
+  if (!p || p.len || g.state !== 'play' || g.turn !== id) return;
+  p.len = Math.round((0.2 + Math.random() * 1.0) * 100) / 100; // 0.2～1.2 公尺
+  bgNextTurn(g);
+}
+function bgStart(g) {
+  clearTimeout(g.timer);
+  g.state = 'play';
+  g.startAt = Date.now();
+  if (g.game === 'stick') return bgNextTurn(g);
+  for (const p of g.players) {
+    p.limit = 0.55 + Math.random() * 0.45; // 每個人的泡泡極限不一樣（看不到）
+    p.size = 0;
+  }
+  g.endsAt = Date.now() + BG_BLOW_MS;
+  bgEmit(g);
+  g.timer = setTimeout(() => bgFinish(g), BG_BLOW_MS + 600);
+}
+/** 有人離開營火（換房間、斷線、站起來） */
+function bgLeave(rkey, sid) {
+  const g = bgGames.get(rkey);
+  if (!g) return;
+  const i = g.players.findIndex((p) => p.id === sid);
+  if (i < 0) return;
+  if (g.state === 'done') return;
+  g.players.splice(i, 1);
+  if (g.state === 'invite') {
+    if (g.host.id === sid || !g.players.length) return bgClear(g); // 發起的人走了：取消
+    return bgEmit(g);
+  }
+  if (g.players.length < 2) return bgFinish(g);
+  if (g.game === 'stick' && g.turn === sid) return bgNextTurn(g);
+  bgEmit(g);
+}
+
 io.on('connection', (socket) => {
   let player = null;
   let chan = null; // 目前的分流
@@ -2033,6 +2140,7 @@ io.on('connection', (socket) => {
   /** 離開目前的分流／房間 */
   /** 離開目前的房間；to：去了哪裡（沒有＝離開遊戲） */
   const leave = (to) => {
+    if (rkey) bgLeave(rkey, socket.id); // 🎲 離開營火：退出桌遊
     room.players.delete(socket.id);
     socket.leave(rkey);
     io.to(rkey).emit('playerLeft', to ? { id: socket.id, to } : { id: socket.id });
@@ -2489,6 +2597,72 @@ io.on('connection', (socket) => {
   let lastChat = 0;
   // 📣 大聲公（作者 11/12）：30 松果，全營地（所有分流、所有地方）都看得到；每人 3 分鐘一次，全營地 20 秒最多一則
   let lastShout = 0;
+  // 🎲 營火桌遊：op＝invite 發起、join 加入、leave 退出、start 開始、draw 抽樹枝、blow 吹泡泡（回報現在多大、吹完了沒）
+  let bgInviteAt = 0;
+  socket.on('bg', (data = {}, ack) => {
+    if (!BOARD_LIVE() || !player || roomId !== 'forest_main') return ack?.({ ok: false, reason: 'off' });
+    const nearFire = Math.hypot(player.x ?? 99, player.z ?? 99) < 3.4; // 要坐在營火旁
+    const g = bgGames.get(rkey);
+    const me = g?.players.find((p) => p.id === socket.id);
+    const op = String(data.op ?? '');
+    if (op === 'invite') {
+      if (!nearFire) return ack?.({ ok: false, reason: 'far' });
+      if (g && g.state !== 'done') return ack?.({ ok: false, reason: 'busy', game: bgView(g) });
+      if (Date.now() - bgInviteAt < 8000) return ack?.({ ok: false, reason: 'tooFast' });
+      const game = BOARD_GAMES.some((x) => x.id === data.game) ? data.game : 'stick';
+      if (g) bgClear(g);
+      bgInviteAt = Date.now();
+      const ng = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, rkey, game, host: { id: socket.id, name: player.name }, state: 'invite', players: [{ id: socket.id, vid: player.vid, name: player.name }], endsAt: Date.now() + BG_INVITE_MS };
+      ng.timer = setTimeout(() => bgClear(ng), BG_INVITE_MS);
+      bgGames.set(rkey, ng);
+      bump('bgInvite');
+      bgEmit(ng);
+      return ack?.({ ok: true });
+    }
+    if (op === 'peek') return ack?.({ ok: true, game: g ? bgView(g) : null }); // 剛走到營火：看看有沒有正在玩的
+    if (!g) return ack?.({ ok: false, reason: 'none' });
+    if (op === 'join') {
+      if (g.state !== 'invite') return ack?.({ ok: false, reason: 'started' });
+      if (!nearFire) return ack?.({ ok: false, reason: 'far' });
+      if (me) return ack?.({ ok: true });
+      if (g.players.length >= BG_MAX) return ack?.({ ok: false, reason: 'full' });
+      if (g.players.some((p) => p.vid === player.vid)) return ack?.({ ok: false, reason: 'dup' }); // 同一個人開兩個視窗
+      g.players.push({ id: socket.id, vid: player.vid, name: player.name });
+      bgEmit(g);
+      return ack?.({ ok: true });
+    }
+    if (op === 'leave') {
+      bgLeave(rkey, socket.id);
+      return ack?.({ ok: true });
+    }
+    if (op === 'start') {
+      if (g.state !== 'invite' || g.host.id !== socket.id) return ack?.({ ok: false });
+      if (g.players.length < BOARD_MIN) return ack?.({ ok: false, reason: 'few' });
+      bgStart(g);
+      return ack?.({ ok: true });
+    }
+    if (op === 'draw') {
+      if (g.game !== 'stick' || !me) return ack?.({ ok: false });
+      bgDraw(g, socket.id);
+      return ack?.({ ok: true });
+    }
+    if (op === 'blow') {
+      if (g.game !== 'bubble' || g.state !== 'play' || !me || me.done || me.popped) return ack?.({ ok: false });
+      // 不能比「從開始一直按住」長得還大（防亂送）
+      const maxNow = Math.min(1.2, ((Date.now() - g.startAt) / 1000) * BG_RATE + 0.05);
+      me.size = Math.max(me.size ?? 0, Math.min(num(data.size, 0, 1.2, 0), maxNow));
+      if (me.size > me.limit) me.popped = true;
+      if (data.done) me.done = true;
+      // 大家都吹完（或破了）就提早結束
+      if (g.players.every((p) => p.done || p.popped)) bgFinish(g);
+      else if (!g.emitAt || Date.now() - g.emitAt > 250 || me.popped || me.done) {
+        g.emitAt = Date.now();
+        bgEmit(g);
+      }
+      return ack?.({ ok: true, popped: me.popped });
+    }
+    ack?.({ ok: false });
+  });
   socket.on('shout', (data = {}, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
     const text = String(data.text ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40);

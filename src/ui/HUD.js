@@ -202,8 +202,8 @@ export class HUD {
       ['campground', t('🏕️ 帳篷營地')],
       ['home', t('🏠 我的帳篷')],
       ['treehouse_music', t('🎵 森林樹屋')],
-      ['tent_social', t('☕ 交流帳篷')],
       ['tent_focus', t('⛺ 專注帳篷')],
+      ['map', `${t('🗺️ 營地地圖')}<small class="go-sub">${t('看大家住哪裡、直接傳送過去')}</small>`], // 作者 11/13
     ];
     // 🏕️ 帳篷營地：只放一行（11/07 作者：區變多選單會太長）。有帳篷就到我家那一區，換區在營地裡右邊的「🏕️ A 區 ▾」
     const zi = this.zoneInfo?.() ?? { zones: [], mine: null, cur: -1 };
@@ -215,7 +215,7 @@ export class HUD {
       // 👣 各區現在幾個人（伺服器的 areas；我的帳篷不顯示）
       // 帳篷營地（camp:幾區）用伺服器的 campground：各區加起來＋在自己帳篷裡的人（11/08 作者：營地看不到人數）
       const aid = id.startsWith('camp:') ? 'campground' : id;
-      const n = id !== 'home' && this.areas ? this.areas[aid] ?? 0 : null;
+      const n = id !== 'home' && id !== 'map' && this.areas ? this.areas[aid] ?? 0 : null;
       const cnt = n == null ? '' : `<span class="go-n${n ? '' : ' zero'}">${t('{n} 人', { n })}</span>`;
       return `<button type="button" data-go="${id}" ${here ? 'disabled' : ''} class="${here ? 'here' : ''}${off ? ' off' : ''}">${cnt}${label}${here ? `<small>${t('目前在這裡')}</small>` : off ? `<small>${t('先到小舖買帳篷')}</small>` : ''}</button>`;
     }).join('');

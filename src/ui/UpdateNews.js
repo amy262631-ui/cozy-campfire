@@ -5,9 +5,10 @@ import { t } from '../i18n/i18n.js';
  * 要發新的公告：改 NEWS.id（例如換成新的日期）和 items 就好。
  */
 export const NEWS = {
-  id: '2026-11-12',
+  id: '2026-11-12b', // 11/13 加了桌遊、營地地圖
   title: () => t('✨ 小精靈來了！'),
   items: () => [
+    ...NEW_1113(),
     { pic: '✨', title: t('可以養小精靈了'), text: t('到小舖「✨ 小精靈」買小精靈蛋（第一顆 100 🌰，馬上孵出來），小光點會飄在你肩膀旁邊，別人也看得到') },
     { pic: '🌱', title: t('玩遊戲會長大'), text: t('釣魚、添柴、煮菜、採集、餵料理都會長大：小光點 → 小精靈 → 長大（翅膀＋光環）') },
     { pic: '💧', title: t('看你怎麼玩決定樣子'), text: t('釣魚 💧、顧火煮菜 🔥、採集 🍃、休息聊天 ☁️、看星星許願 ⭐、迷霧森林採蘑菇 🍄') },
@@ -21,6 +22,12 @@ export const NEWS = {
     { pic: '📢', title: t('以前的更新也看得到'), text: t('按上方「📢 更新」，可以往前翻以前的更新') },
   ],
 };
+
+/** 🎲 營火桌遊＋🗺️ 營地地圖（作者 11/13：不要另開一頁，加在目前這一頁最上面，原本的內容留著） */
+const NEW_1113 = () => [
+  { pic: '🎲', title: t('坐在營火旁玩桌遊'), text: t('坐到營火的圓木上，按「🎲 桌遊」邀大家一起玩，2～6 人，贏的人 +2 🌰') },
+  { pic: '🗺️', title: t('營地地圖'), text: t('帳篷營地入口的地圖看板、或「🧭 去哪裡 → 🗺️ 營地地圖」：看大家住哪裡，點帳篷就能傳送到他家門口') },
+];
 
 /** 🏕️ 新帳篷（作者 11/12：下次週更新上傳就開賣，公告寫新增帳篷）——最新的一則，月票開不開都先給這則 */
 export const NEWS_TENTS = {
@@ -37,9 +44,10 @@ export const NEWS_TENTS = {
 
 /** 💝 月票開賣的公告（伺服器 PASS_ON 開了才用這份，沒開之前還是上面那份） */
 export const NEWS_PASS = {
-  id: '2026-11-14',
+  id: '2026-11-14b', // 11/13 加了桌遊、營地地圖 → 換 id，大家會再看到一次
   title: () => t('💝 支持營地開放了！'),
   items: () => [
+    ...NEW_1113(),
     { pic: '✨', title: t('小精靈來了'), text: t('小舖「✨ 小精靈」買小精靈蛋（第一顆 100 🌰），玩遊戲會長大，可以餵它、取名字') },
     { pic: '🎮', title: t('跟小精靈玩小遊戲'), text: t('每種小精靈的遊戲都不一樣：跳舞、追泡泡、躲貓貓、連星座⋯多養幾隻都玩玩看') },
     { pic: '📣', title: t('大聲公'), text: t('聊天框旁邊的 📣：花 30 🌰，說的話全營地都看得到') },
@@ -104,7 +112,7 @@ export class UpdateNews {
 
   /** 現在要顯示的公告 */
   get news() {
-    return this.payOn() ? NEWS_PASS : NEWS; // 🏕️ 新帳篷下週推出時改回 NEWS_TENTS（作者 11/12：先隱藏）
+    return this.payOn() ? NEWS_PASS : NEWS; // 🏕️ 新帳篷推出時改成 NEWS_TENTS（作者 11/12：先隱藏）
   }
 
   get visible() {
@@ -140,7 +148,7 @@ export class UpdateNews {
     const list = this.pages;
     page = Math.max(0, Math.min(list.length - 1, page));
     const n = list[page];
-    const date = n.id.slice(5).replace('-', '/');
+    const date = n.id.slice(5, 10).replace('-', '/');
     this.card.innerHTML = `
       <div class="upd-title">${n.title()}</div>
       <div class="upd-date">${date}${page ? t('・以前的更新') : ''}</div>

@@ -558,6 +558,70 @@ export function createCampgroundRoom() {
     group.add(tag);
   }
   const nearPubBike = (pos) => Math.hypot(pos.x - PUB_BIKE.x, pos.z - PUB_BIKE.z) < 1.5;
+  // 🗺️ 營地地圖看板（作者 11/13）：入口、腳踏車的另一邊。按 E 打開這一區的地圖，點帳篷可以傳送到家門口
+  const MAP_BOARD = { x: -3.3, z: ENTRY_Z - 2.4 };
+  {
+    const mb = new THREE.Group();
+    const wood = lowpoly(0x7a5236);
+    for (const sx of [-0.62, 0.62]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.7, 0.1), wood);
+      post.position.set(sx, 0.85, 0);
+      mb.add(post);
+    }
+    const frameM = new THREE.Mesh(new THREE.BoxGeometry(1.45, 1.0, 0.08), wood);
+    frameM.position.y = 1.25;
+    mb.add(frameM);
+    // 看板上的小地圖：草地、彎彎的路、幾頂小帳篷（畫在 canvas 上）
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 176;
+    const g = c.getContext('2d');
+    g.fillStyle = '#bfe3a4';
+    g.fillRect(0, 0, 256, 176);
+    g.strokeStyle = '#d9b98a';
+    g.lineWidth = 14;
+    g.beginPath();
+    g.ellipse(128, 80, 82, 52, 0, 0, Math.PI * 2);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(128, 132);
+    g.lineTo(128, 176);
+    g.stroke();
+    const tents = [[60, 40], [110, 22], [170, 28], [205, 70], [190, 120], [70, 118], [40, 80], [150, 130]];
+    tents.forEach(([x, y], i) => {
+      g.fillStyle = ['#f2a65a', '#8fc2a4', '#e58b6b', '#9fb3d8'][i % 4];
+      g.beginPath();
+      g.moveTo(x - 9, y + 7);
+      g.lineTo(x, y - 9);
+      g.lineTo(x + 9, y + 7);
+      g.closePath();
+      g.fill();
+    });
+    g.fillStyle = '#e8553e';
+    g.beginPath();
+    g.arc(128, 160, 8, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#fff';
+    g.font = 'bold 13px sans-serif';
+    g.textAlign = 'center';
+    g.fillText('YOU', 128, 165);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.88), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.25 }));
+    face.position.set(0, 1.25, 0.045);
+    mb.add(face);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 0.3), lowpoly(0x5a3c26));
+    roof.position.y = 1.8;
+    mb.add(roof);
+    mb.position.set(MAP_BOARD.x, 0, MAP_BOARD.z);
+    mb.rotation.y = 0.5;
+    group.add(mb);
+    colliders.push({ x: MAP_BOARD.x, z: MAP_BOARD.z, r: 0.45 });
+    const tag = makeSign(t('🗺️ 營地地圖・點帳篷就能過去'), { height: 0.26 });
+    tag.position.set(MAP_BOARD.x, 2.15, MAP_BOARD.z);
+    group.add(tag);
+  }
+  const nearMapBoard = (pos) => Math.hypot(pos.x - MAP_BOARD.x, pos.z - MAP_BOARD.z) < 1.6;
   const back = makeSign(t('回到營火'), { height: 0.3 });
   back.position.set(0, 2.1, ENTRY_Z + 0.3);
   group.add(back);
@@ -1196,6 +1260,10 @@ export function createCampgroundRoom() {
         actions.ride();
         return true;
       }
+      if (nearMapBoard(actions.player.position)) {
+        actions.onCampMap?.();
+        return true;
+      }
       const tg = targetAt(actions.player.position);
       // 🚙 門口擺設比門口、菜園近的話：打開擺設的選單
       const yd = pickYard(actions.player.position);
@@ -1212,6 +1280,7 @@ export function createCampgroundRoom() {
       lastActions = actions;
       if (trash.near(actions.player.position)) return t('<kbd>E</kbd> ♻️ 撿起垃圾');
       if (actions.state === 'free' && nearPubBike(actions.player.position)) return t('<kbd>E</kbd> 🚲 騎公用腳踏車（再按 E 下車）');
+      if (actions.state === 'free' && nearMapBoard(actions.player.position)) return t('<kbd>E</kbd> 🗺️ 看營地地圖（點帳篷就能過去）');
       const tg = targetAt(actions.player.position);
       const yd = pickYard(actions.player.position);
       if (yd) return t('<kbd>E</kbd> {icon} {name}', { icon: yd.yard.icon ?? YARD_ICON[yd.yard.id] ?? '🚙', name: yd.yard.name ?? t(YARD_NAME[yd.yard.id] ?? '') });
@@ -1229,6 +1298,7 @@ export function createCampgroundRoom() {
       if (seatedOn() || actions.state === 'ride') return ['🧍', t('起身')];
       if (trash.near(actions.player.position)) return ['♻️', t('撿起來')];
       if (nearPubBike(actions.player.position)) return ['🚲', t('騎車')];
+      if (nearMapBoard(actions.player.position)) return ['🗺️', t('地圖')];
       const yd0 = pickYard(actions.player.position);
       if (yd0) return [yd0.yard.icon ?? YARD_ICON[yd0.yard.id] ?? '🚙', t('使用')];
       const tg = targetAt(actions.player.position);
