@@ -18,7 +18,10 @@ export const boardOn = () => {
 export const BOARD_GAMES = [
   { id: 'stick', icon: '🪵', zh: '抽樹枝', how: '輪流抽一根，最長的贏' },
   { id: 'bubble', icon: '🫧', zh: '吹泡泡', how: '按住吹，最大的贏；吹太大會破' },
+  // 🐸 作者 11/13：有小朋友，要簡單 → 輪流點一個洞，戳到青蛙跳出來的人輸；只在畫面上的小視窗玩，不放 3D 模型
+  { id: 'frog', icon: '🐸', zh: '青蛙跳出來', how: '輪流戳一個洞，戳到青蛙跳出來的人就輸了' },
 ];
+export const FROG_HOLES = 8; // 🐸 木桶上幾個洞
 export const BOARD_MIN = 2; // 幾個人才能開始
 export const BOARD_MAX = 6; // 一局最多幾個人
 export const BOARD_WIN = 2; // 贏家拿幾顆松果

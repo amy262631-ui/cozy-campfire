@@ -7,6 +7,7 @@ import { makeStick, makeBubble } from '../player/boardProps.js';
  * 🎲 營火桌遊的畫面（作者 11/13：坐在營火圓木上發起，不放桌椅）
  *   畫面下方一個小視窗（不擋營火）：發起 → 邀請（加入／先不要）→ 抽樹枝／吹泡泡 → 結果
  *   抽到的樹枝、吹的泡泡出現在每個人頭上（自己的、別人的都看得到）
+ * 🐸 青蛙跳出來：像「戳戳樂」，小視窗裡一格一格的紙洞，輪流戳一個；沒有 3D 模型（作者 11/13：無實體、在遊戲畫面內就好）
  * 伺服器規則在 server/index.js 的「🎲 營火桌遊」，事件名稱 'bgame'（'bg' 是切到背景用的，不能共用）
  */
 const RATE = 0.16; // 泡泡每秒長多大（跟伺服器一樣）
@@ -95,9 +96,11 @@ export class BoardGameUI {
     const me = this.self();
     if (v.state === 'invite' && (!prev || prev.id !== v.id) && v.host.id !== me.id) this.audio?.sfx?.('bell');
     if (v.state === 'play' && v.turn === me.id && prev?.turn !== me.id) this.audio?.sfx?.('bell');
+    if (v.game === 'frog' && prev?.id === v.id && (v.holes ?? []).filter(Boolean).length > (prev.holes ?? []).filter(Boolean).length) this.audio?.sfx?.('tap'); // 有人戳了一下
     if (v.state === 'done' && prev?.state !== 'done') {
       this.audio?.sfx?.('bell');
       const gain = v.gain?.[me.id];
+      if (v.game === 'frog' && v.loser === me.id) this.hud.toast(t('🐸 啵！青蛙跳到你頭上了 😆'), 4000);
       if (v.winners?.includes(me.id)) this.hud.toast(gain ? t('🏆 你贏了！+{n} 🌰', { n: gain }) : t('🏆 你贏了！（今天桌遊的松果拿滿了）'), 4000);
     }
     this.g = v;
@@ -115,6 +118,7 @@ export class BoardGameUI {
     const g = this.g;
     if (!g || g.state === 'invite') return this.#clearProps();
     const me = this.self();
+    if (g.game === 'frog') return this.#clearProps(); // 🐸 只在小視窗裡玩，頭上不放東西
     for (const p of g.players) {
       let pr = this.props.get(p.id);
       if (g.game === 'stick') {
@@ -206,6 +210,7 @@ export class BoardGameUI {
       this._key = '';
     } else if (act === 'start') await req('start');
     else if (act === 'draw') await req('draw');
+    else if (act === 'poke') await req('poke', { hole: Number(b.dataset.hole) });
     else if (act === 'again') await req('invite', { game: this.g?.game ?? 'stick' });
     else if (act === 'done') {
       this.dismissed = this.g?.id;
@@ -236,7 +241,20 @@ export class BoardGameUI {
       if (!me.sitting) return me.inForest ? `<div class="bg-card bg-mini">🎲 ${t('{name} 在營火邊邀大家玩 {game}，坐到圓木上就能加入', { name: g.host.name, game: title })}</div>` : '';
       return `<div class="bg-card"><div class="bg-head">🎲 ${t('{name} 邀大家玩 {game}', { name: g.host.name, game: title })}</div>${chips()}<small class="bg-note">${t(G.how)}</small><button type="button" class="bg-go" data-act="join" ${g.players.length >= BOARD_MAX ? 'disabled' : ''}>${t('加入')}</button><button type="button" class="bg-sub" data-act="no">${t('先不要')}</button></div>`;
     }
+    // 🐸 戳戳樂的格子：戳過的破一個洞（🌿＝沒事）；結束時青蛙躲的那格「啵」跳出來
+    const frogBoard = (myTurn) =>
+      `<div class="bg-frog">${(g.holes ?? []).map((h, i) => {
+        const pop = g.state === 'done' && i === g.trap;
+        const cls = pop ? 'pop' : h ? 'x' : '';
+        const who = h ? g.players.find((p) => p.id === h) : null;
+        return `<button type="button" class="${cls}" ${myTurn && !h ? `data-act="poke" data-hole="${i}"` : 'disabled'}>${pop ? '<i>🐸</i>' : h ? '🌿' : ''}${who && !pop ? `<small>${name(who)}</small>` : ''}</button>`;
+      }).join('')}</div>`;
     if (g.state === 'play') {
+      if (g.game === 'frog') {
+        const myTurn = g.turn === me.id;
+        const turnP = g.players.find((p) => p.id === g.turn);
+        return `<div class="bg-card"><div class="bg-head">${title}・${myTurn ? t('輪到你了！') : t('輪到 {name}', { name: turnP ? name(turnP) : '' })}（${left}）</div>${chips()}${frogBoard(myTurn)}<small class="bg-note">${myTurn ? t('點一格戳下去 👆 沒點的話會自動幫你戳') : mine ? t('青蛙躲在其中一格，等 {name} 戳⋯', { name: turnP ? name(turnP) : '' }) : t('在旁邊看大家戳戳樂 👀')}</small></div>`;
+      }
       if (g.game === 'stick') {
         const myTurn = g.turn === me.id;
         return `<div class="bg-card"><div class="bg-head">${title}${myTurn ? `・${t('輪到你了！')}` : ''}</div>${chips((p) => (p.len ? `🪵 ${p.len.toFixed(2)}` : g.turn === p.id ? '⏳' : '…'))}${myTurn ? `<button type="button" class="bg-go" data-act="draw">🪵 ${t('抽一根')}（${left}）</button><small class="bg-note">${t('沒抽的話會自動幫你抽')}</small>` : mine ? `<small class="bg-note">${t('等其他人抽⋯')}</small>` : `<small class="bg-note">${t('在旁邊看大家抽樹枝 👀')}</small>`}</div>`;
@@ -247,6 +265,11 @@ export class BoardGameUI {
     }
     // 結果
     const wins = g.players.filter((p) => g.winners?.includes(p.id));
+    if (g.game === 'frog') {
+      const lp = g.players.find((p) => p.id === g.loser);
+      const fline = lp ? t('🐸 啵！青蛙跳到 {name} 頭上了 😆', { name: name(lp) }) : t('這局沒有人戳到青蛙 🐸');
+      return `<div class="bg-card"><div class="bg-head">${title}・${t('結果')}</div>${frogBoard(false)}<div class="bg-result">${fline}</div>${chips((p) => (p.id === g.loser ? '🐸' : g.winners?.includes(p.id) ? '🏆' : ''))}${mine && me.sitting ? `<button type="button" class="bg-go" data-act="again">${t('再來一局')}</button>` : ''}<button type="button" class="bg-sub" data-act="done">${t('關掉')}</button></div>`;
+    }
     const line = wins.length ? t('🏆 {names} 贏了！', { names: wins.map(name).join('、') }) : t('這局沒有人贏 🫧');
     return `<div class="bg-card"><div class="bg-head">${title}・${t('結果')}</div>${chips((p) => (g.game === 'stick' ? `🪵 ${(p.len ?? 0).toFixed(2)}` : p.popped ? '💥' : `🫧 ${Math.round(p.size * 100)}`))}<div class="bg-result">${line}</div>${mine && me.sitting ? `<button type="button" class="bg-go" data-act="again">${t('再來一局')}</button>` : ''}<button type="button" class="bg-sub" data-act="done">${t('關掉')}</button></div>`;
   }
@@ -285,8 +308,8 @@ export class BoardGameUI {
       if (bar) bar.style.width = `${Math.min(100, this.mySize * 100)}%`;
     }
     // 小視窗：內容變了才重畫（倒數秒數也算）
-    const left = g?.endsAt ? Math.ceil((g.endsAt - Date.now()) / 1000) : 0;
-    const key = JSON.stringify([g?.id, g?.state, g?.turn, g?.players?.map((p) => [p.id, p.len, p.popped, p.done]), left, me.sitting, me.inForest, this.picking, this.dismissed, g?.winners]);
+    const left = g?.endsAt && g.state !== 'done' ? Math.max(0, Math.ceil((g.endsAt - Date.now()) / 1000)) : 0; // 結束後不再倒數（不然每秒重畫，青蛙動畫一直重來）
+    const key = JSON.stringify([g?.id, g?.state, g?.turn, g?.players?.map((p) => [p.id, p.len, p.popped, p.done]), g?.holes, left, me.sitting, me.inForest, this.picking, this.dismissed, g?.winners]);
     if (key !== this._key && !this.blowing) {
       this._key = key;
       const html = me.inForest ? this.#render(me) : '';

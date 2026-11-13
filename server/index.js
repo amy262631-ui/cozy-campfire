@@ -36,7 +36,7 @@ import { MUSEUM_BY_ID, DONATE_PER_DAY } from '../src/game/museum.js';
 import { TRASH, TRASH_BY_ID, TRASH_MAX, TRASH_ROOM, RECYCLE_GAIN, RECYCLE_DAILY_CAP, TRASH_FIRST_GAIN, TRASH_DEX_OUTFIT, pickTrash } from '../src/game/trash.js';
 import { LAYOUT as CAMP_LAYOUT } from '../src/rooms/campLayout.js';
 import { PASS, PASS_TIERS, PASS_PLANS, FREE, SPONSOR, SPONSOR_BOX, sponsorAmounts, sponsorMin, sponsorTier } from '../src/game/pass.js';
-import { BOARD_ON, BOARD_GAMES, BOARD_MIN, BOARD_MAX as BG_MAX, BOARD_WIN, BOARD_DAY_CAP } from '../src/game/boardGames.js';
+import { BOARD_ON, BOARD_GAMES, BOARD_MIN, BOARD_MAX as BG_MAX, BOARD_WIN, BOARD_DAY_CAP, FROG_HOLES } from '../src/game/boardGames.js';
 import crypto from 'node:crypto';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack, hasLoft } from './homes.js';
 import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS } from '../src/game/furnitureCatalog.js';
@@ -1916,6 +1916,9 @@ const bgView = (g) => ({
   endsAt: g.endsAt ?? null,
   winners: g.winners ?? null,
   gain: g.gain ?? null,
+  holes: g.holes ?? null, // 🐸 每個洞是誰戳的（null＝還沒戳）
+  loser: g.loser ?? null,
+  trap: g.state === 'done' ? (g.trap ?? null) : null, // 青蛙躲在哪個洞：結束才公開
   players: g.players.map((p) => ({ id: p.id, name: p.name, len: p.len ?? null, size: p.size ?? 0, popped: !!p.popped, done: !!p.done })),
 });
 const bgEmit = (g) => io.to(g.rkey).emit('bgame', bgView(g));
@@ -1943,6 +1946,8 @@ function bgFinish(g) {
   if (g.game === 'stick') {
     const max = Math.max(...g.players.map((p) => p.len ?? 0));
     best = g.players.filter((p) => p.len && p.len === max);
+  } else if (g.game === 'frog') {
+    best = g.loser ? g.players.filter((p) => p.id !== g.loser) : []; // 戳到青蛙的人輸，其他人都贏
   } else {
     const alive = g.players.filter((p) => !p.popped && p.size > 0);
     const max = Math.max(0, ...alive.map((p) => p.size));
@@ -1974,11 +1979,44 @@ function bgDraw(g, id) {
   p.len = Math.round((0.2 + Math.random() * 1.0) * 100) / 100; // 0.2～1.2 公尺
   bgNextTurn(g);
 }
+/** 🐸 輪到下一個人戳（g.ti＝輪到第幾個人） */
+function bgFrogTurn(g) {
+  clearTimeout(g.timer);
+  if (g.players.length < 2) return bgFinish(g);
+  g.ti %= g.players.length;
+  const p = g.players[g.ti];
+  g.turn = p.id;
+  g.endsAt = Date.now() + BG_TURN_MS;
+  bgEmit(g);
+  g.timer = setTimeout(() => {
+    const free = g.holes.map((h, i) => (h ? -1 : i)).filter((i) => i >= 0);
+    bgPoke(g, p.id, free[Math.floor(Math.random() * free.length)]); // 太久沒戳：自動幫他戳
+  }, BG_TURN_MS);
+}
+function bgPoke(g, id, hole) {
+  if (g.state !== 'play' || g.game !== 'frog' || g.turn !== id) return false;
+  if (!Number.isInteger(hole) || hole < 0 || hole >= g.holes.length || g.holes[hole]) return false;
+  g.holes[hole] = id;
+  if (hole === g.trap) {
+    g.loser = id;
+    bgFinish(g);
+    return true;
+  }
+  g.ti += 1;
+  bgFrogTurn(g);
+  return true;
+}
 function bgStart(g) {
   clearTimeout(g.timer);
   g.state = 'play';
   g.startAt = Date.now();
   if (g.game === 'stick') return bgNextTurn(g);
+  if (g.game === 'frog') {
+    g.holes = Array(FROG_HOLES).fill(null);
+    g.trap = Math.floor(Math.random() * FROG_HOLES);
+    g.ti = 0;
+    return bgFrogTurn(g);
+  }
   for (const p of g.players) {
     p.limit = 0.55 + Math.random() * 0.45; // 每個人的泡泡極限不一樣（看不到）
     p.size = 0;
@@ -2001,6 +2039,10 @@ function bgLeave(rkey, sid) {
   }
   if (g.players.length < 2) return bgFinish(g);
   if (g.game === 'stick' && g.turn === sid) return bgNextTurn(g);
+  if (g.game === 'frog') {
+    if (i < g.ti) g.ti -= 1;
+    if (g.turn === sid) return bgFrogTurn(g); // 輪到他卻走了：換下一個人（同一個位置）
+  }
   bgEmit(g);
 }
 
@@ -2642,6 +2684,10 @@ io.on('connection', (socket) => {
       if (g.players.length < BOARD_MIN) return ack?.({ ok: false, reason: 'few' });
       bgStart(g);
       return ack?.({ ok: true });
+    }
+    if (op === 'poke') {
+      if (g.game !== 'frog' || !me) return ack?.({ ok: false });
+      return ack?.({ ok: bgPoke(g, socket.id, Math.floor(num(data.hole, -1, 99, -1))) });
     }
     if (op === 'draw') {
       if (g.game !== 'stick' || !me) return ack?.({ ok: false });
