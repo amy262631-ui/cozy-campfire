@@ -1000,10 +1000,10 @@ async function init() {
     if (kind === 'fur') next.fur = val;
     else if (kind === 'tail') next.tail = SPECIES_TAIL[sp] === val ? '' : val;
     else next.ear = SPECIES_EARS[sp] === val ? '' : val;
-    profile = { ...next, custom: true, customLook: true };
+    profile = { ...next, custom: true, customLook: true, lookAt: Date.now() };
     applyLook(profile);
     saveProfile(profile);
-    net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '' });
+    pushLook();
     net.rejoin({ auto: !profile.custom, name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
     audio.sfx('tap');
     if (fishingUI.el.modal.classList.contains('show')) fishingUI.openCreel('outfit');
@@ -2952,20 +2952,31 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     if (res.wallet) {
       const w = res.wallet;
       // 👤 自己取過的名字和外型：伺服器記得，換裝置登入也會跟著回來
-      if (profile.custom || profile.customLook) {
-        net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '' });
-      } else if (!w.look?.name && accountName()) {
-        // 有帳號但還沒存過名字：就算沒按過 ✏️，也把現在的名字固定下來
-        profile = { ...profile, custom: true, customLook: true };
-        saveProfile(profile);
-        net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '' });
-      } else if (w.look?.name) {
-        profile = { ...profile, ...w.look, custom: true, customLook: true };
+      //   作者 11/13 回報：電腦改了名字，手機登入同一個帳號卻變回手機原本的隨機名字
+      //   → 以「最後改的那一台」為準（lookAt 時間）；剛在這台登入帳號時，一律用帳號裡存的
+      let adopt = false;
+      try {
+        adopt = localStorage.getItem('cozy-adopt-look') === '1';
+        localStorage.removeItem('cozy-adopt-look');
+      } catch {
+        /* 無痕模式 */
+      }
+      const serverNewer = !!w.look?.name && (adopt || (w.look.at ?? 0) > (profile.lookAt ?? 0) || !profile.custom); // 這台的名字是隨機的（沒自己取過）→ 用帳號裡的
+      if (serverNewer) {
+        profile = { ...profile, ...w.look, custom: true, customLook: true, lookAt: w.look.at ?? Date.now() };
+        delete profile.at;
         saveProfile(profile);
         myName = profile.name;
         applyLook(profile);
         hud.setMe(myName);
         net.rejoin({ auto: !profile.custom, name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
+      } else if (profile.custom || profile.customLook) {
+        pushLook();
+      } else if (!w.look?.name && accountName()) {
+        // 有帳號但還沒存過名字：就算沒按過 ✏️，也把現在的名字固定下來
+        profile = { ...profile, custom: true, customLook: true, lookAt: Date.now() };
+        saveProfile(profile);
+        pushLook();
       }
       if (w.outfit) setLook(w.outfit); // 👒 造型：擁有的、穿著的、今天和這週的
       // 🌱 來了幾天：第二天開「今日小靈感」，第三天全部打開（老玩家直接全開，不跳提示）
@@ -3557,6 +3568,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   onResize();
 
   /** 要送給伺服器的狀態 */
+  let dozing = false; // 😴 掛機打瞌睡中（坐著、釣魚、看星星這些不能裹毯子的時候）
   function netState(actionState) {
     return {
       ...player.getNetworkState(),
@@ -3564,6 +3576,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       doneness: actions.state === 'roast' ? actions.doneness : actions.state === 'eat' ? actions.eatDone : actions.state === 'sofa' && actions.seat?.treeSwing ? (actions.seat.treeSwing.userData.level || 1) / 2 : 0, // 🪢 樹屋鞦韆：盪的段數（別人看到一樣的力道） // 吃棉花糖：讓別人看到烤得怎樣的反應
       // 舉起來的魚（魚種＋公分）：釣魚中舉著、或舉著到處走；不然就是頭上頂著石頭
       extra: fishing.netExtra || (trophy ? packFish(trophy.index, trophy.size) : 0) || (forest.carrying ? STONE_FLAG : 0),
+      zz: dozing, // 😴 坐著、釣魚、看星星時掛機打瞌睡
     };
   }
 
@@ -4705,9 +4718,9 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
         /* 存不了也沒關係 */
       }
       // 有帳號了：把目前的名字和外型固定下來，之後重新整理不會再變
-      profile = { ...profile, custom: true, customLook: true };
+      profile = { ...profile, custom: true, customLook: true, lookAt: Date.now() };
       saveProfile(profile);
-      net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '' });
+      pushLook();
       hud.toast(t('👤 帳號建立好了！換手機時用「{user}」登入就能找回松果和帳篷', { user: res.user }), 5000);
       return null;
     },
@@ -4718,6 +4731,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       try {
         localStorage.setItem('cozy-campfire-vid', res.vid);
         localStorage.setItem(ACCOUNT_KEY, res.user);
+        localStorage.setItem('cozy-adopt-look', '1'); // 重新進來時用帳號裡的名字和外型（不要被這台原本的隨機名字蓋掉）
       } catch {
         /* 無痕模式 */
       }
@@ -4778,36 +4792,68 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   }
 
   // ---------- 掛機自動打盹 ----------
-  // 超過 3 分鐘沒操作（或分頁切到背景超過 1 分鐘），角色自動裹上毯子打盹、頭上冒 Zzz；一動就醒來。
+  // 超過 3 分鐘沒操作（或分頁切到背景），角色睡著、頭上冒 Zzz；一動就醒來。
+  //   站著（free）：裹上毯子打盹
+  //   坐著、釣魚、看星星、烤火⋯：維持原本的動作，頭垂下來打瞌睡（作者 11/13：有的人掛機會睡、有的不會）
+  //   手機切到背景、鎖螢幕：馬上睡（手機切出去後瀏覽器很快就停了，等 1 分鐘會來不及送出去）
+  //   電腦切分頁：1 分鐘後才睡（常常只是切去查個東西）
   // 用 setInterval 檢查：分頁在背景時畫面不會更新，但計時器還會跑，別人才看得到他睡著了。
   const AFK_SLEEP = Number(params.get('afk')) || 180;
   const HIDDEN_SLEEP = 60;
+  const isTouch = () => document.body.classList.contains('touch') || matchMedia('(pointer: coarse)').matches;
   let autoSleep = false;
   let hiddenSince = 0;
+  const setDoze = (on) => {
+    dozing = on;
+    if (player.character) player.character.doze = on;
+    net.update(1, netState()); // 馬上告訴大家（背景時畫面迴圈不會跑）
+  };
+  const fallAsleep = () => {
+    if (autoSleep || dozing || roomMgr?.busy) return;
+    if (actions.state === 'free') {
+      forest.dropStone(player.character);
+      actions.start('blanket');
+      autoSleep = true;
+      net.update(1, netState('blanket')); // 背景分頁不會跑畫面迴圈，直接送一次
+    } else if (actions.state !== 'blanket' && actions.state !== 'sleep') {
+      setDoze(true);
+    }
+  };
   document.addEventListener('visibilitychange', () => {
     hiddenSince = document.hidden ? performance.now() : 0;
     // 🎣 拉竿到一半切出去（鎖螢幕、回 LINE）：畫面會暫停，先告訴大家「坐回去釣魚了」（舉魚炫耀的話就繼續舉著）
     if (document.hidden && joined && actions.state === 'fish' && fishing.netAction === 'reel') net.update(1, netState('fish'));
+    if (document.hidden && joined && !editing && isTouch()) fallAsleep();
   });
   setInterval(() => {
     if (!joined || editing) return;
     const idle = input.idleSeconds;
     const hiddenFor = hiddenSince ? (performance.now() - hiddenSince) / 1000 : 0;
+    const awake = idle < 2 && !document.hidden; // 有操作（滑鼠、觸控、按鍵）
+    if (dozing) {
+      // 起身、換動作（例如釣到魚）或有操作：醒來
+      if (awake || actions.state === 'free' || actions.state === 'blanket' || actions.state === 'sleep') setDoze(false);
+      return;
+    }
     if (!autoSleep) {
-      const sleepy = idle > AFK_SLEEP || hiddenFor > HIDDEN_SLEEP;
-      if (sleepy && actions.state === 'free' && !roomMgr?.busy) {
-        forest.dropStone(player.character);
-        actions.start('blanket');
-        autoSleep = true;
-        net.update(1, netState('blanket')); // 背景分頁不會跑畫面迴圈，直接送一次
-      }
+      if (idle > AFK_SLEEP || hiddenFor > HIDDEN_SLEEP) fallAsleep();
     } else if (actions.state !== 'blanket') {
       autoSleep = false; // 自己起身了（移動或按 Z）
-    } else if (idle < 2 && !document.hidden) {
-      actions.stop(); // 有操作（滑鼠、觸控、按鍵）就醒來
+    } else if (awake) {
+      actions.stop();
       autoSleep = false;
     }
   }, 2000);
+  // 打瞌睡時頭上也冒 Zzz（自己看得到）
+  let dozeZzz = 0;
+  const updateDozeZzz = (dt) => {
+    if (player.character) player.character.doze = dozing; // 換造型後角色是新的，每幀補上
+    if (!dozing) return void (dozeZzz = 0.6);
+    dozeZzz -= dt;
+    if (dozeZzz > 0) return;
+    dozeZzz = 1.3 + Math.random() * 0.5;
+    zzz.spawn(player.character.getHeadWorldPosition(new THREE.Vector3()));
+  };
 
   // ---------- Loop ----------
   const clock = new THREE.Clock();
@@ -4943,6 +4989,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       if (!zoneBusy) switchZone(z, z > campZone ? 'next' : 'prev');
     } else if (goTo) roomMgr.switchTo(goTo, switchOnServer);
 
+    updateDozeZzz(dt);
     zzz.update(dt);
     bubbles.update(dt, headOf);
     pomodoro.update(dt);
@@ -5027,6 +5074,10 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   let profile;
   // 內建角色才能選動物（用 .glb 模型時只有那一種）
   const isProcedural = character instanceof ProceduralFox;
+  /** 👤 把名字和外型存進帳號（at＝最後改的時間，換裝置時比新舊用） */
+  function pushLook() {
+    net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', at: profile.lookAt ?? 0 });
+  }
   const applyLook = ({ fur, species, tail = '', ear = '' }) => {
     const c = player.character;
     if (isProcedural && (c.speciesIndex !== species || (c.tailId ?? '') !== tail || (c.earId ?? '') !== ear)) {
@@ -5087,8 +5138,9 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     // 自己改過名字或外型：一定記住（有帳號的話，換裝置登入也會跟著回來）
     profile.custom = true;
     profile.customLook = true;
+    profile.lookAt = Date.now(); // 👤 改名字／外型的時間：換裝置時「最後改的那台」為準
     saveProfile(profile);
-    net.request('saveLook', { name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '' });
+    pushLook();
     net.rejoin({ auto: !profile.custom, name: profile.name, fur: profile.fur, species: isProcedural ? profile.species : 0, tail: profile.tail || '', ear: profile.ear || '', code: profile.code || '', x: player.position.x, z: player.position.z, ry: player.rotationY });
     hud.toast(t('✨ 換好了，{name}', { name: myName }));
   };

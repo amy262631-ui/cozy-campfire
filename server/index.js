@@ -1844,6 +1844,7 @@ const packState = (p) => [
   p.a,
   Math.round(p.d * 100) / 100,
   p.e | 0,
+  p.zz | 0, // 😴 打瞌睡（舊版前端只讀前 6 格，不受影響）
 ];
 
 const publicInfo = (p) => ({ id: p.id, name: p.name, fur: p.fur, sp: p.sp, tl: p.tl || undefined, er: p.er || undefined, rw: p.rw, ot: p.ot, pb: p.pb, sr: p.sr || undefined, sn: (p.sr && p.sn) || undefined, s: packState(p) });
@@ -1917,11 +1918,11 @@ const bgView = (g) => ({
   gain: g.gain ?? null,
   players: g.players.map((p) => ({ id: p.id, name: p.name, len: p.len ?? null, size: p.size ?? 0, popped: !!p.popped, done: !!p.done })),
 });
-const bgEmit = (g) => io.to(g.rkey).emit('bg', bgView(g));
+const bgEmit = (g) => io.to(g.rkey).emit('bgame', bgView(g));
 const bgClear = (g) => {
   clearTimeout(g.timer);
   if (bgGames.get(g.rkey) === g) bgGames.delete(g.rkey);
-  io.to(g.rkey).emit('bg', { id: g.id, state: 'gone' });
+  io.to(g.rkey).emit('bgame', { id: g.id, state: 'gone' });
 };
 /** 贏家 +2 松果（每天最多 20 顆，上限到了照樣能玩、只是不給） */
 function bgAward(vid) {
@@ -2520,6 +2521,7 @@ io.on('connection', (socket) => {
     player.a = ACTION_STATES.has(s[3]) ? s[3] : 'idle';
     player.d = num(s[4], 0, 2, 0);
     player.e = Math.floor(num(s[5], 0, 99999, 0));
+    player.zz = s[6] ? 1 : 0; // 😴 打瞌睡
     player.st = Date.now(); // 最後一次收到狀態的時間（手機鎖螢幕、切到別的 App 就不會再送）
     player.dirty = true;
   });
@@ -2599,7 +2601,7 @@ io.on('connection', (socket) => {
   let lastShout = 0;
   // 🎲 營火桌遊：op＝invite 發起、join 加入、leave 退出、start 開始、draw 抽樹枝、blow 吹泡泡（回報現在多大、吹完了沒）
   let bgInviteAt = 0;
-  socket.on('bg', (data = {}, ack) => {
+  socket.on('bgame', (data = {}, ack) => {
     if (!BOARD_LIVE() || !player || roomId !== 'forest_main') return ack?.({ ok: false, reason: 'off' });
     const nearFire = Math.hypot(player.x ?? 99, player.z ?? 99) < 3.4; // 要坐在營火旁
     const g = bgGames.get(rkey);
@@ -3057,7 +3059,10 @@ io.on('connection', (socket) => {
     if (!wal) return;
     const name = String(data.name ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 12);
     if (!name) return;
-    wal.look = { name, fur: Math.floor(num(data.fur, 0, 50, 0)), species: Math.floor(num(data.species, 0, 50, 0)), tail: TAIL_BY_ID[data.tail] ? data.tail : '', ear: EAR_BY_ID[data.ear] ? data.ear : '' };
+    // 👤 at＝玩家最後改名字／外型的時間：比帳號裡的舊就不蓋掉（另一台裝置剛改過的名字才不會被這台舊的蓋回去）
+    const at = Math.floor(num(data.at, 0, Date.now() + 60000, 0));
+    if (wal.look?.name && at < (wal.look.at ?? 0)) return;
+    wal.look = { name, fur: Math.floor(num(data.fur, 0, 50, 0)), species: Math.floor(num(data.species, 0, 50, 0)), tail: TAIL_BY_ID[data.tail] ? data.tail : '', ear: EAR_BY_ID[data.ear] ? data.ear : '', at: at || wal.look?.at || 0 };
     saveJson('players.json', players);
   });
 
@@ -4468,6 +4473,11 @@ setInterval(() => {
   const rooms = [...[...channels.values()].flatMap((c) => [...c.rooms.values()]), ...homeRooms.values()];
   for (const r of rooms) {
     for (const p of r.players.values()) {
+      // 😴 手機切到背景、鎖螢幕：瀏覽器停了就不會再送狀態，超過 30 秒在別人畫面上讓他打瞌睡
+      if (!p.zz && p.st && now - p.st > 30000 && p.a !== 'blanket' && p.a !== 'sleep') {
+        p.zz = 1;
+        p.dirty = true;
+      }
       if (!SHORT_ACTIONS.has(p.a) || now - (p.st ?? 0) < 10000) continue;
       p.a = 'fish';
       p.e = 0;

@@ -30,6 +30,7 @@ export function autoProfile(allowSpecies = true) {
     code: saved.code || '',
     custom: !!saved.custom,
     customLook: !!saved.customLook,
+    lookAt: Number(saved.lookAt) || 0, // 👤 最後改名字／外型的時間（換裝置登入時比新舊）
   };
 }
 
@@ -258,7 +259,7 @@ export class JoinScreen {
         const code = saved.code || '';
         // 在「我的樣子」裡換了動物或毛色，才記住外型；沒動就維持每次隨機
         const customLook = this.edit ? !!saved.customLook || fur !== startFur || species !== startSpecies : true;
-        saveProfile({ name, fur, species, custom: name !== autoName, customLook, code });
+        saveProfile({ name, fur, species, custom: name !== autoName, customLook, code, lookAt: Date.now() });
         input.blur();
         el.classList.add('leaving');
         clearInterval(chTimer);

@@ -129,9 +129,9 @@ class RemotePlayer {
 
   setState(s, snap = false) {
     if (!Array.isArray(s)) return;
-    const [x, z, ry, a, d, e = 0] = s;
+    const [x, z, ry, a, d, e = 0, zz = 0] = s;
     const t = this.target;
-    Object.assign(t, { x, z, ry, a, d, e });
+    Object.assign(t, { x, z, ry, a, d, e, zz });
     if (snap || Math.hypot(x - this.pos.x, z - this.pos.z) > SNAP_DIST) {
       this.pos.set(x, 0, z);
       this.ry = ry;
@@ -181,7 +181,8 @@ class RemotePlayer {
     if (t.a !== 'eat') this._eatD = null;
     c.update(dt, elapsed, this.speed);
 
-    if (t.a === 'blanket') {
+    c.doze = !!t.zz && t.a !== 'blanket' && t.a !== 'sleep'; // 😴 坐著、釣魚時打瞌睡
+    if (t.a === 'blanket' || t.zz) {
       this._zzzTimer -= dt;
       if (this._zzzTimer <= 0) {
         this._zzzTimer = 1.1 + Math.random() * 0.4;

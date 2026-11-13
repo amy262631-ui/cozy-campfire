@@ -7,7 +7,7 @@ import { makeStick, makeBubble } from '../player/boardProps.js';
  * 🎲 營火桌遊的畫面（作者 11/13：坐在營火圓木上發起，不放桌椅）
  *   畫面下方一個小視窗（不擋營火）：發起 → 邀請（加入／先不要）→ 抽樹枝／吹泡泡 → 結果
  *   抽到的樹枝、吹的泡泡出現在每個人頭上（自己的、別人的都看得到）
- * 伺服器規則在 server/index.js 的「🎲 營火桌遊」，事件名稱 'bg'
+ * 伺服器規則在 server/index.js 的「🎲 營火桌遊」，事件名稱 'bgame'（'bg' 是切到背景用的，不能共用）
  */
 const RATE = 0.16; // 泡泡每秒長多大（跟伺服器一樣）
 const GAME = Object.fromEntries(BOARD_GAMES.map((g) => [g.id, g]));
@@ -56,7 +56,7 @@ export class BoardGameUI {
     this.el.addEventListener('pointerdown', down);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
-    net.on('bg', (v) => this.#onGame(v));
+    net.on('bgame', (v) => this.#onGame(v));
     this._key = '';
   }
 
@@ -67,7 +67,7 @@ export class BoardGameUI {
   /** 走到營火（或重新連線）：問一下有沒有正在玩的 */
   async peek() {
     if (!this.on || !this.net.online) return;
-    const r = await this.net.request('bg', { op: 'peek' });
+    const r = await this.net.request('bgame', { op: 'peek' });
     if (r?.ok) this.#onGame(r.game ?? { state: 'gone' });
   }
 
@@ -170,7 +170,7 @@ export class BoardGameUI {
     const g = this.g;
     if (!g || g.game !== 'bubble' || g.state !== 'play') return;
     this.sentAt = performance.now();
-    this.net.request('bg', { op: 'blow', size: Math.round(this.mySize * 1000) / 1000, done }).then((r) => {
+    this.net.request('bgame', { op: 'blow', size: Math.round(this.mySize * 1000) / 1000, done }).then((r) => {
       if (r?.popped) this.blowing = false;
     });
   }
@@ -180,7 +180,7 @@ export class BoardGameUI {
     if (!b) return;
     const act = b.dataset.act;
     const req = async (op, extra = {}) => {
-      const r = await this.net.request('bg', { op, ...extra });
+      const r = await this.net.request('bgame', { op, ...extra });
       if (!r?.ok) {
         const why = { far: t('要坐在營火旁的圓木上才能玩喔'), busy: t('營火這邊已經有人在玩了，等這局結束'), tooFast: t('等一下再發起'), full: t('這局人滿了'), started: t('這局已經開始了'), few: t('還要再 1 個人才能開始') };
         this.hud.toast(why[r?.reason] ?? t('沒有成功，再試一次'));

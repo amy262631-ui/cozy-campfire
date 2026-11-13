@@ -952,6 +952,12 @@ export class ProceduralFox {
       this.heldFish.position.y = this.fishY ?? 1.42;
     }
 
+    // 😴 掛機打瞌睡（坐著、釣魚、看星星時沒操作）：頭慢慢垂下、一點一點，眼睛閉起來
+    if (this.doze && !moving) {
+      headRX += 0.34 + Math.sin(t * 1.2) * 0.06;
+      eyesOpen = 0.1;
+    }
+
     // 套用（插值讓姿勢切換平滑）
     const tor = this.torso;
     tor.position.y += (torsoY - tor.position.y) * (moving ? 1 : k);
