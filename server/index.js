@@ -1862,6 +1862,7 @@ const num = (v, min, max, fallback = 0) => {
 function cleanName(raw) {
   const name = String(raw ?? '')
     .replace(/[\u0000-\u001f<>]/g, '')
+    .replace(/🔥|✨|🌌|\uFE0F/gu, '') // 🎫 月票的標誌不能放在名字裡（作者 11/14：有人取「🔥狂」看起來像有月票）
     .trim()
     .slice(0, 12);
   return name || `旅人${Math.floor(Math.random() * 900 + 100)}`;

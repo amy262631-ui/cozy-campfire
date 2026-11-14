@@ -255,7 +255,7 @@ export class JoinScreen {
       });
       el.querySelector('form').addEventListener('submit', (e) => {
         e.preventDefault();
-        const name = input.value.trim().slice(0, 12) || autoName || randomName();
+        const name = input.value.replace(/🔥|✨|🌌|\uFE0F/gu, '').trim().slice(0, 12) || autoName || randomName(); // 月票標誌不能放名字裡（伺服器也會拿掉）
         const code = saved.code || '';
         // 在「我的樣子」裡換了動物或毛色，才記住外型；沒動就維持每次隨機
         const customLook = this.edit ? !!saved.customLook || fur !== startFur || species !== startSpecies : true;

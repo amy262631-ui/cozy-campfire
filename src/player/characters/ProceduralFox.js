@@ -773,8 +773,9 @@ export class ProceduralFox {
         scaleY = 1 + Math.sin(t * 1.0) * 0.03;
         tailWag = Math.sin(t * 0.5) * 0.08;
       } else if (P === 'lookUp') {
-        torsoRX = -0.22;
-        headRX = -0.55;
+        // 🌌 看星星＝坐著抬頭（作者 11/14：原本身體往後仰太多，從上面看像躺著）→ 身體幾乎坐直，只有頭抬起來
+        torsoRX = -0.06;
+        headRX = -0.62;
         tailWag = Math.sin(t * 1.0) * 0.2;
       } else if (P === 'ride') {
         armsT[0].set(-0.16, 0.5, 0.32);
