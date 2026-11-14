@@ -27,6 +27,8 @@ export class InputController {
   constructor() {
     this.state = { forward: false, backward: false, left: false, right: false, run: false };
     this.virtualMove = { x: 0, y: 0 };
+    /** 👉 帶我去（新手小任務）：自動走路的方向（跟搖桿一樣的 x、y）；玩家自己一動就取消 */
+    this.autoMove = null;
     this.lastActivity = performance.now();
     this._actionListeners = [];
 
@@ -119,10 +121,19 @@ export class InputController {
   /**
    * 回傳正規化的移動向量：x = 右(+)/左(-)，y = 前(+)/後(-)
    */
+  /** 玩家自己有按方向鍵或推搖桿（不算自動走路） */
+  get userMoving() {
+    return this.state.forward || this.state.backward || this.state.left || this.state.right || Math.hypot(this.virtualMove.x, this.virtualMove.y) > 0.1;
+  }
+
   getMoveVector() {
     if (!this.enabled) return { x: 0, y: 0 };
     let x = (this.state.right ? 1 : 0) - (this.state.left ? 1 : 0) + this.virtualMove.x;
     let y = (this.state.forward ? 1 : 0) - (this.state.backward ? 1 : 0) + this.virtualMove.y;
+    if (this.autoMove && Math.hypot(x, y) < 0.1) {
+      x = this.autoMove.x;
+      y = this.autoMove.y;
+    }
     const len = Math.hypot(x, y);
     if (len > 1) {
       x /= len;

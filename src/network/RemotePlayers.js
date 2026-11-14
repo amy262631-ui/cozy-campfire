@@ -1,3 +1,4 @@
+import { fireSeatY } from '../rooms/fireSeats.js';
 import * as THREE from 'three';
 import { t } from '../i18n/i18n.js';
 import { STONE_FLAG } from '../rooms/cairns.js';
@@ -200,7 +201,14 @@ class RemotePlayer {
     if (heightFn) {
       this._y = heightFn(this.pos.x, this.pos.z, this._y ?? 0);
       this.group.position.y = this._y + (this.target?.a === 'sleep' ? 0.26 : this.target?.a === 'sofa' ? 0.2 : 0);
-    } else this._y = 0;
+    } else {
+      this._y = 0;
+      // 🪵 營火旁的圓木：別人坐著也要抬到木頭上面（作者 11/14：別人坐下會陷進木頭裡）
+      if (fireSeatsOn && FIRE_SIT.has(this.target?.a)) {
+        const y = fireSeatY(this.pos.x, this.pos.z);
+        if (y != null) this.group.position.y = y;
+      }
+    }
     // 🪢 坐在會盪的鞦韆上（樹屋鞦韆）：跟著鞦韆一起盪（位置由房間算，盪的力道＝對方選的段數）
     if (spotFn && this.target?.a === 'sofa') {
       const s = spotFn(this.pos.x, this.pos.z, this.target.d ?? 0);
@@ -226,6 +234,12 @@ let spotFn = null;
 /** 房間給的「會動的座位」：回傳那個人現在該在的位置（沒有就 null） */
 export const setRemoteSpot = (fn) => {
   spotFn = fn;
+};
+/** 現在在中央營火（有圓木座位）的房間 */
+let fireSeatsOn = false;
+const FIRE_SIT = new Set(['sofa', 'roast', 'eat', 'addWood', 'blanket']);
+export const setRemoteFireSeats = (on) => {
+  fireSeatsOn = on;
 };
 export const setRemoteHeight = (fn) => {
   heightFn = fn;

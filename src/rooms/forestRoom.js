@@ -14,7 +14,7 @@ import { buildXmasDecor } from './xmasDecor.js';
 import { isXmas } from '../game/season.js';
 import { buildShop, nearShop, SHOP_FRONT, SHOP_CLEARING } from './shop.js';
 import { buildCampExtras, createTreasures, EXTRA_CLEARINGS } from './campExtras.js';
-import { buildFireSeats } from './fireSeats.js';
+import { buildFireSeats, SEAT_LIFT } from './fireSeats.js';
 import { createTrashLayer } from './trashLayer.js';
 import { EMOTE_IDS } from '../social/emotes.js';
 import { t } from '../i18n/i18n.js';
@@ -620,9 +620,8 @@ export function createForestRoom() {
     resolveCollision(pos, r) {
       const s = seatedOn();
       if (s) {
-        // 坐在圓木上：固定在座位；烤棉花糖的姿勢比較低，高度少一點
-        const st = lastActions.state;
-        pos.set(s.x, st === 'sofa' || st === 'addWood' ? s.h : s.h * 0.6, s.z);
+        // 坐在圓木上：固定在座位，身體底部剛好在木頭上面（作者 11/14：原本會陷進木頭裡，烤棉花糖時更低）
+        pos.set(s.x, s.h + SEAT_LIFT, s.z);
         return;
       }
       world.resolveCollision(pos, r);

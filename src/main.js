@@ -16,7 +16,7 @@ import { MixerPanel } from './ui/MixerPanel.js';
 import { PomodoroPanel } from './ui/PomodoroPanel.js';
 import { JukeboxPanel } from './ui/JukeboxPanel.js';
 import { NetworkClient } from './network/NetworkClient.js';
-import { RemotePlayers, setRemoteHeight, setRemoteSpot, setCharScale } from './network/RemotePlayers.js';
+import { RemotePlayers, setRemoteHeight, setRemoteSpot, setCharScale, setRemoteFireSeats } from './network/RemotePlayers.js';
 import { SpiritFollower } from './player/spiritFollower.js';
 import { buildSpirit, SPIRIT_TYPES, SPIRIT_BY_ID } from './player/spirit.js';
 import { parseSpirit } from './game/spiritRules.js';
@@ -2741,6 +2741,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     // 🌱 新手小任務 6 步做完：送 20 松果，再跳歡迎卡
     onIntroDone: async () => {
       if (net.online) await net.request('kidDone', {});
+      setTimeout(() => inviteNudge('intro', t('🎉 你學會了！邀朋友一起來烤火，每位新朋友 +10 🌰')), 45000); // 👫 11/14
       setTimeout(() => showInappTip(), 25000); // 歡迎卡、取名提醒之後再說
       setTimeout(showSeeYou, 8000);
       setTimeout(() => !welcome.visible && welcome.maybeShow(), 9000);
@@ -2760,6 +2761,11 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       if (task?.kid) kidStep(id); // 📊 新手小任務每一步（/stats 看卡在哪）
     },
     onKidStep: (id) => kidStep(id),
+    // 👉 帶我去：角色自己走過去（frame() 裡的 stepAutoWalk 負責走）
+    onWalk: (kind) => {
+      autoWalk = { kind, best: Infinity, stuckT: 0, sideT: 0, side: 1, tries: 0 };
+      input.markActive();
+    },
   });
   const garden = forest.cairnGarden;
   const ritualState = {
@@ -3168,6 +3174,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       if (room.id !== 'forest_main') forest.dropStone(player.character);
       cairnPanel.close();
       lakeNews.setRoom(room.id);
+      setRemoteFireSeats(room.id === 'forest_main');
       setRemoteHeight(room.id === 'home' ? rooms.home.heightAt : room.id === 'campground' ? rooms.campground.heightAt : null); // 坐在門口擺設上的人高度
       setRemoteSpot(room.id === 'campground' ? rooms.campground.remoteSpot : null); // 🪢 別人坐在樹屋鞦韆上也跟著盪
       // 🛋️ 帳篷裡角色縮小一點，跟家具（沙發、床）的比例才對
@@ -3950,6 +3957,33 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       small: t('{icon} 一樣一樣慢慢找齊了', { icon }),
       text: t('我在迷霧森林露營地把{name}全部收集完了 🏆 沒力氣出門的夜晚，一起來營火旁坐一下吧', { name }),
     });
+  /**
+   * 👫 邀朋友提醒（作者 11/14：邀請連結來的人最會回來 → 放顯眼一點）
+   * 每種提醒一天最多一次；按「👫 邀朋友」打開「🔥 約朋友」那頁
+   */
+  function inviteNudge(kind, text) {
+    if (!net.online) return;
+    try {
+      const d = new Date().toDateString();
+      const key = `cozy-invite-nudge-${kind}`;
+      if (localStorage.getItem(key) === d) return;
+      localStorage.setItem(key, d);
+    } catch {
+      return;
+    }
+    sharePop(text, null, () => giftPanel.open(), t('👫 邀朋友'), 12000);
+  }
+  // 一個人坐在營火旁 90 秒：「邀朋友來，每位 +10 🌰」
+  let aloneSec = 0;
+  setInterval(() => {
+    const alone = roomMgr?.current.id === 'forest_main' && !!actions.seat?.fire && actions.state !== 'free' && remotes.count === 0 && stage >= 2;
+    aloneSec = alone ? aloneSec + 5 : 0;
+    if (aloneSec >= 90) {
+      aloneSec = -1e9; // 這次進來就不再算
+      inviteNudge('alone', t('🔥 一個人烤火有點安靜，邀朋友來一起坐？每位新朋友 +10 🌰'));
+    }
+  }, 5000);
+
   function sharePop(text, card, onGo, goLabel = t('✏️ 取名字'), ms = 8000) {
     // 取名提醒（onGo）不算在每天 3 次裡
     if (!onGo) try {
@@ -4959,11 +4993,64 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     }
   });
 
+  // ---------- 👉 帶我去（新手第 1、2 步：自己走到營火／圓木，走到圓木就坐下） ----------
+  /** @type {null | { kind: 'fire'|'seat', best: number, stuckT: number, sideT: number, side: number, tries: number }} */
+  let autoWalk = null;
+  const stopAutoWalk = (msg) => {
+    autoWalk = null;
+    input.autoMove = null;
+    if (ritual) ritual.walking = false;
+    if (msg) hud.toast(msg, 3500);
+  };
+  function stepAutoWalk(dt) {
+    if (!autoWalk) return;
+    if (input.userMoving || roomMgr.current.id !== 'forest_main' || actions.state !== 'free') return stopAutoWalk();
+    const p = player.position;
+    const tg = autoWalk.kind === 'seat' ? ritualState.freeSeat() : { x: 0, z: 0 };
+    const stopAt = autoWalk.kind === 'seat' ? 0.75 : 2.4;
+    const dx = tg.x - p.x;
+    const dz = tg.z - p.z;
+    const d = Math.hypot(dx, dz);
+    if (d <= stopAt) {
+      const kind = autoWalk.kind;
+      stopAutoWalk();
+      if (kind === 'seat') actions.handleAction('interact'); // 圓木：走到了就幫他坐下
+      return;
+    }
+    // 卡住（被石頭、木頭擋到）：往旁邊繞一下；繞 4 次還過不去就交給玩家
+    if (d < autoWalk.best - 0.05) {
+      autoWalk.best = d;
+      autoWalk.stuckT = 0;
+    } else if ((autoWalk.stuckT += dt) > 0.8) {
+      autoWalk.stuckT = 0;
+      autoWalk.best = d;
+      autoWalk.side = -autoWalk.side;
+      autoWalk.sideT = 0.7;
+      if (++autoWalk.tries > 4) return stopAutoWalk(mobile ? t('走不過去，用左下角搖桿走走看 🕹️') : t('走不過去，用 WASD 走走看 🕹️'));
+    }
+    let wx = dx / d;
+    let wz = dz / d;
+    if (autoWalk.sideT > 0) {
+      autoWalk.sideT -= dt;
+      const s2 = autoWalk.side;
+      [wx, wz] = [wx * 0.35 - wz * s2, wz * 0.35 + wx * s2];
+    }
+    // 世界方向 → 搖桿方向（Player.update 的反過來；這個轉換剛好是自己的反矩陣）
+    const yaw = cameraRig.yaw;
+    const sn = Math.sin(yaw);
+    const cs = Math.cos(yaw);
+    const mx = wx * cs - wz * sn;
+    const my = -wx * sn - wz * cs;
+    const len = Math.hypot(mx, my) || 1;
+    input.autoMove = { x: mx / len, y: my / len };
+  }
+
   function frame() {
     const dt = Math.min(clock.getDelta(), 0.05); // 切換分頁回來時避免瞬移
     const elapsed = clock.elapsedTime;
     const room = roomMgr.current;
 
+    stepAutoWalk(dt);
     const action = actions.update(dt, input.hasMoveInput);
     player.update(dt, input, cameraRig.yaw, room, elapsed, action);
     // 🍄 蘑菇彈跳：角色跳起來（只是畫面上跳，位置不變）

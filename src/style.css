@@ -2720,6 +2720,31 @@ body.touch .lang {
   background: #ffb46b;
 }
 
+/* 👉 帶我去（新手第 1、2 步） */
+.ritual-walk {
+  display: block;
+  margin: 8px auto 0;
+  padding: 8px 18px;
+  border: 2px solid #ffd56b;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffb46b, #f08a3c);
+  color: #3a2214;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  animation: ritualWalkPulse 1.4s ease-in-out infinite;
+}
+
+.ritual-walk[hidden] {
+  display: none;
+}
+
+@keyframes ritualWalkPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 200, 110, 0.6); }
+  50% { transform: scale(1.06); box-shadow: 0 0 0 8px rgba(255, 200, 110, 0); }
+}
+
 .ritual-actions {
   display: flex;
   justify-content: center;
@@ -5197,6 +5222,9 @@ body.touch .m-stack .fire-meter {
   color: #ffe6f2;
 }
 
+/* 👫 11/14：邀請一位新朋友 +10 松果，直接寫在按鈕上 */
+.date-gain { margin-left: 4px; padding: 0 5px; border-radius: 999px; background: #ffe08a; color: #5a3010; font-style: normal; font-size: 10px; font-weight: 800; }
+
 .date-chip[hidden],
 .look-chip[hidden] {
   display: none;
@@ -7301,6 +7329,23 @@ body.spg-on .notice-panel {
 .bg-panel[hidden] { display: none; }
 .bg-panel > * { pointer-events: auto; }
 body.touch .bg-panel { bottom: 250px; }
+.bg-panel > .bg-card { max-height: inherit; overflow-y: auto; overscroll-behavior: contain; }
+/* 🎲 桌遊＝跟右下動作鈕一樣的圓按鈕、低調（作者 11/14）；位置由 BoardGameUI.#place 放：手機在動作鈕上面、電腦在右邊 */
+.bg-panel { justify-content: center; }
+.bg-open.round { width: 64px; height: 64px; padding: 0; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; margin-left: auto; background: rgba(30, 20, 14, 0.55); border: 2px solid rgba(255, 190, 110, 0.55); color: #f3e6cf; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+.bg-open.round:hover { border-color: #ffc46b; background: rgba(50, 32, 20, 0.7); }
+.bg-open.round span { font-size: 24px; line-height: 1; }
+.bg-open.round small { font-size: 11px; font-weight: 800; }
+/* 📱 橫放：選遊戲那三格排成一列，比較矮 */
+@media (max-height: 500px) {
+  body.touch .bg-panel { width: min(560px, calc(100vw - 24px)); }
+  body.touch .bg-games { grid-template-columns: repeat(3, 1fr); }
+  body.touch .bg-games button { padding: 6px 4px; }
+  body.touch .bg-games button span { font-size: 24px; }
+  body.touch .bg-frog { grid-template-columns: repeat(8, 1fr); gap: 6px; margin: 4px 0; padding: 8px; }
+  body.touch .bg-frog button { font-size: 18px; }
+  body.touch .bg-blow { width: 90px; height: 90px; font-size: 16px; }
+}
 .bg-open { padding: 9px 18px; border: 2px solid #ffd56b; border-radius: 999px; background: linear-gradient(180deg, #ffb46b, #f08a45); color: #3a1d0c; font: inherit; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
 .bg-card { width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 18px; background: rgba(36, 28, 40, 0.93); border: 1px solid rgba(255, 210, 160, 0.28); color: #fff3e0; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); display: flex; flex-direction: column; gap: 8px; }
 .bg-card.bg-mini { font-size: 13px; padding: 8px 12px; }

@@ -59,7 +59,7 @@ function buildTasks(touch) {
       auto: (s) => s.inForest && dist(s.pos, s.fire) < 3.2,
       guide(s) {
         if (!s.inForest) return kidBack(s);
-        return kidWalk(s, s.fire, 2.6, t('走到營火旁邊'));
+        return { ...kidWalk(s, s.fire, 2.6, t('走到營火旁邊')), walk: 'fire' }; // 👉 帶我去（11/14：第一步掉最多人）
       },
     },
     k_sit: {
@@ -70,7 +70,7 @@ function buildTasks(touch) {
         if (!s.inForest) return kidBack(s);
         const seat = s.freeSeat();
         const d = dist(s.pos, seat, 0.3);
-        return { step: d > 0.6 ? 0 : 1, text: t('坐在木頭上'), sub: d > 0.6 ? t('走到發光的圓木旁') : k(t('按 E 坐下'), t('點右下「🪵 坐下」')), target: seat };
+        return { step: d > 0.6 ? 0 : 1, text: t('坐在木頭上'), sub: d > 0.6 ? t('走到發光的圓木旁') : k(t('按 E 坐下'), t('點右下「🪵 坐下」')), target: seat, walk: d > 0.6 ? 'seat' : null };
       },
     },
     k_wood: {
@@ -267,7 +267,8 @@ export class RitualGuide {
    * @param {{ scene, hud, touch?: boolean, onDone?: (id) => Promise<number|null> }} opts
    *   onDone：任務完成時呼叫，回傳「今天第幾位完成」（單人模式回傳 null）
    */
-  constructor({ scene, hud, touch = false, onDone, canPick, onShare, onComplete, onIntroDone, onKidStep, root = document.getElementById('ui') }) {
+  constructor({ scene, hud, touch = false, onDone, canPick, onShare, onComplete, onIntroDone, onKidStep, onWalk, root = document.getElementById('ui') }) {
+    this.onWalk = onWalk;
     this.onKidStep = onKidStep;
     this.onIntroDone = onIntroDone;
     this.hud = hud;
@@ -294,6 +295,7 @@ export class RitualGuide {
         <div class="ritual-title" id="ritual-title"></div>
         <div class="ritual-text" id="ritual-text"></div>
         <div class="ritual-sub" id="ritual-sub" hidden></div>
+        <button type="button" class="ritual-walk" id="ritual-walk" hidden>${t('👉 帶我去')}</button>
         <div class="ritual-dots" id="ritual-dots"></div>
         <div class="ritual-actions" id="ritual-actions" hidden>
           <button type="button" id="ritual-next">${t('🎲 再來一個')}</button>
@@ -311,6 +313,14 @@ export class RitualGuide {
     this.dotsEl = root.querySelector('#ritual-dots');
     this.actionsEl = root.querySelector('#ritual-actions');
     this.arrow = root.querySelector('#ritual-arrow');
+    // 👉 帶我去：新手第 1、2 步，按了角色自己走過去（坐下那步走到了就幫他坐）；main.js 的 onWalk 負責走
+    this.walkBtn = root.querySelector('#ritual-walk');
+    this.walkBtn.addEventListener('click', () => {
+      if (!this._walk) return;
+      this.walkBtn.hidden = true;
+      this.walking = true;
+      this.onWalk?.(this._walk);
+    });
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
     root.querySelector('#ritual-x').addEventListener('click', () => {
       if (!this.task?.kid) store(QUIET_KEY, '1'); // 新手小任務按 ✕ 只是先收起來，角落按鈕還能叫回來
@@ -451,6 +461,8 @@ export class RitualGuide {
     if (id === INTRO[0] && !this.#introDone().length) this.onKidStep?.('start'); // 📊 統計：新朋友看到第 1 步
     this.id = id;
     this.task = this.tasks[id];
+    this.walkBtn.hidden = true;
+    this.walking = false;
     this.active = true;
     this.done = false;
     this._key = null;
@@ -493,6 +505,9 @@ export class RitualGuide {
       return;
     }
     const g = this.task.guide(s);
+    const walk = g.walk && !this.walking ? g.walk : null;
+    this._walk = g.walk ?? null;
+    if (this.walkBtn.hidden === !!walk) this.walkBtn.hidden = !walk;
     const key = `${g.step}|${g.text}|${g.sub ?? ''}`;
     if (key !== this._key) {
       this._key = key;
@@ -570,6 +585,8 @@ export class RitualGuide {
 
   /** 🌱 新手小任務完成一步：大大的「做到了！」，自動接下一步 */
   #completeKid() {
+    this.walkBtn.hidden = true;
+    this.walking = false;
     this.beacon.visible = false;
     if (this.feet) this.feet.visible = false;
     this.arrow.hidden = true;

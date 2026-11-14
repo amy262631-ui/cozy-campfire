@@ -294,6 +294,64 @@ export class BoardGameUI {
     return `<div class="bg-card"><div class="bg-head">${title}・${t('結果')}</div>${chips((p) => (g.game === 'stick' ? `🪵 ${(p.len ?? 0).toFixed(2)}` : p.popped ? '💥' : `🫧 ${Math.round(p.size * 100)}`))}<div class="bg-result">${line}</div>${mine && me.sitting ? `<button type="button" class="bg-go" data-act="again">${t('再來一局')}</button>` : ''}<button type="button" class="bg-sub" data-act="done">${t('關掉')}</button></div>`;
   }
 
+  get touch() {
+    return document.body.classList.contains('touch');
+  }
+
+  /**
+   * 放小視窗（作者 11/14：手機上跟烤棉花糖重疊 → 整體檢查）
+   * - 手機的「🎲」圓按鈕：右下動作鈕的正上方
+   * - 遊戲小視窗：放在「互動提示、火候條、表情那排、動作鈕」裡最高的那個上面；放不下就變矮、可以捲
+   */
+  #place() {
+    const st = this.el.style;
+    const vh = innerHeight;
+    const vw = innerWidth;
+    const pad = document.getElementById('action-buttons');
+    const blocks = [document.getElementById('prompt'), document.querySelector('#roast.show'), document.querySelector('.social-buttons'), pad, document.getElementById('chat-input'), document.getElementById('emote-menu')]; // 聊天輸入框、表情選單打開時也要避開（作者 11/14：電腦版聊天跟桌遊重疊）
+    const rects = blocks.filter((el) => el && el.offsetParent !== null).map((el) => el.getBoundingClientRect()).filter((r) => r.height >= 4 && r.width >= 4);
+    const round = this.el.querySelector('.bg-open.round');
+    if (round && !(pad && pad.offsetParent !== null)) {
+      // 💻 電腦：沒有動作鈕 → 固定在右邊偏下
+      st.left = 'auto';
+      st.transform = 'none';
+      st.width = '64px';
+      st.right = '18px';
+      st.bottom = '120px';
+      st.maxHeight = '';
+      return;
+    }
+    if (round && pad) {
+      // 圓按鈕：動作鈕正上方；碰到表情那排、提示、火候條就再往上
+      const r = pad.getBoundingClientRect();
+      const L = r.right - 64;
+      let top = r.top;
+      for (let k = 0; k < 3; k++)
+        for (const o of rects) if (o !== r && o.right > L && o.left < r.right && o.top < top && o.bottom > top - 76) top = o.top;
+      // 作者 11/14：再往上、往右一點 → 貼近右邊（離邊 10px），再往上抬 70px（不要碰到最上面那幾排）
+      top = Math.max(64 + 80, top - 70);
+      st.left = 'auto';
+      st.transform = 'none';
+      st.width = '64px';
+      st.right = '10px';
+      st.bottom = `${Math.round(vh - top + 10)}px`;
+      st.maxHeight = '';
+      return;
+    }
+    st.right = '';
+    st.left = '';
+    st.transform = '';
+    st.width = '';
+    const w = this.el.getBoundingClientRect();
+    let top = vh - (this.touch ? 16 : 96);
+    for (const r of rects) {
+      if (r.right <= w.left || r.left >= w.right || r.top < vh * 0.35) continue; // 左右沒碰到、在上半部的不管
+      top = Math.min(top, r.top);
+    }
+    st.bottom = `${Math.round(vh - top + 8)}px`;
+    st.maxHeight = `${Math.max(120, Math.round(top - 16))}px`;
+  }
+
   update(dt, time) {
     if (!this.on) {
       if (!this.el.hidden) this.el.hidden = true;
@@ -332,9 +390,12 @@ export class BoardGameUI {
     const key = JSON.stringify([g?.id, g?.state, g?.turn, g?.players?.map((p) => [p.id, p.len, p.popped, p.done]), g?.holes, left, me.sitting, me.inForest, this.picking, this.dismissed, g?.winners, this.quiet]);
     if (key !== this._key && !this.blowing) {
       this._key = key;
-      const html = me.inForest ? this.#render(me) : '';
+      let html = me.inForest ? this.#render(me) : '';
+      // 「🎲 桌遊」一律是圓按鈕、放旁邊、不要太醒目（作者 11/14）：手機在右下動作鈕上面；電腦在右邊
+      if (html.startsWith('<button type="button" class="bg-open"')) html = `<button type="button" class="bg-open round" data-act="open"><span>🎲</span><small>${t('桌遊')}</small></button>`;
       this.el.innerHTML = html;
       this.el.hidden = !html;
+      this._placeAt = 0;
       // 🔔／🔕 每個小視窗標題右邊都有（✕ 的左邊）
       const head = this.el.querySelector('.bg-head');
       if (head) {
@@ -346,6 +407,11 @@ export class BoardGameUI {
         b.textContent = this.quiet ? '🔕' : '🔔';
         head.insertBefore(b, head.querySelector('.bg-x'));
       }
+    }
+    // 位置：每 0.2 秒量一次，避開互動提示、火候條、下面那排按鈕（電腦、手機直放、橫放都一樣）
+    if (!this.el.hidden && (!this._placeAt || performance.now() - this._placeAt > 200)) {
+      this._placeAt = performance.now();
+      this.#place();
     }
     // 站起來就不能選遊戲了
     if (!me.sitting && this.picking) this.picking = false;

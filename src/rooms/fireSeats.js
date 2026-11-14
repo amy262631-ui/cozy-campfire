@@ -60,3 +60,11 @@ export function buildFireSeats(world) {
   };
   return { group, seats: FIRE_SEATS, near };
 }
+
+/** 坐在圓木上時角色要抬多高：圓木高度＋一點點（身體底部剛好在木頭上面，不要陷進去；作者 11/14） */
+export const SEAT_LIFT = 0.05;
+/** 別人（遠端玩家）坐在圓木正中間 → 回傳要抬的高度；不在圓木上回傳 null */
+export function fireSeatY(x, z) {
+  for (const s of FIRE_SEATS) if (Math.hypot(x - s.x, z - s.z) < 0.15) return s.h + SEAT_LIFT;
+  return null;
+}
