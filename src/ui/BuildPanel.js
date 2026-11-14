@@ -1,5 +1,5 @@
 import { t } from '../i18n/i18n.js';
-import { ALL_FURNITURE, FURNITURE_BY_ID } from '../game/furniture.js';
+import { ALL_FURNITURE, FURNITURE_BY_ID, CATS } from '../game/furniture.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TENT_SHAPES } from '../game/tentShapes.js';
 import { CATALOG_BY_ID, canAddTo, fishFits, stackAt, gridOf, expandPrice, MAX_STACK, ALL_COLORS, hasLoft } from '../game/furnitureCatalog.js';
@@ -10,7 +10,8 @@ import { FISH } from '../fishing/fishData.js';
  *   點地板的格子 → 空格：選背包裡的家具放上去；有東西：每一層都能轉向或收起，上面還能再疊
  *   getHome()        { inv, items, grid }
  *   onEdit(op, data) → Promise<boolean>（op：place / rotate / remove / move；rotate、remove、move 帶 l＝第幾層，move 再帶 tx、tz）
- *   ✋ 移動：按了之後再點另一格，那一層（連同上面疊的）就搬過去
+ *   ✋ 移動：點住家具直接拖到別格放開（11/14）；或按「✋ 移動」再點另一格
+ *   🆕 沒選格子時下面列出背包：點一下就擺到中間的空格（freeCell），再拖去想放的地方
  *   onExpand()       📐 擴建帳篷（用松果買）
  *   onExit()         結束布置
  *   onToggleOpen()   開放／關閉參觀
@@ -19,6 +20,7 @@ export class BuildPanel {
   constructor({ getHome, onEdit, onExit, onToggleOpen, onExpand, onShop, root = document.getElementById('ui') }) {
     Object.assign(this, { getHome, onEdit, onExit, onToggleOpen, onExpand, onShop });
     this.cell = null;
+    this.bagCat = 'all';
     root.insertAdjacentHTML(
       'beforeend',
       `
@@ -76,6 +78,42 @@ export class BuildPanel {
         this.busy = true;
         await this.onEdit?.(sb.dataset.shape ? 'shape' : 'style', { s: sb.dataset.shape ?? sb.dataset.style });
         this.busy = false;
+        this.render();
+        return;
+      }
+      const tb = e.target.closest('[data-bagcat]');
+      if (tb) {
+        this.bagCat = tb.dataset.bagcat;
+        this.render();
+        return;
+      }
+      // 📦 一鍵全部收起（按兩次：第一次變成「再按一次確定」）
+      const ca = e.target.closest('[data-clearall]');
+      if (ca && !this.busy) {
+        if (!ca.classList.contains('sure')) {
+          ca.classList.add('sure');
+          ca.textContent = t('再按一次，全部收回背包');
+          clearTimeout(this._caT);
+          this._caT = setTimeout(() => this.render(), 3000);
+          return;
+        }
+        clearTimeout(this._caT);
+        this.busy = true;
+        await this.onEdit?.('clearAll', hasLoft(this.getHome() ?? {}) ? { floor: this.floor } : {});
+        this.busy = false;
+        this.cell = null;
+        this.onPlaced?.(null);
+        this.render();
+        return;
+      }
+      const nb = e.target.closest('[data-new]');
+      if (nb && !this.busy) {
+        const cell = this.freeCell?.();
+        if (!cell) return this.onFull?.();
+        this.busy = true;
+        const ok = await this.onEdit?.('place', { x: cell.x, z: cell.z, i: nb.dataset.new, ...(nb.dataset.c ? { c: Number(nb.dataset.c) } : {}) });
+        this.busy = false;
+        if (ok) this.onPlaced?.(cell); // 選到剛放的那件（頭上有小按鈕），下面背包留著可以一直擺
         this.render();
         return;
       }
@@ -161,6 +199,69 @@ export class BuildPanel {
     return this.cell;
   }
 
+  /** 背包裡還沒擺出來的家具（同一件家具不同配色分開列） */
+  #avail(home) {
+    const avail = [];
+    for (const f of ALL_FURNITURE) {
+      const total = home.inv?.[f.id] ?? 0;
+      if (!total) continue;
+      let colored = 0;
+      for (const cv of ALL_COLORS.slice(1)) {
+        const have = home.cinv?.[`${f.id}~${cv.id}`] ?? 0;
+        colored += have;
+        const n = have - (home.items ?? []).filter((x) => x.i === f.id && x.c === cv.id).length;
+        if (n > 0) avail.push({ f, n, c: cv.id });
+      }
+      const n0 = total - colored - (home.items ?? []).filter((x) => x.i === f.id && !x.c).length;
+      if (n0 > 0) avail.unshift({ f, n: n0, c: 0 });
+    }
+    return avail;
+  }
+
+  /**
+   * 🎒 背包格子（作者 11/14：像時下遊戲的背包，一格一件、上面分類）
+   *   items：[{ f, n, c }]；attr(f, c)：按鈕上的 data-…（放新家具或放到這格）
+   */
+  #bagGrid(items, attr) {
+    if (!items.length) return '';
+    const cats = CATS.filter((c) => items.some(({ f }) => CATALOG_BY_ID[f.id]?.cat === c.id));
+    if (this.bagCat !== 'all' && !cats.some((c) => c.id === this.bagCat)) this.bagCat = 'all';
+    const shown = this.bagCat === 'all' ? items : items.filter(({ f }) => CATALOG_BY_ID[f.id]?.cat === this.bagCat);
+    const tabs =
+      cats.length > 1
+        ? `<div class="bag-tabs"><button type="button" data-bagcat="all" class="${this.bagCat === 'all' ? 'on' : ''}">${t('全部')}</button>${cats
+            .map((c) => `<button type="button" data-bagcat="${c.id}" class="${this.bagCat === c.id ? 'on' : ''}">${c.icon} ${c.name}</button>`)
+            .join('')}</div>`
+        : '';
+    const slots = shown
+      .map(
+        ({ f, n, c }) =>
+          `<button type="button" class="bag-slot" ${attr(f, c)} title="${f.name}"><span class="bs-ic">${f.icon}</span><span class="bs-nm">${f.name}</span>${n > 1 ? `<b class="bs-n">${n}</b>` : ''}${c ? `<em class="bs-c">${ALL_COLORS[c]?.icon}</em>` : ''}</button>`,
+      )
+      .join('');
+    return `${tabs}<div class="bag-grid">${slots}</div>`;
+  }
+
+  /** ✋ 拖曳搬家（點住家具拖到別格放開）：成功就選到新的那格 */
+  async dragMove(cell, l, to) {
+    if (this.busy) return false;
+    this.busy = true;
+    const ok = await this.onEdit?.('move', { x: cell.x, z: cell.z, l, tx: to.x, tz: to.z });
+    this.busy = false;
+    this.moving = null;
+    this.cell = ok ? { x: to.x, z: to.z } : { x: cell.x, z: cell.z };
+    this.render();
+    return ok;
+  }
+
+  /** 拖曳中：標題換成提示 */
+  dragHint(on) {
+    if (on) {
+      this.title.textContent = t('✋ 拖到想放的地方，放開就好');
+      this.body.innerHTML = `<div class="build-tip">${t('綠色＝可以放，紅色＝放不下')}</div>`;
+    } else this.render();
+  }
+
   render() {
     if (!this.active) return;
     const home = this.getHome() ?? { inv: {}, items: [] };
@@ -181,13 +282,17 @@ export class BuildPanel {
     }
     if (!this.cell) {
       const total = Object.values(home.inv ?? {}).reduce((a, b) => a + b, 0);
-      this.title.textContent = t('🛠️ 布置模式：點地板上的格子');
+      this.title.textContent = t('🛠️ 布置：點住家具直接拖');
       const cur = home.style ?? 'classic';
       const g = gridOf(home);
       const price = expandPrice(home);
+      // 🆕 背包裡的家具：點一下就擺到中間的空格，再拖去想放的地方（作者 11/14）
+      const bag = this.#bagGrid(this.#avail(home), (f, c) => `data-new="${f.id}" ${c ? `data-c="${c}"` : ''}`);
       this.body.innerHTML =
         (total
-          ? `<div class="build-tip">${t('點一格放家具；桌子、櫃子上還能再疊小東西')}</div>`
+          ? `<div class="build-tip">${t('點住家具拖到別格；點一下家具可以轉向、收起')}</div>` +
+            (bag ? `<div class="build-tip build-sub">${t('🎒 背包（點一下就擺出來）')}</div>${bag}` : '') +
+            ((home.items ?? []).length ? `<button type="button" class="build-act build-clear" data-clearall="1">${hasLoft(home) ? t('📦 這一樓全部收起') : t('📦 全部收起')}</button>` : '')
           : `<div class="build-tip">${t('背包是空的，按上面的「🛒 買家具」挑幾件吧')}</div>`) +
         `<div class="build-styles"><span class="build-styles-label">${t('📐 地板 {n}×{n}', { n: g })}</span>${
           price
@@ -206,25 +311,9 @@ export class BuildPanel {
     }
     const stack = stackAt(home.items, this.cell.x, this.cell.z).filter((it) => FURNITURE_BY_ID[it.i]);
     const top = stack.at(-1) ?? null;
-    // 背包：同一件家具不同配色分開列
-    const avail = [];
-    for (const f of ALL_FURNITURE) {
-      const total = home.inv?.[f.id] ?? 0;
-      if (!total) continue;
-      let colored = 0;
-      for (const cv of ALL_COLORS.slice(1)) {
-        const have = home.cinv?.[`${f.id}~${cv.id}`] ?? 0;
-        colored += have;
-        const n = have - home.items.filter((x) => x.i === f.id && x.c === cv.id).length;
-        if (n > 0) avail.push({ f, n, c: cv.id });
-      }
-      const n0 = total - colored - home.items.filter((x) => x.i === f.id && !x.c).length;
-      if (n0 > 0) avail.unshift({ f, n: n0, c: 0 });
-    }
+    const avail = this.#avail(home);
     const fits = avail.filter(({ f }) => canAddTo(stack, f.id));
-    const list = fits
-      .map(({ f, n, c }) => `<button type="button" class="build-item" data-op="place" data-i="${f.id}" ${c ? `data-c="${c}"` : ''}><span>${f.icon}</span>${f.name}${c ? `<em class="bi-color">${ALL_COLORS[c]?.icon}</em>` : ''}<small>×${n}</small></button>`)
-      .join('');
+    const list = this.#bagGrid(fits, (f, c) => `data-op="place" data-i="${f.id}" ${c ? `data-c="${c}"` : ''}`);
     if (!stack.length) {
       this.title.textContent = t('要在這格放什麼？');
       this.body.innerHTML = list || `<div class="build-tip">${t('背包裡的家具都擺出來了，到「🏪 營地小舖」買更多吧')}</div>`;

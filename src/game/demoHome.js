@@ -94,6 +94,11 @@ export function createDemoHome() {
         save();
         return { ok: true, home: copy() };
       }
+      if (data.op === 'clearAll') {
+        home.items = [];
+        save();
+        return { ok: true, home: copy() };
+      }
       const x = Number(data.x);
       const z = Number(data.z);
       const grid = gridOf(home);

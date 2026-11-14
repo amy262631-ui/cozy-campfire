@@ -7390,3 +7390,28 @@ body.touch .bg-panel { bottom: 250px; }
 .bg-frog button.pop i { display: inline-block; font-style: normal; animation: bgFrogPop 0.7s cubic-bezier(0.3, 1.8, 0.5, 1) both; }
 @keyframes bgFrogPop { 0% { transform: scale(0.3) translateY(10px); } 60% { transform: scale(1.5) translateY(-18px); } 100% { transform: scale(1.2) translateY(-6px); } }
 @keyframes bgFrogWiggle { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-4deg) scale(1.04); } }
+
+/* ✋ 布置（作者 11/14：像線上遊戲）：選到家具頭上浮一排小按鈕、背包一排、一鍵全部收起 */
+.furn-pop { position: fixed; z-index: 45; transform: translate(-50%, -100%); display: flex; gap: 6px; padding: 6px; border-radius: 16px; background: rgba(30, 22, 18, 0.9); border: 1.5px solid #7fe0ff; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4); pointer-events: auto; }
+.furn-pop[hidden] { display: none; }
+.furn-pop button { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 50px; padding: 6px 4px; border: none; border-radius: 12px; background: rgba(255, 245, 230, 0.1); color: #fff3e0; font: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
+.furn-pop button small { font-size: 11px; font-weight: 700; }
+.furn-pop button:active { transform: scale(0.94); }
+.furn-pop .fp-x { min-width: 30px; font-size: 14px; background: transparent; }
+.build-bag { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.build-bag .build-item { flex: none; }
+.build-clear { display: block; margin: 8px 0 0 auto; }
+.build-clear.sure { background: #e0483c !important; color: #fff !important; }
+/* 🎒 布置的背包：分類＋一格一件（作者 11/14：像時下遊戲的背包格子） */
+.bag-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: none; }
+.bag-tabs button { flex: none; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255, 210, 160, 0.25); background: rgba(255, 245, 230, 0.06); color: inherit; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.bag-tabs button.on { background: #ffb46b; color: #3a1d0c; border-color: #ffd56b; font-weight: 800; }
+.bag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 6px; max-height: 172px; overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
+.bag-slot { position: relative; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 2px; border-radius: 12px; border: 1.5px solid rgba(255, 210, 160, 0.22); background: rgba(255, 245, 230, 0.07); color: inherit; font: inherit; cursor: pointer; }
+.bag-slot:hover, .bag-slot:active { border-color: #ffd56b; background: rgba(255, 200, 120, 0.16); }
+.bag-slot .bs-ic { font-size: 26px; line-height: 1; }
+.bag-slot .bs-nm { font-size: 10.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
+.bag-slot .bs-n { position: absolute; top: 3px; right: 4px; min-width: 16px; padding: 0 4px; border-radius: 8px; background: #ffd56b; color: #3a1d0c; font-size: 10px; line-height: 16px; }
+.bag-slot .bs-c { position: absolute; top: 2px; left: 3px; font-style: normal; font-size: 11px; }
+.build-body > .bag-tabs, .build-body > .bag-grid, .build-body > .build-tip { flex: 1 1 100%; width: 100%; min-width: 0; }
+.furn-pop button[hidden] { display: none; }

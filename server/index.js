@@ -39,7 +39,7 @@ import { PASS, PASS_TIERS, PASS_PLANS, FREE, SPONSOR, SPONSOR_BOX, sponsorAmount
 import { BOARD_ON, BOARD_GAMES, BOARD_MIN, BOARD_MAX as BG_MAX, BOARD_WIN, BOARD_DAY_CAP, FROG_HOLES } from '../src/game/boardGames.js';
 import crypto from 'node:crypto';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack, hasLoft } from './homes.js';
-import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS } from '../src/game/furnitureCatalog.js';
+import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS, isLoftCell } from '../src/game/furnitureCatalog.js';
 import { YARD_BY_ID, hasYard, isBigYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
 import { CHALLENGE_BY_ID, challengesOf } from '../src/game/dailyChallenge.js';
@@ -3033,6 +3033,14 @@ io.on('connection', (socket) => {
     if (!player || roomId !== 'home' || homeOwner !== player.vid) return ack?.({ ok: false, reason: 'notHome' });
     const h = homes[player.vid];
     if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
+    if (data.op === 'clearAll') {
+      // 📦 一鍵全部收起（作者 11/14：想完全重來）：floor＝1 只收一樓、2 只收二樓、沒給＝全部
+      const fl = Number(data.floor);
+      h.items = (h.items ?? []).filter((it) => (fl === 1 ? isLoftCell(it.z) : fl === 2 ? !isLoftCell(it.z) : false));
+      saveJson('homes.json', homes);
+      io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) });
+      return ack?.({ ok: true, home: publicHome(h) });
+    }
     const x = Number(data.x);
     const z = Number(data.z);
     if (!validCell(x, z, gridOf(h), h)) return ack?.({ ok: false, reason: 'cell' });

@@ -40,7 +40,7 @@ import { ConfirmBuy } from './ui/ConfirmBuy.js';
 import { buildYard } from './rooms/yardModels.js';
 import { buildSign } from './rooms/signModels.js';
 import { SIGN_BY_ID } from './game/signCatalog.js';
-import { ALL_COLORS, CATALOG_BY_ID, gridOf, expandPrice, fishFits } from './game/furnitureCatalog.js';
+import { ALL_COLORS, CATALOG_BY_ID, gridOf, expandPrice, fishFits, stackAt } from './game/furnitureCatalog.js';
 import { YARD_BY_ID, YARD_USES } from './game/yardCatalog.js';
 import { FUR_PALETTES } from './player/characters/furPalettes.js';
 import { BASE_FUR, PREMIUM_FUR, TAILS, EARS, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from './game/looks.js';
@@ -4535,6 +4535,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   };
   actions.onWarm = () => hud.toast(t('🔥 小暖爐暖呼呼的'));
 
+  /** 布置時選到的格子＋第幾層 */
+  let furnSel = null;
   const buildPanel = new BuildPanel({
     getHome: () => homeRoom.home,
     onShop: () => shopPanel.open('furn'), // 🛒 布置時直接買家具，買完回背包就能擺
@@ -4542,8 +4544,14 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       const res = await homeReq('homeEdit', { op, ...data });
       if (res?.ok) {
         setMyHome({ ...res.home });
-        audio.sfx(op === 'remove' ? 'tap' : 'stone');
-        if (op === 'move') homeRoom.select({ x: data.tx, z: data.tz });
+        audio.sfx(op === 'remove' || op === 'clearAll' ? 'tap' : 'stone');
+        if (op === 'clearAll') hud.toast(t('📦 全部收回背包了，可以重新擺囉'));
+        // 選取框跟著：搬過去就框新的那格，轉向框同一層，收起後框剩下的
+        if (op === 'clearAll') furnSel = null;
+        else if (op === 'move') furnSel = { x: data.tx, z: data.tz, layer: 0 };
+        else if (op === 'remove' && furnSel) furnSel.layer = 0;
+        else if (op === 'place') furnSel = { x: data.x, z: data.z, layer: stackAt(res.home.items, data.x, data.z).length - 1 };
+        if (furnSel) homeRoom.select(furnSel, furnSel.layer);
         return true;
       }
       if (res?.reason === 'taken') hud.toast(t('這格已經有東西了'));
@@ -4588,6 +4596,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       buildCam = null;
     }
     homeRoom.setBuild(false);
+    furnSel = null;
     homeRoom.select(null);
     cameraRig.focusTarget = null;
     buildPanel.stop();
@@ -4610,21 +4619,123 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   };
   buildPanel.onLeave = () => leaveHome();
   actions.onBuild = () => (buildPanel.active ? stopBuild() : startBuild());
-  // 布置模式：點地板選格子（拖曳轉鏡頭不算）
+  // ✋ 布置模式（作者 11/14：像線上遊戲）：點住家具直接拖到別格，放開就放好；點一下＝選這格（轉向、收起）；在空地上拖＝轉鏡頭
+  buildPanel.freeCell = () => homeRoom.freeCell();
+  buildPanel.onFull = () => hud.toast(t('帳篷裡沒有空格了，收起一些或擴建吧'));
+  buildPanel.onPlaced = (cell) => (cell ? selectFurn(cell, furnSel?.layer ?? 0) : selectFurn(null));
+  /** 選到的格子、第幾層（畫面上的外框、小按鈕跟著它） */
+  function selectFurn(cell, layer = 0) {
+    furnSel = cell ? { x: cell.x, z: cell.z, layer } : null;
+    homeRoom.select(furnSel, layer);
+    // 選到家具：下面的背包留著（可以一直擺），動作用家具頭上的小按鈕；點到空格：下面列出可以放這格的東西
+    const has = cell && stackAt(homeRoom.home?.items, cell.x, cell.z).length;
+    buildPanel.select(cell && !has ? { x: cell.x, z: cell.z } : null);
+    furnPop.querySelector('[data-fop="fish"]').hidden = !(has && CATALOG_BY_ID[stackAt(homeRoom.home.items, cell.x, cell.z)[layer]?.i]?.fish);
+  }
+  // 🔘 選到家具：頭上浮一排小按鈕（轉向、移動、收起），跟著家具走
+  const furnPop = document.createElement('div');
+  furnPop.className = 'furn-pop';
+  furnPop.hidden = true;
+  furnPop.innerHTML = `<button type="button" data-fop="rotate">🔄<small>${t('轉向')}</small></button><button type="button" data-fop="move">✋<small>${t('移動')}</small></button><button type="button" data-fop="remove">📦<small>${t('收起')}</small></button><button type="button" data-fop="fish" hidden>🐠<small>${t('放魚')}</small></button><button type="button" data-fop="close" class="fp-x">✕</button>`;
+  document.getElementById('ui').appendChild(furnPop);
+  furnPop.addEventListener('pointerdown', (e) => e.stopPropagation());
+  furnPop.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-fop]');
+    if (!b || !furnSel || buildPanel.busy) return;
+    const op = b.dataset.fop;
+    if (op === 'close') return selectFurn(null);
+    if (op === 'move') return hud.toast(t('✋ 按住家具直接拖到想放的地方'), 2500);
+    if (op === 'fish') {
+      // 🐠 魚缸：下面換成選魚
+      buildPanel.cell = { x: furnSel.x, z: furnSel.z };
+      buildPanel.fishPick = furnSel.layer;
+      return buildPanel.render();
+    }
+    buildPanel.busy = true;
+    await buildPanel.onEdit?.(op, { x: furnSel.x, z: furnSel.z, l: furnSel.layer });
+    buildPanel.busy = false;
+    if (op === 'remove') selectFurn(furnSel && stackAt(homeRoom.home?.items, furnSel.x, furnSel.z).length ? furnSel : null, 0);
+    else buildPanel.render();
+  });
+  const _popV = new THREE.Vector3();
+  function placeFurnPop() {
+    const top = buildPanel.active && inHome() && furnSel && !homeRoom.dragging ? homeRoom.selTop : null;
+    if (!top) {
+      furnPop.hidden = true;
+      return;
+    }
+    _popV.copy(top).project(camera);
+    const r = renderer.domElement.getBoundingClientRect();
+    const x = r.left + ((_popV.x + 1) / 2) * r.width;
+    const y = r.top + ((1 - _popV.y) / 2) * r.height;
+    furnPop.hidden = _popV.z > 1;
+    furnPop.style.left = `${Math.round(Math.min(r.right - 110, Math.max(r.left + 110, x)))}px`;
+    furnPop.style.top = `${Math.round(Math.max(70, y - 14))}px`;
+  }
   {
+    const dom = renderer.domElement;
     let down = null;
-    renderer.domElement.addEventListener('pointerdown', (e) => (down = { x: e.clientX, y: e.clientY }));
-    renderer.domElement.addEventListener('pointerup', (e) => {
-      if (!down || !buildPanel.active || !inHome()) return;
-      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    dom.addEventListener(
+      'pointerdown',
+      (e) => {
+        down = null;
+        if (!buildPanel.active || !inHome() || buildPanel.busy) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        const cell = homeRoom.cellAtScreen(e.clientX, e.clientY, camera, dom);
+        down = { x: e.clientX, y: e.clientY, id: e.pointerId, cell, dragging: false };
+        if (cell?.hit && !buildPanel.moving) {
+          // 點到家具：這次不轉鏡頭（攔下來，鏡頭收不到這個 pointerdown）
+          e.stopImmediatePropagation();
+          dom.setPointerCapture?.(e.pointerId);
+        }
+      },
+      { capture: true },
+    );
+    dom.addEventListener('pointermove', (e) => {
+      if (!down?.cell?.hit || e.pointerId !== down.id || buildPanel.moving) return;
+      if (!down.dragging) {
+        if (Math.hypot(e.clientX - down.x, e.clientY - down.y) < 8) return;
+        if (!homeRoom.dragStart(down.cell, down.cell.layer)) return;
+        down.dragging = true;
+        buildPanel.dragHint(true);
+      }
+      homeRoom.dragTo(homeRoom.cellAtScreen(e.clientX, e.clientY, camera, dom, true));
+    });
+    dom.addEventListener('pointerup', async (e) => {
+      const d = down;
       down = null;
-      if (moved > 8) return;
-      const cell = homeRoom.cellAtScreen(e.clientX, e.clientY, camera, renderer.domElement);
-      if (!cell) return;
-      // ✋ 搬家模式：點的這格就是要搬去的地方
+      if (!d || e.pointerId !== d.id) return;
+      if (dom.hasPointerCapture?.(e.pointerId)) dom.releasePointerCapture(e.pointerId);
+      if (!buildPanel.active || !inHome()) return homeRoom.dragEnd();
+      if (d.dragging) {
+        const g = homeRoom.dragging;
+        const from = { x: d.cell.x, z: d.cell.z };
+        if (g?.target && g.ok && (g.target.x !== from.x || g.target.z !== from.z)) {
+          const to = { x: g.target.x, z: g.target.z };
+          const ok = await buildPanel.dragMove(from, g.l, to);
+          homeRoom.dragEnd();
+          selectFurn(ok ? to : from, 0);
+        } else {
+          if (g?.target && !g.ok) hud.toast(t('那一格放不下，換一格試試'));
+          homeRoom.dragEnd();
+          selectFurn(from, d.cell.layer ?? 0);
+        }
+        return;
+      }
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8 || !d.cell) return; // 拖曳＝轉鏡頭
+      const cell = { x: d.cell.x, z: d.cell.z };
+      // 「✋ 移動」按鈕：點的這格就是要搬去的地方
       if (buildPanel.moving) return void buildPanel.moveTo(cell);
-      homeRoom.select(cell);
-      buildPanel.select(cell);
+      // 點同一件第二次＝取消選取
+      if (furnSel && furnSel.x === cell.x && furnSel.z === cell.z && furnSel.layer === (d.cell.layer ?? 0) && d.cell.hit) return selectFurn(null);
+      selectFurn(cell, d.cell.layer ?? 0);
+    });
+    dom.addEventListener('pointercancel', () => {
+      if (down?.dragging) {
+        homeRoom.dragEnd();
+        buildPanel.dragHint(false);
+      }
+      down = null;
     });
   }
   // 試玩版：模擬整點小活動（?mini=fish / stone / wood / race / hunt）
@@ -5051,6 +5162,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const room = roomMgr.current;
 
     stepAutoWalk(dt);
+    placeFurnPop();
     const action = actions.update(dt, input.hasMoveInput);
     player.update(dt, input, cameraRig.yaw, room, elapsed, action);
     // 🍄 蘑菇彈跳：角色跳起來（只是畫面上跳，位置不變）

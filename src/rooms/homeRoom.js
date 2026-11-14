@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { makeResolver, lowpoly, shadowAll } from './shared.js';
 import { buildFurniture, FURNITURE_BY_ID } from '../game/furniture.js';
-import { CATALOG_BY_ID, stackAt, stackY, stackOffset, gridOf, GRID_BASE, LOFT_Z, loftRows, isLoftCell, hasLoft } from '../game/furnitureCatalog.js';
+import { CATALOG_BY_ID, stackAt, stackY, stackOffset, gridOf, GRID_BASE, LOFT_Z, loftRows, isLoftCell, hasLoft, moveStack } from '../game/furnitureCatalog.js';
 import { styleOf, tentTexture } from '../game/tentStyles.js';
 import { shapeOf, buildTentShell, buildTentFloor, tentBounds, tentDoorZ, CABIN } from '../game/tentShapes.js';
 import { t } from '../i18n/i18n.js';
@@ -375,6 +375,17 @@ export function createHomeRoom() {
    *             以前會把 level 設回 0，在二樓躺床的人會掉到一樓（還維持躺姿）
    */
   function setHome(h, isMine, keep = false) {
+    if (selBox) {
+      group.remove(selBox);
+      selBox = null;
+      selTop = null;
+    }
+    if (drag) {
+      // 重畫家具：拖到一半的影子先收掉
+      group.remove(drag.ghost);
+      drag = null;
+      selector.material.color.set(0xffd28a);
+    }
     const prev = keep ? { level, rest, shape: loftShape?.id ?? null } : null;
     home = h ?? { items: [] };
     mine = !!isMine;
@@ -419,6 +430,7 @@ export function createHomeRoom() {
         m.rotation.y = (it.r ?? 0) * (Math.PI / 2);
         m.userData.cell = { x, z };
         m.userData.item = it.i;
+        m.userData.layer = lv; // ✋ 拖曳布置：點到第幾層，就拖那一層（連同上面疊的）
         furnitureGroup.add(m);
         m.traverse((o) => o.userData.swim && swimmers.push(o));
         if (it.i === 'rocking') {
@@ -478,20 +490,29 @@ export function createHomeRoom() {
     }
   }
 
+  /** ✋ 正在拖的家具（影子） */
+  let drag = null;
+  /** 選到的家具外框、框的頂端 */
+  let selBox = null;
+  let selTop = null;
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
-  /** 螢幕上點的位置 → 地板第幾格（沒點到地板回傳 null） */
-  function cellAtScreen(clientX, clientY, camera, dom) {
+  /**
+   * 螢幕上點的位置 → 地板第幾格（沒點到地板回傳 null）
+   * 點到家具時多回傳 layer（第幾層）；floorOnly＝只看地板（拖曳家具時用，不要被家具擋到）
+   */
+  function cellAtScreen(clientX, clientY, camera, dom, floorOnly = false) {
     const rect = dom.getBoundingClientRect();
     ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
     // 先看有沒有點到家具（高的櫃子、疊起來的東西，點上面也算那一格）
     const up = buildFloor === 2 && !!loftShape;
-    for (const h of raycaster.intersectObject(furnitureGroup, true)) {
-      let o = h.object;
-      while (o && !o.userData.cell) o = o.parent;
-      if (o && isLoftCell(o.userData.cell.z) === up) return { ...o.userData.cell };
-    }
+    if (!floorOnly)
+      for (const h of raycaster.intersectObject(furnitureGroup, true)) {
+        let o = h.object;
+        while (o && !o.userData.cell) o = o.parent;
+        if (o && o.visible && isLoftCell(o.userData.cell.z) === up) return { ...o.userData.cell, layer: o.userData.layer ?? 0, hit: true };
+      }
     const target = up ? shell.getObjectByProperty('name', 'loft') : floor;
     const hit = target && raycaster.intersectObject(target, false)[0];
     if (!hit) return null;
@@ -568,12 +589,124 @@ export function createHomeRoom() {
     get loftCenter() {
       return loftShape ? { x: 0, y: CABIN.loftY * scale, z: ((-loftShape.D + CABIN.loftFront) / 2) * scale } : null;
     },
-    select(cell) {
-      selector.visible = !!cell;
-      if (cell) {
-        const c = cellPos(cell.x, cell.z);
-        selector.position.set(c.x, c.y + 0.035, c.z);
+    /**
+     * ✋ 拖曳布置（作者 11/14：像線上遊戲一樣，點住家具直接拖）
+     * dragStart：那一層（連同上面疊的）變成半透明的影子跟著手指走，原本的先藏起來
+     * dragTo：影子移到那一格；回傳放不放得下（綠＝可以、紅＝不行）
+     * dragEnd：收掉影子（真的搬過去之後，setHome 會重畫）
+     */
+    dragStart(cell, l) {
+      this.dragEnd();
+      const from = stackAt(home.items, cell.x, cell.z);
+      if (!from[l]) return false;
+      const ghost = new THREE.Group();
+      const hidden = [];
+      for (const m of furnitureGroup.children) {
+        if (m.userData.cell?.x !== cell.x || m.userData.cell?.z !== cell.z || (m.userData.layer ?? 0) < l) continue;
+        const c = m.clone(true);
+        c.traverse((o) => {
+          if (o.isLight) o.visible = false;
+          if (!o.material) return;
+          o.material = (Array.isArray(o.material) ? o.material : [o.material]).map((mt) => {
+            const k = mt.clone();
+            k.transparent = true;
+            k.opacity = Math.min(k.opacity ?? 1, 0.55);
+            k.depthWrite = false;
+            return k;
+          });
+          if (o.material.length === 1) o.material = o.material[0];
+          o.castShadow = false;
+        });
+        ghost.add(c);
+        m.visible = false;
+        hidden.push(m);
       }
+      group.add(ghost);
+      if (selBox) selBox.visible = false;
+      selTop = null;
+      const p0 = cellPos(cell.x, cell.z);
+      drag = { cell, l, ghost, hidden, from, p0, baseY: stackOffset(from, l).y };
+      selector.visible = true;
+      selector.material.color.set(0x8fe39a);
+      selector.position.set(p0.x, p0.y + 0.035, p0.z);
+      return true;
+    },
+    dragTo(cell) {
+      if (!drag || !cell) return false;
+      const same = cell.x === drag.cell.x && cell.z === drag.cell.z;
+      const sim = (home.items ?? []).map((it) => ({ ...it }));
+      const why = same ? null : moveStack(sim, drag.cell.x, drag.cell.z, drag.l, cell.x, cell.z);
+      const ok = !why;
+      const to = same ? drag.from.slice(0, drag.l) : stackAt(home.items, cell.x, cell.z);
+      const p = cellPos(cell.x, cell.z);
+      const y = stackOffset([...to, drag.from[drag.l]], to.length).y;
+      drag.ghost.position.set(p.x - drag.p0.x, p.y - drag.p0.y + y - drag.baseY + (ok ? 0.08 : 0.04), p.z - drag.p0.z); // 浮起來一點點
+      selector.material.color.set(ok ? 0x8fe39a : 0xff8a7a);
+      selector.position.set(p.x, p.y + 0.035, p.z);
+      drag.target = cell;
+      drag.ok = ok;
+      return ok;
+    },
+    get dragging() {
+      return drag ? { cell: drag.cell, l: drag.l, target: drag.target ?? null, ok: !!drag.ok } : null;
+    },
+    dragEnd() {
+      if (!drag) return;
+      group.remove(drag.ghost);
+      drag.ghost.traverse((o) => {
+        if (!o.material) return;
+        for (const mt of Array.isArray(o.material) ? o.material : [o.material]) mt.dispose();
+      });
+      for (const m of drag.hidden) m.visible = true;
+      drag = null;
+      selector.material.color.set(0xffd28a);
+    },
+    /** 🆕 從背包放新家具：離中間最近的空格（布置二樓就找二樓） */
+    freeCell() {
+      const up = buildFloor === 2 && !!loftShape;
+      const rows = up ? loftRows(grid) : grid;
+      let best = null;
+      let bd = Infinity;
+      for (let x = 0; x < grid; x++)
+        for (let r = 0; r < rows; r++) {
+          const z = up ? LOFT_Z + r : r;
+          if (!up && z === grid - 1 && Math.abs(cellPos(x, z).x) < 0.85) continue; // 門口走道先不要
+          if (stackAt(home.items, x, z).length) continue;
+          const c = cellPos(x, z);
+          const d = Math.hypot(c.x, c.z - (up ? cellPos(0, LOFT_Z + rows / 2).z : 0));
+          if (d < bd) [best, bd] = [{ x, z }, d];
+        }
+      return best;
+    },
+    /**
+     * 選取一格：地板亮一格；有家具的話，點到的那一層（連同上面疊的）外面框一圈亮色框（作者 11/14：點一下要看得出選到了）
+     * 回傳框的最上面中間（畫面上的小按鈕跟著它）
+     */
+    select(cell, layer = 0) {
+      selector.visible = !!cell;
+      if (selBox) {
+        group.remove(selBox);
+        selBox.geometry.dispose();
+        selBox = null;
+      }
+      selTop = null;
+      if (!cell) return;
+      const c = cellPos(cell.x, cell.z);
+      selector.position.set(c.x, c.y + 0.035, c.z);
+      const box = new THREE.Box3();
+      for (const m of furnitureGroup.children) if (m.userData.cell?.x === cell.x && m.userData.cell?.z === cell.z && (m.userData.layer ?? 0) >= layer) box.expandByObject(m);
+      if (box.isEmpty()) return;
+      box.expandByScalar(0.04);
+      selBox = new THREE.Box3Helper(box, 0x7fe0ff);
+      selBox.material.depthTest = false;
+      selBox.material.transparent = true;
+      selBox.renderOrder = 10;
+      group.add(selBox);
+      selTop = new THREE.Vector3((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2);
+    },
+    /** 選到的家具最上面中間（世界座標；沒選到家具回傳 null） */
+    get selTop() {
+      return selTop;
     },
     /** 這一格最上面的家具 */
     itemAt(cell) {
