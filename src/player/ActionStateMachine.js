@@ -128,6 +128,7 @@ export class ActionStateMachine {
   /** 🛋️ 坐沙發（sofa）、躺床（sleep）：一移動就起身 */
   rest(kind, faceAngle) {
     if (this.state !== 'free') this.#exit(true);
+    this.dineSeat = null;
     this.state = kind;
     this.t = 0;
     this.restFace = faceAngle;
@@ -366,10 +367,10 @@ export class ActionStateMachine {
       case 'eat':
         r.locked = true;
         r.pose = 'eat';
-        r.faceAngle = this.seat ? this.seat.face : this.eatingDish ? null : faceFire; // 吃料理：面向原本的方向
+        r.faceAngle = this.seat ? this.seat.face : this.dineSeat ? this.restFace : this.eatingDish ? null : faceFire; // 吃料理：面向原本的方向
         if (this.t > EAT_SECONDS) {
           this.eatingDish = false;
-          this.state = this.seat ? 'sofa' : 'free';
+          this.state = this.seat || this.dineSeat ? 'sofa' : 'free'; // 🍽️ 在餐桌椅子上吃完：繼續坐著
           if (this.seat) this.restFace = this.seat.face;
           this.t = 0;
         }
@@ -462,6 +463,7 @@ export class ActionStateMachine {
     if (this.state === 'fish' && this.room?.fishing?.phase === 'show') return this.compact ? t('<kbd>F</kbd> 繼續釣　·　走開就舉著魚炫耀') : t('<kbd>F</kbd> 繼續釣魚　·　直接走開，就舉著魚到處炫耀 🐟');
     if (this.state === 'fish' && this.room?.fishing?.busy) return null;
     if (this.state === 'sofa' && this.seat && !this.seat.yard) return P.seat;
+    if (this.state === 'sofa' && this.dineSeat) return this.room?.mine ? t('<kbd>E</kbd> 🍽️ 擺料理　·　移動就起身') : t('<kbd>E</kbd> 🍽️ 吃一份　·　移動就起身');
     if (this.state === 'blanket' && this.seat?.fire) return P.seatBlanket;
     if (this.state === 'free') {
       if (this.room?.prompt) return this.room.prompt(this);

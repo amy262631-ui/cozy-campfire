@@ -7415,3 +7415,8 @@ body.touch .bg-panel { bottom: 250px; }
 .bag-slot .bs-c { position: absolute; top: 2px; left: 3px; font-style: normal; font-size: 11px; }
 .build-body > .bag-tabs, .build-body > .bag-grid, .build-body > .build-tip { flex: 1 1 100%; width: 100%; min-width: 0; }
 .furn-pop button[hidden] { display: none; }
+/* 🍽️ 餐桌請客（11/14） */
+.dine-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 4px 0 10px; }
+.dine-plate { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 50%; background: #fffaf0; border: 3px solid #e8d6c0; font-size: 28px; color: #5a3a20; }
+.dine-plate small { font-size: 10px; max-width: 62px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dine-plate.empty { opacity: 0.35; font-size: 22px; }

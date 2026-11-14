@@ -99,6 +99,15 @@ export function buildFurniture(id, opts = {}) {
       }
     }
   };
+  /** 🪑 餐桌的小椅子：坐的那面在 y≈0.22，椅背在外側（side＝1 在 +z、-1 在 -z） */
+  const chair = (x, z, side) => {
+    // 11/14 作者：人坐上去不能卡到椅背 → 坐的地方深一點、椅背在圓滾滾的身體後面
+    const w = mat(0xc89668);
+    box(0.3, 0.04, 0.52, w, x, 0.22, z + side * 0.09);
+    box(0.3, 0.3, 0.035, w, x, 0.39, z + side * 0.34).userData.chairBack = true;
+    for (const [dx, dz] of [[-0.12, -0.13], [0.12, -0.13], [-0.12, 0.3], [0.12, 0.3]]) box(0.03, 0.2, 0.03, w, x + dx, 0.1, z + side * dz);
+    cyl(0.12, 0.12, 0.02, mat(0xfbd3d6), x, 0.25, z + side * 0.04, 12); // 小坐墊
+  };
   const heart = (sz) => {
     const s = new THREE.Shape();
     s.moveTo(0, -sz);
@@ -1780,6 +1789,92 @@ export function buildFurniture(id, opts = {}) {
         ball(0.025, mat(0xffa3ad), sx * 0.13, 0.19, 0.115, 1, 0.6, 0.4);
       }
       ball(0.022, mat(0x2a1a14), 0, 0.19, 0.135);
+      break;
+    }
+    // ======== 🍳 11/14 廚房 ========
+    case 'k_counter': {
+      // 奶油白櫃子＋木檯面＋小水槽、水龍頭（上面還能放小東西）
+      box(0.7, 0.56, 0.5, mat(0xf4ecdc), 0, 0.28);
+      box(0.74, 0.06, 0.54, mat(0xb98a5e), 0, 0.59);
+      box(0.26, 0.02, 0.24, mat(0x9aa8b0), 0.14, 0.625, 0); // 水槽
+      cyl(0.015, 0.015, 0.16, mat(0xc8ccd0), 0.14, 0.7, -0.17);
+      box(0.015, 0.015, 0.1, mat(0xc8ccd0), 0.14, 0.77, -0.12);
+      for (const x of [-0.18, 0.18]) {
+        box(0.3, 0.42, 0.01, mat(0xa8d8cc), x, 0.29, 0.255); // 櫃門（蒂芬妮藍）
+        ball(0.02, mat(0xf2c14e), x + (x < 0 ? 0.1 : -0.1), 0.38, 0.265);
+      }
+      break;
+    }
+    case 'k_gasstove': {
+      // 矮櫃上一台雙口爐，一口放著小湯鍋
+      box(0.66, 0.5, 0.5, mat(0xfbd3d6), 0, 0.25);
+      box(0.68, 0.05, 0.52, mat(0xeae6de), 0, 0.525);
+      for (const x of [-0.16, 0.16]) {
+        torus(0.08, 0.012, mat(0x3a3a40), x, 0.56, 0, Math.PI * 2, 14).rotation.x = Math.PI / 2;
+        cyl(0.03, 0.03, 0.01, glow(0x6ab0ff), x, 0.555, 0);
+        ball(0.025, mat(0x3a3a40), x, 0.4, 0.26);
+      }
+      cyl(0.1, 0.09, 0.12, mat(0xe85a5a), 0.16, 0.63, 0); // 小湯鍋
+      cyl(0.105, 0.105, 0.015, mat(0xffffff), 0.16, 0.695, 0);
+      box(0.6, 0.18, 0.01, mat(0xffffff), 0, 0.3, 0.255);
+      break;
+    }
+    case 'k_hearth': {
+      // 紅磚灶台＋柴火口（會亮）＋大鐵鍋＋小煙囪
+      const brick = mat(0xb5553f);
+      const mortar = mat(0xe8d6c0);
+      box(0.72, 0.5, 0.52, brick, 0, 0.25);
+      for (const y of [0.12, 0.25, 0.38]) box(0.73, 0.012, 0.53, mortar, 0, y);
+      box(0.76, 0.05, 0.56, mortar, 0, 0.525);
+      box(0.22, 0.16, 0.02, mat(0x2a1a14), -0.14, 0.15, 0.26);
+      box(0.16, 0.08, 0.02, glow(0xff8a3c), -0.14, 0.12, 0.265); // 柴火
+      dome(0.16, mat(0x3a3a40), 0.12, 0.55, 0, 0.6).rotation.x = Math.PI; // 大鐵鍋
+      cyl(0.17, 0.17, 0.02, mat(0x5a4a40), 0.12, 0.56, 0);
+      box(0.12, 0.5, 0.12, brick, -0.26, 0.8, -0.18); // 煙囪
+      break;
+    }
+    case 'k_oven': {
+      // 圓圓的復古小烤箱（奶油色），玻璃窗會亮
+      box(0.56, 0.5, 0.46, mat(0xfff1d0), 0, 0.27);
+      box(0.6, 0.04, 0.5, mat(0xe8c27a), 0, 0.535);
+      box(0.36, 0.22, 0.01, glow(0xffb45a), -0.04, 0.3, 0.235);
+      box(0.4, 0.26, 0.008, mat(0xe8c27a), -0.04, 0.3, 0.232);
+      for (const y of [0.42, 0.34, 0.26]) ball(0.022, mat(0x9a6a40), 0.2, y, 0.24);
+      box(0.3, 0.02, 0.02, mat(0xc8a070), -0.04, 0.44, 0.25); // 把手
+      for (const [x, z] of [[-0.22, -0.18], [0.22, -0.18], [-0.22, 0.18], [0.22, 0.18]]) cyl(0.025, 0.02, 0.03, mat(0x9a6a40), x, 0.015, z);
+      break;
+    }
+    case 'k_dishrack': {
+      // 小木架上直立一排小盤子＋兩個碗
+      const w = mat(0xb98a5e);
+      box(0.32, 0.02, 0.14, w, 0, 0.01);
+      for (const x of [-0.15, 0.15]) box(0.02, 0.14, 0.14, w, x, 0.07);
+      [0xffffff, 0xa8d8cc, 0xfbd3d6, 0xffffff].forEach((c, i) => {
+        const d = cyl(0.07, 0.07, 0.012, mat(c), -0.09 + i * 0.06, 0.09, 0, 14);
+        d.rotation.z = Math.PI / 2;
+      });
+      dome(0.05, mat(0xf2c14e), 0.1, 0.03, 0.09, 0.8).rotation.x = Math.PI;
+      break;
+    }
+    case 'k_dtable_s': {
+      // 小圓餐桌（奶油白桌巾）＋前後兩張小椅子
+      // 11/14 作者：坐上去不能卡到桌子 → 桌面小一點、椅子往外（坐著的身體剛好在桌邊外面）
+      cyl(0.2, 0.2, 0.04, mat(0xb98a5e), 0, 0.4, 0, 18).userData.tableTop = true;
+      cyl(0.21, 0.23, 0.06, mat(0xfff6e8), 0, 0.37, 0, 18);
+      cyl(0.03, 0.03, 0.38, mat(0x8a5a36), 0, 0.19);
+      cyl(0.13, 0.15, 0.03, mat(0x8a5a36), 0, 0.015, 0, 12);
+      for (const s of [1, -1]) chair(0, s * 0.5, s);
+      break;
+    }
+    case 'k_dtable_l': {
+      // 長餐桌（兩格寬）＋紅格子桌巾＋四張椅子
+      const cx = 0.4;
+      const wood = mat(0x9a6a40);
+      box(1.36, 0.05, 0.38, wood, cx, 0.4).userData.tableTop = true;
+      box(1.0, 0.012, 0.4, mat(0xe86a6a), cx, 0.43);
+      for (let i = 0; i < 5; i++) box(0.04, 0.014, 0.41, mat(0xffffff), cx - 0.4 + i * 0.2, 0.432);
+      for (const [x, z] of [[-0.22, -0.14], [1.02, -0.14], [-0.22, 0.14], [1.02, 0.14]]) box(0.05, 0.38, 0.05, wood, x, 0.19, z);
+      for (const x of [0, 0.8]) for (const s of [1, -1]) chair(x, s * 0.5, s);
       break;
     }
     default:

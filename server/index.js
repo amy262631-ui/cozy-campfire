@@ -31,7 +31,7 @@ import { giftInfo, basketCat, GIFT_DAILY_CAP, GIFT_MIN_DAYS, GIFT_SEND_MAX, GIFT
 import { CROP_BY_ID, GARDEN_MAX, GARDEN_EXPAND, gardenSlotsOf, WATER_MAX, CROP_FIRST_GAIN, readyAtOf, stageOf } from '../src/game/garden.js';
 import { canMake, takeMaterials } from '../src/game/materials.js';
 import { RECIPE_BY_ID } from '../src/game/crafting.js';
-import { DISH_BY_ID, dishFirstGain, BUFF_MS, DISH_FX, activeBuff } from '../src/game/cooking.js';
+import { DISH_BY_ID, dishFirstGain, BUFF_MS, DISH_FX, activeBuff, homeCanCook } from '../src/game/cooking.js';
 import { MUSEUM_BY_ID, DONATE_PER_DAY } from '../src/game/museum.js';
 import { TRASH, TRASH_BY_ID, TRASH_MAX, TRASH_ROOM, RECYCLE_GAIN, RECYCLE_DAILY_CAP, TRASH_FIRST_GAIN, TRASH_DEX_OUTFIT, pickTrash } from '../src/game/trash.js';
 import { LAYOUT as CAMP_LAYOUT } from '../src/rooms/campLayout.js';
@@ -205,6 +205,36 @@ const grants = asArray(savedGrants);
 const FRAME_IDS = new Set(['gold', 'silver', 'white', 'black', 'copper']);
 /** 💡 玩家建議（只有作者在 /ideas 看得到）：[{ n, t, at }] */
 let ideas = asArray(savedIdeas);
+/** 🍽️ 這一格有沒有餐桌（回傳那件餐桌的目錄資料） */
+const dineTableAt = (h, x, z) => {
+  for (const it of stackAt(h?.items ?? [], x, z)) if (CATALOG_BY_ID[it.i]?.dine) return CATALOG_BY_ID[it.i];
+  return null;
+};
+/**
+ * 🍽️ 擺設改了之後整理餐桌上的料理：餐桌搬走了料理跟著搬；餐桌收起來了，料理退回主人
+ *   from、to：這次搬家的格子（沒有就不是搬家）
+ */
+function fixDine(h, vid, from, to) {
+  if (!h?.dine) return;
+  if (from && to) {
+    const k0 = `${from.x},${from.z}`;
+    const k1 = `${to.x},${to.z}`;
+    if (h.dine[k0]?.length && !dineTableAt(h, from.x, from.z) && dineTableAt(h, to.x, to.z) && !h.dine[k1]?.length) {
+      h.dine[k1] = h.dine[k0];
+      delete h.dine[k0];
+    }
+  }
+  const w = players[vid];
+  for (const [k, list] of Object.entries(h.dine)) {
+    const [x, z] = k.split(',').map(Number);
+    if (list?.length && dineTableAt(h, x, z)) continue;
+    if (w && list?.length) {
+      w.dish ??= {};
+      for (const d of list) w.dish[d] = (w.dish[d] ?? 0) + 1;
+    }
+    delete h.dine[k];
+  }
+}
 const publicHome = (h) =>
   h
     ? {
@@ -228,6 +258,7 @@ const publicHome = (h) =>
         sign: h.sign ?? 'wood', // 🪧 門牌造型
         signs: h.signs ?? ['wood'],
         moves: h.moves ?? 0, // 搬過幾次家（第一次免費）
+        dine: h.dine ?? {}, // 🍽️ 餐桌上擺的料理 { "x,z": [料理 id…] }
       }
     : { tent: false, inv: {}, items: [], grid: gridOf(null), open: true, style: 'classic', shape: 'bell', shapes: ['bell'], name: '', likes: 0, notes: [], gifts: [] };
 /** 公開代號 → vid（找不到回傳 null） */
@@ -3037,7 +3068,9 @@ io.on('connection', (socket) => {
       // 📦 一鍵全部收起（作者 11/14：想完全重來）：floor＝1 只收一樓、2 只收二樓、沒給＝全部
       const fl = Number(data.floor);
       h.items = (h.items ?? []).filter((it) => (fl === 1 ? isLoftCell(it.z) : fl === 2 ? !isLoftCell(it.z) : false));
+      fixDine(h, player.vid);
       saveJson('homes.json', homes);
+      saveJson('players.json', players);
       io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) });
       return ack?.({ ok: true, home: publicHome(h) });
     }
@@ -3084,9 +3117,82 @@ io.on('connection', (socket) => {
       const drop = new Set(stack.slice(lv));
       h.items = h.items.filter((it) => !drop.has(it));
     } else return ack?.({ ok: false, reason: 'op' });
+    if (h.dine && (data.op === 'move' || data.op === 'remove')) {
+      fixDine(h, player.vid, data.op === 'move' ? { x, z } : null, data.op === 'move' ? { x: Number(data.tx), z: Number(data.tz) } : null);
+      saveJson('players.json', players);
+    }
     saveJson('homes.json', homes);
     io.to(rkey).emit('homeUpdate', { owner: homeId(homeOwner), home: publicHome(h) });
-    ack?.({ ok: true, home: publicHome(h) });
+    ack?.({ ok: true, home: publicHome(h), ...(h.dine ? dishView() : {}) });
+  });
+  // ---------- 🍽️ 餐桌請客（11/14 作者）：主人把料理擺上餐桌，來玩的人坐下吃一份（每人每天一份），主人 +1 松果（一天最多 10） ----------
+  const dineEmit = (h) => io.to(rkey).emit('homeUpdate', { owner: homeId(homeOwner), home: publicHome(h) });
+  socket.on('dinePut', (data = {}, ack) => {
+    if (!wal || !player || roomId !== 'home' || homeOwner !== player.vid) return ack?.({ ok: false, reason: 'notHome' });
+    const h = homes[player.vid];
+    const x = Number(data.x);
+    const z = Number(data.z);
+    const tb = dineTableAt(h, x, z);
+    const d = DISH_BY_ID[String(data.id ?? '')];
+    if (!tb || !d) return ack?.({ ok: false });
+    if (!(wal.dish?.[d.id] > 0)) return ack?.({ ok: false, reason: 'none' });
+    h.dine ??= {};
+    const list = (h.dine[`${x},${z}`] ??= []);
+    if (list.length >= tb.dine) return ack?.({ ok: false, reason: 'full' });
+    list.push(d.id);
+    wal.dish[d.id]--;
+    if (!wal.dish[d.id]) delete wal.dish[d.id];
+    saveJson('homes.json', homes);
+    saveJson('players.json', players);
+    dineEmit(h);
+    ack?.({ ok: true, home: publicHome(h), ...dishView() });
+  });
+  socket.on('dineBack', (data = {}, ack) => {
+    if (!wal || !player || roomId !== 'home' || homeOwner !== player.vid) return ack?.({ ok: false });
+    const h = homes[player.vid];
+    const k = `${Number(data.x)},${Number(data.z)}`;
+    const list = h?.dine?.[k];
+    if (!list?.length) return ack?.({ ok: false });
+    wal.dish ??= {};
+    for (const d of list) wal.dish[d] = (wal.dish[d] ?? 0) + 1;
+    delete h.dine[k];
+    saveJson('homes.json', homes);
+    saveJson('players.json', players);
+    dineEmit(h);
+    ack?.({ ok: true, home: publicHome(h), ...dishView() });
+  });
+  socket.on('dineEat', (data = {}, ack) => {
+    if (!wal || !player || roomId !== 'home' || !homeOwner) return ack?.({ ok: false });
+    if (homeOwner === player.vid) return ack?.({ ok: false, reason: 'mine' });
+    const h = homes[homeOwner];
+    const x = Number(data.x);
+    const z = Number(data.z);
+    const k = `${x},${z}`;
+    const list = h?.dine?.[k];
+    if (!dineTableAt(h, x, z) || !list?.length) return ack?.({ ok: false, reason: 'empty' });
+    const d0 = dayKey();
+    h.dineTook ??= {};
+    if (h.dineTook[player.vid] === d0) return ack?.({ ok: false, reason: 'took' });
+    for (const [v, day] of Object.entries(h.dineTook)) if (day !== d0) delete h.dineTook[v];
+    h.dineTook[player.vid] = d0;
+    const dish = list.shift();
+    if (!list.length) delete h.dine[k];
+    // 😋 跟自己吃料理一樣有飽飽效果
+    const fx = DISH_FX[dish];
+    if (fx) wal.buff = { k: fx[0], lv: fx[1], until: Date.now() + BUFF_MS, d: dish };
+    // 主人 +1 松果（一天最多 10 顆）＋通知
+    h.dineGain = h.dineGain?.d === d0 ? h.dineGain : { d: d0, n: 0 };
+    const gain = h.dineGain.n < 10 ? 1 : 0;
+    if (gain) {
+      h.dineGain.n++;
+      giveTo(homeOwner, 1, 'dine');
+    }
+    for (const sk of io.sockets.sockets.values()) if (sk.data.vid === homeOwner) sk.emit('dineAte', { name: player.name, dish, gain });
+    saveJson('homes.json', homes);
+    saveJson('players.json', players);
+    io.to(rkey).emit('ate', { id: socket.id, dish });
+    dineEmit(h);
+    ack?.({ ok: true, dish, buff: wal.buff ?? null });
   });
   // 🐾 買動物外型：kind＝fur（特殊毛色索引）／tail／ear
   socket.on('lookInfo', (data, ack) => ack?.(wal ? { ok: true, looks: wal.looks ?? {} } : { ok: false }));
@@ -3520,9 +3626,13 @@ io.on('connection', (socket) => {
     if (!wal || !player) return ack?.({ ok: false });
     // 🍖 自家門口有烤肉爐：在帳篷營地也能煮（烤肉爐限定的料理只能在這裡做）
     const atGrill = roomId === 'campground' && hasYard(homes[player.vid], 'bbq');
-    if (roomId !== 'forest_main' && !atGrill) return ack?.({ ok: false, reason: 'notHere' });
+    // 🍳 11/14：自己帳篷裡有瓦斯爐／灶台（stove）或小烤箱（oven）也能煮
+    const at = data.at === 'oven' ? 'oven' : data.at === 'stove' ? 'stove' : null;
+    const atHome = !!at && roomId === 'home' && homeOwner === player.vid && (homes[player.vid]?.items ?? []).some((it) => CATALOG_BY_ID[it.i]?.cook === at);
+    if (roomId !== 'forest_main' && !atGrill && !atHome) return ack?.({ ok: false, reason: 'notHere' });
     const d = DISH_BY_ID[String(data.id ?? '')];
     if (!d) return ack?.({ ok: false, reason: 'unknown' });
+    if (atHome && !homeCanCook(d, at)) return ack?.({ ok: false, reason: at === 'oven' ? 'oven' : 'grill' });
     if (d.grill && !atGrill) return ack?.({ ok: false, reason: 'grill' });
     if (d.month && d.month !== taipeiMonth()) return ack?.({ ok: false, reason: 'season' }); // 🗓️ 每月限定
     wal.bk ??= {};

@@ -194,7 +194,20 @@ export const FURNITURE_CATALOG = [
   { id: 'box12_ginger', icon: '🏠', zh: '薑餅屋', cat: 'deco', kind: 'small', box: 1, gift: 'box' },
   { id: 'box12_gifts', icon: '🎁', zh: '禮物盒堆', cat: 'deco', box: 1, gift: 'box' },
   { id: 'box12_stocking', icon: '🧦', zh: '聖誕襪掛架', cat: 'deco', box: 1, gift: 'box' },
+  // ---- 🍳 11/14 廚房家具（作者定案）：cook＝在家煮料理（stove 一般料理、oven 只做甜點）；dine＝餐桌擺幾道料理請客，chairs＝椅子位置 ----
+  { id: 'k_counter', icon: '🚰', zh: '流理台', price: 25, cat: 'kitchen', top: 0.62 },
+  { id: 'k_gasstove', icon: '🍳', zh: '瓦斯爐', price: 40, cat: 'kitchen', cook: 'stove' },
+  { id: 'k_hearth', icon: '🧱', zh: '磚造灶台', price: 50, cat: 'kitchen', cook: 'stove', color: false },
+  { id: 'k_oven', icon: '🥧', zh: '小烤箱', price: 35, cat: 'kitchen', cook: 'oven' },
+  { id: 'k_dishrack', icon: '🥣', zh: '碗盤架', price: 12, cat: 'kitchen', kind: 'small' },
+  { id: 'k_dtable_s', icon: '🍽️', zh: '小餐桌', price: 30, cat: 'kitchen', dine: 2, chairs: [[0, 0.5], [0, -0.5]], chairY: 0.24 },
+  { id: 'k_dtable_l', icon: '🪑', zh: '大餐桌', price: 60, cat: 'kitchen', dine: 4, wide: 0.8, chairs: [[0, 0.5], [0, -0.5], [0.8, 0.5], [0.8, -0.5]], chairY: 0.24 },
 ];
+/** 🍽️ 餐桌上的盤子放哪（相對格子中心；大餐桌往右多一格） */
+export const DINE_SLOTS = {
+  k_dtable_s: [[-0.08, 0], [0.08, 0]],
+  k_dtable_l: [[-0.06, -0.06], [0.06, 0.06], [0.74, -0.06], [0.86, 0.06]],
+};
 /** 🌅 早安卡第 7 天大禮的小家具（照順序一輪送一件，全部拿完就只送松果） */
 export const LOGIN_GIFTS = ['login_lantern', 'login_terrarium', 'login_candle', 'login_foxpillow'];
 

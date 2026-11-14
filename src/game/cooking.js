@@ -42,6 +42,10 @@ export const DISHES = [
   { id: 'popcorn', icon: '🍿', zh: '爆米花', need: [{ id: 'corn', n: 2 }], month: 11 }, // 11 月：露營電影夜
 ];
 export const DISH_BY_ID = Object.fromEntries(DISHES.map((d) => [d.id, d]));
+/** 🥧 11/14：帳篷裡的「小烤箱」只能做這些（甜點、烤的）；瓦斯爐、灶台做烤肉爐限定以外的全部 */
+export const BAKE_DISHES = new Set(['roast_sweetpotato', 'roast_corn', 'berry_pie', 'carrot_cake', 'berry_daifuku', 'roast_chestnut', 'honey_cookie', 'petal_jelly', 'star_pudding', 'gold_tart', 'popcorn']);
+/** 在家的哪種爐子能不能做這道（at：stove／oven） */
+export const homeCanCook = (d, at) => !!d && !d.grill && (at === 'oven' ? BAKE_DISHES.has(d.id) : at === 'stove');
 /** 第一次煮出某道料理送的松果（大鍋菜特別多） */
 export const dishFirstGain = (d) => (d.big ? 10 : 3);
 for (const d of DISHES) for (const s of d.need) if (s.id && materialOf(s.id)?.type !== 'veg') RESERVED.add(s.id); // 蔬菜不保留：「任意蔬菜」都可以用

@@ -84,7 +84,7 @@ import { GATHER_ITEMS, GATHER_BY_ID, GATHER_TYPES, GATHER_DEX_BONUS, NET_PRICE, 
 import { CROPS, CROP_BY_ID, WATER_MAX } from './game/garden.js';
 import { haveOf, canMake, specLabel } from './game/materials.js';
 import { RECIPES } from './game/crafting.js';
-import { DISHES, DISH_BY_ID, activeBuff, DISH_FX, BUFFS } from './game/cooking.js';
+import { DISHES, DISH_BY_ID, activeBuff, DISH_FX, BUFFS, homeCanCook } from './game/cooking.js';
 import { MUSEUM_ITEMS, MUSEUM_CATS, MUSEUM_BY_ID } from './game/museum.js';
 import { TRASH, TRASH_BY_ID, RECYCLE_DAILY_CAP } from './game/trash.js';
 import { PASS, PASS_TIERS, PASS_TIER_LIST, PASS_PLANS, FREE, sponsorTier } from './game/pass.js';
@@ -1334,13 +1334,27 @@ async function init() {
   /** 🍖 在自家門口的烤肉爐旁邊（從烤肉爐打開料理時設定，離開營地或走開就失效） */
   let grillAt = null;
   const atGrill = () => roomMgr?.current.id === 'campground' && grillAt && Math.hypot(player.position.x - grillAt.x, player.position.z - grillAt.z) < 3;
+  /** 🍳 在自己帳篷的爐子旁邊：回傳 'stove'（瓦斯爐、灶台）或 'oven'（小烤箱），不在就 null */
+  const homeCookAt = () => {
+    if (roomMgr?.current.id !== 'home' || !rooms.home.mine) return null;
+    const p = player.position;
+    let best = null;
+    let bd = 1.8;
+    for (const g of rooms.home.gadgets) {
+      if (g.id !== 'cook') continue;
+      const d = Math.hypot(g.x - p.x, g.z - p.z);
+      if (d < bd) [best, bd] = [g, d];
+    }
+    return best ? CATALOG_BY_ID[best.item]?.cook ?? null : null;
+  };
   fishingUI.extraTabs.push({
     id: 'cook',
     label: t('🍲 料理'),
     title: () => t('🍲 營火料理 {n}／{total}', { n: DISHES.filter((d) => !d.month && cooked.has(d.id)).length, total: DISHES.filter((d) => !d.month).length }),
     render: () => {
       const grill = atGrill();
-      const here = atPot() || grill;
+      const homeAt = homeCookAt();
+      const here = atPot() || grill || !!homeAt;
       const mine = DISHES.filter((d) => dishes[d.id] > 0);
       const others = [...remotes.players.values()].filter((r) => !r.npc);
       const myDishes = mine.length
@@ -1355,11 +1369,11 @@ async function init() {
       // 🗓️ 每月限定的料理：那個月才出現在食譜（煮過的一直看得到）
       const recipes = DISHES.filter((d) => !d.month || d.month === taipeiMonth() || cooked.has(d.id)).map((d) => {
         const season = !d.month || d.month === taipeiMonth();
-        const ok = canMake(basket, d.need) && (!d.grill || grill) && season;
-        const tag = d.grill ? `<small class="grill-tag">${t('🍖 門口烤肉爐限定')}</small>` : d.month ? `<small class="grill-tag">${t('🗓️ {m} 月限定', { m: d.month })}</small>` : '';
+        const ok = canMake(basket, d.need) && (homeAt ? homeCanCook(d, homeAt) : !d.grill || grill) && season;
+        const tag = d.grill ? `<small class="grill-tag">${t('🍖 門口烤肉爐限定')}</small>` : homeAt === 'oven' && !homeCanCook(d, 'oven') ? `<small class="grill-tag">${t('🥧 烤箱做不了，用瓦斯爐或灶台')}</small>` : d.month ? `<small class="grill-tag">${t('🗓️ {m} 月限定', { m: d.month })}</small>` : '';
         return `<div class="craft-row ${cooked.has(d.id) ? '' : 'new-dish'}"><i class="dex-emoji">${cooked.has(d.id) ? d.icon : '❔'}</i><div class="craft-info"><b>${cooked.has(d.id) ? t(d.zh) : t('？？？（還沒煮過）')}</b>${tag}${cooked.has(d.id) ? fxTag(d.id) : ''}<div class="needs">${needHtml(d.need)}</div></div><button type="button" class="mini-btn" data-cook="${d.id}" ${ok && here && net.online ? '' : 'disabled'}>${t('煮')}</button></div>`;
       }).join('');
-      return `<div class="dex-note">${grill ? t('🍖 在自家門口的烤肉爐旁邊，可以開始煮了！（烤肉爐限定的料理也能做）') : here ? t('🔥 在料理鍋旁邊，可以開始煮了！') : t('到中央營火旁的「🍲 營火料理」鍋子才能煮（自家門口有烤肉爐的話，在家也能煮）。蔬菜在帳篷前的小菜園種。')}</div>
+      return `<div class="dex-note">${homeAt === 'oven' ? t('🥧 在小烤箱旁邊：可以烤甜點、烤地瓜、烤玉米') : homeAt ? t('🍳 在家裡的爐子旁邊，可以開始煮了！') : grill ? t('🍖 在自家門口的烤肉爐旁邊，可以開始煮了！（烤肉爐限定的料理也能做）') : here ? t('🔥 在料理鍋旁邊，可以開始煮了！') : t('到中央營火旁的「🍲 營火料理」鍋子才能煮（自家門口有烤肉爐的話，在家也能煮）。蔬菜在帳篷前的小菜園種。')}</div>
         <div class="dex-note">${t('🍱 我的料理')}</div>${myDishes}
         <div class="dex-note">${t('📖 食譜（第一次煮出新料理送松果）')}</div>${recipes}`;
     },
@@ -1367,7 +1381,8 @@ async function init() {
       for (const b of body.querySelectorAll('[data-cook]')) {
         b.addEventListener('click', async () => {
           b.disabled = true;
-          const res = await net.request('cook', { id: b.dataset.cook });
+          const at = homeCookAt();
+          const res = await net.request('cook', at ? { id: b.dataset.cook, at } : { id: b.dataset.cook });
           if (res?.ok) {
             basket = res.basket;
             dishes = res.dishes;
@@ -1376,7 +1391,7 @@ async function init() {
             audio.sfx('bell');
             hud.toast(res.first ? t('🍲 第一次煮出「{icon} {name}」！+{n} 🌰', { icon: d.icon, name: t(d.zh), n: res.gain }) : t('🍲 煮好了：{icon} {name}', { icon: d.icon, name: t(d.zh) }), 4500);
             if (res.shared) setTimeout(() => hud.toast(t('🥢 大菜分給附近的 {n} 個人一起吃了', { n: res.shared }), 4000), 1200);
-          } else hud.toast(res?.reason === 'notHere' ? t('到營火旁的料理鍋才能煮') : res?.reason === 'grill' ? t('這道要用自家門口的烤肉爐做') : t('材料不夠喔'));
+          } else hud.toast(res?.reason === 'notHere' ? t('到營火旁的料理鍋才能煮') : res?.reason === 'oven' ? t('🥧 烤箱做不了，用瓦斯爐或灶台') : res?.reason === 'grill' ? t('這道要用自家門口的烤肉爐做') : t('材料不夠喔'));
           fishingUI.openCreel('cook');
         });
       }
@@ -4458,7 +4473,69 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     bubbles.show('self', e, { emoji: true });
     net.emoji(e);
   };
+  // ---------- 🍽️ 餐桌請客（11/14）：主人擺料理、客人坐下吃一份（每人每天一份） ----------
+  function openDine(cell, mine, seated) {
+    const h = homeRoom.home;
+    const list = h?.dine?.[`${cell.x},${cell.z}`] ?? [];
+    const tb = stackAt(h?.items, cell.x, cell.z).map((it) => CATALOG_BY_ID[it.i]).find((f) => f?.dine);
+    if (!tb) return;
+    const plates = list.map((d) => `<span class="dine-plate">${DISH_BY_ID[d]?.icon ?? '🍲'}<small>${t(DISH_BY_ID[d]?.zh ?? '')}</small></span>`).join('') + '<span class="dine-plate empty">🍽️</span>'.repeat(Math.max(0, tb.dine - list.length));
+    if (!mine) {
+      if (!list.length) return hud.toast(t('餐桌上還沒有料理，下次再來看看 🍽️'));
+      if (!seated) return hud.toast(t('🪑 坐到椅子上，按 E 就能吃'));
+      return dineEat(cell);
+    }
+    const mineDishes = DISHES.filter((d) => dishes[d.id] > 0);
+    const full = list.length >= tb.dine;
+    modal.open(
+      t('🍽️ {name}', { name: t(tb.zh) }),
+      `<div class="dine-row">${plates}</div>
+      <div class="dex-note">${t('擺上去的料理，來玩的朋友坐下就能吃一份（每人每天一份）；朋友吃了你會拿到 1 顆松果')}</div>
+      ${list.length ? `<div class="yard-opts"><button type="button" class="mini-btn ghost" id="dine-back">${t('↩️ 全部拿回來')}</button></div>` : ''}
+      ${full ? `<div class="dex-note">${t('桌上擺滿了')}</div>` : mineDishes.length ? mineDishes.map((d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${t(d.zh)} ×${dishes[d.id]}</b></div><button type="button" class="mini-btn" data-dput="${d.id}">${t('擺上桌')}</button></div>`).join('') : `<div class="dex-note">${t('還沒有料理：在家裡的瓦斯爐、灶台或營火旁的料理鍋煮一道吧')}</div>`}`,
+      (body) => {
+        body.querySelector('#dine-back')?.addEventListener('click', async () => {
+          const r = await net.request('dineBack', cell);
+          if (r?.ok) {
+            dishes = r.dishes;
+            setMyHome({ ...r.home });
+            audio.sfx('tap');
+            openDine(cell, true, seated);
+          }
+        });
+        for (const b of body.querySelectorAll('[data-dput]')) {
+          b.addEventListener('click', async () => {
+            b.disabled = true;
+            const r = await net.request('dinePut', { ...cell, id: b.dataset.dput });
+            if (r?.ok) {
+              dishes = r.dishes;
+              setMyHome({ ...r.home });
+              audio.sfx('stone');
+              openDine(cell, true, seated);
+            } else hud.toast(r?.reason === 'full' ? t('桌上擺滿了') : t('沒擺成，再試一次吧'));
+          });
+        }
+      },
+    );
+  }
+  async function dineEat(cell) {
+    const r = await net.request('dineEat', cell);
+    if (r?.ok) {
+      const d = DISH_BY_ID[r.dish];
+      actions.eatDish(d?.color ?? 0xe8a050);
+      audio.sfx('bell');
+      if (r.buff) setBuff(r.buff);
+      return hud.toast(t('😋 吃了一份{icon} {name}，好好吃！', { icon: d?.icon ?? '', name: t(d?.zh ?? '') }), 4000);
+    }
+    hud.toast(r?.reason === 'took' ? t('今天已經在這裡吃過一份了，明天再來 😊') : t('餐桌上沒有料理了'));
+  }
+  net.on('dineAte', ({ name, dish, gain }) => {
+    const d = DISH_BY_ID[dish];
+    hud.toast(t('🍽️ {name} 吃了你的{icon} {dish}！', { name, icon: d?.icon ?? '', dish: t(d?.zh ?? '') }) + (gain ? ' +1 🌰' : ''), 5000);
+  });
   actions.onGadget = async (id, mine, g) => {
+    if (id === 'cook') return mine ? fishingUI.openCreel('cook') : hud.toast(t('這是主人的廚房，香香的 🍳'));
+    if (id === 'dine') return openDine(g.cell, mine, !!g.seated);
     if (id === 'book') {
       audio.sfx('tap');
       bubbles.show('self', '📖', { emoji: true });
@@ -5214,7 +5291,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     hud.setSoundBlocked(joined && !audio.running); // 聲音還沒被瀏覽器放行時，顯示「點一下開啟聲音」
     if (mobile) {
       // 手機：互動按鈕跟著位置換（祈福處、告示牌），提示裡的按鍵換成按鈕圖示
-      mobile.setInteract(actions.state === 'free' || actions.seat ? (roomMgr.current.interactHint?.(actions) ?? null) : null); // 坐在圓木上：互動按鈕變成「起身」
+      mobile.setInteract(actions.state === 'free' || actions.seat || (actions.state === 'sofa' && actions.dineSeat) ? (roomMgr.current.interactHint?.(actions) ?? null) : null); // 坐在圓木上：互動按鈕變成「起身」
       mobile.setRoast(roomMgr.current.roastHint?.(actions) ?? null);
       const p = actions.prompt;
       hud.setPrompt(p && p.replace(/<kbd>([^<]*)<\/kbd>/g, (_, k) => {

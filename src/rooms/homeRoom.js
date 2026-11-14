@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { makeResolver, lowpoly, shadowAll } from './shared.js';
 import { buildFurniture, FURNITURE_BY_ID } from '../game/furniture.js';
-import { CATALOG_BY_ID, stackAt, stackY, stackOffset, gridOf, GRID_BASE, LOFT_Z, loftRows, isLoftCell, hasLoft, moveStack } from '../game/furnitureCatalog.js';
+import { CATALOG_BY_ID, stackAt, stackY, stackOffset, gridOf, GRID_BASE, LOFT_Z, loftRows, isLoftCell, hasLoft, moveStack, DINE_SLOTS } from '../game/furnitureCatalog.js';
+import { DISH_BY_ID } from '../game/cooking.js';
 import { styleOf, tentTexture } from '../game/tentStyles.js';
 import { shapeOf, buildTentShell, buildTentFloor, tentBounds, tentDoorZ, CABIN } from '../game/tentShapes.js';
 import { t } from '../i18n/i18n.js';
@@ -25,6 +26,8 @@ const GADGET_HINT = {
   guitar: ['🎸', '彈奏', '彈一段木吉他'],
   telescope: ['🔭', '看星星', '用望遠鏡看星星'],
   fridge: ['🧊', '冰箱', '打開小冰箱'],
+  cook: ['🍳', '煮料理', '在家煮料理'],
+  dine: ['🍽️', '坐下', '坐到餐桌旁'],
   // 11/07 家具小互動（作者確認的 12 種）
   book: ['📖', '翻書', '翻一本書'],
   clock: ['⏰', '看時間', '看看小鬧鐘'],
@@ -42,6 +45,8 @@ const GADGET_HINT = {
 /** 家具 id → 小互動種類（沒有就是不能互動） */
 export function gadgetKind(id) {
   if (['radio', 'guitar', 'telescope', 'fridge'].includes(id)) return id;
+  if (CATALOG_BY_ID[id]?.cook) return 'cook'; // 🍳 瓦斯爐、灶台、小烤箱：在家煮料理
+  if (CATALOG_BY_ID[id]?.dine) return 'dine'; // 🍽️ 餐桌：擺料理請客
   if (id === 'pass_gramophone') return 'radio'; // 📀 唱片機：跟收音機一樣換歌
   if (id === 'pass_glowtree') return 'glowtree';
   if (id === 'bookshelf' || id === 'books') return 'book';
@@ -54,6 +59,25 @@ export function gadgetKind(id) {
   if (f?.cat === 'light') return 'lamp';
   if (f?.cat === 'plant') return 'water';
   return null;
+}
+// 🍽️ 餐桌上的盤子、料理小圖示（圖示做成貼圖，同一種共用一張）
+const PLATE_GEO = new THREE.CylinderGeometry(0.075, 0.06, 0.018, 16);
+const PLATE_MAT = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+const dishSprites = new Map();
+function dishSpriteMat(icon) {
+  if (dishSprites.has(icon)) return dishSprites.get(icon);
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 64;
+  const ctx = cv.getContext('2d');
+  ctx.font = '50px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(icon, 32, 36);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.SpriteMaterial({ map: tex, depthWrite: false });
+  dishSprites.set(icon, m);
+  return m;
 }
 export function createHomeRoom() {
   const group = new THREE.Group();
@@ -278,7 +302,7 @@ export function createHomeRoom() {
   function resolveCollision(pos, r) {
     // 坐著／躺著：固定在家具上
     if (rest) {
-      if (rest.actions.state === rest.kind) {
+      if (rest.actions.state === rest.kind || (rest.kind === 'sofa' && rest.actions.state === 'eat')) {
         pos.set(rest.x, rest.y, rest.z);
         return;
       }
@@ -443,11 +467,25 @@ export function createHomeRoom() {
       // 🛋️ 可以坐、躺的家具（按 E）
       stack.forEach((it) => {
         const gk = gadgetKind(it.i);
-        if (gk) gadgets.push({ id: gk, item: it.i, x: c.x, z: c.z, loft: isLoftCell(z), mesh: furnitureGroup.children.find((o) => o.userData.cell?.x === x && o.userData.cell?.z === z && o.userData.item === it.i) });
+        if (gk) gadgets.push({ id: gk, item: it.i, x: c.x, z: c.z, cell: { x, z }, loft: isLoftCell(z), mesh: furnitureGroup.children.find((o) => o.userData.cell?.x === x && o.userData.cell?.z === z && o.userData.item === it.i) });
         if (it.i === 'stove') stoves.push({ x: c.x, z: c.z, loft: isLoftCell(z) });
       });
       stack.forEach((it, lv) => {
         const f = CATALOG_BY_ID[it.i];
+        // 🍽️ 餐桌的椅子：每張椅子一個座位，面向桌子；坐著按 E 可以吃桌上的料理
+        if (f?.chairs) {
+          const a0 = (it.r ?? 0) * (Math.PI / 2);
+          const ca = Math.cos(a0);
+          const sa = Math.sin(a0);
+          const y0 = c.y + stackY(stack, lv) + (f.chairY ?? 0.24);
+          for (const [dx, dz] of f.chairs) {
+            const wx = c.x + dx * ca + dz * sa;
+            const wz = c.z - dx * sa + dz * ca;
+            const tx = c.x + dx * ca; // 椅子正前方的桌子那一點（面向它）
+            const tz = c.z - dx * sa;
+            seats.push({ x: wx, z: wz, y: y0, a: Math.atan2(tx - wx, tz - wz), sleep: false, loft: isLoftCell(z), dine: { x, z } });
+          }
+        }
         if (f?.seat == null) return;
         const a = (it.r ?? 0) * (Math.PI / 2);
         seats.push({ x: c.x, z: c.z, y: c.y + stackY(stack, lv) + f.seat, a, sleep: !!f.sleep, loft: isLoftCell(z) });
@@ -477,6 +515,34 @@ export function createHomeRoom() {
         if (Wd) list.push({ x: c.x + Wd * Math.cos(a), z: c.z - Wd * Math.sin(a), r: 0.34 });
         if (Wd && L) list.push({ x: c.x + Wd * Math.cos(a) - L * Math.sin(a), z: c.z - Wd * Math.sin(a) - L * Math.cos(a), r: 0.34 }); // 2×2（錦鯉池）
       }
+    }
+    // 🍽️ 餐桌上擺的料理：白盤子＋料理的小圖示（跟著餐桌那一格，拖曳時一起搬）
+    for (const [k, list] of Object.entries(home.dine ?? {})) {
+      if (!list?.length) continue;
+      const [x, z] = k.split(',').map(Number);
+      const stack = stackAt(home.items, x, z);
+      const lv = stack.findIndex((it) => CATALOG_BY_ID[it.i]?.dine);
+      if (lv < 0) continue;
+      const it = stack[lv];
+      const slots = DINE_SLOTS[it.i] ?? [];
+      const c = cellPos(x, z);
+      const a = (it.r ?? 0) * (Math.PI / 2);
+      const y = c.y + stackY(stack, lv) + 0.445;
+      list.forEach((dishId, i) => {
+        const sl = slots[i];
+        if (!sl) return;
+        const g = new THREE.Group();
+        g.add(new THREE.Mesh(PLATE_GEO, PLATE_MAT));
+        const sp = new THREE.Sprite(dishSpriteMat(DISH_BY_ID[dishId]?.icon ?? '🍲'));
+        sp.scale.setScalar(0.17);
+        sp.position.y = 0.08;
+        g.add(sp);
+        g.position.set(c.x + sl[0] * Math.cos(a) + sl[1] * Math.sin(a), y, c.z - sl[0] * Math.sin(a) + sl[1] * Math.cos(a));
+        g.userData.cell = { x, z };
+        g.userData.item = 'plate';
+        g.userData.layer = lv;
+        furnitureGroup.add(g);
+      });
     }
     if (prev) {
       if (loftShape && prev.shape === loftShape.id) level = prev.level;
@@ -777,8 +843,26 @@ export function createHomeRoom() {
         actions.hud.toast(t('帳篷裡看不到星星，到外面去吧 ✨'));
         return true;
       }
+      if (actions.state === 'eat' && name === 'interact') return true; // 吃到一半按 E：不理它
+      // 🍽️ 坐在餐桌椅子上按 E：吃一份／（主人）擺料理
+      if (actions.state === 'sofa' && name === 'interact' && actions.dineSeat && rest) {
+        actions.onGadget?.('dine', mine, { cell: actions.dineSeat, seated: true });
+        return true;
+      }
       if (actions.state === 'free' && name === 'interact') {
         const u = nearUse();
+        // 🍽️ 站在餐桌旁按 E：直接坐到最近的空椅子（再按 E 吃／擺料理）
+        if (u?.gadget?.id === 'dine') {
+          const ch = seats
+            .filter((q) => q.dine && q.dine.x === u.gadget.cell.x && q.dine.z === u.gadget.cell.z && !this.seatTaken?.(q))
+            .sort((a, b) => Math.hypot(lastPos.x - a.x, lastPos.z - a.z) - Math.hypot(lastPos.x - b.x, lastPos.z - b.z))[0];
+          if (ch) u.seat = ch;
+          else {
+            actions.hud.toast(t('椅子都坐滿了'));
+            return true;
+          }
+          u.gadget = null;
+        }
         if (u?.gadget) {
           actions.onGadget?.(u.gadget.id, mine, u.gadget);
           return true;
@@ -791,9 +875,10 @@ export function createHomeRoom() {
         if (s) {
           // 坐下：坐在家具中間；躺下：腳在床尾、頭朝床頭（家具的後面）
           const kind = s.sleep ? 'sleep' : 'sofa';
-          const off = s.sleep ? 0.3 : 0.06;
+          const off = s.sleep ? 0.3 : s.dine ? 0 : 0.06; // 餐桌椅子：坐正中間，不要往桌子擠
           rest = { x: s.x + Math.sin(s.a) * off, y: s.y, z: s.z + Math.cos(s.a) * off, sx: s.x, sz: s.z, kind, actions };
           actions.rest(kind, s.a);
+          actions.dineSeat = s.dine ?? null; // 🍽️ 坐在餐桌的椅子上：按 E 吃桌上的料理
           // 🔥 小暖爐在旁邊：坐著暖呼呼
           if (stoves.some((q) => q.loft === s.loft && Math.hypot(q.x - s.x, q.z - s.z) < 1.8)) actions.onWarm?.();
           return true;
@@ -807,7 +892,8 @@ export function createHomeRoom() {
       }
       return false;
     },
-    interactHint() {
+    interactHint(actions) {
+      if (actions?.state === 'sofa' && actions.dineSeat) return ['🍽️', mine ? t('擺料理') : t('吃一份')];
       const u = nearUse();
       if (u?.gadget) return [GADGET_HINT[u.gadget.id][0], t(GADGET_HINT[u.gadget.id][1])];
       const s = u?.seat;
