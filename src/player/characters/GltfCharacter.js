@@ -167,9 +167,9 @@ export class GltfCharacter {
     }
   }
 
-  setHeldFish(index, size) {
+  setHeldFish(index, size, shiny = false) {
     this.heldFish.clear();
-    const mesh = createFishMesh(index);
+    const mesh = createFishMesh(index, shiny);
     mesh.scale.setScalar(Math.max(0.42, fishScale(size) * 1.5));
     this.heldFish.add(mesh);
   }

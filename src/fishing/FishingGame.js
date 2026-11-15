@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FISH, rollFish, rollSize, packFish } from './fishData.js';
+import { FISH, rollFish, rollSize, packFish, SHINY_CHANCE, canShiny } from './fishData.js';
 import { createFishMesh, fishScale } from './fishModel.js';
 import { haptic } from '../fx/haptics.js';
 import { t } from '../i18n/i18n.js';
@@ -149,7 +149,7 @@ export class FishingGame {
   }
 
   get netExtra() {
-    return this.fish && this.netAction === 'showFish' ? packFish(this.fish.index, this.fish.size) : 0;
+    return this.fish && this.netAction === 'showFish' ? packFish(this.fish.index, this.fish.size, this.fish.shiny) : 0;
   }
 
   /** 咬鉤、拉竿、炫耀中（這時不顯示「收竿」提示） */
@@ -253,7 +253,7 @@ export class FishingGame {
     const c = this.actions?.character;
     c?.setProp?.('fish', false);
     c?.setProp?.('rod', this.actions?.state === 'fish');
-    if (keep) this.onKeep?.(keep.index, keep.size);
+    if (keep) this.onKeep?.(keep.index, keep.size, keep.shiny);
   }
 
   /** 舉魚中按 F／🎣：把魚收進魚簍，繼續甩下一竿 */
@@ -346,7 +346,7 @@ export class FishingGame {
     this.served = 'pending';
     Promise.resolve(this.roll()).then((res) => {
       if (id !== this.rollId) return;
-      if (res?.ok) this.served = { index: res.fish, size: res.size };
+      if (res?.ok) this.served = { index: res.fish, size: res.size, shiny: !!res.shiny };
       else if (res?.reason === 'tooFast')
         setTimeout(() => {
           if (id === this.rollId && this.phase === 'wait') this.#requestRoll();
@@ -358,7 +358,8 @@ export class FishingGame {
   #bite() {
     const got = this.served && this.served !== 'pending' ? this.served : null;
     const index = got ? got.index : rollFish({ place: this.spot?.place, ...(this.context?.() ?? {}) });
-    this.fish = { index, size: got ? got.size : rollSize(index), perfect: false };
+    const shiny = got ? !!got.shiny : canShiny(FISH[index]) && Math.random() < SHINY_CHANCE; // ✨ 異色魚（連線時伺服器決定）
+    this.fish = { index, size: got ? got.size : rollSize(index), perfect: false, shiny };
     this.served = null;
     this.rollId++;
     this.window = FISH[index].window * 1.35; // 不再跳「！」，只能看浮標沉下去，所以時間放寬一點
@@ -422,7 +423,7 @@ export class FishingGame {
     this.ui.showReel(false);
     this.#go('caught');
     // 魚從浮標的位置跳出水面，飛到手上
-    const mesh = createFishMesh(this.fish.index);
+    const mesh = createFishMesh(this.fish.index, this.fish.shiny);
     mesh.scale.setScalar(fishScale(this.fish.size));
     mesh.position.copy(this.bobber.position);
     this.group.add(mesh);
@@ -566,12 +567,12 @@ export class FishingGame {
         }
         if (u >= 1) {
           this.#clearFlying();
-          c?.setHeldFish?.(this.fish.index, this.fish.size);
+          c?.setHeldFish?.(this.fish.index, this.fish.size, this.fish.shiny);
           c?.setProp?.('rod', false);
           c?.setProp?.('fish', true);
           this.#go('show');
           if (this.session) this.session.n += 1;
-          this.onCatch?.(this.fish.index, this.fish.size, this.fish.perfect);
+          this.onCatch?.(this.fish.index, this.fish.size, this.fish.perfect, this.fish.shiny);
           const f = FISH[this.fish.index];
           this.audio?.sfx?.(f.junk ? 'junk' : f.rarity >= 4 ? 'legend' : 'catch');
           this.#shake(f.rarity >= 4 ? 0.12 : 0.04);

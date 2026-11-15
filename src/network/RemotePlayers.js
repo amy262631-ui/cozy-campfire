@@ -168,8 +168,8 @@ class RemotePlayer {
     // 舉著魚：坐著炫耀（showFish），或舉著魚到處走（走路、站著時也帶著魚的代碼）
     const holdsFish = !!t.e && t.e !== STONE_FLAG;
     if (holdsFish) {
-      const { index, size } = unpackFish(t.e);
-      c.setHeldFish?.(index, size);
+      const { index, size, shiny } = unpackFish(t.e);
+      c.setHeldFish?.(index, size, shiny);
     }
     c.setProp('fish', holdsFish);
     c.setProp('stone', t.a !== 'showFish' && t.e === STONE_FLAG); // 頭上頂著石頭

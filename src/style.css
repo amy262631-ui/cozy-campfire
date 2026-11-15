@@ -7441,3 +7441,18 @@ body.touch .bg-panel { bottom: 250px; }
 @media (orientation: landscape) and (min-width: 700px) and (max-height: 500px) {
   body.building .build-bar { top: 52px; bottom: 8px; padding: 8px; }
 }
+
+/* ✨ 異色魚（作者 11/15） */
+.dex-sub { display: flex; gap: 6px; margin: 0 0 8px; }
+.dex-sub button { flex: 1; padding: 5px 4px; border: 1px solid rgba(255, 229, 138, 0.25); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 12.5px; }
+.dex-sub button.on { background: #f0a040; border-color: #f0a040; color: #2a1a08; font-weight: 700; }
+.dex-card.shiny { background: linear-gradient(160deg, rgba(160, 120, 255, 0.28), rgba(255, 255, 255, 0.05)); box-shadow: inset 0 0 0 2px #ffe58a; position: relative; }
+.dex-card.shiny::after { content: '✨'; position: absolute; top: 2px; right: 4px; font-size: 12px; }
+.badge.shiny { background: linear-gradient(90deg, #ffe58a, #ffb0e0, #a0e0ff); color: #3a1d4a; }
+.fish-card.shiny { box-shadow: 0 0 0 2px #ffe58a, 0 0 24px rgba(255, 229, 138, 0.55); }
+.big-catch.shiny { border-color: #ffe58a; background: linear-gradient(120deg, rgba(90, 60, 140, 0.92), rgba(40, 60, 110, 0.92)); }
+/* 🛒 還沒買帳篷也能逛小舖（作者 11/15） */
+.shop-browse { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; padding: 8px 12px; border-radius: 12px; background: rgba(255, 210, 122, 0.12); border: 1px dashed rgba(255, 210, 122, 0.5); font-size: 13.5px; }
+.shop-browse button { flex: none; padding: 6px 12px; border-radius: 999px; border: none; background: #f0a040; color: #2a1a08; font: inherit; font-weight: 700; cursor: pointer; }
+.browse-lock { opacity: 0.85; cursor: default; }
+.browse-lock:disabled { filter: none; }

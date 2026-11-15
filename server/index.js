@@ -21,7 +21,7 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
-import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM, rollFish, rollSize } from '../src/fishing/fishData.js';
+import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM, rollFish, rollSize, DEX_TOTAL, SHINY_CHANCE, SHINY_DEX_GAIN, SHINY_BONUS, SHINY_TOTAL, canShiny } from '../src/fishing/fishData.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
 import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateOutfit, sponsorOutfits, XMAS_OUTFITS, XMAS_STREAK } from '../src/game/outfits.js';
 import { GATHER_SPOTS, GATHER_ITEMS, regrowMs, GATHER_FIRST_GAIN, GATHER_DEX_BONUS, gatherItemAt, isNight, GATHER_R, NET_PRICE, BUG_WANDER, BUG_CATCH_R } from '../src/game/gathering.js';
@@ -2539,7 +2539,7 @@ io.on('connection', (socket) => {
       id: socket.id,
       name: player.name, // 隨機名字撞名時，伺服器換過的名字
       reward: player.rw,
-      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, age: walletAge(wal), dex: dexView(wal), look: wal.look ?? null, outfit: outfitView(wal), basket: wal.bk ?? {}, gdex: gdexOf(wal), ...trashView(wal), dishes: wal.dish ?? {}, cooked: Object.keys(wal.cooked ?? {}), buff: activeBuff(wal.buff) ? wal.buff : null, net: !!wal.net, pass: passView(wal) } : null,
+      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, age: walletAge(wal), dex: dexView(wal), shiny: wal.shiny ?? {}, look: wal.look ?? null, outfit: outfitView(wal), basket: wal.bk ?? {}, gdex: gdexOf(wal), ...trashView(wal), dishes: wal.dish ?? {}, cooked: Object.keys(wal.cooked ?? {}), buff: activeBuff(wal.buff) ? wal.buff : null, net: !!wal.net, pass: passView(wal) } : null,
       myHome: publicHome(homes[player.vid]),
       plotNote, // 🏕️ 「你的帳篷有了固定門牌／搬到 X 區 N 號了」
       code: player.vid ? homeId(player.vid) : null, // 邀請連結用的公開代號
@@ -2598,7 +2598,7 @@ io.on('connection', (socket) => {
     player.ry = num(s[2], -1000, 1000, player.ry);
     player.a = ACTION_STATES.has(s[3]) ? s[3] : 'idle';
     player.d = num(s[4], 0, 2, 0);
-    player.e = Math.floor(num(s[5], 0, 99999, 0));
+    player.e = Math.floor(num(s[5], 0, 199999, 0)); // 舉著的魚（✨ 異色 +100000）
     player.zz = s[6] ? 1 : 0; // 😴 打瞌睡
     player.st = Date.now(); // 最後一次收到狀態的時間（手機鎖螢幕、切到別的 App 就不會再送）
     player.dirty = true;
@@ -4238,8 +4238,9 @@ io.on('connection', (socket) => {
     const m = miniNow();
     const fb = activeBuff(wal?.buff);
     const fish = rollFish({ place, event: !!eventInfo().active, contest: m?.kind === 'fish', luck: fb?.k === 'fish' ? fb.v : 1 }); // 🎣 吃了「釣魚好運」：稀有魚機率變高
-    hooked = { fish, size: rollSize(fish), at: now };
-    ack?.({ ok: true, fish, size: hooked.size });
+    const shiny = canShiny(FISH[fish]) && Math.random() < (Number(process.env.SHINY_TEST) || SHINY_CHANCE); // ✨ 異色魚（本機測試：SHINY_TEST=1 每條都是異色；Render 不要設）
+    hooked = { fish, size: rollSize(fish), at: now, shiny };
+    ack?.({ ok: true, fish, size: hooked.size, shiny });
   });
   // 釣到魚：全場公告＋湖畔排行（只收湖畔房間；一定要先有伺服器給的魚，而且要過了最少的時間）
   socket.on('catch', (data = {}) => {
@@ -4248,6 +4249,7 @@ io.on('connection', (socket) => {
     if (!hooked || Number(data.fish) !== hooked.fish || now - hooked.at < FISH_MIN_MS || now - lastCatch < 3000) return;
     lastCatch = now;
     const fish = hooked.fish;
+    const shiny = !!hooked.shiny;
     let size = hooked.size;
     // 浮標一沉就拉的漂亮時機：魚大一點（和前端同一個算法）
     if (data.perfect && !FISH[fish].junk) size = Math.min(FISH[fish].max, Math.round(size * 1.15) + 1);
@@ -4294,14 +4296,32 @@ io.on('connection', (socket) => {
       if (first) {
         const gain = dexGain(FISH[fish]);
         award(gain, 'dex');
-        const count = Object.keys(wal.dex).length;
+        const count = Object.keys(wal.dex).filter((k) => !FISH[k]?.month).length; // 🗓️ 每月限定的不算
         let bonus = 0;
-        if (count >= FISH_COUNT && !wal.dexDone) {
+        if (count >= DEX_TOTAL && !wal.dexDone) {
           wal.dexDone = true;
           bonus = DEX_BONUS;
           award(bonus, 'dex');
         }
-        socket.emit('dex', { fish, gain, bonus, count, total: FISH_COUNT, dex: dexView(wal) });
+        socket.emit('dex', { fish, gain, bonus, count, total: DEX_TOTAL, dex: dexView(wal) });
+      }
+      // ✨ 異色圖鑑：第一次釣到這種的異色 +10；全部（每月限定的不算）收集完 +500
+      if (shiny) {
+        wal.shiny ??= {};
+        const firstS = !(fish in wal.shiny);
+        wal.shiny[fish] = Math.max(wal.shiny[fish] ?? 0, size);
+        bump('shiny');
+        if (firstS) {
+          award(SHINY_DEX_GAIN, 'dex');
+          const count = Object.keys(wal.shiny).filter((k) => !FISH[k]?.month).length;
+          let bonus = 0;
+          if (count >= SHINY_TOTAL && !wal.shinyDone) {
+            wal.shinyDone = true;
+            bonus = SHINY_BONUS;
+            award(bonus, 'dex');
+          }
+          socket.emit('shinyDex', { fish, gain: SHINY_DEX_GAIN, bonus, count, total: SHINY_TOTAL, shiny: wal.shiny });
+        }
       }
       saveJson('players.json', players);
     }
@@ -4315,10 +4335,10 @@ io.on('connection', (socket) => {
       }
     }
     // 湖畔即時動態：所有分流、所有地點都看得到（垃圾不算）
-    if (!JUNK.has(fish)) pushNews('fish', { fish, size, rank });
+    if (!JUNK.has(fish)) pushNews('fish', { fish, size, rank, ...(shiny ? { shiny: 1 } : {}) });
     // 📣 五星魚與傳說之魚：整個伺服器（所有分流、所有地點）跳出大公告
-    if (FISH_RARITY[fish] >= 5) io.emit('bigCatch', { name: player.name, fish, size, ch: chan.ch, place: roomId });
-    io.to(rkey).emit('caught', { id: socket.id, name: player.name, fish, size, rank });
+    if (FISH_RARITY[fish] >= 5 || shiny) io.emit('bigCatch', { name: player.name, fish, size, ch: chan.ch, place: roomId, shiny }); // ✨ 異色魚也全營地公告
+    io.to(rkey).emit('caught', { id: socket.id, name: player.name, fish, size, rank, shiny });
   });
 
   // 添柴火：伺服器加 fuel，通知其他人播放火星特效

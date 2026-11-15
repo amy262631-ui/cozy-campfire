@@ -5,8 +5,9 @@ import { FISH } from './fishData.js';
  * 圓滾滾的小魚模型（長度 1，頭朝 +X）。舊靴子與寶特瓶另外做。
  * 使用時依尺寸縮放：mesh.scale.setScalar(公分 / 100 * 1.3)
  */
-export function createFishMesh(index) {
-  const f = FISH[index] ?? FISH[0];
+export function createFishMesh(index, shiny = false) {
+  const f0 = FISH[index] ?? FISH[0];
+  const f = shiny && !f0.junk ? { ...f0, ...shinyLook(f0) } : f0;
   const g = new THREE.Group();
   const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, ...extra });
   const glow = f.glow ? { emissive: f.glow, emissiveIntensity: 0.55 } : {};
@@ -81,7 +82,7 @@ export function createFishMesh(index) {
     }
   }
   // 尾巴（扁扁的三角）
-  const finColor = new THREE.Color(f.color).multiplyScalar(0.85).getHex();
+  const finColor = f.fin ?? new THREE.Color(f.color).multiplyScalar(0.85).getHex();
   const tail = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.34, 4), mat(finColor, glow));
   tail.rotation.z = -Math.PI / 2; // 尖的那頭接身體、寬的那頭在後面（11/07：原本反過來，看起來怪）
   tail.scale.set(1, 1, 0.22);
@@ -117,8 +118,31 @@ export function createFishMesh(index) {
     }
     body.material.emissiveIntensity = 0.9;
   }
+  // ✨ 異色魚：身邊一圈小亮片
+  if (shiny && !f0.junk) {
+    const sp = new THREE.MeshBasicMaterial({ color: 0xfff6c0 });
+    for (const [x, y, z] of [[0.45, 0.32, 0.12], [-0.2, 0.38, -0.1], [0.1, -0.32, 0.14], [-0.5, 0.2, 0.1], [0.62, -0.1, -0.12]]) {
+      const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.045), sp);
+      star.position.set(x, y, z);
+      star.scale.set(0.6, 1.4, 0.6);
+      g.add(star);
+    }
+    g.userData.shiny = true;
+  }
   g.userData.tail = tail;
   return g;
+}
+
+/** ✨ 異色魚的顏色：有寫 shiny 的照寫的，沒寫的把色相轉半圈、亮一點 */
+export function shinyLook(f) {
+  if (f.shiny) return f.shiny;
+  const rot = (hex) => {
+    const c = new THREE.Color(hex);
+    const hsl = {};
+    c.getHSL(hsl);
+    return new THREE.Color().setHSL((hsl.h + 0.5) % 1, Math.min(1, hsl.s + 0.35), Math.min(0.75, Math.max(0.45, hsl.l))).getHex();
+  };
+  return { color: rot(f.color), ...(f.patch ? { patch: rot(f.patch) } : {}), glow: f.glow ? rot(f.glow) : undefined };
 }
 
 /** 依公分數算出模型縮放（比真實略大一點，比較看得清楚） */

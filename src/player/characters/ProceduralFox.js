@@ -631,12 +631,12 @@ export class ProceduralFox {
   }
 
   /** 換成要炫耀的魚（魚種索引、公分） */
-  setHeldFish(index, size) {
-    const key = `${index}:${size}`;
+  setHeldFish(index, size, shiny = false) {
+    const key = `${index}:${size}:${shiny ? 1 : 0}`;
     if (this._heldKey === key) return;
     this._heldKey = key;
     this.heldFish.clear();
-    const mesh = createFishMesh(index);
+    const mesh = createFishMesh(index, shiny); // ✨ 異色魚
     mesh.scale.setScalar(Math.max(0.42, fishScale(size) * 1.5)); // 炫耀用：放大一點比較看得清楚
     mesh.traverse((o) => o.isMesh && (o.castShadow = true));
     this.heldFish.add(mesh);

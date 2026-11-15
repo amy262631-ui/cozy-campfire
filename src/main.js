@@ -317,16 +317,16 @@ async function init() {
     ui: fishingUI,
     audio,
     cameraRig,
-    onCatch: (index, size, perfect) => {
+    onCatch: (index, size, perfect, shiny) => {
       setStage(2); // 🌱 第一次釣到魚：造型、約朋友打開
       ritual?.event('fish', { junk: !!FISH[index]?.junk });
       if (!FISH[index]?.junk && size > (todayLog.size ?? 0)) logToday({ fish: index, size }); // 分享文案用：今天最大的魚
       const rec = fishingUI.record(index, size);
-      lastCatch = { index, size, rec };
-      fishingUI.showCard(index, size, rec);
+      lastCatch = { index, size, rec: { ...rec, shiny } };
+      fishingUI.showCard(index, size, lastCatch.rec);
       const ff = FISH[index];
-      if (ff && !ff.junk && (ff.legend || ff.rarity >= 4)) {
-        const stars = ff.legend ? '👑' : `★${ff.rarity}`;
+      if (ff && !ff.junk && (ff.legend || ff.rarity >= 4 || shiny)) {
+        const stars = (shiny ? '✨' + t('異色') + ' ' : '') + (ff.legend ? '👑' : `★${ff.rarity}`);
         setTimeout(
           () =>
             sharePop(t('🎉 釣到 <b>{stars} {name}</b>！', { stars, name: ff.name }), {
@@ -342,8 +342,8 @@ async function init() {
       else fishingUI.setBoard([], false);
     },
     // 舉著魚起身走開：繼續舉著，走到哪都看得到（按「放下」或去做別的事才收起來）
-    onKeep: (index, size) => {
-      setTrophy({ index, size });
+    onKeep: (index, size, shiny) => {
+      setTrophy({ index, size, shiny });
       hud.toast(t('🐟 舉著{name}到處炫耀吧！想收起來就按「放下」', { name: FISH[index]?.name ?? '' }), 4500);
     },
   });
@@ -2668,6 +2668,17 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       audio.sfx('bell');
     }, 2600); // 等釣到魚的卡片先秀完
   });
+  // ✨ 異色圖鑑收錄
+  net.on('shinyDex', ({ fish, gain, bonus, count, total, shiny }) => {
+    fishingUI.setShiny(shiny);
+    const f = FISH[fish];
+    setTimeout(() => {
+      hud.toast(t('✨ 異色圖鑑新收錄：{name}！+{n} 🌰（{c}／{t}）', { name: f?.name ?? '', n: gain, c: count, t: total }), 5000);
+      if (bonus) setTimeout(() => hud.toast(t('🏆 異色魚全部收集完成！再送你 {n} 顆松果', { n: bonus }), 6000), 2500);
+      if (bonus) setTimeout(() => dexPop(t('異色魚圖鑑'), '✨'), 9000);
+      audio.sfx('bell');
+    }, 3400); // 等釣到魚的卡片、一般圖鑑的提示先秀完
+  });
   net.on('ornament', ({ item, by }) => {
     forest.wishTree.add(item);
     treePanel.refresh();
@@ -3036,6 +3047,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       setNet(w.net);
       refreshGather();
       fishingUI.mergeDex(w.dex);
+      fishingUI.setShiny(w.shiny);
       // 以前存在這個瀏覽器裡的魚簍，也一起存進帳號（換手機登入就看得到）
       const local = Object.fromEntries(Object.entries(fishingUI.creel).filter(([, e]) => e?.count).map(([i, e]) => [i, e.best || 1]));
       if (Object.keys(local).length) net.request('dexSync', { dex: local }).then((r) => r?.dex && fishingUI.mergeDex(r.dex));
@@ -3114,8 +3126,9 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   // 伺服器的拒絕原因用代碼判斷，再顯示成目前語言
   const fullMsg = () => t('這裡人數已滿，請稍後再來');
   net.on('rejected', (res) => res?.reason === 'full' && hud.toast(fullMsg(), 4000));
-  net.on('caught', ({ id, name, fish, size, rank }) => {
+  net.on('caught', ({ id, name, fish, size, rank, shiny }) => {
     const f = FISH[fish];
+    if (shiny && id !== net.id) return; // ✨ 異色魚：bigCatch 那邊會跳大公告
     if (id === net.id) {
       // 自己的：伺服器回報排名後，卡片補上「湖畔排行第 N 名」
       if (rank && lastCatch) fishingUI.showCard(lastCatch.index, lastCatch.size, { ...lastCatch.rec, rank });
@@ -3128,14 +3141,14 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   });
   net.on('board', ({ board }) => fishingUI.setBoard(board, true));
   // 📣 五星魚、傳說之魚：全伺服器大公告
-  net.on('bigCatch', ({ name, fish, size, place }) => {
+  net.on('bigCatch', ({ name, fish, size, place, shiny }) => {
     const f = FISH[fish];
     if (!f) return;
     const where = place === 'lake_dock' ? t('湖畔碼頭') : t('營火河畔');
     const el = document.createElement('div');
-    el.className = 'big-catch' + (f.legend ? ' legend' : '');
-    el.innerHTML = `<b>${f.legend ? t('🐉 傳說之魚現身！') : t('📣 五星大魚！')}</b><span></span>`;
-    el.querySelector('span').textContent = t('{name} 在{where}釣到了 {size} 公分的{fish}', { name, where, size, fish: f.name });
+    el.className = 'big-catch' + (f.legend ? ' legend' : '') + (shiny ? ' shiny' : '');
+    el.innerHTML = `<b>${shiny ? t('✨ 異色魚出現了！') : f.legend ? t('🐉 傳說之魚現身！') : t('📣 五星大魚！')}</b><span></span>`;
+    el.querySelector('span').textContent = t('{name} 在{where}釣到了 {size} 公分的{fish}', { name, where, size, fish: shiny ? t('異色{fish}', { fish: f.name }) : f.name });
     document.getElementById('ui').appendChild(el);
     setTimeout(() => el.classList.add('out'), f.legend ? 8000 : 5500);
     setTimeout(() => el.remove(), f.legend ? 9000 : 6500);
@@ -3309,9 +3322,14 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   );
   const campBar = document.getElementById('camp-bar');
   const zoneBtn = document.getElementById('zone-btn');
+  // 🌱 新手任務「去小舖看帳篷」：不在營火廣場（例如剛在湖邊釣完魚）也給一顆「🛒 小舖」（作者 11/15：任務叫人點小舖，湖邊卻沒有按鈕）
+  const shopStepAway = () => ritual?.id === 'k_shop' && !ritual?.done && roomMgr?.current.id !== 'forest_main';
+  let shopAwayShown = false;
+  setInterval(() => shopStepAway() !== shopAwayShown && drawCampBar(), 1000);
   function drawCampBar() {
     const id = roomMgr?.current.id;
-    campBar.classList.toggle('show', id === 'campground' || id === 'home');
+    shopAwayShown = shopStepAway();
+    campBar.classList.toggle('show', id === 'campground' || id === 'home' || shopAwayShown);
     zoneBtn.hidden = id !== 'campground';
     // 手機：縮成小圓按鈕（只有圖示＋區名），比較不擋畫面
     zoneBtn.innerHTML = `🏕️<span class="cb-long"> ${t('{z} 區', { z: zoneName(campZone) })} ▾</span><b class="cb-short">${zoneName(campZone)}</b>`;
@@ -3625,7 +3643,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       actionState: actionState ?? ((actions.state === 'fish' && fishing.netAction) || player.actionState), // 拉竿、舉魚
       doneness: actions.state === 'roast' ? actions.doneness : actions.state === 'eat' ? actions.eatDone : actions.state === 'sofa' && actions.seat?.treeSwing ? (actions.seat.treeSwing.userData.level || 1) / 2 : 0, // 🪢 樹屋鞦韆：盪的段數（別人看到一樣的力道） // 吃棉花糖：讓別人看到烤得怎樣的反應
       // 舉起來的魚（魚種＋公分）：釣魚中舉著、或舉著到處走；不然就是頭上頂著石頭
-      extra: fishing.netExtra || (trophy ? packFish(trophy.index, trophy.size) : 0) || (forest.carrying ? STONE_FLAG : 0),
+      extra: fishing.netExtra || (trophy ? packFish(trophy.index, trophy.size, trophy.shiny) : 0) || (forest.carrying ? STONE_FLAG : 0),
       zz: dozing, // 😴 坐著、釣魚、看星星時掛機打瞌睡
     };
   }
@@ -5280,7 +5298,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     if (trophy) {
       if (actions.state !== 'free' || forest.carrying) setTrophy(null);
       else if (player.character !== trophyChar) {
-        player.character.setHeldFish?.(trophy.index, trophy.size);
+        player.character.setHeldFish?.(trophy.index, trophy.size, trophy.shiny);
         player.character.setProp('fish', true);
         trophyChar = player.character;
       }

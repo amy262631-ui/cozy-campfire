@@ -37,7 +37,7 @@ export class LakeNews {
     if (item.kind && item.kind !== 'fish') return;
     const f = FISH[item.fish];
     // 稀有魚（4 星）：跳出提示；五星以上另有全伺服器大公告（main.js 的 bigCatch）
-    if (f && f.rarity === 4) {
+    if (f && f.rarity === 4 && !item.shiny) {
       this.hud.toast(t('🎉 {name} 釣到了稀有的{fish}（{size} 公分）！', { name: item.name, fish: f.name, size: item.size }), 5000);
     }
   }
@@ -54,7 +54,7 @@ export class LakeNews {
     }
     const f = FISH[it.fish] ?? FISH[0];
     const rare = f.rarity >= 5 ? ' legend' : f.rarity >= 4 ? ' rare' : '';
-    return `🎣 ${t('{name} 釣到 <b>{size}cm {fish}</b>', { name: esc(it.name), size: it.size, fish: f.name })}<span class="nl-star${rare}">${'★'.repeat(f.rarity)}</span>${it.rank ? ` · ${t('排行第 {n} 名', { n: it.rank })}` : ''}`;
+    return `🎣 ${t('{name} 釣到 <b>{size}cm {fish}</b>', { name: esc(it.name), size: it.size, fish: (it.shiny ? '✨' + t('異色') : '') + f.name })}<span class="nl-star${rare}">${'★'.repeat(f.rarity)}</span>${it.rank ? ` · ${t('排行第 {n} 名', { n: it.rank })}` : ''}`;
   }
 
   #show(it) {

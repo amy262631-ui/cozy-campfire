@@ -9,14 +9,14 @@ import { t } from '../i18n/i18n.js';
  *   window  咬鉤後有幾秒可以拉竿
  */
 export const FISH = [
-  { name: t('小溪哥'), rarity: 1, min: 10, max: 22, color: 0xa9c3d3, weight: 30, pull: 7, fight: 0.05, window: 1.6 },
-  { name: t('吳郭魚'), rarity: 1, min: 15, max: 38, color: 0x8a9a78, weight: 26, pull: 9, fight: 0.06, window: 1.5 },
+  { name: t('小溪哥'), rarity: 1, min: 10, max: 22, color: 0xa9c3d3, weight: 30, pull: 7, fight: 0.05, window: 1.6, shiny: { color: 0xc9a8ff } },
+  { name: t('吳郭魚'), rarity: 1, min: 15, max: 38, color: 0x8a9a78, weight: 26, pull: 9, fight: 0.06, window: 1.5, shiny: { color: 0xff9ec4 } },
   { name: t('香魚'), rarity: 2, min: 14, max: 28, color: 0xcdbb73, weight: 15, pull: 10, fight: 0.07, window: 1.4 },
-  { name: t('鯽魚'), rarity: 2, min: 18, max: 42, color: 0xb59c66, weight: 12, pull: 11, fight: 0.07, window: 1.4 },
-  { name: t('錦鯉'), rarity: 3, min: 35, max: 78, color: 0xf7f2ea, patch: 0xe8642c, weight: 6, pull: 15, fight: 0.09, window: 1.25 },
-  { name: t('櫻花鉤吻鮭'), rarity: 4, min: 25, max: 48, color: 0xe9adb9, weight: 3, pull: 18, fight: 0.11, window: 1.15, note: t('台灣的國寶魚') },
+  { name: t('鯽魚'), rarity: 2, min: 18, max: 42, color: 0xb59c66, weight: 12, pull: 11, fight: 0.07, window: 1.4, shiny: { color: 0xffd34d, glow: 0xffb000 } },
+  { name: t('錦鯉'), rarity: 3, min: 35, max: 78, color: 0xf7f2ea, patch: 0xe8642c, weight: 6, pull: 15, fight: 0.09, window: 1.25, shiny: { color: 0x2a2a33, patch: 0xffc83a } },
+  { name: t('櫻花鉤吻鮭'), rarity: 4, min: 25, max: 48, color: 0xe9adb9, weight: 3, pull: 18, fight: 0.11, window: 1.15, note: t('台灣的國寶魚'), shiny: { color: 0x9fd8ff, glow: 0x7fc0ff } },
   { name: t('月光魚'), rarity: 4, min: 30, max: 62, color: 0xc4e6ff, glow: 0x5fb0ff, weight: 2.2, pull: 19, fight: 0.11, window: 1.1, note: t('只在月光下出現') },
-  { name: t('黃金鯉魚王'), rarity: 5, min: 70, max: 120, color: 0xffd04d, glow: 0xffa000, weight: 0.6, pull: 26, fight: 0.14, window: 1.0, note: t('傳說中的湖之王') },
+  { name: t('黃金鯉魚王'), rarity: 5, min: 70, max: 120, color: 0xffd04d, glow: 0xffa000, weight: 0.6, pull: 26, fight: 0.14, window: 1.0, note: t('傳說中的湖之王'), shiny: { color: 0xf4f6ff, glow: 0xc8d8ff } },
   { name: t('舊靴子'), rarity: 0, junk: 'boot', min: 26, max: 30, color: 0x5a4030, weight: 2, pull: 5, fight: 0.02, window: 1.6 },
   { name: t('寶特瓶'), rarity: 0, junk: 'bottle', min: 20, max: 25, color: 0xbfe8e0, weight: 2, pull: 4, fight: 0.02, window: 1.6 },
   // ---- 圖鑑追加：特殊魚（where：只在某個水域；when：只在某個時段）----
@@ -48,11 +48,11 @@ export const FISH = [
   { name: t('晚霞鯉'), rarity: 3, min: 30, max: 60, color: 0xff9e7a, patch: 0xb07aff, weight: 3, pull: 14, fight: 0.09, window: 1.25, where: 'lake', note: t('只在湖畔碼頭出現') },
   { name: t('蜂蜜鱒'), rarity: 4, min: 30, max: 55, color: 0xffc25a, weight: 1.4, pull: 18, fight: 0.11, window: 1.15 },
   { name: t('森林鱷雀鱔'), rarity: 4, min: 60, max: 110, color: 0x6d7a55, weight: 1, pull: 20, fight: 0.12, window: 1.1, where: 'lake', note: t('長得像小恐龍') },
-  { name: t('雲朵魚'), rarity: 4, min: 25, max: 50, color: 0xffffff, glow: 0xe8f2ff, weight: 1.2, pull: 18, fight: 0.11, window: 1.15, note: t('摸起來軟綿綿的') },
+  { name: t('雲朵魚'), rarity: 4, min: 25, max: 50, color: 0xffffff, glow: 0xe8f2ff, weight: 1.2, pull: 18, fight: 0.11, window: 1.15, note: t('摸起來軟綿綿的'), shiny: { color: 0xffd0e8, glow: 0xffb0d8 } },
   { name: t('極光魚'), rarity: 4, min: 30, max: 60, color: 0x7affd0, glow: 0x7ab0ff, weight: 3, pull: 18, fight: 0.11, window: 1.15, when: 'event', note: t('只在早晚 9:30 營火時間出現') },
   { name: t('琥珀鯰'), rarity: 4, min: 50, max: 95, color: 0xd99a3a, glow: 0xffc070, weight: 1, pull: 19, fight: 0.11, window: 1.1, where: 'pond', note: t('只在營火河畔出現') },
-  { name: t('熊貓魚'), rarity: 4, min: 20, max: 40, color: 0xffffff, patch: 0x222222, weight: 1, pull: 18, fight: 0.11, window: 1.15, note: t('黑白配色超可愛') },
-  { name: t('松果魚'), rarity: 4, min: 15, max: 30, color: 0x8a5a30, patch: 0xc88a50, weight: 1.2, pull: 18, fight: 0.11, window: 1.15, note: t('營地的吉祥物？') },
+  { name: t('熊貓魚'), rarity: 4, min: 20, max: 40, color: 0xffffff, patch: 0x222222, weight: 1, pull: 18, fight: 0.11, window: 1.15, note: t('黑白配色超可愛'), shiny: { color: 0xffd6e8, patch: 0x7a4a3a } },
+  { name: t('松果魚'), rarity: 4, min: 15, max: 30, color: 0x8a5a30, patch: 0xc88a50, weight: 1.2, pull: 18, fight: 0.11, window: 1.15, note: t('營地的吉祥物？'), shiny: { color: 0xffd34d, patch: 0xfff2b0, glow: 0xffb000 } },
   { name: t('銀河鯨鯉'), rarity: 5, min: 90, max: 128, color: 0x1a2050, glow: 0xc8a0ff, weight: 1.2, pull: 26, fight: 0.14, window: 1.0, when: 'event', note: t('只在早晚 9:30 營火時間出現') },
   { name: t('鳳凰鯉'), rarity: 5, min: 80, max: 125, color: 0xff5030, glow: 0xffd060, weight: 1.2, pull: 26, fight: 0.14, window: 1.0, when: 'contest', note: t('只在釣魚大賽時出現') },
   { name: t('彩虹獨角魚'), rarity: 5, min: 50, max: 90, color: 0xffb0e0, glow: 0xa0e0ff, weight: 0.25, pull: 26, fight: 0.14, window: 1.0, note: t('看過的人都說會帶來好運') },
@@ -65,12 +65,31 @@ export const FISH = [
   // 每晚 9:30 營火時間限定的魚王：湖畔、營火河畔各一隻
   { name: t('流星劍魚王'), rarity: 5, legend: true, min: 200, max: 300, color: 0xdfe8ff, glow: 0x9fd0ff, weight: 0.22, pull: 37, fight: 0.18, window: 0.9, when: 'event', where: 'lake', note: t('只在早晚 9:30，追著流星衝進湖裡') },
   { name: t('螢光幽靈魚王'), rarity: 5, legend: true, min: 150, max: 240, color: 0xc8fff0, glow: 0x7affc8, weight: 0.22, pull: 36, fight: 0.18, window: 0.9, when: 'event', where: 'pond', note: t('只在早晚 9:30，在營火河畔若隱若現') },
+  // ---- 🗓️ 每月限定（作者 11/15）：那個月才釣得到；不算進全收集，圖鑑「🗓️ 限定」；隔年同一個月會再出現 ----
+  { name: t('楓葉魚'), rarity: 3, min: 18, max: 40, color: 0xe8642c, patch: 0xffb347, fin: 0xb8401c, weight: 5, pull: 13, fight: 0.08, window: 1.25, month: 11, note: t('11 月限定：秋天的楓葉落進湖裡變成的') },
+  { name: t('雪花魚'), rarity: 3, min: 15, max: 35, color: 0xeaf6ff, glow: 0x9fd8ff, patch: 0xbfe4ff, weight: 5, pull: 13, fight: 0.08, window: 1.25, month: 12, note: t('12 月限定：冷冷的水裡才游出來') },
+  { name: t('聖誕紅鰭魚'), rarity: 3, min: 20, max: 42, color: 0x3f8f4f, patch: 0xffffff, fin: 0xe23a3a, weight: 5, pull: 13, fight: 0.08, window: 1.25, month: 12, note: t('12 月限定：紅紅的鰭像聖誕裝飾') },
 ];
 /** 第一次釣到某種魚（收進圖鑑）送的松果，依星等（伺服器 server/index.js 的 DEX_GAIN 相同） */
 export const DEX_GAIN = [1, 2, 3, 5, 10, 20];
 export const DEX_BONUS = 100; // 圖鑑全部收集完
 export const LEGEND_DEX_GAIN = 50; // 第一次釣到傳說之魚
 /** 第一次釣到這種魚送幾顆松果 */
+/** 🗓️ 每月限定的魚（不算進全收集） */
+export const isMonthFish = (f) => !!f?.month;
+/** 算進魚類圖鑑全收集的魚 */
+export const DEX_TOTAL = FISH.filter((f) => !f.month).length;
+/** 台北時間現在是幾月（1～12） */
+export const fishMonth = (now = new Date()) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', month: 'numeric' }).format(now));
+
+/** ✨ 異色魚（作者 11/15）：每條 1%；第一次釣到某種異色 +10；全部收集完 +500。垃圾沒有異色 */
+export const SHINY_CHANCE = 0.01;
+export const SHINY_DEX_GAIN = 10;
+export const SHINY_BONUS = 500;
+export const canShiny = (f) => !!f && !f.junk;
+/** 算進異色全收集的魚（每月限定的不算） */
+export const SHINY_TOTAL = FISH.filter((f) => !f.junk && !f.month).length;
+
 export const dexGain = (f) => (f.legend ? LEGEND_DEX_GAIN : DEX_GAIN[f.rarity] ?? 1);
 /** 每釣一次送的松果（傳說之魚特別多） */
 export const catchGain = (f) => (f.legend ? 30 : [0, 1, 2, 3, 6, 15][f.rarity] ?? 0);
@@ -79,7 +98,7 @@ export const FISH_MAX_CM = Math.max(...FISH.map((f) => f.max));
 
 /** 這個水域、這個時段釣得到嗎 */
 export const fishAvailable = (f, ctx = {}) =>
-  (!f.where || f.where === ctx.place) && (!f.when || (f.when === 'event' && ctx.event) || (f.when === 'contest' && ctx.contest));
+  (!f.where || f.where === ctx.place) && (!f.month || f.month === (ctx.month ?? fishMonth())) && (!f.when || (f.when === 'event' && ctx.event) || (f.when === 'contest' && ctx.contest));
 
 /**
  * 依權重隨機挑一種
@@ -106,5 +125,6 @@ export function rollSize(index) {
 export const stars = (rarity) => (rarity > 0 ? '★'.repeat(rarity) + '☆'.repeat(5 - rarity) : '');
 
 /** 網路傳輸用：把魚種與尺寸壓成一個整數 */
-export const packFish = (index, size) => index * 1000 + Math.min(999, Math.max(0, size));
-export const unpackFish = (code) => ({ index: Math.floor(code / 1000), size: code % 1000 });
+// ✨ 異色魚 +100000（伺服器狀態封包上限 199999；99999 是頂石頭的旗標）
+export const packFish = (index, size, shiny = false) => index * 1000 + Math.min(999, Math.max(0, size)) + (shiny ? 100000 : 0);
+export const unpackFish = (code) => ({ index: Math.floor((code % 100000) / 1000), size: code % 1000, shiny: code >= 100000 });

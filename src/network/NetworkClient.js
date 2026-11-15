@@ -111,7 +111,7 @@ export class NetworkClient {
     socket.on('disconnect', () => this.#setStatus(socket.active ? 'connecting' : 'offline'));
     socket.on('connect_error', () => this.#setStatus(socket.active ? 'connecting' : 'offline'));
 
-    for (const ev of ['miniHuntShow', 'dineAte', 'playerJoined', 'playerLeft', 'states', 'fire', 'fireSync', 'song', 'caught', 'board', 'chat', 'emoji', 'wishes', 'notes', 'stone', 'lakeNews', 'wallet', 'ornament', 'event', 'friendJoined', 'cairnReset', 'homeUpdate', 'mini', 'miniBoard', 'miniHunt', 'areas', 'gift', 'friendCredit', 'bigCatch', 'outfit', 'outfitGift', 'dateFriend', 'museum', 'ate', 'cooked', 'dishGift', 'gardenWatered', 'treasures', 'trash', 'trashGot', 'pass', 'sponsored', 'friendSuggest', 'dupLogin', 'spiritMe', 'spirit', 'spiritAte', 'spiritHatch', 'shout', 'bgame']) {
+    for (const ev of ['shinyDex', 'miniHuntShow', 'dineAte', 'playerJoined', 'playerLeft', 'states', 'fire', 'fireSync', 'song', 'caught', 'board', 'chat', 'emoji', 'wishes', 'notes', 'stone', 'lakeNews', 'wallet', 'ornament', 'event', 'friendJoined', 'cairnReset', 'homeUpdate', 'mini', 'miniBoard', 'miniHunt', 'areas', 'gift', 'friendCredit', 'bigCatch', 'outfit', 'outfitGift', 'dateFriend', 'museum', 'ate', 'cooked', 'dishGift', 'gardenWatered', 'treasures', 'trash', 'trashGot', 'pass', 'sponsored', 'friendSuggest', 'dupLogin', 'spiritMe', 'spirit', 'spiritAte', 'spiritHatch', 'shout', 'bgame']) {
       socket.on(ev, (data) => this.#emit(ev, data));
     }
   }

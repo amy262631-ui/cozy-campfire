@@ -1,4 +1,5 @@
-import { FISH, stars, dexGain, DEX_BONUS } from '../fishing/fishData.js';
+import { FISH, stars, dexGain, DEX_BONUS, DEX_TOTAL, SHINY_TOTAL, SHINY_DEX_GAIN, SHINY_BONUS, fishMonth } from '../fishing/fishData.js';
+import { shinyLook } from '../fishing/fishModel.js';
 import { t } from '../i18n/i18n.js';
 import { addCloseX } from './CloseX.js';
 
@@ -147,14 +148,15 @@ export class FishingUI {
     return { newRecord, firstTime };
   }
 
-  showCard(index, size, { newRecord, firstTime, rank } = {}) {
+  showCard(index, size, { newRecord, firstTime, rank, shiny } = {}) {
     const f = FISH[index];
     const badges = [];
+    if (shiny) badges.push('<b class="badge shiny">' + t('✨ 異色') + '</b>');
     if (firstTime && !f.junk) badges.push('<b class="badge new">' + t('第一次釣到') + '</b>');
     else if (newRecord && !f.junk) badges.push('<b class="badge record">' + t('個人新紀錄') + '</b>');
     if (rank) badges.push(`<b class="badge rank">${t('湖畔排行第 {rank} 名', { rank })}</b>`);
-    const title = f.junk ? t('撈到了垃圾⋯') : f.legend ? t('🐉 傳說之魚現身！') : f.rarity >= 4 ? t('🎉 大豐收！') : t('🎣 釣到了！');
-    this.el.card.className = `fish-card show rarity-${f.rarity}`;
+    const title = f.junk ? t('撈到了垃圾⋯') : shiny ? t('✨ 哇！異色的！') : f.legend ? t('🐉 傳說之魚現身！') : f.rarity >= 4 ? t('🎉 大豐收！') : t('🎣 釣到了！');
+    this.el.card.className = `fish-card show rarity-${f.rarity}${shiny ? ' shiny' : ''}`;
     this.el.card.innerHTML = `
       <div class="fish-card-row">
         <span class="fish-card-title">${title}</span>
@@ -194,7 +196,14 @@ export class FishingUI {
   }
 
   get dexCount() {
-    return FISH.filter((f, i) => this.creel[i]?.count).length;
+    return FISH.filter((f, i) => !f.month && this.creel[i]?.count).length;
+  }
+
+  /** ✨ 異色圖鑑：{ 魚種: 最大公分 }（伺服器給） */
+  shiny = {};
+  setShiny(map) {
+    this.shiny = { ...(map ?? {}) };
+    if (this.el.modal.classList.contains('show') && this._modal === 'creel' && this._tab === 'fish') this.openCreel('fish');
   }
 
   /** 📖 魚類圖鑑：釣過的顯示名字與最大紀錄；沒釣過的是剪影，附上出現提示 */
@@ -216,7 +225,7 @@ export class FishingUI {
   }
 
   /** 打開圖鑑；tab：fish（預設）或其他分頁的 id */
-  openCreel(tab = 'fish') {
+  openCreel(tab = 'fish', sub0 = null) {
     const extra = this.extraTabs.find((x) => x.id === tab);
     if (extra) {
       this._modal = 'creel';
@@ -230,27 +239,70 @@ export class FishingUI {
     }
     this._tab = 'fish';
     this._modal = 'creel';
+    const sub = (this._fsub = sub0 ?? this._fsub ?? 'all'); // all＝一般、shiny＝✨ 異色、month＝🗓️ 每月限定
     const total = Object.values(this.creel).reduce((s, e) => s + e.count, 0);
     const found = this.dexCount;
-    this.el.modalTitle.textContent = t('📖 魚類圖鑑 {found}／{total}', { found, total: FISH.length });
     const hex = (c) => `#${(c ?? 0x888888).toString(16).padStart(6, '0')}`;
     const rank = (f) => (f.legend ? t('🐉 傳說') + ' ' + stars(f.rarity) : f.rarity ? stars(f.rarity) : t('雜物'));
-    const cards = FISH.map((f, i) => {
-      const e = this.creel[i];
-      const gain = dexGain(f);
-      if (!e?.count) {
-        return `<div class="dex-card unknown${f.legend ? ' legend' : ''}"><i class="dex-fish" style="background:#2a3140"></i><b>${t('？？？')}</b><small>${rank(f)}</small><em>${f.note && (f.where || f.when) ? f.note : t('第一次釣到 +{n} 🌰', { n: gain })}</em></div>`;
-      }
+    const look = (f) => {
       const glow = f.glow ? `box-shadow:0 0 10px ${hex(f.glow)};` : '';
       const patch = f.patch ? `background:linear-gradient(135deg, ${hex(f.color)} 55%, ${hex(f.patch)} 55%);` : `background:${hex(f.color)};`;
-      return `<div class="dex-card rarity-${f.rarity}${f.legend ? ' legend' : ''}"><i class="dex-fish" style="${patch}${glow}"></i><b>${f.name}</b><small>${rank(f)}</small><em>${f.junk ? `×${e.count}` : t('最大 {size} 公分・×{n}', { size: e.best, n: e.count })}</em></div>`;
-    }).join('');
+      return patch + glow;
+    };
+    const unknown = (f, em) => `<div class="dex-card unknown${f.legend ? ' legend' : ''}"><i class="dex-fish" style="background:#2a3140"></i><b>${t('？？？')}</b><small>${rank(f)}</small><em>${em}</em></div>`;
+    const subs = `<div class="dex-sub">${[
+      ['all', t('🐟 一般')],
+      ['shiny', t('✨ 異色')],
+      ['month', t('🗓️ 限定')],
+    ]
+      .map(([id, label]) => `<button type="button" data-fsub="${id}" class="${id === sub ? 'on' : ''}">${label}</button>`)
+      .join('')}</div>`;
+    let body;
+    if (sub === 'shiny') {
+      const sFound = Object.keys(this.shiny).filter((k) => FISH[k] && !FISH[k].month).length;
+      this.el.modalTitle.textContent = t('✨ 異色魚圖鑑 {found}／{total}', { found: sFound, total: SHINY_TOTAL });
+      const cards = FISH.map((f, i) => [f, i])
+        .filter(([f]) => !f.junk)
+        .map(([f, i]) => {
+          const best = this.shiny[i];
+          if (!best) return unknown(f, f.month ? t('{m} 月限定', { m: f.month }) : t('第一次釣到 +{n} 🌰', { n: SHINY_DEX_GAIN }));
+          return `<div class="dex-card shiny rarity-${f.rarity}${f.legend ? ' legend' : ''}"><i class="dex-fish" style="${look({ ...f, ...shinyLook(f) })}"></i><b>${f.name}</b><small>${rank(f)}</small><em>${t('最大 {size} 公分', { size: best })}</em></div>`;
+        })
+        .join('');
+      body = `<div class="dex-note">${t('每條魚有 1% 機會是異色（顏色不一樣、身邊有亮片）。第一次釣到某種異色 +{n} 🌰；全部 {t} 種收集完再送 {b} 顆 🌰（每月限定的不算）', { n: SHINY_DEX_GAIN, t: SHINY_TOTAL, b: SHINY_BONUS })}</div><div class="dex-grid">${cards}</div>`;
+    } else if (sub === 'month') {
+      this.el.modalTitle.textContent = t('🗓️ 每月限定的魚');
+      const now = fishMonth();
+      const cards = FISH.map((f, i) => [f, i])
+        .filter(([f]) => f.month)
+        .map(([f, i]) => {
+          const e = this.creel[i];
+          const tag = f.month === now ? t('🟢 這個月釣得到') : t('{m} 月限定', { m: f.month });
+          if (!e?.count) return unknown(f, tag);
+          return `<div class="dex-card rarity-${f.rarity}"><i class="dex-fish" style="${look(f)}"></i><b>${f.name}</b><small>${rank(f)}</small><em>${t('最大 {size} 公分・×{n}', { size: e.best, n: e.count })}<br>${tag}</em></div>`;
+        })
+        .join('');
+      body = `<div class="dex-note">${t('那個月才釣得到，隔年同一個月會再出現。不算進全收集。')}</div><div class="dex-grid">${cards}</div>`;
+    } else {
+      this.el.modalTitle.textContent = t('📖 魚類圖鑑 {found}／{total}', { found, total: DEX_TOTAL });
+      const cards = FISH.filter((f) => !f.month)
+        .map((f) => {
+          const i = FISH.indexOf(f);
+          const e = this.creel[i];
+          const gain = dexGain(f);
+          if (!e?.count) return unknown(f, f.note && (f.where || f.when) ? f.note : t('第一次釣到 +{n} 🌰', { n: gain }));
+          return `<div class="dex-card rarity-${f.rarity}${f.legend ? ' legend' : ''}"><i class="dex-fish" style="${look(f)}"></i><b>${f.name}</b><small>${rank(f)}</small><em>${f.junk ? `×${e.count}` : t('最大 {size} 公分・×{n}', { size: e.best, n: e.count })}</em></div>`;
+        })
+        .join('');
+      body = `<div class="dex-note">${t('第一次釣到新的魚會收進圖鑑，送松果（★ 越多送越多）；全部 {n} 種收集完再送 {b} 顆 🌰', { n: DEX_TOTAL, b: DEX_BONUS })}</div><div class="dex-grid">${cards}</div>`;
+    }
     this.el.modalBody.innerHTML = `
       ${this.#tabsHtml('fish')}
-      <div class="dex-note">${t('第一次釣到新的魚會收進圖鑑，送松果（★ 越多送越多）；全部 {n} 種收集完再送 {b} 顆 🌰', { n: FISH.length, b: DEX_BONUS })}</div>
-      <div class="dex-grid">${cards}</div>
+      ${subs}
+      ${body}
       <div class="creel-total">${t('總共釣了 {n} 次（每條魚都放回湖裡了）', { n: total })}</div>`;
     this.#bindTabs();
+    for (const b of this.el.modalBody.querySelectorAll('[data-fsub]')) b.addEventListener('click', () => this.openCreel('fish', b.dataset.fsub));
     this.el.modal.classList.add('show');
   }
 
