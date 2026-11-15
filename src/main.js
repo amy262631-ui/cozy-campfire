@@ -517,7 +517,7 @@ async function init() {
     fish: () => t('🎣 釣魚大賽開始了！10 分鐘內到營火河畔或湖邊釣最大的魚，前三名送松果'),
     stone: () => t('🪨 疊石接力開始了！10 分鐘內每疊一顆石頭多 1 顆松果'),
     race: () => t('🏃 燈籠賽跑開始了！依序跑過森林裡 1→5 號燈籠，最快的前三名送松果'),
-    hunt: () => t('✨ 找金松果開始了！森林裡藏了 5 顆發光的金松果，找到一顆 +5 松果'),
+    hunt: () => t('✨ 找金松果開始了！森林裡會一顆一顆冒出 5 顆發光的金松果，找到一顆 +5 松果'),
     wood: () => t('🔥 添柴時光開始了！10 分鐘內每添一根柴多 1 顆松果'),
   };
   const applyMini = (m, announce = false) => {
@@ -596,6 +596,13 @@ async function init() {
     );
   });
   setInterval(() => miniState && hud.setMini(currentMini()), 20000);
+  // 下一顆金松果冒出來了
+  net.on('miniHuntShow', (m) => {
+    if (!m?.active) return;
+    applyMini(m, false);
+    hud.toast(t('✨ 森林裡冒出一顆金松果了！快去找找'), 4500);
+    audio.sfx('bell');
+  });
   net.on('miniHunt', ({ i, by, left }) => {
     forest.mini.take(i);
     if (miniState) miniState.left = left;
@@ -3591,10 +3598,17 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   };
 
   // ---------- Resize ----------
+  /** 🛠️ 布置面板靠右邊（電腦、手機橫放）：畫面中心往左移半個面板，帳篷不會被擋（作者 11/14） */
+  const buildDocked = () => document.body.classList.contains('building') && innerWidth > innerHeight && innerWidth >= 700;
   function onResize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
     camera.aspect = w / h;
+    if (buildDocked()) {
+      const panel = Math.min(360, Math.round(w * 0.36));
+      camera.setViewOffset(w, h, Math.round(panel / 2), 0, w, h);
+    } else if (document.body.classList.contains('building')) camera.setViewOffset(w, h, 0, Math.round(h * 0.13), w, h); // 手機直放：面板在下面 → 畫面往上挪
+    else camera.clearViewOffset();
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
     campfire.setPixelScale(h * renderer.getPixelRatio(), camera.fov);
@@ -4660,6 +4674,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     homeRoom.setBuild(true);
     buildPanel.start();
     document.body.classList.add('building');
+    onResize(); // 面板靠右：畫面往左挪
     // 布置時鏡頭拉高往下看，整個帳篷一目了然
     buildCam = { pitch: cameraRig.target.pitch, distance: cameraRig.target.distance };
     cameraRig.target.pitch = 1.05;
@@ -4667,6 +4682,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   };
   const stopBuild = () => {
     document.body.classList.remove('building');
+    onResize();
     if (buildCam) {
       cameraRig.target.pitch = buildCam.pitch;
       cameraRig.target.distance = buildCam.distance;

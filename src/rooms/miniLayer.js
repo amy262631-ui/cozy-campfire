@@ -83,6 +83,8 @@ export function buildMiniLayer() {
   function setHunt(spots = []) {
     for (const c of cones) group.remove(c.g);
     cones = spots.map((p) => {
+      // 還沒冒出來的（h）：先不放，也不能撿
+      if (p.h) return { g: new THREE.Group(), cone: null, taken: true, hidden: true, x: 9999, z: 9999 };
       const g = new THREE.Group();
       g.position.set(p.x, 0, p.z);
       const cone = new THREE.Mesh(coneGeo, goldMat);
@@ -135,7 +137,7 @@ export function buildMiniLayer() {
       return -1;
     },
     get huntLeft() {
-      return cones.filter((c) => !c.taken).length;
+      return cones.filter((c) => !c.taken || c.hidden).length;
     },
     update(dt, t) {
       for (const c of cones) {

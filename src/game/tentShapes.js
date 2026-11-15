@@ -10,7 +10,7 @@ import { LOFT_FRONT } from './furnitureCatalog.js';
  *   kind：'round' 圓形地板／'rect' 方形地板
  */
 /** 🏕️ 中價位新帳篷開賣日（作者 11/12：先隱藏，下週再推出 → 到時候改成那天的日期，例如 '2026-11-19'；server/homes.js 也要一起改） */
-export const TENTS_LAUNCH = '2099-01-01';
+export const TENTS_LAUNCH = '2026-11-15'; // 🏕️ 作者 11/15：蝸牛殼屋、花園溫室、和風小屋開賣
 export const TENT_SHAPES = [
   { id: 'bell', icon: '⛺', name: t('鐘形帳'), price: 0, kind: 'round', R: 3.8, light: 3.0 },
   { id: 'aframe', icon: '🏕️', name: t('野營三角帳'), price: 15, kind: 'rect', W: 3.3, D: 3.4, light: 2.6, style: 'forest' },
@@ -27,8 +27,8 @@ export const TENT_SHAPES = [
   { id: 'cabin', icon: '🏡', name: t('雙層小木屋'), price: 500, kind: 'rect', W: 3.4, D: 3.4, light: 3.6, style: 'log', loft: true },
   // 🏔️ 高級小屋（12 月，作者 11/10：1,000～1,500 松果，先做 2 間）
   // 作者 11/12：雪屋要更可愛 → 北極熊雪屋（胖胖雪球、粉嫩色、冰柱、門口小雪人雪橇）；湖畔木屋太像現有木屋 → 改成船屋
-  { id: 'igloo', icon: '🐻‍❄️', name: t('北極熊雪屋'), price: 800, kind: 'round', R: 3.8, light: 2.4, style: 'classic', from: '2026-12-01' },
-  { id: 'houseboat', icon: '⛵', name: t('船屋'), price: 1500, kind: 'rect', W: 3.4, D: 3.4, light: 3.6, style: 'log', loft: true, from: '2026-12-01' }, // 作者 11/12：兩層（跟雙層小木屋一樣有樓梯、閣樓）
+  { id: 'igloo', icon: '🐻‍❄️', name: t('北極熊雪屋'), price: 800, kind: 'round', R: 3.8, light: 2.4, style: 'classic', from: '2026-11-15' },
+  { id: 'houseboat', icon: '⛵', name: t('船屋'), price: 1500, kind: 'rect', W: 3.4, D: 3.4, light: 3.6, style: 'log', loft: true, from: '2026-11-15' }, // 作者 11/12：兩層（跟雙層小木屋一樣有樓梯、閣樓）
 ];
 
 /** 🎄 這個造型現在有沒有在賣（from：台北日期開賣）；測試：網址加 ?xmas=1 提早看到 */

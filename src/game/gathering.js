@@ -1,5 +1,5 @@
 /**
- * 採集（前端、伺服器共用的資料）：迷霧森林 50 種＋湖邊石頭貝殼 24 種＋營火寶藏 8 種。
+ * 採集（前端、伺服器共用的資料）：迷霧森林 50 種＋湖邊石頭貝殼 24 種＋營火寶藏 16 種（11/14 加 8 種）。
  *
  * - 每個人的採集點各自分開：你採走了，別人那邊還在
  * - 採過的點幾小時後長回來，東西放進採集籃不會壞，採集籃不限格子
@@ -112,6 +112,15 @@ export const GATHER_ITEMS = [
   { id: 'rainbow_shell', type: 'shell', icon: '🫧', zh: '七彩蚌殼', rarity: 3, color: 0xd8e8ff, hint: '對著光看，會出現彩虹' },
   // ---- 🗓️ 每月限定（month：那個月才採得到；不算進全收集，收在圖鑑的「限定」區；隔年同一個月會再出現）----
   { id: 'film_shell', type: 'shell', icon: '🎞️', zh: '膠捲貝殼', rarity: 2, color: 0x4a4a52, month: 11, hint: '11 月限定：露營電影夜，湖邊撿得到' },
+  // ---- ✨ 11/14 營火寶藏 8 → 16 種（作者：寶藏種類多一點；只能往後加）----
+  { id: 'firefly_jar', type: 'treasure', icon: '🫙', zh: '螢火蟲小瓶', rarity: 2, color: 0xd8ff8a, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'old_compass', type: 'treasure', icon: '🧭', zh: '舊指南針', rarity: 2, color: 0xc8a050, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'star_map', type: 'treasure', icon: '🗺️', zh: '星座小地圖', rarity: 2, color: 0xbfd8ff, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'tiny_lantern', type: 'treasure', icon: '🏮', zh: '迷你提燈', rarity: 2, color: 0xff9a5a, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'bottle_letter', type: 'treasure', icon: '🍾', zh: '瓶中信', rarity: 2, color: 0x9fd8c8, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'music_box', type: 'treasure', icon: '🎶', zh: '迷你音樂盒', rarity: 3, color: 0xf0c8e0, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'gold_acorn', type: 'treasure', icon: '🌰', zh: '金色松果', rarity: 3, color: 0xffd24a, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  { id: 'snow_globe', type: 'treasure', icon: '❄️', zh: '雪花水晶球', rarity: 3, color: 0xe0f4ff, hint: '晚上 8～10 點，營火附近閃閃發光' },
 ];
 /** 🗓️ 每月限定的東西（不算進全收集） */
 export const isLimited = (x) => !!x?.month;

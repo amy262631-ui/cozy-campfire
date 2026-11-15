@@ -42,7 +42,7 @@ export const TENT_STYLES = new Set(['classic', 'forest', 'stripe', 'night', 'sak
 export const GIFTS = { postcard: 'share', foxlamp: 'ref1', rainbow: 'ref3', telescope: 'ref5', ember: 'pass' };
 export const GIFT_FURNITURE = new Set(FURNITURE_CATALOG.filter((f) => f.gift).map((f) => f.id));
 /** 🏕️ 中價位新帳篷開賣日（作者 11/12：先隱藏，下週推出時改成那天，跟 src/game/tentShapes.js 的 TENTS_LAUNCH 一樣） */
-const TENTS_LAUNCH = '2099-01-01';
+const TENTS_LAUNCH = '2026-11-15'; // 🏕️ 作者 11/15 開賣（跟 src/game/tentShapes.js 一樣）
 /** 帳篷造型：價格（鐘形帳買帳篷就有）、剛買下時換上的花色（跟 src/game/tentShapes.js 一致） */
 export const TENT_SHAPES = {
   bell: { price: 0 },
@@ -60,9 +60,9 @@ export const TENT_SHAPES = {
   // 🎫 月票小屋：要有月票才能買（pass＝需要的等級），買了永久保留
   stardome: { price: 300, style: 'log', pass: 1 }, // 🔭 玻璃星空圓頂屋（兩種月票）
   treehouse: { price: 500, style: 'log', pass: 2 }, // 🌳 私人樹屋（星空月票）
-  // 🎄 高級小屋（作者 11/12）：12/1 起在小舖賣（from＝台北日期），之後一直賣；用松果買、不用月票
-  igloo: { price: 800, style: 'classic', from: '2026-12-01' }, // 🐻‍❄️ 北極熊雪屋（作者 11/12：800，屋裡直接有冰塊燈、雪地毯、窗外飄雪）
-  houseboat: { price: 1500, style: 'log', from: '2026-12-01' }, // ⛵ 船屋（地中海配色）
+  // 🎄 高級小屋（作者 11/15：提早一起開賣）：11/15 起在小舖賣（from＝台北日期），之後一直賣；用松果買、不用月票
+  igloo: { price: 800, style: 'classic', from: '2026-11-15' }, // 🐻‍❄️ 北極熊雪屋（作者 11/12：800，屋裡直接有冰塊燈、雪地毯、窗外飄雪）
+  houseboat: { price: 1500, style: 'log', from: '2026-11-15' }, // ⛵ 船屋（地中海配色）
 };
 
 /** 帳篷的公開代號：不能把 vid（等同登入憑證）給別人看，所以給雜湊過的代號 */

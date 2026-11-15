@@ -624,7 +624,9 @@ const miniNow = () => {
     if (m.kind === 'hunt') {
       // 從候選地點隨機挑幾個藏金松果
       const pool = HUNT_SPOTS.map((p, i) => ({ ...p, i })).sort(() => Math.random() - 0.5);
-      miniRun.spots = pool.slice(0, HUNT_COUNT).map((p) => ({ x: p.x, z: p.z, by: null }));
+      // 作者 11/14：不要一開始就全部出來（5 顆 30 秒內就被找光）→ 一顆一顆冒出來：第一顆開始後 20～90 秒，找到之後再等 40～150 秒冒下一顆
+      miniRun.spots = pool.slice(0, HUNT_COUNT).map((p) => ({ x: p.x, z: p.z, by: null, showAt: null }));
+      miniRun.spots[0].showAt = Date.now() + (20 + Math.random() * 70) * 1000;
     }
   }
   return m;
@@ -636,7 +638,9 @@ const miniTop = () => miniRanked().slice(0, 5).map(([, r]) => ({ ...r }));
 const miniPublic = () => {
   const m = miniInfo();
   const same = m.active && miniNow() && miniRun.id === m.id;
-  return { ...m, top: same ? miniTop() : [], spots: same && m.kind === 'hunt' ? miniRun.spots.map((p) => ({ x: p.x, z: p.z, by: p.by })) : [] };
+  // 還沒冒出來的金松果不給位置（h＝藏著）
+  const now = Date.now();
+  return { ...m, top: same ? miniTop() : [], spots: same && m.kind === 'hunt' ? miniRun.spots.map((p) => (p.by || (p.showAt && p.showAt <= now) ? { x: p.x, z: p.z, by: p.by } : { h: 1 })) : [] };
 };
 /** 🌱 來了幾天（第一次來那天算 0；以前的老玩家沒記錄，當作很久了），新手功能慢慢打開用 */
 const walletAge = (w) => {
@@ -4356,9 +4360,18 @@ io.on('connection', (socket) => {
     const spot = miniRun.spots[i];
     if (!spot) return ack?.({ ok: false, reason: 'unknown' });
     if (spot.by) return ack?.({ ok: false, reason: 'taken', by: spot.by });
+    if (!spot.showAt || spot.showAt > Date.now()) return ack?.({ ok: false, reason: 'hidden' });
     if (!nearSpot(spot)) return ack?.({ ok: false, reason: 'far' });
     spot.by = player.name;
     award(HUNT_GAIN, 'hunt');
+    // 下一顆：等一下才冒出來（時間不夠就不冒了）
+    const nxt = miniRun.spots.find((p) => !p.by && !p.showAt);
+    if (nxt) {
+      const endAt = Date.now() + (m.endsIn ?? 0) * 1000;
+      const at = Date.now() + (40 + Math.random() * 110) * 1000;
+      if (at < endAt - 20000) nxt.showAt = at;
+      else if (endAt - Date.now() > 40000) nxt.showAt = Date.now() + 15000;
+    }
     const left = miniRun.spots.filter((p) => !p.by).length;
     io.emit('miniHunt', { i, by: player.name, left });
     ack?.({ ok: true, left });
@@ -4786,6 +4799,21 @@ setInterval(() => {
   io.emit('mini', { ...m, ended: miniRun.kind, winners });
   console.log(`[小活動] ${miniRun.kind} 結束`, winners.map((w) => w.name + (w.size ? ` ${w.size}cm` : w.time ? ` ${w.time}s` : '')).join('、'));
 }, 5000);
+
+// ✨ 找金松果：時間到就讓下一顆冒出來，通知大家
+setInterval(() => {
+  const m = miniInfo();
+  if (!m.active || m.kind !== 'hunt' || !miniNow()) return;
+  const now = Date.now();
+  let fresh = false;
+  for (const p of miniRun.spots) {
+    if (p.showAt && p.showAt <= now && !p.shown) {
+      p.shown = true;
+      fresh = true;
+    }
+  }
+  if (fresh) io.emit('miniHuntShow', miniPublic());
+}, 2000);
 
 // 營火時間開始／結束時通知所有人
 let eventActive = eventInfo().active;

@@ -79,6 +79,21 @@ function dishSpriteMat(icon) {
   dishSprites.set(icon, m);
   return m;
 }
+/** 一般帳篷放大幾倍：讓牆到最外圈格子的距離維持 6×6 時的樣子（圓形帳看四個角） */
+function fitScale(sh, g) {
+  const half = (g * CELL) / 2;
+  const half0 = (GRID_BASE * CELL) / 2;
+  if (sh.loft) {
+    // 雙層：左牆離格子 1 格多一點（跟 6×6 一樣）、樓梯內側剛好在最右排格子邊上（6×6 時也重疊 0.1）
+    const m = sh.W - half0;
+    const over = half0 - CABIN.stairX0;
+    const k = Math.max((half + sh.D - half0) / sh.D, (2 * half + m - over) / (sh.W + CABIN.stairX0));
+    return { k, x: half - over - CABIN.stairX0 * k };
+  }
+  if (sh.kind === 'rect') return { k: Math.max((half + sh.W - half0) / sh.W, (half + sh.D - half0) / sh.D), x: 0 };
+  const R = sh.R;
+  return { k: (half * Math.SQRT2 + R - half0 * Math.SQRT2) / R, x: 0 };
+}
 export function createHomeRoom() {
   const group = new THREE.Group();
   group.name = 'home';
@@ -110,6 +125,7 @@ export function createHomeRoom() {
   let shapeKey = null;
   let grid = GRID_BASE;
   let scale = 1; // 擴建後整頂帳篷放大的倍數
+  let offX = 0; // 雙層小屋整間往右挪多少（右邊留樓梯）
   let lightBase = 9;
   const bounds = [tentBounds('bell'), { type: 'rect', minX: -0.6, maxX: 0.6, minZ: 2.6, maxZ: R + 0.2 }];
   const entrance = { to: 'forest_main', x: 0, z: R - 0.05, r: 0.5, label: t('回到營火') };
@@ -121,7 +137,14 @@ export function createHomeRoom() {
     if (key === shapeKey) return;
     shapeKey = key;
     grid = g;
-    const k = (scale = g / GRID_BASE);
+    // 擴建後放大的倍數：原本整頂帳篷照格數等比例放大，邊邊的空地也跟著變大（20×20 時離牆快 3 公尺，作者 11/14：格子沒到最外面）
+    // → 一般帳篷改成「格子＋固定的邊」：牆跟最外圈格子的距離永遠跟 6×6 時一樣
+    //   雙層的（小木屋、船屋、樹屋）樓梯靠右牆、二樓前緣都跟著比例算，先維持原本的放大方式
+    //   雙層的（小木屋、船屋）：右邊要留樓梯 → 整間往右挪 offX，左牆、前後牆跟格子的距離一樣維持 6×6 的樣子（樹屋有樹幹，先照舊）
+    const fit = sh.id === 'treehouse' ? { k: g / GRID_BASE, x: 0 } : fitScale(sh, g);
+    const k = (scale = fit.k);
+    offX = fit.x;
+    shell.position.x = offX;
     for (const c of shell.children) c.traverse((o) => o.geometry?.dispose());
     shell.clear();
     // 奇數格時正中間那格要能擺東西，就不放中柱
@@ -151,14 +174,18 @@ export function createHomeRoom() {
     const b = tentBounds(sh.id);
     bounds[0] =
       b.type === 'rect'
-        ? { type: 'rect', minX: -sh.W * k + 0.3, maxX: sh.W * k - 0.3, minZ: -sh.D * k + 0.3, maxZ: sh.D * k + 0.2 }
+        ? { type: 'rect', minX: -sh.W * k + 0.3 + offX, maxX: sh.W * k - 0.3 + offX, minZ: -sh.D * k + 0.3, maxZ: sh.D * k + 0.2 }
         : { type: 'circle', r: sh.R * k - 0.35 };
     // 出口放在門外一點：要真的走出門才算，不會被擠一下就跑出去
     bounds[1].minZ = door - 1.0;
     bounds[1].maxZ = door + 0.55;
     entrance.z = door + 0.15;
     entrance.r = 0.4;
+    entrance.x = offX;
+    bounds[1].minX = offX - 0.6;
+    bounds[1].maxX = offX + 0.6;
     spawn.z = door - 1.0; // 從門口往裡面一步，免得一進來就踩到出口
+    spawn.x = offX;
     light.position.y = sh.light * k;
     bulb.position.y = sh.light * k;
     light.distance = 9 * k;
@@ -320,29 +347,29 @@ export function createHomeRoom() {
     const D = loftShape.D;
     const sx0 = C.stairX0 + 0.12;
     const sx1 = C.stairX1 - 0.12;
-    let ux = pos.x / k;
+    let ux = (pos.x - offX) / k;
     let uz = pos.z / k;
     const inStairX = ux > C.stairX0 - 0.1 && ux < C.stairX1 + 0.1;
     if (level === 0) {
       baseResolve(pos, r);
-      ux = pos.x / k;
+      ux = (pos.x - offX) / k;
       uz = pos.z / k;
       if (ux > C.stairX0 - 0.15 && uz > C.loftFront && uz < C.stairBottom) {
         if (uz > C.stairBottom - 0.45) level = 1; // 從最下面一階走上去
-        else pos.x = (C.stairX0 - 0.15) * k; // 樓梯側面：擋住
+        else pos.x = (C.stairX0 - 0.15) * k + offX; // 樓梯側面：擋住
       }
     }
     if (level === 1) {
       ux = clamp(ux, sx0, sx1);
       if (uz > C.stairBottom) level = 0;
       else if (uz < C.loftFront) level = 2;
-      pos.x = ux * k;
+      pos.x = ux * k + offX;
     }
     if (level === 2) {
       ux = clamp(ux, -W + 0.3, W - 0.3);
       uz = clamp(uz, -D + 0.3, inStairX ? C.loftFront + 0.2 : C.loftFront - 0.1);
       if (inStairX && uz > C.loftFront) level = 1;
-      pos.x = ux * k;
+      pos.x = ux * k + offX;
       pos.z = uz * k;
       // 二樓的家具擋路
       for (const c of colliders2) {
@@ -369,7 +396,7 @@ export function createHomeRoom() {
     if (!loftShape) return 0;
     const k = scale;
     const C = CABIN;
-    const ux = x / k;
+    const ux = (x - offX) / k;
     const uz = z / k;
     if (ux > C.stairX0 - 0.1 && uz > C.loftFront && uz < C.stairBottom && (prevY > 0.05 || uz > C.stairBottom - 0.5)) {
       return clamp((C.stairBottom - uz) / (C.stairBottom - C.loftFront), 0, 1) * C.loftY * k;
@@ -653,7 +680,7 @@ export function createHomeRoom() {
     },
     /** 二樓中間（布置二樓時鏡頭看這裡） */
     get loftCenter() {
-      return loftShape ? { x: 0, y: CABIN.loftY * scale, z: ((-loftShape.D + CABIN.loftFront) / 2) * scale } : null;
+      return loftShape ? { x: offX, y: CABIN.loftY * scale, z: ((-loftShape.D + CABIN.loftFront) / 2) * scale } : null;
     },
     /**
      * ✋ 拖曳布置（作者 11/14：像線上遊戲一樣，點住家具直接拖）
