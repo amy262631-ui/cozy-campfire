@@ -2930,6 +2930,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     }
     refreshOnline();
   }
+  net.on('homeBack', (res) => inHome() && applySnapshot(res)); // ⛺ 重連後回到帳篷：換回帳篷裡的人
   const localWishes = [];
   const applyWishes = (list) => {
     forest.shrine.setWishes(list);

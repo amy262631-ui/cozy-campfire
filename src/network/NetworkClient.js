@@ -79,6 +79,13 @@ export class NetworkClient {
           socket.disconnect();
           return;
         }
+        // ⛺ 斷線重連（例如伺服器更新重開）時人還在帳篷裡：伺服器的 join 不認得 'home'，會先把人放回營火
+        //    → 馬上再進一次帳篷，不然布置、煮菜都會被當成「不在家」（作者 11/15：更新後布置都放不上去）
+        const d = this._joinData;
+        if (d.rejoin && d.room === 'home') socket.emit('switchRoom', { room: 'home', hid: d.hid, x: d.x, z: d.z, ry: d.ry }, (r) => {
+            this._last = null;
+            if (r?.ok) this.#emit('homeBack', r); // 帳篷裡的人（不是營火的人）
+          });
         this.id = res.id;
         this.ch = res.ch ?? 0;
         // 之後斷線重連，回到同一個分流（滿了的話伺服器會自動換一個）
