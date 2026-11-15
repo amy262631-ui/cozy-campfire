@@ -101,11 +101,12 @@ function buildTasks(touch) {
       guide(s) {
         if (s.roomId === 'lake_dock') {
           if (s.state === 'fish') return { step: 2, text: t('浮標沉下去就拉！'), sub: k(t('浮標整個沉下去時按 F'), t('浮標整個沉下去時點「🎣」')), target: null };
-          return { step: 1, text: t('走到碼頭盡頭'), sub: k(t('按 F 開始釣魚'), t('點右下「🎣 釣魚」')), target: s.dockEnd };
+          const dd = dist(s.pos, s.dockEnd, 0.6);
+          return { step: 1, text: t('走到碼頭盡頭'), sub: k(t('按 F 開始釣魚'), t('點右下「🎣 釣魚」')), target: s.dockEnd, walk: dd > 1.2 ? 'dock' : null };
         }
         if (!s.inForest) return kidBack(s);
         const d = dist(s.pos, s.lakeGate, 0.5);
-        return { step: 0, text: t('去湖邊釣一條魚'), sub: t('走進發光的路口（{n} 公尺）', { n: Math.ceil(d) }), target: s.lakeGate };
+        return { step: 0, text: t('去湖邊釣一條魚'), sub: t('走進發光的路口（{n} 公尺）', { n: Math.ceil(d) }), target: s.lakeGate, walk: 'lake' }; // 👉 帶我去（11/15：釣魚這步掉比較多）
       },
     },
     k_shop: {

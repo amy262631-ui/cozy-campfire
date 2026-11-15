@@ -3827,7 +3827,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   };
 
   /** 在小舖買東西（布置面板的「擴建」也走這裡） */
-  const buyItem = async (id, c = 0) => {
+  const buyItem = async (id, c = 0, quiet = false) => {
     const res = await homeReq('buy', c ? { id, c } : { id });
     if (res?.ok) {
       if (!net.online) setCoins(res.pc, res.delta ?? 0);
@@ -3850,7 +3850,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
         const y = YARD_BY_ID[id.slice(5)];
         hud.toast(t('{icon} 「{name}」擺到你家門口了！去帳篷營地看看', { icon: y?.icon ?? '', name: t(y?.zh ?? '') }), 4500);
       }
-      else hud.toast(t('{icon} 買了{name}，回帳篷按「🛠️ 布置」擺出來', { icon: FURNITURE_BY_ID[id]?.icon ?? '', name: FURNITURE_BY_ID[id]?.name ?? '' }));
+      else if (!quiet) hud.toast(t('{icon} 買了{name}，回帳篷按「🛠️ 布置」擺出來', { icon: FURNITURE_BY_ID[id]?.icon ?? '', name: FURNITURE_BY_ID[id]?.name ?? '' }));
       return true;
     }
     const why = { poor: t('松果不夠喔 🌰'), owned: t('你已經有帳篷了'), noTent: t('先買帳篷，才能放家具 ⛺'), tooMany: t('這個已經買很多了'), tooFast: t('慢慢來 🙂'), maxed: t('已經是最大的帳篷了 🎉'), needPass: t('🎫 這是月票限定，有月票才能買'), off: t('🎫 月票商品還沒開放喔'), soon: t('🎄 12/1 才開賣喔') };
@@ -4753,12 +4753,13 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const has = cell && stackAt(homeRoom.home?.items, cell.x, cell.z).length;
     buildPanel.select(cell && !has ? { x: cell.x, z: cell.z } : null);
     furnPop.querySelector('[data-fop="fish"]').hidden = !(has && CATALOG_BY_ID[stackAt(homeRoom.home.items, cell.x, cell.z)[layer]?.i]?.fish);
+    furnPop.querySelector('[data-fop="buy"]').hidden = !(has && canRebuy(CATALOG_BY_ID[stackAt(homeRoom.home.items, cell.x, cell.z)[layer]?.i]));
   }
   // 🔘 選到家具：頭上浮一排小按鈕（轉向、移動、收起），跟著家具走
   const furnPop = document.createElement('div');
   furnPop.className = 'furn-pop';
   furnPop.hidden = true;
-  furnPop.innerHTML = `<button type="button" data-fop="rotate">🔄<small>${t('轉向')}</small></button><button type="button" data-fop="move">✋<small>${t('移動')}</small></button><button type="button" data-fop="remove">📦<small>${t('收起')}</small></button><button type="button" data-fop="fish" hidden>🐠<small>${t('放魚')}</small></button><button type="button" data-fop="close" class="fp-x">✕</button>`;
+  furnPop.innerHTML = `<button type="button" data-fop="rotate">🔄<small>${t('轉向')}</small></button><button type="button" data-fop="move">✋<small>${t('移動')}</small></button><button type="button" data-fop="remove">📦<small>${t('收起')}</small></button><button type="button" data-fop="fish" hidden>🐠<small>${t('放魚')}</small></button><button type="button" data-fop="buy" hidden>🛒<small>${t('再買')}</small></button><button type="button" data-fop="close" class="fp-x">✕</button>`;
   document.getElementById('ui').appendChild(furnPop);
   furnPop.addEventListener('pointerdown', (e) => e.stopPropagation());
   furnPop.addEventListener('click', async (e) => {
@@ -4767,6 +4768,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const op = b.dataset.fop;
     if (op === 'close') return selectFurn(null);
     if (op === 'move') return hud.toast(t('✋ 按住家具直接拖到想放的地方'), 2500);
+    if (op === 'buy') return rebuyFurn(stackAt(homeRoom.home?.items, furnSel.x, furnSel.z)[furnSel.layer]);
     if (op === 'fish') {
       // 🐠 魚缸：下面換成選魚
       buildPanel.cell = { x: furnSel.x, z: furnSel.z };
@@ -4779,6 +4781,20 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     if (op === 'remove') selectFurn(furnSel && stackAt(homeRoom.home?.items, furnSel.x, furnSel.z).length ? furnSel : null, 0);
     else buildPanel.render();
   });
+  // 🛒 選到的家具直接「再買一個」（作者 11/15：不用跑去小舖）；同樣顏色，買了放進背包
+  const canRebuy = (f) => !!f && !f.gift && !f.craft && !f.box && (f.price ?? 0) > 0;
+  async function rebuyFurn(it) {
+    const f = CATALOG_BY_ID[it?.i];
+    if (!canRebuy(f)) return;
+    const c = it.c ?? 0;
+    const ok = await confirmBuy.ask({ icon: f.icon, name: t(f.zh), price: f.price, desc: t('同樣的顏色，買了會放進背包'), coins: pinecones });
+    if (!ok) return;
+    buildPanel.busy = true;
+    const res = await buyItem(f.id, c, true);
+    buildPanel.busy = false;
+    buildPanel.render();
+    if (res) hud.toast(t('🛒 又買了一個 {icon} {name}，在背包裡（點一下就擺出來）', { icon: f.icon, name: t(f.zh) }), 3500);
+  }
   const _popV = new THREE.Vector3();
   function placeFurnPop() {
     const top = buildPanel.active && inHome() && furnSel && !homeRoom.dragging ? homeRoom.selTop : null;
@@ -5237,17 +5253,37 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   };
   function stepAutoWalk(dt) {
     if (!autoWalk) return;
-    if (input.userMoving || roomMgr.current.id !== 'forest_main' || actions.state !== 'free') return stopAutoWalk();
+    const rid = roomMgr.current.id;
+    // 🎣 去湖邊：從營火走進湖邊的路口，換到湖畔碼頭後接著走到碼頭盡頭（作者 11/15：第 5 步釣魚也要帶我去）
+    if (autoWalk.kind === 'lake' && rid === 'lake_dock') Object.assign(autoWalk, { kind: 'dock', best: Infinity, stuckT: 0, tries: 0 });
+    const okRoom = autoWalk.kind === 'dock' ? rid === 'lake_dock' : rid === 'forest_main';
+    if (input.userMoving || !okRoom || actions.state !== 'free') return stopAutoWalk();
     const p = player.position;
-    const tg = autoWalk.kind === 'seat' ? ritualState.freeSeat() : { x: 0, z: 0 };
-    const stopAt = autoWalk.kind === 'seat' ? 0.75 : 2.4;
-    const dx = tg.x - p.x;
-    const dz = tg.z - p.z;
+    const tg = autoWalk.kind === 'seat' ? ritualState.freeSeat() : autoWalk.kind === 'lake' ? ritualState.lakeGate : autoWalk.kind === 'dock' ? ritualState.dockEnd : { x: 0, z: 0 };
+    const stopAt = autoWalk.kind === 'seat' ? 0.75 : autoWalk.kind === 'lake' ? 0 : autoWalk.kind === 'dock' ? 0.8 : 2.4;
+    let dx = tg.x - p.x;
+    let dz = tg.z - p.z;
     const d = Math.hypot(dx, dz);
+    // 🔥 去湖邊會經過營火：直線穿過營火和圓木那圈就繞著外圈走（不然會卡在圓木上）
+    if (autoWalk.kind === 'lake') {
+      const R = 2.7;
+      const along = Math.max(0, Math.min(1, -(p.x * dx + p.z * dz) / (d * d || 1)));
+      const cx = p.x + dx * along;
+      const cz = p.z + dz * along;
+      if (Math.hypot(p.x, p.z) > R - 0.3 && Math.hypot(cx, cz) < R) {
+        const ap = Math.atan2(p.x, p.z);
+        let diff = Math.atan2(tg.x, tg.z) - ap;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        const wa = ap + Math.sign(diff) * Math.min(Math.abs(diff), 0.8);
+        dx = Math.sin(wa) * (R + 0.6) - p.x;
+        dz = Math.cos(wa) * (R + 0.6) - p.z;
+      }
+    }
     if (d <= stopAt) {
       const kind = autoWalk.kind;
       stopAutoWalk();
       if (kind === 'seat') actions.handleAction('interact'); // 圓木：走到了就幫他坐下
+      if (kind === 'dock') actions.handleAction('roast'); // 碼頭盡頭：走到了就幫他甩竿
       return;
     }
     // 卡住（被石頭、木頭擋到）：往旁邊繞一下；繞 4 次還過不去就交給玩家
@@ -5261,8 +5297,9 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       autoWalk.sideT = 0.7;
       if (++autoWalk.tries > 4) return stopAutoWalk(mobile ? t('走不過去，用左下角搖桿走走看 🕹️') : t('走不過去，用 WASD 走走看 🕹️'));
     }
-    let wx = dx / d;
-    let wz = dz / d;
+    const dd = Math.hypot(dx, dz) || 1;
+    let wx = dx / dd;
+    let wz = dz / dd;
     if (autoWalk.sideT > 0) {
       autoWalk.sideT -= dt;
       const s2 = autoWalk.side;

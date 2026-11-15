@@ -1418,7 +1418,10 @@ app.get(['/stats', '/api/stats'], (req, res) => {
 <div class="wrap"><table><tr><th>日期</th>${KID_COLS.map(([, n]) => `<th>${n}</th>`).join('')}<th>👤 新帳號</th></tr>${kidRows}</table></div>`;
   // 🎫 營火月票的收入：這個月（台北時間）付款成功的訂單
   const month = dayKey().slice(0, 7);
-  const paid = Object.entries(orders).filter(([, o]) => o.status === 'paid' && !o.sim && dayKey(new Date(o.paidAt)).startsWith(month));
+  const paidAll = Object.entries(orders).filter(([, o]) => o.status === 'paid' && !o.sim && dayKey(new Date(o.paidAt)).startsWith(month));
+  // 🏷️ 自己人（作者 11/15：作者測試、家人買的）不算收入；作者裝置買的自動標，其他的在 /admin 標
+  const paid = paidAll.filter(([, o]) => !o.self);
+  const selfPaid = paidAll.filter(([, o]) => o.self);
   const revenue = paid.reduce((a, [, o]) => a + o.amt, 0);
   const sumOf = (f) => paid.filter(([, o]) => f(o)).reduce((a, [, o]) => a + o.amt, 0);
   const planOf = (o) => PASS_PLANS[o.plan]?.months ?? 1;
@@ -1426,12 +1429,12 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   // 🌏 國外玩家想買：這個月按了幾次購買（按了「我有台灣的卡，繼續」幾次）
   const fx = Object.entries(stats).filter(([k]) => k.startsWith(month)).reduce((a, [, d]) => [a[0] + (d.foreign ?? 0), a[1] + (d.foreignGo ?? 0)], [0, 0]);
   const split = `🔥 小營火 1 個月 ${nt((o) => o.kind !== 'sponsor' && o.tier !== 'star' && !o.upgrade && planOf(o) === 1)}・3 個月 ${nt((o) => o.kind !== 'sponsor' && o.tier !== 'star' && !o.upgrade && planOf(o) === 3)}・✨ 星空 1 個月 ${nt((o) => o.kind !== 'sponsor' && o.tier === 'star' && !o.upgrade && planOf(o) === 1)}・3 個月 ${nt((o) => o.kind !== 'sponsor' && o.tier === 'star' && !o.upgrade && planOf(o) === 3)}・⬆️ 升級 ${nt((o) => o.upgrade)}・🎁 支持營地 ${nt((o) => o.kind === 'sponsor')}・🌏 國外玩家想買 ${fx[0]} 次（繼續付款 ${fx[1]} 次）`;
-  const passTable = `<h3>🎫 月票＋☕ 贊助（${month}）</h3><p class="me">${ECPAY.prod ? '綠界正式模式' : '⚠️ 綠界測試模式（不會真的收錢）'}・這個月 ${paid.length} 筆、收入 <b>NT$ ${revenue.toLocaleString()}</b>（${split}）（個人網路銷售服務類大約每月 4 萬元以下，可以先不用辦稅籍，以國稅局最新規定為準）</p>${
-    paid.length
-      ? `<div class="wrap"><table><tr><th>付款時間</th><th>名字</th><th>項目</th><th>金額</th><th>付款方式</th><th>訂單編號</th></tr>${paid
+  const passTable = `<h3>🎫 月票＋☕ 贊助（${month}）</h3><p class="me">${ECPAY.prod ? '綠界正式模式' : '⚠️ 綠界測試模式（不會真的收錢）'}・這個月玩家買了 ${paid.length} 筆、收入 <b>NT$ ${revenue.toLocaleString()}</b>（${split}）${selfPaid.length ? `・🏷️ 自己人 ${selfPaid.length} 筆 NT$ ${selfPaid.reduce((a, [, o]) => a + o.amt, 0).toLocaleString()}（不算）` : ''}（個人網路銷售服務類大約每月 4 萬元以下，可以先不用辦稅籍，以國稅局最新規定為準）</p>${
+    paidAll.length
+      ? `<div class="wrap"><table><tr><th>付款時間</th><th>名字</th><th>項目</th><th>金額</th><th>付款方式</th><th>訂單編號</th></tr>${paidAll
           .sort((a, b) => b[1].paidAt - a[1].paidAt)
           .slice(0, 50)
-          .map(([no, o]) => `<tr><td>${new Date(o.paidAt).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td>${(() => { const now = nameOfVid(o.vid); const was = String(o.name ?? ''); return `${escH(now)}${was && was !== now ? `<br><small style="opacity:.65">付款時叫：${escH(was)}</small>` : ''}<br><small style="opacity:.55">${escH(homeId(o.vid))}</small>`; })()}</td><td>${o.kind === 'sponsor' ? '🎁 支持營地' : o.upgrade ? '⬆️ 升級星空' : `${o.tier === 'star' ? '✨ 星空月票' : '🔥 小營火月票'} ${planOf(o)} 個月`}</td><td>${o.amt}</td><td>${o.pay ?? ''}</td><td>${no}</td></tr>`)
+          .map(([no, o]) => `<tr><td>${new Date(o.paidAt).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td>${(() => { const now = nameOfVid(o.vid); const was = String(o.name ?? ''); return `${escH(now)}${was && was !== now ? `<br><small style="opacity:.65">付款時叫：${escH(was)}</small>` : ''}<br><small style="opacity:.55">${escH(homeId(o.vid))}</small>`; })()}</td><td>${o.kind === 'sponsor' ? '🎁 支持營地' : o.upgrade ? '⬆️ 升級星空' : `${o.tier === 'star' ? '✨ 星空月票' : '🔥 小營火月票'} ${planOf(o)} 個月`}</td><td>${o.amt}${o.self ? '<br><small>🏷️ 自己人</small>' : ''}</td><td>${o.pay ?? ''}</td><td>${no}</td></tr>`)
           .join('')}</table></div>`
       : ''
   }`;
@@ -1619,6 +1622,17 @@ app.get('/api/lookup', (req, res) => {
   if (!vid) return res.json({ ok: false, reason: '找不到：請用玩家編號（遊戲「🔥 約朋友」或「👫 好友」視窗裡）或帳號名稱' });
   res.json({ ok: true, ...playerCard(vid) });
 });
+/** 🏷️ 標成自己人／取消（作者 11/15）：作者測試、家人買的訂單不算進 /stats 收入 */
+app.post('/api/selfOrder', express.json(), (req, res) => {
+  if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
+  const no = String(req.body?.no ?? '').trim();
+  const o = orders[no];
+  if (!o) return res.json({ ok: false, reason: '找不到這個訂單編號' });
+  if (o.self) delete o.self;
+  else o.self = 1;
+  saveJson('orders.json', orders);
+  res.json({ ok: true, self: !!o.self, name: nameOfVid(o.vid), amt: o.amt });
+});
 app.post('/api/refund', express.json(), (req, res) => {
   if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
   res.json(refundOrder(String(req.body?.no ?? '').trim()));
@@ -1692,6 +1706,7 @@ app.get('/admin', (req, res) => {
 <select id="gout">${outfitOpts}</select><select id="gfurn" hidden>${furnOpts}</select><input id="gn" type="number" min="1" max="1000" value="10" hidden>
 <input id="gnote" placeholder="備註（例：同網路沒算到的邀請補發）" size="30"> <button id="give">送出</button> <span id="gmsg"></span></div>
 <div class="box"><b>💸 退款後收回</b><br><span class="hint">先在綠界後台退款，再在這裡輸入那筆的訂單編號（/stats 月票表格最右邊那欄）。會扣回月票天數、先送的松果（已花掉就扣到 0）；支持營地會收回假髮。</span><br><input id="rno" placeholder="訂單編號" size="28"> <button id="refund">收回</button> <span id="rmsg"></span></div>
+<div class="box"><b>🏷️ 標成自己人（不算收入）</b><br><span class="hint">自己測試、家人朋友幫忙買的訂單，標了以後 /stats 收入不算它（東西不會收回）。再按一次就取消。用你自己裝置（打過 staff 的）買的會自動標。</span><br><input id="sno" placeholder="訂單編號" size="28"> <button id="selfo">標成自己人／取消</button> <span id="smsg"></span></div>
 <h3>🟢 現在在線（${onRows.length} 人）</h3><p class="hint">打開這頁那一刻在線上的人（重新整理才會更新；營地居民不算）。點名字可以查他、發補償。</p>
 <div class="wrap"><table><tr><th>名字／玩家編號</th><th>在哪裡</th><th>分流</th><th>第一次來</th><th>營位</th><th>月票</th></tr>${onRows.map((r) => r.row).join('') || '<tr><td colspan="6">現在沒有人在線上</td></tr>'}</table></div>
 <h3>✉️ 玩家來信（${support.filter((x) => !x.re).length} 則還沒回）</h3><p class="hint">玩家在遊戲裡按「✉️ 聯絡作者」寄來的，會自動附上玩家編號。點名字可以查他、發補償；回覆後玩家在線上會馬上收到，不在線上下次進來會看到。</p>
@@ -1742,6 +1757,13 @@ app.get('/admin', (req, res) => {
       $('give').disabled = false;
       $('gmsg').innerHTML = r.ok ? '<span class="ok">✅ 送出 ' + esc(r.what) + '（玩家在線上會馬上收到通知）</span>' : '<span class="err">❌ ' + esc(r.reason) + '</span>';
       if (r.ok) show(Object.assign({ ok: true }, r.card));
+    });
+  };
+  $('selfo').onclick = function () {
+    var no = $('sno').value.trim();
+    if (!no) return;
+    fetch('/api/selfOrder' + K, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ no: no }) }).then(function (r) { return r.json(); }).then(function (r) {
+      $('smsg').innerHTML = r.ok ? '<span class="ok">✅ ' + esc(r.name) + ' NT$' + esc(r.amt) + '：' + (r.self ? '標成自己人了（不算收入）' : '取消了，算回收入') + '</span>' : '<span class="err">❌ ' + esc(r.reason) + '</span>';
     });
   };
   $('refund').onclick = function () {
@@ -3411,7 +3433,7 @@ io.on('connection', (socket) => {
     const box = SPONSOR_BOX[dayKey().slice(0, 7)];
     const small = box?.small.includes(data.small) ? data.small : box?.small[0];
     const pick = data.pick === 'big' ? 'big' : 'wig';
-    orders[no] = { vid: player.vid, name: player.name, amt, at: now, status: 'new', kind: 'sponsor', wig, ...(box ? { small, pick } : {}), age: { at: now, acct: acctOfVid(player.vid) } };
+    orders[no] = { vid: player.vid, name: player.name, amt, at: now, status: 'new', kind: 'sponsor', wig, ...(box ? { small, pick } : {}), age: { at: now, acct: acctOfVid(player.vid) }, ...(socket.data.staff ? { self: 1 } : {}) };
     saveJson('orders.json', orders);
     const proto = socket.handshake.headers['x-forwarded-proto']?.split(',')[0] || 'http';
     ack?.({ ok: true, no, url: `${proto}://${socket.handshake.headers.host}/api/pay/go/${no}` });
@@ -3470,7 +3492,7 @@ io.on('connection', (socket) => {
     if (upgrade && cur?.id !== 'ember') return ack?.({ ok: false, reason: 'noUpgrade' });
     if (!upgrade && cur?.id === 'star' && tier.id === 'ember') return ack?.({ ok: false, reason: 'hasStar' }); // 星空期間不用再買小營火
     const amt = upgrade ? upgradePrice(wal, now) : plan.price;
-    orders[no] = { vid: player.vid, name: player.name, kind: 'pass', tier: tier.id, plan: upgrade ? null : plan.id, upgrade, amt, at: now, status: 'new', age: { at: now, acct: acctOfVid(player.vid) } };
+    orders[no] = { vid: player.vid, name: player.name, kind: 'pass', tier: tier.id, plan: upgrade ? null : plan.id, upgrade, amt, at: now, status: 'new', age: { at: now, acct: acctOfVid(player.vid) }, ...(socket.data.staff ? { self: 1 } : {}) };
     // 太舊、沒付款的訂單清掉
     for (const [k, o] of Object.entries(orders)) if (o.status === 'new' && now - o.at > 7 * 86400000) delete orders[k];
     saveJson('orders.json', orders);
