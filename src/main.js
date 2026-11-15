@@ -4736,7 +4736,17 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   buildPanel.onFull = () => hud.toast(t('帳篷裡沒有空格了，收起一些或擴建吧'));
   buildPanel.onPlaced = (cell) => (cell ? selectFurn(cell, furnSel?.layer ?? 0) : selectFurn(null));
   /** 選到的格子、第幾層（畫面上的外框、小按鈕跟著它） */
+  // 🎥 布置時鏡頭跟著點的那一格走（作者 11/15：大帳篷布置邊邊的房間，畫面不會移過去）
+  function buildFocus(cell) {
+    if (!cell || !buildPanel.active) return;
+    const p = homeRoom.cellWorld(cell.x, cell.z);
+    const cur = cameraRig.focusTarget ?? player.position;
+    if (Math.hypot(p.x - cur.x, p.z - cur.z) < 1.5) return; // 附近的格子不用動，免得畫面一直晃
+    cameraRig.focusTarget = new THREE.Vector3(p.x, p.y, p.z);
+    cameraRig.focusMix = 1;
+  }
   function selectFurn(cell, layer = 0) {
+    buildFocus(cell);
     furnSel = cell ? { x: cell.x, z: cell.z, layer } : null;
     homeRoom.select(furnSel, layer);
     // 選到家具：下面的背包留著（可以一直擺），動作用家具頭上的小按鈕；點到空格：下面列出可以放這格的東西

@@ -290,7 +290,7 @@ export class BuildPanel {
       const bag = this.#bagGrid(this.#avail(home), (f, c) => `data-new="${f.id}" ${c ? `data-c="${c}"` : ''}`);
       this.body.innerHTML =
         (total
-          ? `<div class="build-tip">${t('點住家具拖到別格；點一下家具可以轉向、收起')}</div>` +
+          ? `<div class="build-tip">${t('點住家具拖到別格；點一下家具可以轉向、收起；點遠處的格子，畫面會移過去')}</div>` +
             (bag ? `<div class="build-tip build-sub">${t('🎒 背包（點一下就擺出來）')}</div>${bag}` : '') +
             ((home.items ?? []).length ? `<button type="button" class="build-act build-clear" data-clearall="1">${hasLoft(home) ? t('📦 這一樓全部收起') : t('📦 全部收起')}</button>` : '')
           : `<div class="build-tip">${t('背包是空的，按上面的「🛒 買家具」挑幾件吧')}</div>`) +

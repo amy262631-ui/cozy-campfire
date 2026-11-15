@@ -755,6 +755,10 @@ export function createHomeRoom() {
       selector.material.color.set(0xffd28a);
     },
     /** 🆕 從背包放新家具：離中間最近的空格（布置二樓就找二樓） */
+    /** 某一格的中心（世界座標，布置時鏡頭移過去用） */
+    cellWorld(x, z) {
+      return cellPos(x, z);
+    },
     freeCell() {
       const up = buildFloor === 2 && !!loftShape;
       const rows = up ? loftRows(grid) : grid;
