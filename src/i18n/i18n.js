@@ -1,4 +1,7 @@
 import { DICT } from './dict.js';
+import { RU } from './dict_ru.js';
+
+DICT.ru = RU; // 🇷🇺 俄文（作者 11/15：有俄羅斯玩家）；還沒翻到的句子先顯示英文
 
 /**
  * 多國語言：用「繁體中文原文」當作翻譯的索引。
@@ -11,6 +14,7 @@ export const LANGS = [
   { id: 'en', label: 'English' },
   { id: 'ja', label: '日本語' },
   { id: 'ko', label: '한국어' },
+  { id: 'ru', label: 'Русский' },
 ];
 
 const STORE_KEY = 'cozy-campfire-lang';
@@ -28,6 +32,7 @@ function detect() {
   const nav = (navigator.language || '').toLowerCase();
   if (nav.startsWith('ja')) return 'ja';
   if (nav.startsWith('ko')) return 'ko';
+  if (/^(ru|uk|be|kk)/.test(nav)) return 'ru'; // 俄文（烏克蘭、白俄、哈薩克的人多半也看得懂）
   if (nav.startsWith('zh')) return 'zh-Hant';
   if (nav.startsWith('en')) return 'en';
   // 11/09：中英日韓以外的國家（泰文、法文、印尼文⋯）先給英文，比看不懂的中文好
@@ -42,7 +47,7 @@ const missing = new Set();
 export function t(zh, vars) {
   let s = zh;
   if (lang !== 'zh-Hant') {
-    const tr = DICT[lang]?.[zh];
+    const tr = DICT[lang]?.[zh] ?? (lang === 'ru' ? DICT.en[zh] : null);
     if (tr != null) s = tr;
     else if (import.meta.env?.DEV && !missing.has(zh)) {
       missing.add(zh);
