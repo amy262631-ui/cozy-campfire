@@ -721,6 +721,7 @@ function buildCabin(sh, mats, add, outside) {
   const len = Math.hypot(stairBottom - loftFront, loftY);
   const hand = add(new THREE.BoxGeometry(0.06, 0.06, len), mats.wood, stairX0, loftY / 2 + 0.8, (stairBottom + loftFront) / 2);
   hand.rotation.x = Math.atan2(loftY, stairBottom - loftFront);
+  hand.userData.loftRail = true; // 布置一樓時藏起來
   // 後牆的圓窗（二樓可以自己擺家具）
   const round = add(new THREE.CircleGeometry(0.42, 16), mats.windowIn ?? winMat, 0, loftY + 1.3, -D + 0.03);
   round.rotation.y = 0;

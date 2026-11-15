@@ -7456,3 +7456,13 @@ body.touch .bg-panel { bottom: 250px; }
 .shop-browse button { flex: none; padding: 6px 12px; border-radius: 999px; border: none; background: #f0a040; color: #2a1a08; font: inherit; font-weight: 700; cursor: pointer; }
 .browse-lock { opacity: 0.85; cursor: default; }
 .browse-lock:disabled { filter: none; }
+/* 📱 手機直放：布置標題自己一行，樓層／買家具／完成排第二行，字不要折成兩行（作者 11/15） */
+@media (max-width: 520px) {
+  .build-head { flex-wrap: wrap; gap: 6px; }
+  .build-head #build-title { flex: 1 1 100%; }
+  .build-head button { white-space: nowrap; }
+}
+/* 📜 聊天紀錄往上滑（作者 11/15：顯示的則數一樣，但可以往上拉回看）：紀錄區固定大約 6 則的高度，往上滑看更早的（最近 80 則） */
+.chat-log { max-height: 190px; overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; scrollbar-width: none; }
+.chat-log::-webkit-scrollbar { display: none; }
+.chat-log:empty { pointer-events: none; }

@@ -227,6 +227,29 @@ export function createHomeRoom() {
   function showGrid() {
     gridLines.visible = building && buildFloor === 1;
     if (loftGrid) loftGrid.visible = building && buildFloor === 2;
+    hideUpper();
+  }
+  /**
+   * 🏡 雙層小木屋／船屋：布置一樓時，二樓的東西（閣樓地板、欄杆、扶手、屋頂、二樓家具）先藏起來，
+   * 鏡頭移到邊邊才不會被擋住（作者 11/15：平板布置一樓被二樓的樑擋住）
+   */
+  function hideUpper() {
+    const hide = building && buildFloor === 1 && !!loftShape;
+    const top = CABIN.loftY * scale - 0.25;
+    if (hide) shell.updateMatrixWorld(true);
+    shell.traverse((o) => {
+      if (!o.isMesh || o === floor) return;
+      if (hide) {
+        const up = o.userData.loftRail || new THREE.Box3().setFromObject(o).min.y > top;
+        if (up && o.visible) (o.visible = false), (o.userData.upHidden = true);
+      } else if (o.userData.upHidden) (o.visible = true), (o.userData.upHidden = false);
+    });
+    for (const m of furnitureGroup.children) {
+      const c = m.userData.cell;
+      if (!c) continue;
+      if (hide && isLoftCell(c.z)) (m.visible = false), (m.userData.upHidden = true);
+      else if (m.userData.upHidden) (m.visible = true), (m.userData.upHidden = false);
+    }
   }
   let hasPole = true;
   /** 🏡 小木屋才有二樓：0＝一樓、1＝樓梯上、2＝二樓 */
@@ -581,6 +604,7 @@ export function createHomeRoom() {
         else r.actions.stop();
       }
     }
+    hideUpper(); // 布置一樓時，二樓家具重畫後也要藏
   }
 
   /** ✋ 正在拖的家具（影子） */

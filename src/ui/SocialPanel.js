@@ -150,6 +150,7 @@ export class SocialPanel {
     this.el.menu.classList.remove('show');
     this.el.form.classList.add('show');
     document.body.classList.add('chatting'); // 手機打字時先把左上的資訊收起來，免得重疊
+    requestAnimationFrame(() => (this.el.log.scrollTop = this.el.log.scrollHeight)); // 📜 聊天紀錄：打開時捲到最新，往上滑看更早的
     setTimeout(() => this.el.input.focus(), 30);
     // 鍵盤是慢慢滑上來的，多量幾次
     for (const ms of [150, 400, 800]) setTimeout(() => this.fitKeyboard(), ms);
@@ -166,13 +167,16 @@ export class SocialPanel {
     return this.el.form.classList.contains('show');
   }
 
-  /** 加一則聊天紀錄（會慢慢淡掉；最多保留 6 則） */
+  /** 加一則聊天紀錄（會慢慢淡掉；畫面上大約 6 則的高度，往上滑看最近 80 則） */
   addLog(name, text, { system = false } = {}) {
+    const log = this.el.log;
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30; // 正在往上看舊的，就不要硬拉回最新
     const line = document.createElement('div');
     line.className = `chat-line${system ? ' system' : ''}`;
     line.innerHTML = system ? esc(text) : `<b>${esc(name)}</b>${esc(text)}`;
     this.el.log.appendChild(line);
-    while (this.el.log.children.length > 6) this.el.log.firstChild.remove();
+    while (this.el.log.children.length > 80) this.el.log.firstChild.remove();
+    if (atBottom) log.scrollTop = log.scrollHeight;
     setTimeout(() => line.classList.add('old'), 15000);
     return line;
   }
@@ -183,7 +187,10 @@ export class SocialPanel {
     const tr = document.createElement('div');
     tr.className = 'chat-tr';
     tr.textContent = `🌐 ${text}`;
+    const log = this.el.log;
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
     line.appendChild(tr);
+    if (atBottom) log.scrollTop = log.scrollHeight;
   }
 
   clearLog() {
