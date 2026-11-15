@@ -315,7 +315,7 @@ export class ShopPanel {
           ).join('')}
         </div>
         ${action}
-        ${sh.pass && !has ? `<div class="shop-hint">${sh.id === 'stardome' ? t('🔭 屋頂是玻璃，屋裡永遠是星空；骨架顏色可以換，也能擴建') : t('🌳 大樹上的小木屋，有二樓、繩梯、陽台，屋裡有樹幹穿過')}</div><div class="shop-hint">${t('🎫 月票限定：買了永久是你的，月票到期也能繼續住')}</div>` : ''}
+        ${sh.pass && !has ? `<div class="shop-hint">${sh.id === 'stardome' ? t('🔭 屋頂是玻璃，屋裡永遠是星空；骨架顏色可以換，也能擴建') : sh.id === 'houseboat' ? t('⛵ 地中海配色的兩層船屋，有樓梯和閣樓') : t('🌳 大樹上的小木屋，有二樓、繩梯、陽台，屋裡有樹幹穿過')}</div><div class="shop-hint">${t('🎫 月票限定：買了永久是你的，月票到期也能繼續住')}</div>` : ''}
         ${pick === 'stardome' && has ? `<div class="shop-sub">${t('🔭 骨架顏色（免費換）')}</div>
         <div class="shop-styles">${FRAME_COLORS.map((f) => `<button type="button" class="build-style${f.id === (home.frame ?? 'gold') ? ' on' : ''}" data-frame="${f.id}"><span>${f.icon}</span>${t(f.zh)}</button>`).join('')}</div>` : ''}
         ${has ? `<div class="shop-sub">${t('🎨 花色（免費換）')}</div>

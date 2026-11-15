@@ -62,7 +62,7 @@ export const TENT_SHAPES = {
   treehouse: { price: 500, style: 'log', pass: 2 }, // 🌳 私人樹屋（星空月票）
   // 🎄 高級小屋（作者 11/15：提早一起開賣）：11/15 起在小舖賣（from＝台北日期），之後一直賣；用松果買、不用月票
   igloo: { price: 800, style: 'classic', from: '2026-11-15' }, // 🐻‍❄️ 北極熊雪屋（作者 11/12：800，屋裡直接有冰塊燈、雪地毯、窗外飄雪）
-  houseboat: { price: 1500, style: 'log', from: '2026-11-15' }, // ⛵ 船屋（地中海配色）
+  houseboat: { price: 1500, style: 'log', from: '2026-11-15', pass: 1 }, // 作者 11/15：改成有月票才能買 // ⛵ 船屋（地中海配色）
 };
 
 /** 帳篷的公開代號：不能把 vid（等同登入憑證）給別人看，所以給雜湊過的代號 */
