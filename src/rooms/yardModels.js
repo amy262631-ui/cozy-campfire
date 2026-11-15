@@ -109,17 +109,19 @@ export function buildYard(id) {
         cyl(0.1, 1.6, wood, x, 0.8, 0, 8);
         cyl(0.13, 0.1, dark, x, 1.62, 0, 8);
       }
-      const bed = add(new THREE.CylinderGeometry(0.45, 0.45, 2.2, 14, 1, true, Math.PI * 0.6, Math.PI * 0.8), mat(0xf4ead8, { side: THREE.DoubleSide }), 0, 1.15, 0);
+      const bed = add(new THREE.CylinderGeometry(0.45, 0.45, 2.2, 14, 1, true, Math.PI * 1.1, Math.PI * 0.8), mat(0xf4ead8, { side: THREE.DoubleSide }), 0, 1.15, 0);
       bed.rotation.z = Math.PI / 2;
       for (let i = 0; i < 4; i++) {
-        const s = add(new THREE.CylinderGeometry(0.451, 0.451, 0.14, 14, 1, true, Math.PI * 0.6, Math.PI * 0.8), mat(0xc9483c, { side: THREE.DoubleSide }), -0.75 + i * 0.5, 1.15, 0);
-        s.rotation.z = Math.PI / 2;
+        for (const r of [0.44, 0.46]) { // 裡面、外面都看得到條紋
+          const s = add(new THREE.CylinderGeometry(r, r, 0.14, 14, 1, true, Math.PI * 1.1, Math.PI * 0.8), mat(0xc9483c, { side: THREE.DoubleSide }), -0.75 + i * 0.5, 1.15, 0);
+          s.rotation.z = Math.PI / 2;
+        }
       }
       for (const s of [-1, 1]) {
         const rope = box(0.3, 0.02, 0.02, dark, s * 1.15, 1.35, 0);
         rope.rotation.z = s * -0.6;
       }
-      add(new THREE.IcosahedronGeometry(0.16, 1), mat(0xffe08a), -0.6, 0.95, 0).scale.set(1.4, 0.6, 1); // 小枕頭
+      add(new THREE.IcosahedronGeometry(0.16, 1), mat(0xffe08a), -0.6, 0.84, 0).scale.set(1.4, 0.6, 1); // 小枕頭
       break;
     }
     case 'canoe': {
