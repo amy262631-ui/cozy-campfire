@@ -16,6 +16,7 @@
   "dependencies": {
     "compression": "^1.8.2",
     "express": "^4.22.3",
+    "geoip-country": "^5.0.202611140331",
     "qrcode-generator": "1.4.4",
     "socket.io": "^4.8.4",
     "socket.io-client": "^4.8.4",

@@ -758,6 +758,7 @@ async function init() {
     hud.toast(t('👫 {name} 透過你的連結來玩了！+10 松果（已經邀請 {n} 位）', { name, n: refs }), 6000);
     giftPanel.refresh();
   });
+  net.on('invitedGift', ({ name, n }) => hud.toast(t('🎁 你是 {name} 邀請來的！送你 {n} 顆松果，一起玩吧 🔥', { name, n }), 6000));
   net.on('friendJoined', ({ name }) => hud.toast(t('👫 {name} 照著你的邀請來到營火旁了！', { name }), 5000));
 
   // ---------- 松果與心願大樹 ----------
@@ -2774,7 +2775,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     // 🌱 新手小任務 6 步做完：送 20 松果，再跳歡迎卡
     onIntroDone: async () => {
       if (net.online) await net.request('kidDone', {});
-      setTimeout(() => inviteNudge('intro', t('🎉 你學會了！邀朋友一起來烤火，每位新朋友 +10 🌰')), 45000); // 👫 11/14
+      setTimeout(() => inviteNudge('intro', t('🎉 你學會了！邀朋友一起來烤火，新朋友來了你和他都 +10 🌰')), 45000); // 👫 11/14
       setTimeout(() => showInappTip(), 25000); // 歡迎卡、取名提醒之後再說
       setTimeout(showSeeYou, 8000);
       setTimeout(() => !welcome.visible && welcome.maybeShow(), 9000);
@@ -4028,7 +4029,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     aloneSec = alone ? aloneSec + 5 : 0;
     if (aloneSec >= 90) {
       aloneSec = -1e9; // 這次進來就不再算
-      inviteNudge('alone', t('🔥 一個人烤火有點安靜，邀朋友來一起坐？每位新朋友 +10 🌰'));
+      inviteNudge('alone', t('🔥 一個人烤火有點安靜，邀朋友來一起坐？新朋友來了你和他都 +10 🌰'));
     }
   }, 5000);
 

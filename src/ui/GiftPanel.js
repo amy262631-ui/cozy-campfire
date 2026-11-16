@@ -126,7 +126,7 @@ export class GiftPanel {
       card(
         'fc-new',
         t('🌟 邀請新朋友'),
-        t('只算第一次來營地的人'),
+        t('只算第一次來營地的人・朋友也拿 +{g} 🌰', { g: info.gain }),
         flow(step('📤', t('傳連結')), step('🆕', t('新朋友點進來')), step('⏱️', t('玩 {m} 分鐘', { m: info.stay })), step('🎁', t('+{g} 🌰＋每週造型', { g: info.gain }))) +
           netNote +
           `<div class="flow-tiers"><span>${t('累積')}</span><b>1 ${t('位')} 🏮</b><b>3 ${t('位')} 🌈</b><b>5 ${t('位')} 🔭</b></div>`,
@@ -192,6 +192,6 @@ export class GiftPanel {
         this.onPreview?.(kind, id, el.dataset.how);
       });
     }
-    this.note.innerHTML = `${esc(t('已經有 {n} 位朋友透過你的連結來玩。每位朋友第一次來、待滿 {m} 分鐘，你就多 {g} 顆松果。只傳圖片的話，請朋友掃圖上的 QR Code 才算喔', { m: info.stay, g: info.gain, n: info.refs }))}<div class="gift-id">${esc(t('🆔 你的玩家編號：{id}（找作者補發東西時，請給這組編號）', { id: info.code }))}</div>`;
+    this.note.innerHTML = `${esc(t('已經有 {n} 位朋友透過你的連結來玩。每位朋友第一次來、待滿 {m} 分鐘，你和朋友都多 {g} 顆松果。只傳圖片的話，請朋友掃圖上的 QR Code 才算喔', { m: info.stay, g: info.gain, n: info.refs }))}<div class="gift-id">${esc(t('🆔 你的玩家編號：{id}（找作者補發東西時，請給這組編號）', { id: info.code }))}</div>`;
   }
 }

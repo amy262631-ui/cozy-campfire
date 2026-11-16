@@ -4,6 +4,11 @@
  */
 export const DICT = {
   en: {
+    "只算第一次來營地的人・朋友也拿 +{g} 🌰": "Only counts first-time visitors · your friend gets +{g} 🌰 too",
+    "🎁 你是 {name} 邀請來的！送你 {n} 顆松果，一起玩吧 🔥": "🎁 {name} invited you! Here are {n} pinecones — let's play together 🔥",
+    "🎉 你學會了！邀朋友一起來烤火，新朋友來了你和他都 +10 🌰": "🎉 You've got it! Invite friends to the fire — when a new friend comes, you both get +10 🌰",
+    "🔥 一個人烤火有點安靜，邀朋友來一起坐？新朋友來了你和他都 +10 🌰": "🔥 It's quiet by the fire alone… invite a friend? When a new friend comes, you both get +10 🌰",
+    "已經有 {n} 位朋友透過你的連結來玩。每位朋友第一次來、待滿 {m} 分鐘，你和朋友都多 {g} 顆松果。只傳圖片的話，請朋友掃圖上的 QR Code 才算喔": "{n} friends have come through your link. For each friend who visits for the first time and stays {m} min, you and your friend both get {g} pinecones. If you only send the picture, ask friends to scan its QR code",
     "再買": "Buy again",
     "同樣的顏色，買了會放進背包": "Same color — it goes into your bag",
     "🛒 又買了一個 {icon} {name}，在背包裡（點一下就擺出來）": "🛒 Bought another {icon} {name} — it's in your bag (tap to place)",
@@ -2979,6 +2984,11 @@ export const DICT = {
     "確定購買": "Buy",
   },
   ja: {
+    "只算第一次來營地的人・朋友也拿 +{g} 🌰": "初めて来た人だけ・友だちも +{g} 🌰",
+    "🎁 你是 {name} 邀請來的！送你 {n} 顆松果，一起玩吧 🔥": "🎁 {name}に招待されたんだね！松ぼっくり {n} 個プレゼント、一緒に遊ぼう 🔥",
+    "🎉 你學會了！邀朋友一起來烤火，新朋友來了你和他都 +10 🌰": "🎉 覚えたね！友だちを焚き火に誘おう。新しい友だちが来たら、ふたりとも +10 🌰",
+    "🔥 一個人烤火有點安靜，邀朋友來一起坐？新朋友來了你和他都 +10 🌰": "🔥 ひとりの焚き火は少し静かだね。友だちを誘う？新しい友だちが来たら、ふたりとも +10 🌰",
+    "已經有 {n} 位朋友透過你的連結來玩。每位朋友第一次來、待滿 {m} 分鐘，你和朋友都多 {g} 顆松果。只傳圖片的話，請朋友掃圖上的 QR Code 才算喔": "あなたのリンクから {n} 人の友だちが来てくれたよ。初めて来て {m} 分いてくれた友だち1人ごとに、あなたも友だちも松ぼっくり {g} 個。画像だけ送るときは、QRコードを読み取ってもらってね",
     "再買": "もう1つ",
     "同樣的顏色，買了會放進背包": "同じ色で、バッグに入るよ",
     "🛒 又買了一個 {icon} {name}，在背包裡（點一下就擺出來）": "🛒 {icon} {name}をもう1つ買ったよ。バッグにあるよ（タップで置ける）",
@@ -5954,6 +5964,11 @@ export const DICT = {
     "確定購買": "購入する",
   },
   ko: {
+    "只算第一次來營地的人・朋友也拿 +{g} 🌰": "처음 온 사람만 · 친구도 +{g} 🌰",
+    "🎁 你是 {name} 邀請來的！送你 {n} 顆松果，一起玩吧 🔥": "🎁 {name}의 초대로 왔구나! 솔방울 {n}개 선물, 같이 놀자 🔥",
+    "🎉 你學會了！邀朋友一起來烤火，新朋友來了你和他都 +10 🌰": "🎉 다 배웠어! 친구를 모닥불에 초대해. 새 친구가 오면 둘 다 +10 🌰",
+    "🔥 一個人烤火有點安靜，邀朋友來一起坐？新朋友來了你和他都 +10 🌰": "🔥 혼자 불 쬐니 좀 조용하지? 친구를 부를래? 새 친구가 오면 둘 다 +10 🌰",
+    "已經有 {n} 位朋友透過你的連結來玩。每位朋友第一次來、待滿 {m} 分鐘，你和朋友都多 {g} 顆松果。只傳圖片的話，請朋友掃圖上的 QR Code 才算喔": "네 링크로 친구 {n}명이 왔어. 처음 와서 {m}분 머문 친구마다 너와 친구 모두 솔방울 {g}개. 사진만 보낼 땐 친구가 QR 코드를 찍어야 해",
     "再買": "하나 더",
     "同樣的顏色，買了會放進背包": "같은 색으로, 가방에 들어가",
     "🛒 又買了一個 {icon} {name}，在背包裡（點一下就擺出來）": "🛒 {icon} {name} 하나 더 샀어. 가방에 있어 (탭하면 놓여)",

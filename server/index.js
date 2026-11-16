@@ -21,6 +21,7 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
+import geoip from 'geoip-country';
 import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM, rollFish, rollSize, DEX_TOTAL, SHINY_CHANCE, SHINY_DEX_GAIN, SHINY_BONUS, SHINY_TOTAL, canShiny } from '../src/fishing/fishData.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
 import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateOutfit, sponsorOutfits, XMAS_OUTFITS, XMAS_STREAK } from '../src/game/outfits.js';
@@ -726,9 +727,16 @@ function logInvite(kind, ref, friend, fn, r, net = false) {
   saveJson('invites.json', invites);
 }
 /** 朋友待滿時間：幫邀請人記一筆 */
-function creditReferral(refVid, friendName) {
+function creditReferral(refVid, friendName, friendVid = null) {
   const rw = players[refVid];
   if (!rw) return;
+  // 🎁 被邀請的朋友也拿一樣多（作者 11/16：兩個人都有獎勵，邀朋友比較有吸引力）
+  if (friendVid && players[friendVid] && !players[friendVid].refGot) {
+    players[friendVid].refGot = refVid;
+    giveTo(friendVid, REF_GAIN, 'friend');
+    const refName = nameOfVid(refVid);
+    for (const s of io.sockets.sockets.values()) if (s.data.vid === friendVid) s.emit('invitedGift', { name: refName, n: REF_GAIN });
+  }
   rw.refs = (rw.refs ?? 0) + 1;
   giveTo(refVid, REF_GAIN, 'friend');
   for (const [n, id] of REF_TIERS) if (rw.refs >= n) grantGift(refVid, id);
@@ -792,9 +800,9 @@ function finishStay(st) {
     }
   }
   if (kind === 'invite') {
-    creditReferral(ref, name);
+    creditReferral(ref, name, friend);
     suggestFriend(friend, ref);
-    return logInvite(kind, ref, friend, name, `✅ 成功：邀請人 +${REF_GAIN} 松果、每週造型`, !!st.net);
+    return logInvite(kind, ref, friend, name, `✅ 成功：邀請人 +${REF_GAIN} 松果、每週造型；朋友也 +${REF_GAIN} 松果`, !!st.net);
   }
   if (kind === 'share') {
     const got = grantOutfit(ref, dailyOutfit(dayKey()).id, 'daily');
@@ -1303,8 +1311,44 @@ app.get('/api/channels', (_req, res) => {
 });
 // 統計頁：/stats（有設環境變數 STATS_KEY 的話，要用 /stats?key=密碼 才看得到）
 /** 🟢 現在在線的人（/stats、/admin 打開那一刻即時算，不另外存）；link(hid, name) 決定名字怎麼顯示 */
+/** 🌏 IP → 國家（只在記憶體裡、不存 IP；VPN 會顯示 VPN 的國家）（作者 11/16） */
+const REGION_ZH = new Intl.DisplayNames(['zh-TW'], { type: 'region' });
+function countryOf(ip) {
+  try {
+    const cc = geoip.lookup(String(ip || '').replace(/^::ffff:/, ''))?.country;
+    return cc || '';
+  } catch {
+    return '';
+  }
+}
+function flagOf(cc) {
+  if (!/^[A-Z]{2}$/.test(cc)) return '';
+  let name = cc;
+  try {
+    name = REGION_ZH.of(cc) ?? cc;
+  } catch {
+    /* 舊版 Node */
+  }
+  return `<span title="${cc}">${String.fromCodePoint(...[...cc].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))} ${escH(name)}</span>`;
+}
 function onlineList(link) {
   const onRows = [];
+  const ccOf = new Map();
+  for (const so of io.sockets.sockets.values()) if (so.data.vid && so.data.cc) ccOf.set(so.data.vid, so.data.cc);
+  // 🔗 同網路（作者 11/16：想知道說不認識的玩家是不是同一個網路）：同一個網路有 2 個以上不同玩家，標 A、B、C⋯
+  const netVids = new Map();
+  for (const so of io.sockets.sockets.values()) {
+    if (!so.data.vid || !so.data.netKey) continue;
+    if (!netVids.has(so.data.netKey)) netVids.set(so.data.netKey, new Set());
+    netVids.get(so.data.netKey).add(so.data.vid);
+  }
+  const netTag = new Map();
+  let netN = 0;
+  for (const vids of netVids.values()) {
+    if (vids.size < 2) continue;
+    const tag = String.fromCharCode(65 + (netN++ % 26));
+    for (const v of vids) netTag.set(v, tag);
+  }
   const placeOf = (rid) => {
     const z = campZoneOf(rid);
     const base = baseRoom(rid);
@@ -1314,7 +1358,7 @@ function onlineList(link) {
     const w = players[p.vid];
     const h = homes[p.vid];
     const pt = passTier(w);
-    onRows.push({ ch, row: `<tr><td>${link(homeId(p.vid), p.name)}<br><small>${escH(homeId(p.vid))}</small></td><td>${escH(where)}</td><td>${ch}</td><td>${w?.fd ? `${Number(w.fd.slice(5, 7))}/${Number(w.fd.slice(8, 10))}<br><small>（第 ${Math.max(0, Math.round((Date.parse(`${dayKey()}T00:00:00Z`) - Date.parse(`${w.fd}T00:00:00Z`)) / 86400000)) + 1} 天）</small>` : w ? '更早' : '-'}</td><td>${h?.tent ? (h.plot ? plotLabel(h.plot) : '有') : '-'}</td><td>${pt ? `${pt.icon} ${pt.zh}` : ''}${isAuthorVid(p.vid) ? ' ⭐ 作者' : ''}</td></tr>` });
+    onRows.push({ ch, row: `<tr><td>${link(homeId(p.vid), p.name)}${ccOf.get(p.vid) ? ` <small>${flagOf(ccOf.get(p.vid))}</small>` : ''}${netTag.get(p.vid) ? ` <small style="color:#ffb347">🔗 同網路 ${netTag.get(p.vid)}</small>` : ''}<br><small>${escH(homeId(p.vid))}</small></td><td>${escH(where)}</td><td>${ch}</td><td>${w?.fd ? `${Number(w.fd.slice(5, 7))}/${Number(w.fd.slice(8, 10))}<br><small>（第 ${Math.max(0, Math.round((Date.parse(`${dayKey()}T00:00:00Z`) - Date.parse(`${w.fd}T00:00:00Z`)) / 86400000)) + 1} 天）</small>` : w ? '更早' : '-'}</td><td>${h?.tent ? (h.plot ? plotLabel(h.plot) : '有') : '-'}</td><td>${pt ? `${pt.icon} ${pt.zh}` : ''}${isAuthorVid(p.vid) ? ' ⭐ 作者' : ''}</td></tr>` });
   };
   for (const c of channels.values()) for (const [rid, r] of c.rooms) for (const pl of r.players.values()) addOn(pl, placeOf(rid), c.ch);
   for (const [owner, r] of homeRooms) for (const pl of r.players.values()) addOn(pl, owner === pl.vid ? '🏠 自己的帳篷' : `🏠 ${String(homes[owner]?.name ?? '別人')}的帳篷`, pl.ch ?? '-');
@@ -2441,6 +2485,8 @@ io.on('connection', (socket) => {
       }
     }
     const ip = String(socket.handshake.headers['x-forwarded-for'] ?? socket.handshake.address ?? '').split(',')[0].trim();
+    socket.data.cc = countryOf(ip); // 🌏 後台「現在在線」名字旁邊的國旗（只記國家）
+    socket.data.netKey = ip ? crypto.createHash('sha256').update(ip).digest('hex').slice(0, 12) : ''; // 🔗 同網路比對用（雜湊，不留原本的 IP）
     // 朋友透過連結進來（?with=）：
     // ① 第一次來、待滿 3 分鐘 → 邀請人拿松果和每週造型
     // ② 待滿 1 分鐘（新、舊玩家都算）→ 分享人拿今天的每日造型
@@ -3464,13 +3510,14 @@ io.on('connection', (socket) => {
     ack?.({ ok: true, home: publicHome(h), pass: passView(wal) });
   });
   // 🌏 國外玩家按了購買（只記次數，給作者判斷要不要申請國外卡）
-  let lastForeign = 0;
+  // 🌏 國外玩家想買：跳提示算一次、按「繼續付款」另外算（11/16 修：原本兩個共用 1 分鐘的限制，「繼續付款」永遠算不到）
+  const lastForeign = { try: 0, go: 0 };
   socket.on('foreignTry', (data, ack) => {
     const now = Date.now();
-    if (now - lastForeign > 60000) {
-      lastForeign = now;
-      bump('foreign');
-      if (data?.go) bump('foreignGo');
+    const k = data?.go ? 'go' : 'try';
+    if (now - lastForeign[k] > 60000) {
+      lastForeign[k] = now;
+      bump(data?.go ? 'foreignGo' : 'foreign');
     }
     ack?.({ ok: true });
   });
