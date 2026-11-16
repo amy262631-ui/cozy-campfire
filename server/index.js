@@ -4252,16 +4252,29 @@ io.on('connection', (socket) => {
     if (!player || roomId !== 'home' || !homeOwner) return ack?.({ ok: false });
     const h = homes[homeOwner];
     if (!h?.tent) return ack?.({ ok: false });
+    if (banOf(player.vid, 'mute')) return ack?.({ ok: false, reason: 'muted' });
     const text = String(data.text ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 60);
     if (!text) return ack?.({ ok: false, reason: 'empty' });
     const now = Date.now();
     if (now - lastHomeNote < 15000) return ack?.({ ok: false, reason: 'tooFast' });
     lastHomeNote = now;
     h.notes ??= [];
-    h.notes.push({ n: player.name, t: text, at: now });
+    h.notes.push({ n: player.name, v: player.vid ? homeId(player.vid) : '', t: text, at: now });
     h.notes = h.notes.slice(-30);
     saveJson('homes.json', homes);
     io.to(rkey).emit('homeUpdate', { owner: homeId(homeOwner), home: publicHome(h) });
+    ack?.({ ok: true });
+  });
+  // 🗑️ 主人刪掉自己帳篷留言本的一則（作者 11/16：有人在作者的留言本亂寫）
+  socket.on('homeNoteDel', (data = {}, ack) => {
+    const h = player?.vid && homes[player.vid];
+    if (!h?.notes) return ack?.({ ok: false });
+    const at = Number(data.at);
+    const before = h.notes.length;
+    h.notes = h.notes.filter((x) => x.at !== at);
+    if (h.notes.length === before) return ack?.({ ok: false });
+    saveJson('homes.json', homes);
+    io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) });
     ack?.({ ok: true });
   });
 
@@ -4285,13 +4298,14 @@ io.on('connection', (socket) => {
     const owner = vidOfHid(String(data.hid ?? ''));
     const h = owner && homes[owner];
     if (!h?.tent || !hasYard(h, 'mailbox') || owner === player.vid) return ack?.({ ok: false });
+    if (banOf(player.vid, 'mute')) return ack?.({ ok: false, reason: 'muted' });
     const text = String(data.text ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 60);
     if (!text) return ack?.({ ok: false, reason: 'empty' });
     const now = Date.now();
     if (now - lastHomeNote < 15000) return ack?.({ ok: false, reason: 'tooFast' });
     lastHomeNote = now;
     h.notes ??= [];
-    h.notes.push({ n: player.name, t: text, at: now });
+    h.notes.push({ n: player.name, v: player.vid ? homeId(player.vid) : '', t: text, at: now });
     h.notes = h.notes.slice(-30);
     saveJson('homes.json', homes);
     ack?.({ ok: true });

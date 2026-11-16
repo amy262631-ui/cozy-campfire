@@ -5,13 +5,14 @@ import { addCloseX } from './CloseX.js';
  * 帳篷裡的「按讚」「留言本」：拜訪別人的帳篷時可以按讚、留一句話；主人看得到大家的留言。
  *   onLike()      → Promise<{ liked, likes } | null>
  *   onNote(text)  → Promise<string | null>（錯誤訊息）
+ *   onDelNote(at) → Promise<boolean>（主人刪掉一則留言）
  */
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 export class GuestPanel {
-  constructor({ onLike, onNote, onLeave, root = document.getElementById('ui') }) {
+  constructor({ onLike, onNote, onDelNote, onLeave, root = document.getElementById('ui') }) {
     this.root = root;
-    Object.assign(this, { onLike, onNote, onLeave });
+    Object.assign(this, { onLike, onNote, onDelNote, onLeave });
     this.home = null;
     this.mine = false;
     this.liked = false;
@@ -47,6 +48,13 @@ export class GuestPanel {
     this.msg = $('#guest-msg');
     for (const el of [this.tools, this.panel]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.input.addEventListener('keydown', (e) => e.stopPropagation()); // 打字時不要走路
+    // 🗑️ 主人刪留言（作者 11/16）
+    this.list.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-gdel]');
+      if (!b || !this.mine) return;
+      if (!confirm(t('刪掉這則留言？'))) return;
+      await this.onDelNote?.(Number(b.dataset.gdel));
+    });
     this.likeBtn.addEventListener('click', async () => {
       if (this.mine || this.busy) return;
       this.busy = true;
@@ -123,7 +131,7 @@ export class GuestPanel {
     this.list.innerHTML = notes.length
       ? [...notes]
           .reverse()
-          .map((n) => `<div class="guest-note"><b>${esc(n.n)}</b><span>${esc(n.t)}</span></div>`)
+          .map((n) => `<div class="guest-note"><b>${esc(n.n)}${this.mine && n.v ? ` <small class="guest-id">${esc(n.v)}</small>` : ''}</b><span>${esc(n.t)}</span>${this.mine ? `<button type="button" class="guest-del" data-gdel="${n.at}" title="${t('刪掉這則留言？')}">🗑️</button>` : ''}</div>`)
           .join('')
       : `<div class="guest-empty">${this.mine ? t('還沒有人留言，開放參觀後旅人就能來留言') : t('還沒有人留言，當第一個吧')}</div>`;
   }

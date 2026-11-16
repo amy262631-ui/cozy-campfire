@@ -7471,3 +7471,10 @@ body.touch .bg-panel { bottom: 250px; }
 .box-big { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 6px 0 10px; }
 .box-big img { width: 150px; height: 150px; border-radius: 14px; object-fit: cover; box-shadow: 0 0 18px rgba(255, 210, 120, 0.35); }
 .box-big small { font-size: 13px; font-weight: 700; }
+
+/* 🗑️ 主人刪留言本的留言；留言人的玩家編號（主人才看得到，後台查人用） */
+.guest-note { position: relative; }
+.guest-note .guest-id { font-weight: 400; font-size: 11px; opacity: 0.55; margin-left: 4px; }
+.guest-note .guest-del { position: absolute; top: 4px; right: 4px; background: none; border: 0; cursor: pointer; font-size: 14px; opacity: 0.6; padding: 2px 4px; }
+.guest-note .guest-del:hover { opacity: 1; }
+.guest-note { padding-right: 28px; }

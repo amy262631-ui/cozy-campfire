@@ -867,7 +867,7 @@ async function init() {
   const outfitName = (id) => (OUTFIT_BY_ID[id] ? `${OUTFIT_BY_ID[id].icon} ${t(OUTFIT_BY_ID[id].zh)}` : '');
   /** 怎麼拿到：長的說明（滑鼠移上去）、短的（卡片上） */
   const HOW = {
-    daily: [t('每日造型：那天有朋友點你的連結進來玩 1 分鐘就拿到（大約一個月輪一次，錯過會再回來）'), t('那天朋友點你的連結來玩')],
+    daily: [t('每日造型：完成當天的每日任務就拿到；那天有朋友點你的連結來玩 1 分鐘也能拿（大約一個月輪一次，錯過會再回來）'), t('完成每日任務')],
     weekly: [t('每週限定：朋友真的透過你的連結來玩才拿得到'), t('朋友透過連結來玩')],
     date: [t('營火之約限定：朋友在早上或晚上 9:30 營火時間透過你的連結進來，兩個人都拿到'), t('9:30 營火時間約朋友')],
     eco: [t('垃圾圖鑑全部收集完就拿到'), t('垃圾圖鑑收集完')],
@@ -3651,7 +3651,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
         return null;
       }
       if (!res) return t('還沒連上伺服器，等一下再試');
-      return res.reason === 'tooFast' ? t('慢慢來，15 秒後再留言 🙂') : t('沒留成，再試一次吧');
+      return res.reason === 'tooFast' ? t('慢慢來，15 秒後再留言 🙂') : res.reason === 'muted' ? t('🔇 你暫時不能說話') : t('沒留成，再試一次吧');
+    },
+    onDelNote: async (at) => {
+      const res = await net.request('homeNoteDel', { at });
+      if (res?.ok) hud.toast(t('🗑️ 刪掉了'));
+      return !!res?.ok;
     },
   });
 
