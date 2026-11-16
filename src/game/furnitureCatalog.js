@@ -26,6 +26,8 @@ export const FURNITURE_CATS = [
   { id: 'kitchen', icon: '🍳', zh: '廚房' }, // 11/14 作者：多一區廚房類
   { id: 'deco', icon: '🍰', zh: '小物' },
   { id: 'fish', icon: '🐟', zh: '魚缸' },
+  { id: 'spirit', icon: '✨', zh: '小精靈' }, // 11/16 作者：精靈家具
+  { id: 'xmas', icon: '🎄', zh: '聖誕' }, // 11/16 作者：聖誕家具自己一類（聖誕期間才在小舖出現）；cat2＝也放在原本那一類（椅子在「坐臥」也找得到）
   { id: 'wall', icon: '🧱', zh: '隔間' },
 ];
 
@@ -53,6 +55,8 @@ export const PASS_COLORS = [
 export const ALL_COLORS = [...FURNITURE_COLORS, ...PASS_COLORS];
 /** 這種魚放得進這個魚缸嗎（魚王算 6 星） */
 export const fishFits = (tank, fish) => !!tank?.fish && !!fish && !fish.junk && (fish.legend ? 6 : fish.rarity) <= tank.fish;
+/** 這件家具算不算這個分類（cat 或 cat2） */
+export const inCat = (f, cat) => !!f && (f.cat === cat || f.cat2 === cat);
 export const hasColors = (f) => !!f && !f.gift && !f.craft && f.color !== false;
 
 export const FURNITURE_CATALOG = [
@@ -189,11 +193,11 @@ export const FURNITURE_CATALOG = [
   { id: 'pass_gramophone', icon: '📀', zh: '唱片機', price: 50, cat: 'deco', pass: 1 },
   { id: 'pass_chandelier', icon: '💎', zh: '水晶吊燈', price: 70, cat: 'light', walk: true, pass: 1 }, // 吊在半空，底下走得過去
   { id: 'pass_canopybed', icon: '🛏️', zh: '四柱紗帳床', price: 90, cat: 'sit', seat: 0.32, sleep: true, long: 0.6, pass: 1 },
-  // ---- 🎁 12 月聖誕禮盒（支持營地送的，不賣、不能送人；box: 1）：小東西 3 選 1＋大件 ----
-  { id: 'box12_tree', icon: '🎄', zh: '室內聖誕樹', cat: 'plant', box: 1, big: 1, gift: 'box' },
-  { id: 'box12_ginger', icon: '🏠', zh: '薑餅屋', cat: 'deco', kind: 'small', box: 1, gift: 'box' },
-  { id: 'box12_gifts', icon: '🎁', zh: '禮物盒堆', cat: 'deco', box: 1, gift: 'box' },
-  { id: 'box12_stocking', icon: '🧦', zh: '聖誕襪掛架', cat: 'deco', box: 1, gift: 'box' },
+  // ---- 🎄 聖誕家具（作者 11/16 改：這 4 件原本是禮盒，改成小舖用松果買；season: 'xmas'＝12/1～1/15 才賣，買了永久）----
+  { id: 'box12_tree', icon: '🎄', zh: '室內聖誕樹', price: 60, cat: 'xmas', cat2: 'plant', season: 'xmas' },
+  { id: 'box12_ginger', icon: '🏠', zh: '薑餅屋', price: 25, cat: 'xmas', cat2: 'deco', kind: 'small', season: 'xmas' },
+  { id: 'box12_gifts', icon: '🎁', zh: '禮物盒堆', price: 30, cat: 'xmas', cat2: 'deco', season: 'xmas' },
+  { id: 'box12_stocking', icon: '🧦', zh: '聖誕襪掛架', price: 30, cat: 'xmas', cat2: 'deco', season: 'xmas' },
   // ---- 🍳 11/14 廚房家具（作者定案）：cook＝在家煮料理（stove 一般料理、oven 只做甜點）；dine＝餐桌擺幾道料理請客，chairs＝椅子位置 ----
   { id: 'k_counter', icon: '🚰', zh: '流理台', price: 25, cat: 'kitchen', top: 0.62 },
   { id: 'k_gasstove', icon: '🍳', zh: '瓦斯爐', price: 40, cat: 'kitchen', cook: 'stove' },
@@ -202,6 +206,24 @@ export const FURNITURE_CATALOG = [
   { id: 'k_dishrack', icon: '🥣', zh: '碗盤架', price: 12, cat: 'kitchen', kind: 'small' },
   { id: 'k_dtable_s', icon: '🍽️', zh: '小餐桌', price: 30, cat: 'kitchen', dine: 2, chairs: [[0, 0.5], [0, -0.5]], chairY: 0.24 },
   { id: 'k_dtable_l', icon: '🪑', zh: '大餐桌', price: 60, cat: 'kitchen', dine: 4, wide: 0.8, chairs: [[0, 0.5], [0, -0.5], [0.8, 0.5], [0.8, -0.5]], chairY: 0.24 },
+  // ---- ✨ 11/16 精靈家具（作者看過模擬圖）：spot＝小精靈在這裡做什麼（nest 睡覺、swing 盪鞦韆、toy 玩玩具）----
+  //   收起來的小精靈住在家裡（一件家具一隻，小窩優先）；主人在家站著不動，身邊那隻也會跑去玩
+  { id: 'sp_nest', icon: '🧺', zh: '小精靈小窩', price: 40, cat: 'spirit', spot: 'nest', color: false, from: '2026-11-20' },
+  { id: 'sp_swing', icon: '🪢', zh: '小精靈鞦韆', price: 50, cat: 'spirit', spot: 'swing', color: false, from: '2026-11-20' },
+  { id: 'sp_toys', icon: '🧸', zh: '小精靈玩具', price: 30, cat: 'spirit', spot: 'toy', color: false, walk: true, from: '2026-11-20' },
+  // ---- 🎄 11/16 聖誕家具（松果買，12/1～1/15 才賣）----
+  { id: 'xm_cane', icon: '🍭', zh: '拐杖糖小燈', price: 20, cat: 'xmas', cat2: 'light', season: 'xmas', color: false },
+  { id: 'xm_wreath', icon: '💚', zh: '聖誕花圈', price: 20, cat: 'xmas', cat2: 'deco', season: 'xmas', color: false },
+  // ---- 🎫 11/16 月票聖誕家具（作者：一般、月票、贊助要有差異；月票＝有一點點會動、可以坐或玩；松果買、12/1～1/15 才賣）----
+  { id: 'xm_snowman', icon: '⛄', zh: '揮手雪人', price: 50, cat: 'xmas', cat2: 'toy', season: 'xmas', pass: 1, color: false },
+  { id: 'xm_reindeer', icon: '🦌', zh: '麋鹿搖搖馬', price: 60, cat: 'xmas', cat2: 'sit', season: 'xmas', pass: 1, color: false, seat: 0.34 },
+  { id: 'xm_sleigh', icon: '🛷', zh: '聖誕雪橇椅', price: 70, cat: 'xmas', cat2: 'sit', season: 'xmas', pass: 1, color: false, seat: 0.28, wide: 0.8 },
+  { id: 'xm_arch', icon: '💡', zh: '燈串拱門', price: 50, cat: 'xmas', cat2: 'light', season: 'xmas', pass: 1, color: false, walk: true },
+  // ---- 🎁 12 月支持營地禮盒（作者 11/16：要比一般的更高級、會動；不賣、不能送人；box: 1）----
+  { id: 'box12_lux', icon: '🌟', zh: '豪華聖誕樹', cat: 'xmas', cat2: 'plant', box: 1, big: 1, gift: 'box', color: false },
+  { id: 'box12_globe', icon: '❄️', zh: '下雪水晶球', cat: 'xmas', cat2: 'deco', kind: 'small', box: 1, gift: 'box', color: false },
+  { id: 'box12_train', icon: '🚂', zh: '聖誕小火車', cat: 'xmas', cat2: 'toy', box: 1, gift: 'box', color: false, walk: true },
+  { id: 'box12_fire', icon: '🔥', zh: '聖誕壁爐', cat: 'xmas', cat2: 'deco', box: 1, gift: 'box', color: false },
 ];
 /** 🍽️ 餐桌上的盤子放哪（相對格子中心；大餐桌往右多一格） */
 export const DINE_SLOTS = {

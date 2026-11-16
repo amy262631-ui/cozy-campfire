@@ -23,3 +23,23 @@ export function isXmasDay(dayKey) {
   const [, m, d] = String(dayKey).split('-').map(Number);
   return m === 12 || (m === 1 && d <= 6);
 }
+
+/** 🛒 聖誕商品賣到幾號（作者 11/16：直接賣到 1/15；造景、音樂、聖誕造型還是 1/6 結束） */
+export const XMAS_SHOP_END = 15;
+/** 'YYYY-MM-DD' 是不是聖誕商品還在賣（12/1～1/15） */
+export function isXmasShopDay(dayKey) {
+  const [, m, d] = String(dayKey).split('-').map(Number);
+  return m === 12 || (m === 1 && d <= XMAS_SHOP_END);
+}
+/** 前端：現在聖誕商品還在賣嗎（網址 ?xmas=1／0 一樣有用） */
+export function isXmasShop(now = new Date()) {
+  try {
+    const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('xmas') : null;
+    if (q === '1') return true;
+    if (q === '0') return false;
+  } catch {
+    /* 伺服器 */
+  }
+  const { m, d } = taipeiMD(now);
+  return m === 12 || (m === 1 && d <= XMAS_SHOP_END);
+}

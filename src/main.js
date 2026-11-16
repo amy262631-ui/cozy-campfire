@@ -77,6 +77,7 @@ import { ORNAMENT_BY_ID } from './game/ornaments.js';
 import { STONE_FLAG, CAIRN_MAX } from './rooms/cairns.js';
 import { FishingGame } from './fishing/FishingGame.js';
 import { FISH, packFish } from './fishing/fishData.js';
+import { todaySpecial, isOpen } from './game/dailySpecial.js';
 import { FishingUI } from './ui/FishingUI.js';
 import { createMistForestRoom } from './rooms/mistForestRoom.js';
 import { OUTFITS, OUTFIT_BY_ID, OUTFIT_SLOTS } from './game/outfits.js';
@@ -874,7 +875,7 @@ async function init() {
     xmas: [t('聖誕限定：12/1～1/6 連續上線每滿 3 天送一款'), t('聖誕期間連續上線 3 天')],
   };
   // 🎄 聖誕造型：聖誕期間、或已經拿到的才顯示（11 月先不出現，也不算在總數裡）
-  const showOutfit = (o) => (payOn || o.src !== 'sponsor') && (o.src !== 'xmas' || isXmas() || look.outfits.includes(o.id));
+  const showOutfit = (o) => (payOn || o.src !== 'sponsor') && (o.src !== 'xmas' || isXmas() || look.outfits.includes(o.id)) && (isOpen(o) || look.outfits.includes(o.id));
   fishingUI.extraTabs.push({
     id: 'outfit',
     label: t('👒 造型'),
@@ -884,7 +885,7 @@ async function init() {
       const owned = new Set(look.outfits);
       const today = look.daily ? OUTFIT_BY_ID[look.daily] : null;
       const week = look.weekly ? OUTFIT_BY_ID[look.weekly] : null;
-      const cards = OUTFITS.filter((o) => o.slot === lookSlot && (o.src !== 'xmas' || isXmas() || owned.has(o.id)))
+      const cards = OUTFITS.filter((o) => o.slot === lookSlot && (o.src !== 'xmas' || isXmas() || owned.has(o.id)) && (isOpen(o) || owned.has(o.id)))
         .map((o) => {
           const has = owned.has(o.id);
           const worn = look.wear?.[o.slot] === o.id;
@@ -1603,7 +1604,22 @@ async function init() {
   const SPIRIT_NAME = { light: '小光點', drop: '水滴', flame: '火苗', leaf: '葉子', cloud: '雲朵', star: '星星', mush: '蘑菇' };
   const spiritKind = (sp) => (sp.stage === 0 ? t('✨ 小光點') : `${SPIRIT_BY_ID[sp.t]?.icon ?? '✨'} ${t(SPIRIT_NAME[sp.t])}${t('小精靈')}`);
   const spiritLabel = (sp) => (sp.nm ? `${sp.nm}（${spiritKind(sp)}）` : spiritKind(sp));
-  const spiritCodeOf = (sp) => (!sp || sp.off || sp.none ? '' : `${sp.stage === 0 ? 'light0' : `${sp.t}${sp.stage}`}${sp.acc?.wear ? `+${sp.acc.wear}` : ''}`);
+  /** 🎀 買／戴／拿下小精靈造型（蝴蝶結、帽子、圍巾戴頭上一次一個；翅膀配色另外一格）；戴著的再按一次＝拿下來 */
+  const spiritAccTap = async (id, own) => {
+    const x = spiritSt?.acc?.list.find((v) => v.id === id);
+    if (!x) return;
+    if (!own) {
+      if ((pinecones ?? 0) < x.price) return hud.toast(t('松果不夠，需要 {n} 🌰', { n: x.price }));
+      if (!confirm(t('花 {n} 🌰 買{icon} {name}？買了每隻小精靈都能戴', { n: x.price, icon: x.icon, name: t(x.zh) }))) return;
+    }
+    const slot = x.slot === 'wing' ? 'wing' : 'head';
+    const on = (slot === 'wing' ? spiritSt.acc.wing : spiritSt.acc.wear) === id;
+    const r = await net.request('spiritAcc', own ? { op: 'wear', slot, id: on ? '' : id } : { op: 'buy', id });
+    if (!r?.ok) return hud.toast(r?.reason === 'season' ? t('這個配件現在沒有賣了') : r?.reason === 'poor' ? t('松果不夠') : t('沒有成功，再試一次'));
+    applySpirit(r.sp);
+    mySpirit.react('love', 2, { hop: true, spin: true });
+  };
+  const spiritCodeOf = (sp) => (!sp || sp.off || sp.none ? '' : `${sp.stage === 0 ? 'light0' : `${sp.t}${sp.stage}`}${sp.acc?.wear ? `+${sp.acc.wear}` : ''}${sp.acc?.wing ? `~${sp.acc.wing}` : ''}`);
   const applySpirit = (sp) => {
     if (!sp) return;
     spiritSt = sp;
@@ -1638,6 +1654,7 @@ async function init() {
   // ☁️ 休息（坐著、睡覺、裹毯子）滿 1 分鐘、⭐ 看星星滿 10 秒：告訴伺服器（小精靈會往雲朵／星星長）
   let spiritRestT = 0;
   let spiritStarT = 0;
+  let spiritIdleT = 0;
   const SPIRIT_REST = new Set(['sofa', 'sit', 'sleep', 'blanket', 'swing']);
   const updateSpirits = (dt) => {
     camera.getWorldPosition(spiritCam);
@@ -1649,6 +1666,14 @@ async function init() {
       if (spiritStarT > 10) (spiritStarT = -50), net.socket?.emit?.('spiritAct', { k: 'stargaze' });
     }
     const m = player.mesh.position;
+    // ✨ 精靈家具（作者 11/16）：在自己帳篷裡站著不動一下子，身邊那隻自己跑去小窩、鞦韆、玩具玩；一動就飛回來
+    const still = roomMgr.current === rooms.home && rooms.home.mine && a === 'idle' && Math.hypot(player.velocity.x, player.velocity.z) < 0.05 && !spiritGames.playing;
+    spiritIdleT = still ? spiritIdleT + dt : 0;
+    if (mySpirit.playAt && (!still || !mySpirit.playAt.alive())) (mySpirit.playAt.done(), (mySpirit.playAt = null));
+    if (!mySpirit.playAt && spiritIdleT > 4 && mySpirit.obj) {
+      mySpirit.playAt = rooms.home.spiritSpot(m.x, m.z, m.y > 1.2);
+      if (!mySpirit.playAt) spiritIdleT = -20; // 沒有空的精靈家具：過一陣子再找
+    }
     mySpirit.update(dt, { x: m.x, y: m.y, z: m.z, ry: player.rotationY, scale: player.mesh.scale.x, speed: Math.hypot(player.velocity.x, player.velocity.z), state: a === 'sleep' || a === 'blanket' ? 'sleep' : SPIRIT_SIT.has(a) ? 'sit' : 'idle', cam: spiritCam, night: spiritNightNow, party: spiritParty(m.x, m.z) });
     return { cam: spiritCam, night: spiritNightNow, party: spiritParty, me: m };
   };
@@ -1752,7 +1777,7 @@ async function init() {
         if (c !== code) {
           if (obj) s.remove(obj);
           const p = parseSpirit(c);
-          obj = p ? buildSpirit(p.type, p.stage, 'happy', undefined, p.acc) : null;
+          obj = p ? buildSpirit(p.type, p.stage, 'happy', undefined, p.acc, p.wing) : null;
           if (obj) s.add(obj);
           code = c;
         }
@@ -1819,7 +1844,7 @@ async function init() {
         const a = sp.acc ?? { own: [], list: [] };
         const rows = a.list.filter((x) => x.sell || a.own.includes(x.id));
         if (!rows.length) return '';
-        return `<div class="dex-note"><b>${t('🎄 小精靈配件')}</b>${t('（買了每隻小精靈都能戴）')}</div><div class="sp-forms">${rows.map((x) => { const own = a.own.includes(x.id); const on = a.wear === x.id; return `<button type="button" data-acc="${x.id}" data-own="${own ? 1 : 0}" class="${on ? 'on' : ''}">${x.icon}<small>${t(x.zh)}</small><small>${on ? t('戴著') : own ? t('戴上') : `🌰 ${x.price}`}</small></button>`; }).join('')}${a.wear ? `<button type="button" data-acc="" data-own="1">🙅<small>${t('拿下來')}</small></button>` : ''}</div>`;
+        return `<div class="dex-note"><b>${t('🎀 小精靈造型')}</b>${t('（買了每隻小精靈都能戴）')}・${t('再按一次拿下來')}</div><div class="sp-forms">${rows.map((x) => { const own = a.own.includes(x.id); const on = (x.slot === 'wing' ? a.wing : a.wear) === x.id; return `<button type="button" data-acc="${x.id}" data-own="${own ? 1 : 0}" class="${on ? 'on' : ''}">${x.icon}<small>${t(x.zh)}</small><small>${on ? t('戴著') : own ? t('戴上') : `🌰 ${x.price}`}</small></button>`; }).join('')}</div>${sp.stage < 2 && rows.some((x) => x.slot === 'wing') ? `<div class="dex-note">${t('🦋 翅膀要長大的小精靈才看得到')}</div>` : ''}`;
       })()}
       <div class="dex-note"><b>${t('🏡 收起來的小精靈')}</b>（${1 + sp.box.length}／${sp.max}）</div>
       ${sp.box.length ? `<div class="sp-box">${sp.box.map((b, i) => `<button type="button" data-pick="${i}"><b>${b.stage ? SPIRIT_BY_ID[b.t]?.icon : '✨'}</b><small>${b.nm || t(SPIRIT_NAME[b.t])}</small><em>${t('帶出門')}</em></button>`).join('')}</div>` : ''}
@@ -1833,17 +1858,7 @@ async function init() {
         body.querySelector('[data-play]')?.addEventListener('click', () => startSpiritGame());
         for (const b of body.querySelectorAll('[data-acc]'))
           b.addEventListener('click', async () => {
-            const id = b.dataset.acc;
-            const own = b.dataset.own === '1';
-            if (!own) {
-              const x = sp.acc.list.find((v) => v.id === id);
-              if ((pinecones ?? 0) < x.price) return hud.toast(t('松果不夠，需要 {n} 🌰', { n: x.price }));
-              if (!confirm(t('花 {n} 🌰 買{icon} {name}？買了每隻小精靈都能戴', { n: x.price, icon: x.icon, name: t(x.zh) }))) return;
-            }
-            const r = await net.request('spiritAcc', { op: own ? 'wear' : 'buy', id });
-            if (!r?.ok) return hud.toast(r?.reason === 'season' ? t('這個配件現在沒有賣了') : r?.reason === 'poor' ? t('松果不夠') : t('沒有成功，再試一次'));
-            applySpirit(r.sp);
-            mySpirit.react('love', 2, { hop: true, spin: true });
+            await spiritAccTap(b.dataset.acc, b.dataset.own === '1');
             openSpirit();
           });
         body.querySelector('[data-rename]').addEventListener('click', async () => {
@@ -2451,18 +2466,18 @@ async function init() {
       const box = sp?.box ?? null;
       if (box && !box.small.includes(smallPick)) smallPick = box.small[0];
       const fz = (id) => `${CATALOG_BY_ID[id]?.icon ?? '🎁'} ${t(CATALOG_BY_ID[id]?.zh ?? id)}`;
+      const furnPic = (id) => snapshot(`${id}|0`, () => buildFurniture(id, {}));
       const boxHtml = box
         ? `<p>${t('這座營地是一個人慢慢做出來的，伺服器需要一點費用。{m} 月的聖誕禮盒，依金額送你不同的東西：', { m: month })}</p>
           <table class="box-tiers">
-            <tr><td><b>NT$ 60</b></td><td>${t('小東西 1 件（3 選 1）')}</td></tr>
-            <tr><td><b>NT$ 100</b></td><td>${t('小東西 1 件＋假髮或{big}（2 選 1）', { big: fz(box.big) })}</td></tr>
-            <tr><td><b>NT$ 150</b></td><td>${t('小東西 1 件＋假髮＋{big}', { big: fz(box.big) })}</td></tr>
-            <tr><td><b>NT$ 200</b></td><td>${t('小東西 3 件全部＋假髮＋{big}', { big: fz(box.big) })}</td></tr>
+            <tr><td><b>NT$ 60</b></td><td>${t('💇 限定假髮（2 選 1）')}</td></tr>
+            <tr><td><b>NT$ 100</b></td><td>${t('假髮＋小東西 1 件（3 選 1）')}</td></tr>
+            <tr><td><b>NT$ 150</b></td><td>${t('假髮＋{big}', { big: fz(box.big) })}</td></tr>
+            <tr><td><b>NT$ 200</b></td><td>${t('假髮＋{big}＋小東西 3 件全部', { big: fz(box.big) })}</td></tr>
           </table>
-          <div class="pay-gift-sub">${t('🎁 小東西選一件（NT$200 三件都送）')}</div>
-          <div class="box-smalls">${box.small.map((id) => `<button type="button" data-small="${id}" class="${id === smallPick ? 'on' : ''}"><span>${CATALOG_BY_ID[id]?.icon ?? '🎁'}</span><small>${t(CATALOG_BY_ID[id]?.zh ?? id)}</small></button>`).join('')}</div>
-          <div class="pay-gift-sub">${t('NT$100 想要哪一個？')}</div>
-          <div class="box-smalls box-pick"><button type="button" data-bpick="wig" class="${bigPick === 'wig' ? 'on' : ''}"><span>💇</span><small>${t('限定假髮')}</small></button><button type="button" data-bpick="big" class="${bigPick === 'big' ? 'on' : ''}"><span>${CATALOG_BY_ID[box.big]?.icon ?? '🎁'}</span><small>${t(CATALOG_BY_ID[box.big]?.zh ?? box.big)}</small></button></div>`
+          <div class="pay-gift-sub">${t('🎁 NT$100 的小東西選一件（NT$200 三件都送）')}</div>
+          <div class="box-big">${(() => { const im = furnPic(box.big); return im ? `<img src="${im}" alt="">` : `<span>${CATALOG_BY_ID[box.big]?.icon ?? '🎁'}</span>`; })()}<small>${fz(box.big)}</small></div>
+          <div class="box-smalls">${box.small.map((id) => { const im = furnPic(id); return `<button type="button" data-small="${id}" class="${id === smallPick ? 'on' : ''}">${im ? `<img src="${im}" alt="">` : `<span>${CATALOG_BY_ID[id]?.icon ?? '🎁'}</span>`}<small>${t(CATALOG_BY_ID[id]?.zh ?? id)}</small></button>`; }).join('')}</div>`
         : '';
       const card = (id) => {
         const o = OUTFIT_BY_ID[id];
@@ -2478,7 +2493,7 @@ async function init() {
       html = `<div class="pay-gift">
         <div class="pay-gift-head">${t('謝謝你支持營地 🔥')}</div>
         ${box ? boxHtml : `<p>${t('這座營地是一個人慢慢做出來的，伺服器需要一點費用。贊助 NT${n} 以上，送你 {m} 月限定假髮（2 選 1）。', { n: sp?.min ?? 60, m: month })}</p>`}
-        ${box ? `<div class="pay-gift-sub">${t('💇 選一款假髮（NT$100 選假髮、NT$150 以上會送）')}</div>` : ''}
+        ${box ? `<div class="pay-gift-sub">${t('💇 選一款假髮（每個金額都送）')}</div>` : ''}
         ${wigs.length ? `<div class="sw-cards">${wigs.map(card).join('')}</div>` : ''}
         <div class="dex-note">${t('先點選喜歡的那一款。同一個月再贊助一次，送你另一款。')}</div>
         ${allOwned ? `<div class="sw-has">${t('✅ 這個月的兩款你都有了，謝謝你的支持 💛')}</div>` : ''}
@@ -2546,7 +2561,7 @@ async function init() {
           const fz = (id) => `${CATALOG_BY_ID[id]?.icon ?? '🎁'} ${t(CATALOG_BY_ID[id]?.zh ?? id)}`;
           const gifts = [];
           if (box) {
-            gifts.push(...(tier.small >= 3 ? box.small : [smallPick ?? box.small[0]]).map(fz));
+            if (tier.small) gifts.push(...(tier.small >= 3 ? box.small : [smallPick ?? box.small[0]]).map(fz));
             if (tier.big || (tier.pick && bigPick === 'big')) gifts.push(fz(box.big));
           }
           if (give) gifts.push(outfitName(give));
@@ -3230,6 +3245,18 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     },
   });
   roomMgr.onSwitched = (room, res) => {
+    // 📅 今日限定：第一次走到湖邊／迷霧森林時提醒一次（一天一次）
+    {
+      const x = todaySpecial().off ? null : todayText();
+      const kind = !x ? null : room.id === 'lake_dock' ? 'fish' : room.id === 'mist_forest' ? 'gather' : null;
+      const k = `cozy-today-${kind}`;
+      try {
+        if (kind && localStorage.getItem(k) !== x.sp.day) {
+          localStorage.setItem(k, x.sp.day);
+          setTimeout(() => hud.toast(kind === 'fish' ? [x.fish, x.shiny].filter(Boolean).join('・') : x.gather), 2600);
+        }
+      } catch {}
+    }
     // 想進別人的帳篷但沒成功（剛好關了、客滿）：回到營地
     if (room.id === 'home' && res && !res.ok) {
       hud.toast(res.reason === 'closed' ? t('🔒 這頂帳篷剛好休息中') : res.reason === 'full' ? t('帳篷裡人太多了，等一下再來') : t('進不去，等一下再試'));
@@ -3854,7 +3881,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       else if (!quiet) hud.toast(t('{icon} 買了{name}，回帳篷按「🛠️ 布置」擺出來', { icon: FURNITURE_BY_ID[id]?.icon ?? '', name: FURNITURE_BY_ID[id]?.name ?? '' }));
       return true;
     }
-    const why = { poor: t('松果不夠喔 🌰'), owned: t('你已經有帳篷了'), noTent: t('先買帳篷，才能放家具 ⛺'), tooMany: t('這個已經買很多了'), tooFast: t('慢慢來 🙂'), maxed: t('已經是最大的帳篷了 🎉'), needPass: t('🎫 這是月票限定，有月票才能買'), off: t('🎫 月票商品還沒開放喔'), soon: t('🎄 12/1 才開賣喔') };
+    const why = { later: t('🗓️ 11/20 才開賣喔'), poor: t('松果不夠喔 🌰'), owned: t('你已經有帳篷了'), noTent: t('先買帳篷，才能放家具 ⛺'), tooMany: t('這個已經買很多了'), tooFast: t('慢慢來 🙂'), maxed: t('已經是最大的帳篷了 🎉'), needPass: t('🎫 這是月票限定，有月票才能買'), off: t('🎫 月票商品還沒開放喔'), soon: t('🎄 12/1 才開賣喔'), season: t('🎄 聖誕家具只在 12/1～1/15 賣喔') };
     hud.toast(why[res?.reason] ?? t('沒買成，再試一次吧'));
     return false;
   };
@@ -3862,6 +3889,17 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   const confirmBuy = new ConfirmBuy();
   const snapCache = new Map();
   /** 幫一個 3D 物件拍張照（奶油色背景），存成圖片給確認視窗用 */
+  /** 第一張圖 → 全部的圖（會動的家具）；畫面上的 <img> 用到第一張，就每 0.3 秒換下一張 */
+  const snapAnim = new Map();
+  setInterval(() => {
+    if (!snapAnim.size) return;
+    for (const img of document.querySelectorAll('img[src^="data:image"]')) {
+      if (img._fr === undefined) img._fr = snapAnim.get(img.getAttribute('src')) ?? null;
+      if (!img._fr || !img.offsetParent) continue;
+      img._fi = ((img._fi ?? 0) + 1) % img._fr.length;
+      img.src = img._fr[img._fi];
+    }
+  }, 300);
   const snapshot = (key, makeObj) => {
     if (snapCache.has(key)) return snapCache.get(key);
     let url = '';
@@ -3892,8 +3930,19 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       const cam = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
       cam.position.set(center.x + size * 1.15, center.y + size * 0.75, center.z + size * 1.55);
       cam.lookAt(center);
+      obj.userData.tick?.(0.05, 0);
       r.render(sc, cam);
       url = r.domElement.toDataURL('image/png');
+      // 🎄 會動的家具（燈會閃、火會燒、雪會飄）：多畫幾張，預覽圖輪流換（作者 11/16：購買的預覽圖都要會閃）
+      if (obj.userData.tick) {
+        const frames = [url];
+        for (let i = 1; i < 8; i++) {
+          obj.userData.tick(0.3, i * 0.3);
+          r.render(sc, cam);
+          frames.push(r.domElement.toDataURL('image/png'));
+        }
+        snapAnim.set(url, frames);
+      }
       r.dispose();
       r.forceContextLoss?.();
     } catch {
@@ -3946,6 +3995,16 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     if (info) confirmBuy.view({ ...info, desc: how });
   }
   /** 🌅 每日登入卡：早上「早安」、下午「午安」、晚上「晚上好」；7 格來營地第幾天、今天／明天的每日造型、第 7 天大禮 */
+  /** 📅 每天都有點不一樣（作者 11/16）：今天哪種魚好釣、哪種採集物多、週六異色魚日 */
+  function todayText() {
+    const sp = todaySpecial();
+    const g = GATHER_ITEMS.find((x) => x.id === sp.gather);
+    return { sp, fish: t('🐟 今天{name}比較好釣', { name: FISH[sp.fish].name }), gather: t('{icon} 今天森林裡{name}特別多', { icon: g.icon, name: t(g.zh) }), shiny: sp.shiny ? t('✨ 週六：異色魚比較容易出現') : '' };
+  }
+  function todayRow() {
+    const x = todayText();
+    return `<div class="lc-row lc-wide"><span class="ic">📅</span><div><b>${t('今日限定')}</b><small>${x.fish}・${x.gather}${x.shiny ? `<br>${x.shiny}` : ''}</small></div></div>`;
+  }
   function showDailyCard(daily, outfit) {
     if (document.getElementById('login-card')) return;
     const h = new Date().getHours();
@@ -3976,6 +4035,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       if (go) rows.push(`<div class="lc-row lc-gift"><span class="ic">${go.icon}</span><div><b>${t('🎄 連續上線 3 天！送你聖誕造型：{name}', { name: t(go.zh) })}</b><small>${t('到「👒 造型」穿上')}</small></div></div>`);
       else if (nx) rows.push(`<div class="lc-row"><span class="ic lc-sil">${nx.icon}</span><div><b>${t('🎄 連續上線 {n}／{need} 天', { n: xm.n, need: xm.need })}</b><small>${t('連續滿 3 天送一款聖誕造型（斷一天要重算）')}</small></div></div>`);
     }
+    if (!todaySpecial().off) rows.push(todayRow()); // 📅 11/20 起
     if (tmr) rows.push(`<div class="lc-row"><span class="ic lc-sil">${tmr.icon}</span><div><b>${t('明天的每日造型：？？？')}</b><small>${t('明天來揭曉 ✨')}</small></div></div>`);
     if (!daily.gift) {
       const left = 7 - ld;
@@ -4146,6 +4206,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   // ✨ 小精靈分類：🥚 孵蛋器
   shopPanel.spirit = () => spiritSt;
   shopPanel.onSpirit = () => openSpirit();
+  // 🎀 小舖「✨ 小精靈」分頁裡買／戴小精靈造型（11/16）
+  shopPanel.onSpiritAcc = (id, own) => spiritAccTap(id, own);
   shopPanel.onEgg = async () => {
     const x = spiritSt;
     if (!x || !confirm(x.none ? t('花 {n} 🌰 買小精靈蛋（附孵蛋器）？買了馬上孵出來', { n: x.eggPrice }) : t('花 {n} 🌰 買一個孵蛋器？10 分鐘後孵出一顆新的小光點', { n: x.eggPrice }))) return;
@@ -4610,6 +4672,16 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       const k = rooms.home.cycleGlow?.(g) ?? 0;
       audio.sfx('tap');
       return hud.toast([t('🌳 小樹換成暖暖的黃光'), t('🌳 小樹換成粉紅色的光'), t('🌳 小樹換成藍色的光'), t('🌳 小樹換成綠色的光'), t('🌳 小樹換成彩色的光')][k]);
+    }
+    if (id === 'xmtree') {
+      const k = rooms.home.cycleGlow?.(g) ?? 0;
+      audio.sfx('bell');
+      return hud.toast([t('🎄 聖誕樹換成暖暖的黃光'), t('🎄 聖誕樹換成粉紅色的光'), t('🎄 聖誕樹換成藍色的光'), t('🎄 聖誕樹換成綠色的光'), t('🎄 聖誕樹換成彩色的光')][k]);
+    }
+    if (id === 'snowglobe') {
+      rooms.home.shakeGlobe?.(g);
+      audio.sfx('bell');
+      return hud.toast(t('❄️ 搖一搖～水晶球裡下起大雪了'));
     }
     if (id === 'feed') {
       rooms.home.feedFish?.();

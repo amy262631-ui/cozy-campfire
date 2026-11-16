@@ -1,4 +1,16 @@
-import { MusicPlayer, SONGS } from './music.js';
+import { MusicPlayer, SONGS, XMAS_SONG_OF } from './music.js';
+
+/** 🎄 12/1～12/31（台北時間；網址 ?xmas=1 也算）：營地背景音樂換成聖誕歌（作者 11/16） */
+const xmasMusic = () => {
+  try {
+    const q = new URLSearchParams(location.search).get('xmas');
+    if (q === '1') return true;
+    if (q === '0') return false;
+  } catch {
+    /* 沒有網址 */
+  }
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', month: 'numeric' }).format(new Date()) === '12';
+};
 import { t } from '../i18n/i18n.js';
 
 /**
@@ -551,7 +563,7 @@ export class AudioEngine {
   setRoomPreset(preset, { focusMode = false } = {}) {
     this.preset = { ...preset };
     this.focusMuted = focusMode;
-    if (preset.song != null) this.setSong(preset.song);
+    if (preset.song != null) this.setSong(xmasMusic() ? (XMAS_SONG_OF[preset.song] ?? preset.song) : preset.song);
     this.#applyGains(1.2);
   }
 

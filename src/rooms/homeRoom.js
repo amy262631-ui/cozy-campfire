@@ -6,6 +6,8 @@ import { DISH_BY_ID } from '../game/cooking.js';
 import { styleOf, tentTexture } from '../game/tentStyles.js';
 import { shapeOf, buildTentShell, buildTentFloor, tentBounds, tentDoorZ, CABIN } from '../game/tentShapes.js';
 import { t } from '../i18n/i18n.js';
+import { buildSpirit } from '../player/spirit.js';
+import { parseSpirit } from '../game/spiritRules.js';
 
 /**
  * 我的帳篷（home）：地板一開始 6×6 格，用松果擴建可以到 10×10（整頂帳篷跟著變大）。
@@ -39,6 +41,8 @@ const GADGET_HINT = {
   chime: ['🎐', '搖一搖', '搖一下風鈴'],
   lamp: ['💡', '開關燈', '開燈／關燈'],
   glowtree: ['🌳', '換燈色', '換小樹燈的顏色'],
+  xmtree: ['🎄', '換燈色', '換聖誕樹燈的顏色'],
+  snowglobe: ['❄️', '搖一搖', '搖一搖水晶球'],
   feed: ['🐟', '餵魚', '餵魚'],
   water: ['💧', '澆水', '澆澆水'],
 };
@@ -49,6 +53,9 @@ export function gadgetKind(id) {
   if (CATALOG_BY_ID[id]?.dine) return 'dine'; // 🍽️ 餐桌：擺料理請客
   if (id === 'pass_gramophone') return 'radio'; // 📀 唱片機：跟收音機一樣換歌
   if (id === 'pass_glowtree') return 'glowtree';
+  if (id === 'box12_lux') return 'xmtree'; // 🌟 豪華聖誕樹：換燈色
+  if (id === 'box12_globe') return 'snowglobe'; // ❄️ 搖一搖水晶球
+  if (id === 'xm_cane') return 'lamp'; // 🍭 拐杖糖小燈：開關燈
   if (id === 'bookshelf' || id === 'books') return 'book';
   if (id === 'clock' || id === 'globe' || id === 'crystal' || id === 'easel') return id;
   if (id === 'teapot' || id === 'mug') return 'tea';
@@ -260,6 +267,11 @@ export function createHomeRoom() {
   const swimmers = [];
   const rockingChairs = []; // 🪑 小搖椅（有人坐就搖）
   const swingers = []; // 🪺 吊籃椅的籃子（一直輕輕晃，有人坐晃大一點）
+  /** ✨ 精靈家具：{ kind: nest|swing|toy, m, seat, local, res（住在這裡的小精靈）, busy（主人身邊那隻正在玩）, loft } */
+  const spSpots = [];
+  const tickers = []; // 🎄 會自己動的家具（豪華聖誕樹的燈、小火車、壁爐的火、水晶球的雪）
+  const _sv = new THREE.Vector3();
+  const _cam = new THREE.Vector3();
   let feedUntil = 0; // 🐟 剛餵過魚：游快一點
   /** 可以坐、躺的位置；rest＝現在坐在哪（{ x, y, z, kind, actions }） */
   const seats = [];
@@ -480,6 +492,8 @@ export function createHomeRoom() {
     swimmers.length = 0;
     rockingChairs.length = 0;
     swingers.length = 0;
+    spSpots.length = 0;
+    tickers.length = 0;
     seats.length = 0;
     gadgets.length = 0;
     stoves.length = 0;
@@ -507,18 +521,25 @@ export function createHomeRoom() {
         m.userData.layer = lv; // ✋ 拖曳布置：點到第幾層，就拖那一層（連同上面疊的）
         furnitureGroup.add(m);
         m.traverse((o) => o.userData.swim && swimmers.push(o));
-        if (it.i === 'rocking') {
+        if (it.i === 'rocking' || it.i === 'xm_reindeer') {
           m.rotation.order = 'YXZ'; // 🪑 小搖椅：沿著椅子自己的前後方向搖
           rockingChairs.push(m);
         }
         m.traverse((o) => o.userData.sway && swingers.push({ o, m }));
+        if (m.userData.tick) tickers.push(m);
+        if (m.userData.spSpot) {
+          let seat = null;
+          m.traverse((o) => o.userData.spSwing && (seat = o));
+          const sp = m.userData.spSpot;
+          spSpots.push({ kind: CATALOG_BY_ID[it.i]?.spot ?? 'nest', m, seat, local: seat ? new THREE.Vector3(0, -0.4, 0) : new THREE.Vector3(sp.x, sp.y, sp.z), res: null, busy: false, loft: isLoftCell(z), ph: Math.random() * 6 });
+        }
       });
       // 門口那條走道（最前排中間）的家具不擋路，免得把門堵住出不去
       // 🛋️ 可以坐、躺的家具（按 E）
       stack.forEach((it) => {
         const gk = gadgetKind(it.i);
         if (gk) gadgets.push({ id: gk, item: it.i, x: c.x, z: c.z, cell: { x, z }, loft: isLoftCell(z), mesh: furnitureGroup.children.find((o) => o.userData.cell?.x === x && o.userData.cell?.z === z && o.userData.item === it.i) });
-        if (it.i === 'stove') stoves.push({ x: c.x, z: c.z, loft: isLoftCell(z) });
+        if (it.i === 'stove' || it.i === 'box12_fire') stoves.push({ x: c.x, z: c.z, loft: isLoftCell(z) }); // 🔥 聖誕壁爐也暖暖的
       });
       stack.forEach((it, lv) => {
         const f = CATALOG_BY_ID[it.i];
@@ -604,7 +625,24 @@ export function createHomeRoom() {
         else r.actions.stop();
       }
     }
+    placeHomeSpirits();
     hideUpper(); // 布置一樓時，二樓家具重畫後也要藏
+  }
+
+  /** ✨ 住在家裡的小精靈：小窩先住，再來鞦韆、玩具，一件家具一隻（作者 11/16） */
+  function placeHomeSpirits() {
+    const list = (home.sps ?? []).map((x) => ({ ...x, p: parseSpirit(x.c) })).filter((x) => x.p);
+    const order = ['nest', 'swing', 'toy'];
+    const spots = [...spSpots].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
+    spots.forEach((s, i) => {
+      const x = list[i];
+      if (!x) return;
+      const o = buildSpirit(x.p.type, x.p.stage, s.kind === 'nest' ? 'sleepy' : 'happy', undefined, x.p.acc, x.p.wing);
+      o.scale.setScalar(x.p.stage === 0 ? 0.8 : 0.6);
+      o.position.copy(s.local);
+      (s.seat ?? s.m).add(o);
+      s.res = { o, base: s.local.clone(), face: s.kind === 'nest' ? 'sleepy' : 'happy', nm: x.n };
+    });
   }
 
   /** ✋ 正在拖的家具（影子） */
@@ -878,6 +916,10 @@ export function createHomeRoom() {
       });
       return k;
     },
+    /** ❄️ 搖一搖水晶球：雪下得很大，慢慢停下來 */
+    shakeGlobe(g) {
+      if (g?.mesh) g.mesh.userData.shake = 1;
+    },
     /** 🐟 餵魚：魚缸裡的魚游快一點（4 秒） */
     feedFish() {
       feedUntil = performance.now() + 4000;
@@ -962,8 +1004,52 @@ export function createHomeRoom() {
       if (s) return s.sleep ? t('<kbd>E</kbd> 躺下睡一下') : t('<kbd>E</kbd> 坐下');
       return mine ? t('<kbd>E</kbd> 布置帳篷') : null;
     },
-    update(dt, time) {
+    /** ✨ 主人身邊的小精靈要去玩：離 (x,z) 最近、沒有小精靈住的精靈家具（同一層樓）；回傳 { kind, pos(), done() } */
+    spiritSpot(x, z, loft = false) {
+      let best = null;
+      let bd = Infinity;
+      for (const s of spSpots) {
+        if (s.res || s.busy || s.loft !== loft) continue;
+        const d = Math.hypot(s.m.position.x - x, s.m.position.z - z);
+        if (d < bd) (bd = d), (best = s);
+      }
+      if (!best) return null;
+      best.busy = true;
+      const s = best;
+      return {
+        kind: s.kind,
+        pos: (v) => (s.seat ?? s.m).localToWorld(v.copy(s.local)),
+        done: () => (s.busy = false),
+        alive: () => spSpots.includes(s),
+      };
+    },
+    update(dt, time, camera) {
       shellUpdate?.(dt, time);
+      for (const m of tickers) {
+        if (!m.visible) continue;
+        m.userData.near = Math.hypot(lastPos.x - m.position.x, lastPos.z - m.position.z) < 1.8; // ⛄ 雪人：有人走近就揮手
+        m.userData.tick(dt, time);
+      }
+      // ✨ 精靈家具：鞦韆有小精靈就盪；住在家裡的小精靈睡覺、盪、在玩具旁邊跳
+      if (spSpots.length) {
+        camera?.getWorldPosition(_cam);
+        for (const s of spSpots) {
+          const on = !!(s.res || s.busy);
+          if (s.seat) {
+            s.amp = (s.amp ?? 0) + ((on ? 0.42 : 0.03) - (s.amp ?? 0)) * Math.min(1, dt * 1.5);
+            s.seat.rotation.x = Math.sin(time * 2.3 + s.ph) * s.amp;
+          }
+          const r = s.res;
+          if (!r) continue;
+          if (s.kind === 'nest') r.o.position.y = r.base.y + Math.sin(time * 1.2 + s.ph) * 0.015;
+          else if (s.kind === 'toy') {
+            // 在毛線球、皮球旁邊繞小圈，偶爾跳一下
+            const a = time * 0.8 + s.ph;
+            r.o.position.set(r.base.x + Math.sin(a) * 0.12, r.base.y + Math.abs(Math.sin(time * 3.1 + s.ph)) * 0.08, r.base.z + Math.cos(a) * 0.1);
+          }
+          r.o.userData.update(dt, time + s.ph, camera ? _cam : undefined);
+        }
+      }
       // 🌱 澆水後植物晃一晃
       for (const gd of gadgets) {
         const m = gd.mesh;

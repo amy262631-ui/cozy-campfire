@@ -12,6 +12,7 @@ import { slotLocal } from '../game/garden.js';
 import { createTrashLayer } from './trashLayer.js';
 import { buildYard, yardRadius } from './yardModels.js';
 import { buildSign } from './signModels.js';
+import { buildSnowfall } from './xmasDecor.js';
 import { YARD_USES, YARD_BY_ID } from '../game/yardCatalog.js';
 const YARD_ICON = Object.fromEntries(Object.entries(YARD_BY_ID).map(([k, v]) => [k, v.icon]));
 const YARD_NAME = Object.fromEntries(Object.entries(YARD_BY_ID).map(([k, v]) => [k, v.zh]));
@@ -146,6 +147,8 @@ function ribbon(pts, width, closed, rand) {
 
 export function createCampgroundRoom() {
   const group = new THREE.Group();
+  const snowfall = buildSnowfall(); // 🌨️ 聖誕期間飄雪（作者 11/16）
+  group.add(snowfall.obj);
   group.name = 'campground';
   const rand = seededRandom(77);
   const path = [...LAYOUT.loop, ...LAYOUT.entry];
@@ -642,7 +645,7 @@ export function createCampgroundRoom() {
 
   let zoneNow = 0; // 🏕️ 現在顯示哪一區（門牌寫「A 區 7 號」用）
   const plotTitle = (i) => t('{z} 區 {n} 號', { z: zoneName(zoneNow), n: i + 1 });
-  const tentKey = (tent) => (tent ? [zoneNow, tent.sign ?? '', tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.frame ?? '', tent.open, tent.likes, tent.n, tent.yard ?? '', (tent.sm ?? []).join(','), JSON.stringify(tent.garden ?? null)].join('|') : `empty:${zoneNow}`);
+  const tentKey = (tent) => (tent ? [zoneNow, tent.sign ?? '', tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.frame ?? '', tent.open, tent.likes, tent.n, tent.yard ?? '', (tent.sm ?? []).join(','), (tent.dc ?? []).join(','), JSON.stringify(tent.garden ?? null)].join('|') : `empty:${zoneNow}`);
   const trash = createTrashLayer(group);
   const ridePicked = new Set(); // 騎車自動撿過的垃圾（避免同一件一直送）
   const _sw = new THREE.Vector3();
@@ -749,6 +752,33 @@ export function createCampgroundRoom() {
       const mirror = y0 === 'tarp' ? false : y0 === 'camper' ? side !== 1 : side === 1;
       place.push([y0, BIG_SPOT.x * side, BIG_SPOT.z, ry, mirror]);
     }
+    // 🎄 門口燈串拱門：立在門前的小路上（走得過去，不擋路）
+    const ticks = [];
+    if ((tent.dc ?? []).includes('xm_doorarch')) {
+      const a = buildYard('xm_doorarch');
+      a.traverse((o) => o.isMesh && (o.userData.ownGeo = true));
+      a.scale.setScalar(1.45);
+      a.position.set(0, 0, front + 0.55); // 靠近門，在小路的路燈後面
+      g.add(a);
+      if (a.userData.tick) ticks.push(a);
+    }
+    // 💚 門上聖誕花圈：每種帳篷的門不一樣，從前面打一條線找到門的表面再掛上去
+    if ((tent.dc ?? []).includes('xm_doorwreath')) {
+      g.updateMatrixWorld(true);
+      const rc = new THREE.Raycaster();
+      const y = sh.id === 'treehouse' ? 2.35 : 0.82;
+      const o = g.localToWorld(new THREE.Vector3(0, y, front + 4));
+      const dir = g.localToWorld(new THREE.Vector3(0, y, 0)).sub(o).normalize();
+      rc.set(o, dir);
+      const hit = rc.intersectObject(shell, true)[0];
+      const w = buildYard('xm_doorwreath');
+      w.traverse((m) => m.isMesh && (m.userData.ownGeo = true));
+      w.scale.setScalar(0.95);
+      const lz = hit ? g.worldToLocal(hit.point.clone()).z + 0.04 : front;
+      w.position.set(0, y, lz);
+      g.add(w);
+    }
+    g.userData.ticks = ticks;
     // 小型擺設：郵筒的門要朝小路（11/08 作者），模型的門在 +x，所以多轉 -90 度
     (tent.sm ?? []).slice(0, SMALL_SPOTS.length).forEach((id, i) => place.push([id, SMALL_SPOTS[i].x * side, SMALL_SPOTS[i].z, SMALL_SPOTS[i].ry * side + (id === 'mailbox' ? -Math.PI / 2 : 0), false]));
     for (const [id, lx, lz, ry, mirror] of place) {
@@ -1170,6 +1200,7 @@ export function createCampgroundRoom() {
       returnSpawn.home = outSpot(plotSpots(PLOTS[Math.min(idx, PLOTS.length - 1)], front));
     },
     update(dt, time, camera) {
+      snowfall.update(dt, time, camera?.position);
       clockNow = time;
       // 🌳 樹屋鞦韆：自己坐著照選的力道盪（1 輕輕、2 高一點、3 用力）；別人坐著輕輕盪；沒人慢慢停
       const me = seatedOn();
@@ -1231,6 +1262,7 @@ export function createCampgroundRoom() {
       flyMat.opacity = 0.55 + Math.sin(time * 1.7) * 0.3;
       lanternHalo.opacity = 0.62 + Math.sin(time * 1.3) * 0.06;
       updateFx(dt);
+      for (const p of plots) for (const o of p.g?.userData.ticks ?? []) o.userData.tick(dt, time); // 🎄 門口拱門的燈
       for (const o of spinners) {
         o.rotation.y = time * 2;
         o.position.y = 0.62 + Math.sin(time * 3) * 0.03;

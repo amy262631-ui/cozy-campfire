@@ -40,10 +40,11 @@ export const DISHES = [
   { id: 'grill_platter', icon: '🔥', zh: '炭烤拼盤', need: [{ id: 'corn', n: 1 }, { id: 'sweetpotato', n: 1 }, { id: 'onion', n: 1 }], grill: true },
   // ---- 🗓️ 每月限定（month：那個月才煮得出來；不算進全收集）----
   { id: 'popcorn', icon: '🍿', zh: '爆米花', need: [{ id: 'corn', n: 2 }], month: 11 }, // 11 月：露營電影夜
+  { id: 'gingerbread', icon: '🍪', zh: '薑餅人', need: [{ type: 'fruit', n: 2 }, { id: 'sweetpotato', n: 1 }], month: 12 }, // 🎄 12 月（作者 11/16）
 ];
 export const DISH_BY_ID = Object.fromEntries(DISHES.map((d) => [d.id, d]));
 /** 🥧 11/14：帳篷裡的「小烤箱」只能做這些（甜點、烤的）；瓦斯爐、灶台做烤肉爐限定以外的全部 */
-export const BAKE_DISHES = new Set(['roast_sweetpotato', 'roast_corn', 'berry_pie', 'carrot_cake', 'berry_daifuku', 'roast_chestnut', 'honey_cookie', 'petal_jelly', 'star_pudding', 'gold_tart', 'popcorn']);
+export const BAKE_DISHES = new Set(['roast_sweetpotato', 'roast_corn', 'berry_pie', 'carrot_cake', 'berry_daifuku', 'roast_chestnut', 'honey_cookie', 'petal_jelly', 'star_pudding', 'gold_tart', 'popcorn', 'gingerbread']);
 /** 在家的哪種爐子能不能做這道（at：stove／oven） */
 export const homeCanCook = (d, at) => !!d && !d.grill && (at === 'oven' ? BAKE_DISHES.has(d.id) : at === 'stove');
 /** 第一次煮出某道料理送的松果（大鍋菜特別多） */
@@ -98,6 +99,7 @@ export const DISH_FX = {
   gold_tart: ['idle', 2],
   big_pot: ['idle', 2],
   popcorn: ['speed', 1],
+  gingerbread: ['gather', 1],
 };
 /** 現在的效果（沒有或過期回傳 null）：{ k, lv, until, v, ...BUFFS[k] } */
 export function activeBuff(b, now = Date.now()) {

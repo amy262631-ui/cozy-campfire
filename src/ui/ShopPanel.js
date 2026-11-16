@@ -1,12 +1,14 @@
 import { t } from '../i18n/i18n.js';
 import { FURNITURE, TENT_PRICE, CATS } from '../game/furniture.js';
-import { gridOf, expandPrice, EXPAND_PRICES, GRID_MAX, ALL_COLORS, hasColors } from '../game/furnitureCatalog.js';
+import { gridOf, expandPrice, EXPAND_PRICES, GRID_MAX, ALL_COLORS, hasColors, inCat } from '../game/furnitureCatalog.js';
 import { TENT_SHAPES, TENT_SHAPE_BY_ID, PASS_SHAPES, FRAME_COLORS, shapeOnSale } from '../game/tentShapes.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TentPreview } from './TentPreview.js';
-import { YARD_ITEMS, normYard, isBigYard, YARD_SMALL_MAX } from '../game/yardCatalog.js';
+import { YARD_ITEMS, normYard, isBigYard, isDoorYard, YARD_SMALL_MAX } from '../game/yardCatalog.js';
 import { SIGNS } from '../game/signCatalog.js';
 import { addCloseX } from './CloseX.js';
+import { isXmasShop as isXmas } from '../game/season.js'; // 🛒 聖誕商品 12/1～1/15
+import { isOpen } from '../game/dailySpecial.js';
 
 /**
  * 營地小舖：用松果買帳篷、家具。
@@ -104,6 +106,13 @@ export class ShopPanel {
       if (e.target.closest('[data-egg]') && !this.busy) {
         this.busy = true;
         await this.onEgg?.();
+        this.busy = false;
+        return this.render();
+      }
+      const sa = e.target.closest('[data-sacc]');
+      if (sa && !sa.disabled && !this.busy) {
+        this.busy = true;
+        await this.onSpiritAcc?.(sa.dataset.sacc, sa.dataset.own === '1');
         this.busy = false;
         return this.render();
       }
@@ -213,7 +222,40 @@ export class ShopPanel {
         <div class="shop-hint">${none ? t('第一顆 {a} 🌰，之後想多養一隻，每顆 {b} 🌰（10 分鐘孵好）。', { a: price, b: 300 }) : t('現在養了 {n}／{m} 隻。', { n: total, m: max })}</div>
         <div class="shop-hint">${t('養好幾隻可以收起來，挑一隻帶在身邊；每一隻都可以取名字。')}</div>
         ${none ? '' : `<button type="button" class="mini-btn" data-spgo>${t('✨ 看我的小精靈')}</button>`}
-      </div>`;
+      </div>
+      ${this.#spiritFurn(coins, hasTent)}${this.#spiritAcc(coins, sp)}`;
+  }
+
+  /** ✨ 精靈家具（作者 11/16：小精靈分頁也放家具、造型） */
+  #spiritFurn(coins, hasTent) {
+    const home = this.getHome() ?? {};
+    const list = FURNITURE.filter((f) => f.cat === 'spirit' && isOpen(f));
+    if (!list.length) return '';
+    return `<div class="shop-sub">${t('🏡 精靈家具')}</div>
+      <div class="shop-hint">${t('收起來的小精靈會住在家裡（一件家具住一隻）；你在家站著不動，身邊那隻也會跑去玩')}</div>
+      <div class="shop-grid">${list.map((f) => {
+        const owned = home.inv?.[f.id] ?? 0;
+        return `<button type="button" class="shop-item" data-buy="${f.id}" ${!hasTent || coins == null || coins < f.price || owned >= 20 ? 'disabled' : ''}>
+          <span class="si-icon">${f.icon}</span><span class="si-name">${f.name}</span><span class="si-price">🌰 ${f.price}</span>
+          ${owned ? `<span class="si-owned">${t('有 {n} 個', { n: owned })}</span>` : ''}</button>`;
+      }).join('')}</div>
+      ${hasTent ? '' : `<div class="shop-hint">${t('⛺ 先有帳篷，才能買家具、換外觀')}</div>`}`;
+  }
+
+  /** 🎀 小精靈造型（配件）：有在賣的、或已經買了的 */
+  #spiritAcc(coins, sp) {
+    const a = sp?.acc;
+    if (!a || sp?.none) return '';
+    const rows = a.list.filter((x) => x.sell || a.own.includes(x.id));
+    const later = a.list.filter((x) => x.season === 'xmas' && !x.sell && !a.own.includes(x.id));
+    return `<div class="shop-sub">${t('🎀 小精靈造型')}</div>
+      ${rows.length ? `<div class="shop-grid">${rows.map((x) => {
+        const own = a.own.includes(x.id);
+        const on = (x.slot === 'wing' ? a.wing : a.wear) === x.id;
+        return `<button type="button" class="shop-item${on ? ' on' : ''}" data-sacc="${x.id}" data-own="${own ? 1 : 0}" ${!own && (coins == null || coins < x.price) ? 'disabled' : ''}>
+          <span class="si-icon">${x.icon}</span><span class="si-name">${t(x.zh)}</span><span class="si-price">${on ? t('戴著') : own ? t('戴上') : `🌰 ${x.price}`}</span></button>`;
+      }).join('')}</div><div class="shop-hint">${t('（買了每隻小精靈都能戴）')}・${t('再按一次拿下來')}</div><div class="shop-hint">${t('🎀 頭上一次戴一個（蝴蝶結、帽子、圍巾）；🦋 翅膀要長大的小精靈才看得到')}</div>` : ''}
+      ${later.length ? `<div class="shop-hint">${t('🎄 12/1 起開賣：{list}', { list: later.map((x) => x.icon).join(' ') })}</div>` : ''}`;
   }
 
   /** 🛒 還沒買帳篷也能逛整間小舖（作者 11/15：不要像強迫買帳篷；看完自己決定要買還是存錢），只是家具、外觀要先有帳篷才能買 */
@@ -292,16 +334,19 @@ export class ShopPanel {
     if (this.tab === 'pass' && !this.passOn?.()) this.tab = 'furn';
     if (this.tab === 'yard') {
       this.preview.stop();
-      const yd = normYard({ ...(home.yard ?? {}), sm: [...(home.yard?.sm ?? [])] });
+      const yd = normYard({ ...(home.yard ?? {}), sm: [...(home.yard?.sm ?? [])], dc: [...(home.yard?.dc ?? [])] });
       const own = yd.own ?? [];
       const smFull = yd.sm.length >= YARD_SMALL_MAX;
       const row = (y) => {
         const has = own.includes(y.id);
-        const placed = yd.on === y.id || yd.sm.includes(y.id);
-        const act = has
+        const placed = yd.on === y.id || yd.sm.includes(y.id) || yd.dc.includes(y.id);
+        const passLock = !has && y.pass && (this.passRank?.() ?? 0) < y.pass;
+        const act = passLock
+          ? `<button type="button" data-needpass="1">${t('🔒 有月票才可買')}</button>`
+          : has
           ? placed
             ? `<button type="button" data-yard="${y.id}" data-on="0">${t('✅ 擺著中・收起來')}</button>`
-            : !isBigYard(y.id) && smFull
+            : !isBigYard(y.id) && !isDoorYard(y.id) && smFull
               ? `<button type="button" disabled>${t('小型已滿 3 個')}</button>`
               : `<button type="button" data-yard="${y.id}" data-on="1">${isBigYard(y.id) && yd.on ? t('換成這個') : t('擺出來')}</button>`
           : `<button type="button" data-buy="yard_${y.id}" ${coins == null || coins < y.price ? 'disabled' : ''}>🌰 ${y.price}</button>`;
@@ -328,7 +373,9 @@ export class ShopPanel {
         <div class="yard-sec">${t('🚙 大型擺設（擺 1 個）')}</div>
         <div class="yard-list">${YARD_ITEMS.filter((y) => isBigYard(y.id)).map(row).join('')}</div>
         <div class="yard-sec">${t('🪑 小型擺設（最多 3 個，現在 {n} 個）', { n: yd.sm.length })}</div>
-        <div class="yard-list">${YARD_ITEMS.filter((y) => !isBigYard(y.id)).map(row).join('')}</div>
+        <div class="yard-list">${YARD_ITEMS.filter((y) => !isBigYard(y.id) && !isDoorYard(y.id)).map(row).join('')}</div>
+        ${isXmas() || yd.dc.length || YARD_ITEMS.some((y) => isDoorYard(y.id) && own.includes(y.id)) ? `<div class="yard-sec">${t('🎄 門口聖誕裝飾（不佔格子，可以一起擺）')}</div>
+        <div class="yard-list">${YARD_ITEMS.filter((y) => isDoorYard(y.id) && (isXmas() || own.includes(y.id))).map(row).join('')}</div>` : ''}
         <div class="yard-sec">${t('🪧 門牌（寫著你的營位和名字）')}</div>
         <div class="yard-list">${SIGNS.filter((sg) => !sg.pass || this.passStar?.()).map(signRow).join('')}</div>`;
       return;
@@ -406,11 +453,11 @@ export class ShopPanel {
     }
     const cats = `<div class="shop-cats">
       <button type="button" data-cat="all" class="${this.cat === 'all' ? 'on' : ''}">${t('全部')}</button>
-      ${CATS.map((c) => `<button type="button" data-cat="${c.id}" class="${this.cat === c.id ? 'on' : ''}">${c.icon} ${c.name}</button>`).join('')}
+      ${CATS.filter((c) => (c.id !== 'spirit' || FURNITURE.some((f) => f.cat === 'spirit' && isOpen(f))) && (c.id !== 'xmas' || isXmas())).map((c) => `<button type="button" data-cat="${c.id}" class="${this.cat === c.id ? 'on' : ''}">${c.icon} ${c.name}</button>`).join('')}
     </div>`;
     const isPass = this.tab === 'pass';
-    const pool = FURNITURE.filter((f) => !!f.pass === isPass); // 🎫 月票家具只在「月票」分頁
-    const list = isPass || this.cat === 'all' ? pool : pool.filter((f) => f.cat === this.cat);
+    const pool = FURNITURE.filter((f) => !!f.pass === isPass && (!f.season || isXmas()) && isOpen(f)); // 🗓️ 精靈家具 11/20 才開 // 🎫 月票家具只在「月票」分頁；🎄 聖誕家具 12/1～1/15 才賣
+    const list = isPass || this.cat === 'all' ? pool : pool.filter((f) => inCat(f, this.cat)); // 聖誕家具在「🎄 聖誕」和原本那一類都找得到
     const rank = this.passRank?.() ?? 0;
     // 🐟 魚缸：卡片上直接標能放幾星的魚（不用點開就看得到）
     const tag = (f) => (f.fish ? (f.fish >= 6 ? t('👑 魚王也行') : t('⭐{n} 以下', { n: f.fish })) : f.kind === 'small' ? t('可放桌上') : f.kind === 'mat' ? t('可墊底') : f.top ? t('上面可放') : '');

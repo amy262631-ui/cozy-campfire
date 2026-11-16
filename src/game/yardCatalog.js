@@ -19,6 +19,9 @@ export const YARD_ITEMS = [
   { id: 'bistro', icon: '☕', zh: '小圓桌和椅子', price: 50, note: '白色小圓桌配兩張折疊椅，適合喝茶聊天', slot: 'seat' },
   { id: 'firestool', icon: '🔥', zh: '小火爐和圓木凳', price: 70, note: '鐵製小火爐旁邊放兩個圓木凳，晚上暖暖的', slot: 'seat' },
   { id: 'swing', icon: '🪢', zh: '雙人鞦韆椅', price: 90, note: '木架上掛著有軟墊的鞦韆椅，坐上去會輕輕搖', slot: 'seat' },
+  // ---- 🎄 門口聖誕裝飾（作者 11/16；slot: 'door'＝另外一格，不佔大型、小型的位置，可以同時擺；12/1～1/15 才賣，買了永久）----
+  { id: 'xm_doorarch', icon: '💡', zh: '門口燈串拱門', price: 80, note: '立在進家門的小路上，大家走進你家都會穿過它，燈會慢慢變亮變暗', slot: 'door', season: 'xmas', pass: 1 },
+  { id: 'xm_doorwreath', icon: '💚', zh: '門上聖誕花圈', price: 30, note: '掛在帳篷門上的綠葉花圈，有紅莓果和紅蝴蝶結', slot: 'door', season: 'xmas' },
 ];
 export const YARD_BY_ID = Object.fromEntries(YARD_ITEMS.map((x) => [x.id, x]));
 /**
@@ -31,13 +34,16 @@ export const YARD_BY_ID = Object.fromEntries(YARD_ITEMS.map((x) => [x.id, x]));
 export const YARD_BIG = new Set(['hammock', 'canoe', 'tarp', 'jeep', 'camper', 'airstream']);
 export const YARD_SMALL_MAX = 3;
 export const isBigYard = (id) => YARD_BIG.has(id);
-/** 擺在哪一格：'on' 大型、'sm' 小型 */
-export const yardSlotOf = (id) => (isBigYard(id) ? 'on' : 'sm');
+/** 🎄 門口裝飾（拱門、門上花圈）：另外一格 dc，可以同時擺 */
+export const isDoorYard = (id) => YARD_BY_ID[id]?.slot === 'door';
+/** 擺在哪一格：'on' 大型、'sm' 小型、'dc' 門口裝飾 */
+export const yardSlotOf = (id) => (isBigYard(id) ? 'on' : isDoorYard(id) ? 'dc' : 'sm');
 /** 把舊格式整理成新格式（會直接改 y；重複呼叫沒關係） */
 export function normYard(y) {
   if (!y) return y;
   y.own ??= [];
-  const sm = Array.isArray(y.sm) ? y.sm.filter((id) => YARD_BY_ID[id] && !isBigYard(id)) : [];
+  const sm = Array.isArray(y.sm) ? y.sm.filter((id) => YARD_BY_ID[id] && !isBigYard(id) && !isDoorYard(id)) : [];
+  y.dc = Array.isArray(y.dc) ? y.dc.filter((id, i, a) => isDoorYard(id) && y.own.includes(id) && a.indexOf(id) === i) : [];
   if (y.on && !isBigYard(y.on)) {
     if (!sm.includes(y.on)) sm.unshift(y.on);
     y.on = null;
@@ -54,7 +60,7 @@ export function normYard(y) {
 export const hasYard = (h, id) => {
   if (!id || !h?.yard) return false;
   const y = normYard(h.yard);
-  return y.on === id || y.sm.includes(id);
+  return y.on === id || y.sm.includes(id) || y.dc.includes(id);
 };
 
 /**

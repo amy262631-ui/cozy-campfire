@@ -4,6 +4,7 @@ import { seededRandom } from '../scene/textures.js';
 import { GATHER_SPOTS, MIST_R } from '../game/gathering.js';
 import { createGatherLayer, buildDecor } from './gatherLayer.js';
 import { t } from '../i18n/i18n.js';
+import { buildSnowfall } from './xmasDecor.js';
 
 const MIST_COLOR = 0x1c2a33;
 
@@ -14,6 +15,8 @@ const MIST_COLOR = 0x1c2a33;
  */
 export function createMistForestRoom() {
   const group = new THREE.Group();
+  const snowfall = buildSnowfall(); // 🌨️ 聖誕期間飄雪（作者 11/16）
+  group.add(snowfall.obj);
   group.name = 'mist_forest';
   const rand = seededRandom(1104);
   const occluders = [];
@@ -181,6 +184,7 @@ export function createMistForestRoom() {
     },
 
     update(dt, time, _camera, actions) {
+      snowfall.update(dt, time, _camera?.position);
       for (const m of motes) {
         const u = m.userData;
         m.position.set(u.x + Math.sin(time * 0.3 + u.p) * 0.6, u.y + Math.sin(time * 0.7 + u.p) * 0.25, u.z + Math.cos(time * 0.25 + u.p) * 0.6);

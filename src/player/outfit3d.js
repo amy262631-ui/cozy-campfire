@@ -107,7 +107,12 @@ export function buildOutfit(id, opts = {}) {
     case 'beanie': {
       dome(0.36, m1, 0.12, 0.85, 1.12);
       torus(0.37, 0.05, m2, 0.13, 1).scale.set(1.12, 1, 1);
-      sphere(0.075, m2, 0, 0.45, 0);
+      if (o.deco === 'flame') {
+        // 🧡 營火毛線帽：頂端不是毛球，是一團會發光的小火苗＋一圈奶油色條紋
+        torus(0.355, 0.022, m2, 0.24, 1).scale.set(1.08, 1, 1);
+        add(new THREE.ConeGeometry(0.07, 0.16, 8), new THREE.MeshBasicMaterial({ color: 0xff9a3a }), 0, 0.5, 0);
+        add(new THREE.ConeGeometry(0.04, 0.1, 8), new THREE.MeshBasicMaterial({ color: 0xffe08a }), 0, 0.48, 0.01);
+      } else sphere(0.075, m2, 0, 0.45, 0);
       g.userData.hatTop = 0.5;
       break;
     }
@@ -379,6 +384,38 @@ export function buildOutfit(id, opts = {}) {
       break;
     }
     case 'cape': {
+      if (o.deco === 'stars') {
+        // 🌌 星夜斗篷（作者 11/16：不要像硬硬的披風）：從肩膀包到背後、往下散開的軟布，下襬一波一波，上面散著發光小星星
+        const geo = new THREE.CylinderGeometry(0.27, 0.43, 0.52, 28, 6, true, Math.PI * 0.5 + 0.12, Math.PI - 0.24);
+        const pos = geo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          const x = pos.getX(i);
+          const y = pos.getY(i);
+          const z = pos.getZ(i);
+          const k = (0.26 - y) / 0.52; // 0＝肩膀、1＝下襬
+          const a = Math.atan2(x, z);
+          const wave = Math.sin(a * 7) * 0.035 * k; // 布的皺褶：越下面越明顯
+          const r = Math.hypot(x, z) + wave;
+          pos.setXYZ(i, Math.sin(a) * r, y - (k > 0.95 ? Math.cos(a * 7) * 0.025 : 0), Math.cos(a) * r);
+        }
+        geo.computeVertexNormals();
+        const cm = mat(o.c1).clone();
+        cm.side = THREE.DoubleSide;
+        add(geo, cm, 0, 0.47, -0.02);
+        const col = add(new THREE.TorusGeometry(0.27, 0.03, 8, 20, Math.PI - 0.2), m2, 0, 0.73, -0.02);
+        col.rotation.x = Math.PI / 2;
+        col.rotation.z = 0.1;
+        const sm = new THREE.MeshBasicMaterial({ color: o.c2 });
+        for (const [a, y, sz] of [[-0.5, 0.6, 1], [0.35, 0.55, 0.8], [-0.1, 0.45, 0.9], [0.6, 0.38, 0.7], [-0.7, 0.33, 0.7], [0.1, 0.3, 1], [0.15, 0.65, 0.6], [-0.35, 0.28, 0.6]]) {
+          const k = (0.73 - y) / 0.52;
+          const r = 0.27 + (0.43 - 0.27) * k + 0.012;
+          const th = Math.PI + a;
+          const st = add(new THREE.OctahedronGeometry(0.022 * sz, 0), sm, Math.sin(th) * r, y, -0.02 + Math.cos(th) * r);
+          st.scale.set(1, 1, 0.4);
+          st.rotation.y = th;
+        }
+        break;
+      }
       const shape = new THREE.Shape();
       shape.moveTo(-0.18, 0);
       shape.quadraticCurveTo(-0.34, -0.3, -0.12, -0.5);
@@ -398,7 +435,13 @@ export function buildOutfit(id, opts = {}) {
         up.rotation.z = s * -0.5;
         const low = sphere(0.1, m2, s * 0.16, 0.42, -0.36, 1, 1.2, 0.12);
         low.rotation.z = s * 0.4;
-        g.userData[s < 0 ? 'wingL' : 'wingR'] = [up, low];
+        const parts = [up, low];
+        if (o.deco === 'firefly') {
+          // ✨ 螢火蟲翅膀：翅膀邊上幾顆會發光的小光點（跟著翅膀拍）
+          const dm = new THREE.MeshBasicMaterial({ color: 0xfff6a0 });
+          for (const [dx, dy] of [[0.1, 0.12], [0.16, -0.02], [0.04, 0.2]]) parts.push(sphere(0.025, dm, s * (0.2 + dx), 0.62 + dy, -0.38));
+        }
+        g.userData[s < 0 ? 'wingL' : 'wingR'] = parts;
       }
       g.userData.flap = true;
       break;

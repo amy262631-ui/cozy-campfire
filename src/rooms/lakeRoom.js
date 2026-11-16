@@ -7,6 +7,7 @@ import { FOG_COLOR } from '../scene/World.js';
 import { createFishMesh, fishScale } from '../fishing/fishModel.js';
 import { rollFish, rollSize } from '../fishing/fishData.js';
 import { t } from '../i18n/i18n.js';
+import { buildSnowfall } from './xmasDecor.js';
 
 export const LAKE_WATER_Y = -0.35;
 
@@ -84,6 +85,8 @@ function createWater() {
  */
 export function createLakeRoom() {
   const group = new THREE.Group();
+  const snowfall = buildSnowfall(); // 🌨️ 聖誕期間飄雪（作者 11/16）
+  group.add(snowfall.obj);
   group.name = 'lake_dock';
   const rand = seededRandom(31);
   const occluders = [];
@@ -332,6 +335,7 @@ export function createLakeRoom() {
 
     /** 由 RoomManager 每幀呼叫 */
     update(dt, t, _camera, actions) {
+      snowfall.update(dt, t, _camera?.position);
       water.material.uniforms.uTime.value = t;
       gather.update(dt, t, actions);
       lanterns.forEach((l, i) => (l.intensity = 3.2 * (0.92 + Math.sin(t * 2.7 + i) * 0.05)));

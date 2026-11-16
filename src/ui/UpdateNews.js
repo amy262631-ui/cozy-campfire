@@ -1,4 +1,6 @@
 import { t } from '../i18n/i18n.js';
+import { isXmas } from '../game/season.js';
+import { isOpen, LAUNCH_1120 } from '../game/dailySpecial.js';
 
 /**
  * 📰 重大更新公告：圖文小卡片，每次更新只出現一次（看過就記在這台裝置上）。
@@ -52,6 +54,36 @@ export const NEWS_TENTS = {
     { pic: '⛵', title: t('船屋　🎫 月票限定・🌰 1500'), text: t('地中海配色的兩層船屋，有樓梯和閣樓') },
     { pic: '🛒', title: t('到小舖「⛺ 帳篷外觀」看看'), text: t('買了可以隨時換回原本的帳篷，家具都會留著') },
     ...NEW_1115(),
+  ],
+};
+
+/** 🎄 12/1 聖誕更新（作者 11/16：精靈家具、小精靈造型、每日限定也跟聖誕一起發）。12/1 起（台北時間）才出現；?xmas=1 可以先看 */
+const XMAS_AT = Date.parse('2026-12-01T00:00:00+08:00');
+export const xmasNewsOn = () => Date.now() >= XMAS_AT || isXmas();
+export const NEWS_XMAS = {
+  id: '2026-12-01',
+  title: () => t('🎄 聖誕節來到營地了！'),
+  items: (payOn) => [
+    { pic: '🎄', title: t('營地變成聖誕風'), text: t('心願大樹變成大聖誕樹，營火廣場下起小雪，掛滿燈串，還有兩個雪人（到 1/6）') },
+    { pic: '🎅', title: t('連續上線 3 天送聖誕造型'), text: t('聖誕帽、馴鹿角、紅綠雪人圍巾，連續來 3 天送 1 款，共 4 款') },
+    { pic: '🧣', title: t('小精靈聖誕配件'), text: t('聖誕帽、紅色／綠色雪人圍巾，每個 60 🌰，聖誕期間才賣') },
+    { pic: '🍪', title: t('12 月限定圖鑑'), text: t('薑餅人（料理）、聖誕紅（野花）、馴鹿角甲蟲（蟲），還有雪花魚、聖誕紅鰭魚') },
+    { pic: '🍭', title: t('聖誕家具開賣'), text: t('小舖「🪑 家具」6 件、「🎫 月票」揮手雪人、麋鹿搖搖馬、雪橇椅、燈串拱門，「🚙 門口擺設」還有門口拱門和門上花圈（賣到 1/15）') },
+    ...(payOn ? [{ pic: '🌟', title: t('12 月支持營地禮盒'), text: t('贊助送 12 月限定假髮；再加上會閃的豪華聖誕樹、下雪水晶球、聖誕小火車、聖誕壁爐') }] : []),
+  ],
+};
+
+/** 🗓️ 11/20 更新（作者 11/16：11/20 自動打開＋跳這則）：精靈家具、小精靈造型、每日限定、營火之約新 3 款 */
+export const news1120On = () => isOpen({ from: LAUNCH_1120 });
+export const NEWS_1120 = {
+  id: '2026-11-20',
+  title: () => t('✨ 小精靈的家來了！'),
+  items: () => [
+    { pic: '🧺', title: t('精靈家具'), text: t('小窩、鞦韆、玩具：收起來的小精靈會住在家裡，朋友來玩也看得到；你在家站著不動，身邊那隻也會跑去玩') },
+    { pic: '🎀', title: t('小精靈造型'), text: t('蝴蝶結 4 色（60 🌰）、翅膀 5 色（40 🌰，長大的小精靈才有翅膀），一直都有賣') },
+    { pic: '🛒', title: t('到小舖「✨ 小精靈」看看'), text: t('孵蛋器、精靈家具、小精靈造型都在這裡') },
+    { pic: '📅', title: t('每天都有點不一樣'), text: t('每天有一種魚特別好釣、森林有一種東西特別多；每週六異色魚比較容易出現') },
+    { pic: '🔥', title: t('營火之約多了 3 款造型'), text: t('星夜斗篷、營火毛線帽、螢火蟲翅膀：原本 3 款拿完的人，約朋友就會拿到新的') },
   ],
 };
 
@@ -125,6 +157,8 @@ export class UpdateNews {
 
   /** 現在要顯示的公告 */
   get news() {
+    if (xmasNewsOn()) return NEWS_XMAS; // 🎄 12/1 起先給聖誕這則
+    if (news1120On()) return NEWS_1120; // 🗓️ 11/20 起
     return NEWS_TENTS; // 🏕️ 11/15 新造型帳篷開賣：月票開不開都先給這則
   }
 
@@ -152,7 +186,7 @@ export class UpdateNews {
 
   /** 全部的公告（新的在前面）：月票開了才有月票那份 */
   get pages() {
-    return [NEWS_TENTS, ...(this.payOn() ? [NEWS_PASS] : []), NEWS, ...NEWS_OLD];
+    return [...(xmasNewsOn() ? [NEWS_XMAS] : []), ...(news1120On() ? [NEWS_1120] : []), NEWS_TENTS, ...(this.payOn() ? [NEWS_PASS] : []), NEWS, ...NEWS_OLD];
   }
 
   /** page：0＝最新；往前翻看以前的更新 */
@@ -165,7 +199,7 @@ export class UpdateNews {
     this.card.innerHTML = `
       <div class="upd-title">${n.title()}</div>
       <div class="upd-date">${date}${page ? t('・以前的更新') : ''}</div>
-      <div class="upd-list">${n.items()
+      <div class="upd-list">${n.items(this.payOn())
         .map((x) => `<div class="upd-item"><div class="upd-pic">${x.pic}</div><div><b>${x.title}</b><p>${x.text}</p></div></div>`)
         .join('')}</div>
       <div class="upd-pager">

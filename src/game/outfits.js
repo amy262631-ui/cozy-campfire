@@ -88,6 +88,10 @@ export const OUTFITS = [
   { id: 'xmas_antlers', slot: 'head', kind: 'antlers', c1: 0x8a5a3a, c2: 0xd2392f, icon: '🦌', zh: '馴鹿角＋紅鼻子', src: 'xmas' }, // 作者 11/12：不要髮箍，耳朵直接變成鹿角、鼻子變紅
   { id: 'xmas_scarf', slot: 'neck', kind: 'scarf', c1: 0xd2392f, c2: 0xd2392f, snowman: true, icon: '🧣', zh: '紅色小雪人圍巾', src: 'xmas' }, // 作者 11/12：改成跟綠色那條一樣，只是紅色
   { id: 'xmas_scarf2', slot: 'neck', kind: 'scarf', c1: 0x2f7a45, c2: 0x2f7a45, snowman: true, icon: '⛄', zh: '綠色小雪人圍巾', src: 'xmas' }, // 作者 11/12：綠色也不錯，配小雪人
+  // 🔥 11/16 營火之約補 3 款（作者：3 款變 6 款），照順序在原本 3 款之後送
+  { id: 'dt_star_cape', slot: 'back', kind: 'cape', c1: 0x2a3266, c2: 0xffe28a, deco: 'stars', icon: '🌌', zh: '星夜斗篷', src: 'date', from: '2026-11-20' },
+  { id: 'dt_ember_beanie', slot: 'head', kind: 'beanie', c1: 0xf08a3c, c2: 0xfff3e2, deco: 'flame', icon: '🧡', zh: '營火毛線帽', src: 'date', from: '2026-11-20' },
+  { id: 'dt_firefly_wings', slot: 'back', kind: 'wings', c1: 0xe8ffb0, c2: 0x9ad070, glow: true, deco: 'firefly', icon: '✨', zh: '螢火蟲翅膀', src: 'date', from: '2026-11-20' },
 ];
 
 export const OUTFIT_BY_ID = Object.fromEntries(OUTFITS.map((o) => [o.id, o]));
@@ -124,4 +128,5 @@ export const XMAS_STREAK = 3;
 export const weekNum = (dayKey) => Math.floor((dayNum(dayKey) + 3) / 7); // 1970-01-01 是週四，+3 讓週一換週
 export const weeklyOutfit = (dayKey) => WEEKLY_OUTFITS[weekNum(dayKey) % WEEKLY_OUTFITS.length];
 /** 營火之約：還沒拿到的下一款（全部都有了回傳 null） */
-export const nextDateOutfit = (owned = []) => DATE_OUTFITS.find((o) => !owned.includes(o.id)) ?? null;
+/** open：還沒到 from 的先不送（11/20 才加的 3 款），伺服器傳 isOpen 進來 */
+export const nextDateOutfit = (owned = [], open = () => true) => DATE_OUTFITS.find((o) => !owned.includes(o.id) && open(o)) ?? null;

@@ -158,7 +158,10 @@ function faceTex(face) {
 /**
  * 做一隻小精靈。回傳 Group；userData：{ body, face, setFace(face), update(dt, time) }
  */
-export function buildSpirit(type = 'light', stage = 0, face = 'happy', variant = SPIRIT_LOOK[type] ?? 0, acc = null) {
+/** 🎀 蝴蝶結顏色、🦋 翅膀配色（11/16 作者：一直賣） */
+export const WING_COLORS = { wing_pink: 0xffa8c8, wing_gold: 0xffd86a, wing_sky: 0x8fd0ff, wing_lavender: 0xc4a8ff, wing_mint: 0x9ee8c4 };
+export const BOW_COLORS = { bow_pink: 0xff8fb8, bow_blue: 0x7fc8ff, bow_yellow: 0xffd34f, bow_purple: 0xb99cff };
+export function buildSpirit(type = 'light', stage = 0, face = 'happy', variant = SPIRIT_LOOK[type] ?? 0, acc = null, wingPat = null) {
   const g = new THREE.Group();
   const T = SPIRIT_BY_ID[type] ?? { color: 0xfff1b8, glow: 0xfff6d0 };
   const body = new THREE.Group();
@@ -465,6 +468,21 @@ export function buildSpirit(type = 'light', stage = 0, face = 'happy', variant =
       const hat = add(new THREE.ConeGeometry(R * 0.55, R * 1.1, 14), red, 0, hy + R * 0.5, -R * 0.08);
       hat.rotation.x = -0.35;
       add(new THREE.SphereGeometry(R * 0.16, 10, 8), white, 0, hy + R * 1.0, -R * 0.38);
+    } else if (BOW_COLORS[acc]) {
+      // 🎀 蝴蝶結：歪歪地戴在頭頂右邊（兩片圓圓的翅膀＋中間一顆結）
+      const bm = soft(BOW_COLORS[acc], { emissiveIntensity: 0.25 });
+      const bow = new THREE.Group();
+      bow.position.set(R * 0.42, (type === 'mush' && stage > 0 ? top - R * 0.02 : hy) + R * 0.05, R * 0.1); // 蘑菇：戴在帽子上面
+      bow.rotation.set(0.25, 0, -0.45);
+      body.add(bow);
+      for (const s of [-1, 1]) {
+        const lobe = add(new THREE.ConeGeometry(R * 0.26, R * 0.5, 12), bm, s * R * 0.25, 0, 0, bow);
+        lobe.rotation.z = s * Math.PI / 2;
+        lobe.scale.set(1, 1, 0.55);
+        const tail = add(new THREE.CapsuleGeometry(R * 0.06, R * 0.18, 3, 6), bm, s * R * 0.12, -R * 0.2, 0, bow);
+        tail.rotation.z = s * 0.5;
+      }
+      add(new THREE.SphereGeometry(R * 0.12, 10, 8), soft(new THREE.Color(BOW_COLORS[acc]).multiplyScalar(0.85).getHex(), { emissiveIntensity: 0.25 }), 0, 0, R * 0.02, bow);
     } else if (acc === 'scarf' || acc === 'scarf2') {
       // 🧣 圍巾（作者 11/12：跟玩家的一樣，紅色、綠色兩款，前面一個小雪人）
       const red2 = acc === 'scarf';
@@ -485,7 +503,10 @@ export function buildSpirit(type = 'light', stage = 0, face = 'happy', variant =
   }
   // 長大（第 3 階段）：小翅膀＋光環
   if (stage >= 2) {
-    const wing = once(`wing${type}`, () => new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: T.glow, emissiveIntensity: 0.5, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
+    // 🦋 翅膀配色（作者 11/16：外型不變、只換顏色）
+    const wing = WING_COLORS[wingPat]
+      ? once(`wingp${wingPat}`, () => new THREE.MeshStandardMaterial({ color: WING_COLORS[wingPat], emissive: WING_COLORS[wingPat], emissiveIntensity: 0.45, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }))
+      : once(`wing${type}`, () => new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: T.glow, emissiveIntensity: 0.5, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
     for (const sx of [-1, 1]) {
       const w = add(new THREE.CircleGeometry(R * 0.75, 16), wing, sx * R * 0.95, R * 0.35, -R * 0.5);
       w.scale.set(1, 0.62, 1);

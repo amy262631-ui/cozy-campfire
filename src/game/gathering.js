@@ -121,6 +121,9 @@ export const GATHER_ITEMS = [
   { id: 'music_box', type: 'treasure', icon: '🎶', zh: '迷你音樂盒', rarity: 3, color: 0xf0c8e0, hint: '晚上 8～10 點，營火附近閃閃發光' },
   { id: 'gold_acorn', type: 'treasure', icon: '🌰', zh: '金色松果', rarity: 3, color: 0xffd24a, hint: '晚上 8～10 點，營火附近閃閃發光' },
   { id: 'snow_globe', type: 'treasure', icon: '❄️', zh: '雪花水晶球', rarity: 3, color: 0xe0f4ff, hint: '晚上 8～10 點，營火附近閃閃發光' },
+  // ---- 🎄 12 月限定（作者 11/16）----
+  { id: 'poinsettia', type: 'flower', icon: '🌺', zh: '聖誕紅', rarity: 2, color: 0xd8283a, month: 12, hint: '12 月限定：森林裡紅紅的一小叢' },
+  { id: 'reindeer_beetle', type: 'bug', icon: '🦌', zh: '馴鹿角甲蟲', rarity: 3, color: 0x8a5a3a, month: 12, hint: '12 月限定：頭上的角像小馴鹿，很少見' },
 ];
 /** 🗓️ 每月限定的東西（不算進全收集） */
 export const isLimited = (x) => !!x?.month;
@@ -201,9 +204,10 @@ export function isNight(now = new Date()) {
 }
 
 /** 在某一型的採集點採到什麼（依稀有度抽：★★★ 很難遇到；白天、晚上的種類不一樣） */
-export function gatherItemAt(type, night, rand = Math.random, month = taipeiMonth()) {
+/** boost：📅 今天特別多的採集物 id（dailySpecial.js），比較容易採到 */
+export function gatherItemAt(type, night, rand = Math.random, month = taipeiMonth(), boost = null) {
   const pool = GATHER_ITEMS.filter((x) => x.type === type && (night ? !x.day : !x.night) && (!x.month || x.month === month));
-  const weight = (x) => [0, 14, 3, 0.5][x.rarity];
+  const weight = (x) => (x.id === boost ? Math.max([0, 14, 3, 0.5][x.rarity] * 4, 8) : [0, 14, 3, 0.5][x.rarity]);
   const total = pool.reduce((a, x) => a + weight(x), 0);
   let r = rand() * total;
   for (const x of pool) {

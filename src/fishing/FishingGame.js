@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FISH, rollFish, rollSize, packFish, SHINY_CHANCE, canShiny } from './fishData.js';
+import { todaySpecial, SHINY_DAY_MULT } from '../game/dailySpecial.js';
 import { createFishMesh, fishScale } from './fishModel.js';
 import { haptic } from '../fx/haptics.js';
 import { t } from '../i18n/i18n.js';
@@ -357,8 +358,9 @@ export class FishingGame {
 
   #bite() {
     const got = this.served && this.served !== 'pending' ? this.served : null;
-    const index = got ? got.index : rollFish({ place: this.spot?.place, ...(this.context?.() ?? {}) });
-    const shiny = got ? !!got.shiny : canShiny(FISH[index]) && Math.random() < SHINY_CHANCE; // ✨ 異色魚（連線時伺服器決定）
+    const today = todaySpecial();
+    const index = got ? got.index : rollFish({ place: this.spot?.place, boost: today.fish, ...(this.context?.() ?? {}) });
+    const shiny = got ? !!got.shiny : canShiny(FISH[index]) && Math.random() < SHINY_CHANCE * (today.shiny ? SHINY_DAY_MULT : 1); // ✨ 異色魚（連線時伺服器決定）
     this.fish = { index, size: got ? got.size : rollSize(index), perfect: false, shiny };
     this.served = null;
     this.rollId++;

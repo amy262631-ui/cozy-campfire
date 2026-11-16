@@ -25,6 +25,7 @@ import geoip from 'geoip-country';
 import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM, rollFish, rollSize, DEX_TOTAL, SHINY_CHANCE, SHINY_DEX_GAIN, SHINY_BONUS, SHINY_TOTAL, canShiny } from '../src/fishing/fishData.js';
 import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
 import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateOutfit, sponsorOutfits, XMAS_OUTFITS, XMAS_STREAK } from '../src/game/outfits.js';
+import { todaySpecial, SHINY_DAY_MULT, isOpen } from '../src/game/dailySpecial.js';
 import { GATHER_SPOTS, GATHER_ITEMS, regrowMs, GATHER_FIRST_GAIN, GATHER_DEX_BONUS, gatherItemAt, isNight, GATHER_R, NET_PRICE, BUG_WANDER, BUG_CATCH_R } from '../src/game/gathering.js';
 import { SOURCES, cleanSource, sourceFrom } from '../src/game/sources.js';
 import { GATHER_BY_ID, treasureTime, TREASURE_MAX, taipeiMonth } from '../src/game/gathering.js';
@@ -41,12 +42,13 @@ import { BOARD_ON, BOARD_GAMES, BOARD_MIN, BOARD_MAX as BG_MAX, BOARD_WIN, BOARD
 import crypto from 'node:crypto';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack, hasLoft } from './homes.js';
 import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS, isLoftCell } from '../src/game/furnitureCatalog.js';
-import { YARD_BY_ID, hasYard, isBigYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
+import { YARD_BY_ID, hasYard, isBigYard, isDoorYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
 import { CHALLENGE_BY_ID, challengesOf } from '../src/game/dailyChallenge.js';
 import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_FIRST_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, SPIRIT_ACT_KIND, SPIRIT_NIGHT_STAR, SPIRIT_PLAY_DAY, SPIRIT_ACCS, SPIRIT_ACC_BY_ID, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
-import { isXmasDay as isXmasDay0 } from '../src/game/season.js';
-const isXmasDay = (k) => process.env.XMAS_TEST === '1' || isXmasDay0(k); // 本機測試用：XMAS_TEST=1 假裝現在是聖誕期間（Render 不要設）
+import { isXmasDay as isXmasDay0, isXmasShopDay as isXmasShopDay0 } from '../src/game/season.js';
+const isXmasDay = (k) => process.env.XMAS_TEST === '1' || isXmasDay0(k);
+const isXmasShopDay = (k) => process.env.XMAS_TEST === '1' || isXmasShopDay0(k); // 🛒 聖誕商品賣到 1/15 // 本機測試用：XMAS_TEST=1 假裝現在是聖誕期間（Render 不要設）
 import { FUR_TOTAL, BASE_FUR, PREMIUM_FUR, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from '../src/game/looks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -236,9 +238,25 @@ function fixDine(h, vid, from, to) {
     delete h.dine[k];
   }
 }
+/** ✨ 11/16 精靈家具：住在家裡的小精靈（收起來的，和「先收起來」的那隻）→ 給帳篷畫在小窩、鞦韆、玩具上 */
+const homeOwnerOf = new WeakMap();
+function homeSpirits(h) {
+  let vid = homeOwnerOf.get(h);
+  if (!vid || homes[vid] !== h) {
+    vid = Object.keys(homes).find((k) => homes[k] === h);
+    if (vid) homeOwnerOf.set(h, vid);
+  }
+  const w = vid && players[vid];
+  if (!w) return [];
+  const wear = w.spiritAcc?.wear;
+  const wing = w.spiritAcc?.wing;
+  const list = [...(w.spirit?.off ? [w.spirit] : []), ...(w.spiritBox ?? [])].filter((x) => x && (x.own || x.xp > 0));
+  return list.slice(0, 12).map((x) => ({ c: spiritCode({ ...x, off: false }, wear, wing), n: String(x.nm ?? '').slice(0, 8) }));
+}
 const publicHome = (h) =>
   h
     ? {
+        sps: homeSpirits(h), // ✨ 住在家裡的小精靈
         tent: !!h.tent,
         inv: h.inv,
         items: h.items,
@@ -254,7 +272,7 @@ const publicHome = (h) =>
         gifts: h.gifts ?? [],
         rack: h.rack ?? [],
         cinv: h.cinv ?? {},
-        yard: (() => { const y = normYard(h.yard ?? { own: [] }); return { own: y.own, on: y.on, sm: y.sm }; })(),
+        yard: (() => { const y = normYard(h.yard ?? { own: [] }); return { own: y.own, on: y.on, sm: y.sm, dc: y.dc }; })(),
         plot: h.plot ?? null, // 🏕️ 固定營位 { z, n }
         sign: h.sign ?? 'wood', // 🪧 門牌造型
         signs: h.signs ?? ['wood'],
@@ -408,6 +426,7 @@ function campList(zone = 0, selfVid = null) {
       garden: gardenView(h),
       yard: normYard(h.yard)?.on ?? null, // 大型擺設
       sm: h.yard?.sm ?? [], // 小型擺設（最多 3 個）
+      dc: h.yard ? normYard(h.yard).dc : [], // 🎄 門口裝飾（拱門、門上花圈）
       on: onv.has(vid),
     };
   }
@@ -821,8 +840,8 @@ function finishStay(st) {
       return logInvite(kind, ref, friend, name, '❌ 這兩個人今天已經約過了', !!st.net);
     }
     shared.datePairs.list.push(pair);
-    const a = players[friend] ? grantOutfit(friend, nextDateOutfit(players[friend].outfits)?.id, 'date') : null;
-    const b = grantOutfit(ref, nextDateOutfit(players[ref].outfits)?.id, 'date');
+    const a = players[friend] ? grantOutfit(friend, nextDateOutfit(players[friend].outfits, isOpen)?.id, 'date') : null;
+    const b = grantOutfit(ref, nextDateOutfit(players[ref].outfits, isOpen)?.id, 'date');
     if (a || b) bump('dates');
     logInvite(kind, ref, friend, name, a || b ? '✅ 成功：兩個人拿營火之約造型' : '✅ 成立了（兩個人造型都已經有了）', !!st.net);
     for (const s2 of io.sockets.sockets.values()) if (s2.data.vid === ref) s2.emit('dateFriend', { name });
@@ -885,7 +904,7 @@ const outfitView = (w) => {
   const daily = dailyOutfit(d).id;
   const weekly = weeklyOutfit(d).id;
   const owned = w?.outfits ?? [];
-  return { outfits: owned, wear: w?.wear ?? {}, daily, dailyGot: owned.includes(daily), weekly, weeklyGot: owned.includes(weekly), dateNext: nextDateOutfit(owned)?.id ?? null };
+  return { outfits: owned, wear: w?.wear ?? {}, daily, dailyGot: owned.includes(daily), weekly, weeklyGot: owned.includes(weekly), dateNext: nextDateOutfit(owned, isOpen)?.id ?? null };
 };
 
 function wallet(vid) {
@@ -2204,8 +2223,8 @@ io.on('connection', (socket) => {
   /** 🎄 小精靈配件：有哪些、戴哪個、現在小舖賣不賣（季節限定） */
   const accView = () => {
     const a = wal?.spiritAcc ?? {};
-    const xmas = isXmasDay(dayKey());
-    return { own: a.own ?? [], wear: a.wear ?? '', list: SPIRIT_ACCS.map((x) => ({ ...x, sell: x.season === 'xmas' ? xmas : true })) };
+    const xmas = isXmasShopDay(dayKey()); // 小精靈聖誕配件賣到 1/15
+    return { own: a.own ?? [], wear: a.wear ?? '', wing: a.wing ?? '', list: SPIRIT_ACCS.map((x) => ({ ...x, sell: (x.season === 'xmas' ? xmas : true) && isOpen(x) })) };
   };
   const spiritView = () => {
     if (!wal) return null;
@@ -2221,12 +2240,18 @@ io.on('connection', (socket) => {
   /** 小精靈外型變了：告訴同一區的人 */
   const spiritSync = () => {
     const sp = spiritOf();
-    const code = spiritCode(sp, wal?.spiritAcc?.wear);
+    const code = spiritCode(sp, wal?.spiritAcc?.wear, wal?.spiritAcc?.wing);
     const nm = code ? String(sp?.nm ?? '') : '';
     if (!player || (player.sr === code && (player.sn ?? '') === nm)) return;
     player.sr = code;
     player.sn = nm; // ✏️ 名字（別人靠近或點它時顯示）
     if (rkey) socket.to(rkey).emit('spirit', { id: socket.id, sr: code, sn: nm });
+    homeSpiritsSync();
+  };
+  /** ✨ 家裡的小精靈換了（收起來、換一隻帶出門、孵出來、取名字）：在這個帳篷裡的人重畫 */
+  const homeSpiritsSync = () => {
+    const h = player?.vid && homes[player.vid];
+    if (h?.tent) io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) });
   };
   /** kind：fish／fire／gather／cook；feed：餵食直接加 xp（不算每日上限） */
   const spiritGain = (kind, feedXp = 0) => {
@@ -2270,6 +2295,7 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     bump('spiritHatch');
     socket.emit('spiritHatch', spiritView());
+    homeSpiritsSync();
   };
   /** 疊石接力／添柴時光：每做一次多一顆松果（每場有上限） */
   const miniBonus = (kind) => {
@@ -2454,7 +2480,7 @@ io.on('connection', (socket) => {
         sp.away = sp.last ? Math.floor((now - sp.last) / 86400000) : 0;
         sp.last = now;
       }
-      player.sr = spiritCode(sp, wal.spiritAcc?.wear);
+      player.sr = spiritCode(sp, wal.spiritAcc?.wear, wal.spiritAcc?.wing);
       player.sn = player.sr ? String(sp?.nm ?? '') : '';
       setTimeout(checkEgg, 3000);
     }
@@ -3004,6 +3030,9 @@ io.on('connection', (socket) => {
       if (!h.tent) return ack?.({ ok: false, reason: 'noTent' });
       normYard((h.yard ??= { own: [], on: null, sm: [] }));
       if (h.yard.own.includes(yardId)) return ack?.({ ok: false, reason: 'owned' });
+      if (y.season === 'xmas' && !isXmasShopDay(dayKey())) return ack?.({ ok: false, reason: 'season' }); // 🎄 12/1～1/15 才賣
+      if (y.pass && !PASS_ON) return ack?.({ ok: false, reason: 'off' });
+      if (y.pass && (passTier(wal)?.rank ?? 0) < y.pass) return ack?.({ ok: false, reason: 'needPass' });
       if (wal.pc < y.price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
       if (Date.now() - lastBuy < 800) return ack?.({ ok: false, reason: 'tooFast' });
       lastBuy = Date.now();
@@ -3011,6 +3040,7 @@ io.on('connection', (socket) => {
       h.yard.own.push(yardId);
       // 買了就擺出來：大型換掉原本的；小型還有空位就擺（滿 3 個先收在倉庫，到小舖再換）
       if (isBigYard(yardId)) h.yard.on = yardId;
+      else if (isDoorYard(yardId)) h.yard.dc.push(yardId);
       else if (h.yard.sm.length < YARD_SMALL_MAX) h.yard.sm.push(yardId);
       saveJson('players.json', players);
       saveJson('homes.json', homes);
@@ -3063,6 +3093,8 @@ io.on('connection', (socket) => {
     if (id === 'tent' && h.tent) return ack?.({ ok: false, reason: 'owned' });
     if (id !== 'tent' && !h.tent) return ack?.({ ok: false, reason: 'noTent' });
     if (id !== 'tent' && (h.inv[id] ?? 0) >= (CATALOG_BY_ID[id]?.kind === 'wall' ? 80 : 20)) return ack?.({ ok: false, reason: 'tooMany' });
+    if (CATALOG_BY_ID[id]?.season === 'xmas' && !isXmasShopDay(dayKey())) return ack?.({ ok: false, reason: 'season' }); // 🎄 聖誕家具 12/1～1/15 才賣
+    if (!isOpen(CATALOG_BY_ID[id])) return ack?.({ ok: false, reason: 'later' }); // 🗓️ 精靈家具 11/20 才開
     // 🎨 買的時候選的配色（0＝原色）
     const color = hasColors(CATALOG_BY_ID[id]) ? Math.floor(num(data.c, 0, ALL_COLORS.length - 1, 0)) : 0;
     // 🎫 月票家具、月票配色：月票開通（PASS_ON）而且月票有效才能買；買了永久保留
@@ -3117,6 +3149,7 @@ io.on('connection', (socket) => {
         const y = normYard(h.yard);
         const put = data.on !== false;
         if (isBigYard(v)) y.on = put ? v : y.on === v ? null : y.on;
+        else if (isDoorYard(v)) y.dc = put ? [...new Set([...y.dc, v])] : y.dc.filter((id) => id !== v);
         else if (!put) y.sm = y.sm.filter((id) => id !== v);
         else if (!y.sm.includes(v)) {
           if (y.sm.length >= YARD_SMALL_MAX) return ack?.({ ok: false, reason: 'smallFull' });
@@ -3570,7 +3603,7 @@ io.on('connection', (socket) => {
     const now = Date.now();
     wal.gat ??= {};
     if ((wal.gat[i] ?? 0) > now) return ack?.({ ok: false, reason: 'notYet', readyAt: wal.gat[i] });
-    const item = gatherItemAt(spot.type, isNight());
+    const item = gatherItemAt(spot.type, isNight(), Math.random, undefined, todaySpecial().gather); // 📅 今天特別多的那種
     wal.gat[i] = now + Math.round(regrowMs());
     wal.bk ??= {};
     // 🧺 吃了「採集達人」的料理：有機會多拿一個
@@ -3818,16 +3851,18 @@ io.on('connection', (socket) => {
       const x = SPIRIT_ACC_BY_ID[id];
       if (!x) return ack?.({ ok: false });
       if (a.own.includes(id)) return ack?.({ ok: false, reason: 'have' });
-      if (x.season === 'xmas' && !isXmasDay(dayKey())) return ack?.({ ok: false, reason: 'season' });
+      if ((x.season === 'xmas' && !isXmasShopDay(dayKey())) || !isOpen(x)) return ack?.({ ok: false, reason: 'season' });
       if (wal.pc < x.price) return ack?.({ ok: false, reason: 'poor' });
       wal.pc -= x.price;
       a.own.push(id);
-      a.wear = id; // 買了直接戴上
+      if (x.slot === 'wing') a.wing = id; // 🦋 翅膀另外一格
+      else a.wear = id; // 買了直接戴上
       socket.emit('wallet', { pc: wal.pc, delta: -x.price, reason: 'spiritAcc' });
       bump('spiritAcc');
     } else if (data.op === 'wear') {
       if (id && !a.own.includes(id)) return ack?.({ ok: false });
-      a.wear = id;
+      if (data.slot === 'wing' || SPIRIT_ACC_BY_ID[id]?.slot === 'wing') a.wing = id; // 🦋 翅膀（id 空的＝拿掉翅膀配色）
+      else a.wear = id;
     } else return ack?.({ ok: false });
     saveJson('players.json', players);
     spiritSync();
@@ -3911,6 +3946,7 @@ io.on('connection', (socket) => {
     wal.spirit = next;
     saveJson('players.json', players);
     spiritSync();
+    homeSpiritsSync();
     ack?.({ ok: true, sp: spiritView() });
   });
   /** ✏️ 幫小精靈取名字（最多 8 個字） */
@@ -4306,8 +4342,9 @@ io.on('connection', (socket) => {
     const place = roomId === 'lake_dock' ? 'lake' : 'pond';
     const m = miniNow();
     const fb = activeBuff(wal?.buff);
-    const fish = rollFish({ place, event: !!eventInfo().active, contest: m?.kind === 'fish', luck: fb?.k === 'fish' ? fb.v : 1 }); // 🎣 吃了「釣魚好運」：稀有魚機率變高
-    const shiny = canShiny(FISH[fish]) && Math.random() < (Number(process.env.SHINY_TEST) || SHINY_CHANCE); // ✨ 異色魚（本機測試：SHINY_TEST=1 每條都是異色；Render 不要設）
+    const today = todaySpecial(); // 📅 今日限定：某種魚特別好釣、週六異色魚比較多
+    const fish = rollFish({ place, event: !!eventInfo().active, contest: m?.kind === 'fish', luck: fb?.k === 'fish' ? fb.v : 1, boost: today.fish }); // 🎣 吃了「釣魚好運」：稀有魚機率變高
+    const shiny = canShiny(FISH[fish]) && Math.random() < (Number(process.env.SHINY_TEST) || SHINY_CHANCE * (today.shiny ? SHINY_DAY_MULT : 1)); // ✨ 異色魚（本機測試：SHINY_TEST=1 每條都是異色；Render 不要設）
     hooked = { fish, size: rollSize(fish), at: now, shiny };
     ack?.({ ok: true, fish, size: hooked.size, shiny });
   });

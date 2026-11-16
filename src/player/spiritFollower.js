@@ -99,7 +99,7 @@ export class SpiritFollower {
     this.obj = null;
     const p = parseSpirit(code);
     if (!p) return;
-    this.obj = buildSpirit(p.type, p.stage, this.face, undefined, p.acc);
+    this.obj = buildSpirit(p.type, p.stage, this.face, undefined, p.acc, p.wing);
     this.size = p.stage === 0 ? 1 : SIZE; // 小光點本來就很小，不用再縮
     this.obj.position.copy(this.pos);
     this.scene.add(this.obj);
@@ -144,7 +144,20 @@ export class SpiritFollower {
     let ty = (host.y ?? 0) + UP * s * low;
     let nx = tx;
     let nz = tz;
-    if (this.hideAt) {
+    const play = this.playAt;
+    if (play) {
+      // ✨ 在家裡玩精靈家具（11/16）：小窩裡睡、鞦韆上盪、玩具旁邊跳
+      play.pos(this._pv ??= new THREE.Vector3());
+      nx = this._pv.x;
+      nz = this._pv.z;
+      ty = this._pv.y;
+      if (play.kind === 'toy') {
+        const a = this.t * 0.8;
+        nx += Math.sin(a) * 0.12;
+        nz += Math.cos(a) * 0.1;
+        ty += Math.abs(Math.sin(this.t * 3.1)) * 0.08;
+      }
+    } else if (this.hideAt) {
       // 🙈 躲貓貓：飛去躲在那裡，低低的
       nx = this.hideAt.x;
       nz = this.hideAt.z;
@@ -161,12 +174,14 @@ export class SpiritFollower {
       this.pos.set(tx, ty, tz);
       this.placed = true;
     }
-    const k = 1 - Math.exp(-(this.nuzzleT > 0 ? 6 : moving ? 3.2 : 2) * dt);
+    // 到了精靈家具旁邊就貼緊（鞦韆在盪，慢半拍會飄出去）
+    const arrived = play && Math.hypot(nx - this.pos.x, nz - this.pos.z) < 0.35;
+    const k = 1 - Math.exp(-(arrived ? 14 : this.nuzzleT > 0 ? 6 : moving ? 3.2 : 2) * dt);
     this.pos.x += (nx - this.pos.x) * k;
     this.pos.y += (ty - this.pos.y) * k;
     this.pos.z += (nz - this.pos.z) * k;
     // 離太遠（傳送、換房間）就直接跟上（躲貓貓時不算）
-    if (!this.hideAt && Math.hypot(tx - this.pos.x, tz - this.pos.z) > 12) this.pos.set(tx, ty, tz);
+    if (!this.hideAt && !play && Math.hypot(tx - this.pos.x, tz - this.pos.z) > 12) this.pos.set(tx, ty, tz);
     // 跳一下、轉圈
     let hopY = 0;
     if (this.hop > 0) {
@@ -176,7 +191,7 @@ export class SpiritFollower {
     if (this.spin > 0) this.spin = Math.max(0, this.spin - dt * 7);
     this.obj.position.set(this.pos.x, this.pos.y + hopY, this.pos.z);
     this.obj.userData.body.rotation.y = this.spin;
-    this.obj.scale.setScalar(s * (this.size ?? SIZE));
+    this.obj.scale.setScalar(s * (this.size ?? SIZE) * (arrived ? 0.75 : 1));
     if (this.sneezeT > 0) {
       // 哈啾：先縮一下再彈開
       this.sneezeT = Math.max(0, this.sneezeT - dt);
@@ -200,7 +215,7 @@ export class SpiritFollower {
     if (this.reactT > 0) this.reactT -= dt;
     let f = 'happy';
     if (this.reactT > 0) f = this.reactFace;
-    else if (host.state === 'sleep' || (host.night && !moving)) f = 'sleepy';
+    else if (host.state === 'sleep' || (host.night && !moving) || (arrived && play.kind === 'nest')) f = 'sleepy';
     else if (this.hungry) {
       this._hungryT -= dt;
       if (this._hungryT < 0) {

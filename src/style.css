@@ -7466,3 +7466,8 @@ body.touch .bg-panel { bottom: 250px; }
 .chat-log { max-height: 190px; overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; scrollbar-width: none; }
 .chat-log::-webkit-scrollbar { display: none; }
 .chat-log:empty { pointer-events: none; }
+/* 🎁 12 月禮盒：家具預覽圖（會動的會一直換圖，燈會閃） */
+.box-smalls button img { width: 72px; height: 72px; border-radius: 10px; object-fit: cover; }
+.box-big { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 6px 0 10px; }
+.box-big img { width: 150px; height: 150px; border-radius: 14px; object-fit: cover; box-shadow: 0 0 18px rgba(255, 210, 120, 0.35); }
+.box-big small { font-size: 13px; font-weight: 700; }

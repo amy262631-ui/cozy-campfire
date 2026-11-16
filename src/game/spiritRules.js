@@ -59,24 +59,37 @@ export function autoKind(c = {}) {
 }
 /** 給別人看的代碼：'drop1'、'light0'；隱藏＝'' */
 /** acc：戴著的配件（'santa'…），代碼後面加「+santa」 */
-export function spiritCode(sp, acc = '') {
+/** wing：🦋 翅膀配色（'wing_pink'…），代碼最後面加「~wing_pink」（11/16） */
+export function spiritCode(sp, acc = '', wing = '') {
   if (!sp || sp.off) return '';
   const st = spiritStage(sp.xp);
   const base = st === 0 ? 'light0' : `${sp.t ?? 'leaf'}${st}`;
-  return SPIRIT_ACC_BY_ID[acc] ? `${base}+${acc}` : base;
+  const a = SPIRIT_ACC_BY_ID[acc] && SPIRIT_ACC_BY_ID[acc].slot !== 'wing' ? `+${acc}` : '';
+  const w = SPIRIT_ACC_BY_ID[wing]?.slot === 'wing' ? `~${wing}` : '';
+  return base + a + w;
 }
 export function parseSpirit(code) {
-  const m = /^(light|drop|flame|leaf|cloud|star|mush)([0-2])(?:\+(\w+))?$/.exec(String(code ?? ''));
-  return m ? { type: m[1], stage: +m[2], acc: SPIRIT_ACC_BY_ID[m[3]] ? m[3] : null } : null;
+  const m = /^(light|drop|flame|leaf|cloud|star|mush)([0-2])(?:\+(\w+?))?(?:~(\w+))?$/.exec(String(code ?? ''));
+  return m ? { type: m[1], stage: +m[2], acc: SPIRIT_ACC_BY_ID[m[3]] ? m[3] : null, wing: SPIRIT_ACC_BY_ID[m[4]]?.slot === 'wing' ? m[4] : null } : null;
 }
 /**
  * 🎄 小精靈配件（作者 11/12：用松果買，買了每隻小精靈都能戴、永久保留）。
- *   season：只在這個季節的小舖賣（xmas＝12/1～1/6）；戴不限時間
+ *   season：只在這個季節的小舖賣（xmas＝12/1～1/15）；戴不限時間
  *   存檔：wal.spiritAcc = { own: [id…], wear: id }
  */
 export const SPIRIT_ACCS = [
   { id: 'santa', icon: '🎅', zh: '小精靈聖誕帽', price: 60, season: 'xmas' },
   { id: 'scarf', icon: '🧣', zh: '小精靈紅色雪人圍巾', price: 60, season: 'xmas' },
   { id: 'scarf2', icon: '⛄', zh: '小精靈綠色雪人圍巾', price: 60, season: 'xmas' }, // 作者 11/12：拿掉鹿角，圍巾紅綠兩款
+  // 🎀 11/16 作者：蝴蝶結 4 色（60）、翅膀配色 5 色（40，作者：翅膀便宜點），一直賣。蝴蝶結跟帽子、圍巾一樣戴在頭上（一次一個）；翅膀另外一格（slot: wing），長大的小精靈才看得到
+  { id: 'bow_pink', icon: '🎀', zh: '粉紅蝴蝶結', price: 60, from: '2026-11-20' },
+  { id: 'bow_blue', icon: '🩵', zh: '水藍蝴蝶結', price: 60, from: '2026-11-20' },
+  { id: 'bow_yellow', icon: '💛', zh: '鵝黃蝴蝶結', price: 60, from: '2026-11-20' },
+  { id: 'bow_purple', icon: '💜', zh: '薰衣草蝴蝶結', price: 60, from: '2026-11-20' },
+  { id: 'wing_pink', icon: '🩷', zh: '粉紅翅膀', price: 40, slot: 'wing', from: '2026-11-20' },
+  { id: 'wing_gold', icon: '🌟', zh: '金色翅膀', price: 40, slot: 'wing', from: '2026-11-20' },
+  { id: 'wing_sky', icon: '🦋', zh: '天空藍翅膀', price: 40, slot: 'wing', from: '2026-11-20' },
+  { id: 'wing_lavender', icon: '🪻', zh: '薰衣草翅膀', price: 40, slot: 'wing', from: '2026-11-20' },
+  { id: 'wing_mint', icon: '🍃', zh: '薄荷綠翅膀', price: 40, slot: 'wing', from: '2026-11-20' },
 ];
 export const SPIRIT_ACC_BY_ID = Object.fromEntries(SPIRIT_ACCS.map((a) => [a.id, a]));

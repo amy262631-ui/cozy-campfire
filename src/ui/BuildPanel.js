@@ -2,7 +2,7 @@ import { t } from '../i18n/i18n.js';
 import { ALL_FURNITURE, FURNITURE_BY_ID, CATS } from '../game/furniture.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TENT_SHAPES } from '../game/tentShapes.js';
-import { CATALOG_BY_ID, canAddTo, fishFits, stackAt, gridOf, expandPrice, MAX_STACK, ALL_COLORS, hasLoft } from '../game/furnitureCatalog.js';
+import { CATALOG_BY_ID, canAddTo, fishFits, stackAt, gridOf, expandPrice, MAX_STACK, ALL_COLORS, hasLoft, inCat } from '../game/furnitureCatalog.js';
 import { FISH } from '../fishing/fishData.js';
 
 /**
@@ -224,9 +224,9 @@ export class BuildPanel {
    */
   #bagGrid(items, attr) {
     if (!items.length) return '';
-    const cats = CATS.filter((c) => items.some(({ f }) => CATALOG_BY_ID[f.id]?.cat === c.id));
+    const cats = CATS.filter((c) => items.some(({ f }) => inCat(CATALOG_BY_ID[f.id], c.id)));
     if (this.bagCat !== 'all' && !cats.some((c) => c.id === this.bagCat)) this.bagCat = 'all';
-    const shown = this.bagCat === 'all' ? items : items.filter(({ f }) => CATALOG_BY_ID[f.id]?.cat === this.bagCat);
+    const shown = this.bagCat === 'all' ? items : items.filter(({ f }) => inCat(CATALOG_BY_ID[f.id], this.bagCat));
     const tabs =
       cats.length > 1
         ? `<div class="bag-tabs"><button type="button" data-bagcat="all" class="${this.bagCat === 'all' ? 'on' : ''}">${t('全部')}</button>${cats

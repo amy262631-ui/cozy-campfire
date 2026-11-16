@@ -78,7 +78,72 @@ export const SONGS = [
   },
 ];
 
-// 錄音檔歌曲接在內建曲子後面（索引 3 起）
+// 🎄 聖誕歌（作者 11/16：12/1～12/31 營地背景音樂要有聖誕風格）：都是 1900 年以前的公版曲子，加上雪橇鈴鐺
+//   索引 3、4（錄音檔接在後面）。AudioEngine 在 12 月把 0 號換成 3 號、1 號換成 4 號（點唱機照點的播）
+export const XMAS_SONG_OF = { 0: 3, 1: 4 };
+SONGS.push(
+  {
+    name: t('鈴兒響叮噹'),
+    desc: t('拇指琴＋雪橇鈴'),
+    instrument: 'kalimba',
+    jingle: true,
+    bpm: 92,
+    steps: 8,
+    // C C C C F C D7 G7
+    chords: [
+      [48, 55, 60, 64],
+      [48, 55, 60, 64],
+      [48, 55, 60, 64],
+      [48, 55, 60, 64],
+      [53, 57, 60, 65],
+      [48, 55, 60, 64],
+      [50, 54, 57, 60],
+      [43, 50, 53, 59],
+    ],
+    pattern: [0, 2, 1, 3, 2, 1, 3, 2],
+    melody: [
+      [76, null, 76, null, 76, null, null, null],
+      [76, null, 76, null, 76, null, null, null],
+      [76, null, 79, null, 72, null, null, 74],
+      [76, null, null, null, null, null, null, null],
+      [77, null, 77, null, 77, null, null, 77],
+      [77, null, 76, null, 76, null, 76, 76],
+      [76, null, 74, null, 74, null, 76, null],
+      [74, null, null, null, 79, null, null, null],
+    ],
+  },
+  {
+    name: t('平安夜'),
+    desc: t('音樂盒＋雪橇鈴'),
+    instrument: 'musicbox',
+    jingle: true,
+    bpm: 56,
+    steps: 6,
+    // C C C C G7 G7 C C
+    chords: [
+      [48, 52, 55, 60],
+      [48, 52, 55, 60],
+      [48, 52, 55, 60],
+      [48, 52, 55, 60],
+      [43, 50, 53, 59],
+      [43, 50, 53, 59],
+      [48, 52, 55, 60],
+      [48, 52, 55, 60],
+    ],
+    melody: [
+      [79, null, null, 81, 79, null],
+      [76, null, null, null, null, null],
+      [79, null, null, 81, 79, null],
+      [76, null, null, null, null, null],
+      [86, null, null, null, 86, null],
+      [83, null, null, null, null, null],
+      [84, null, null, null, 84, null],
+      [79, null, null, null, null, null],
+    ],
+  },
+);
+
+// 錄音檔歌曲接在內建曲子後面（索引 5 起）
 for (const f of FILE_SONGS) SONGS.push({ ...f, instrument: 'file' });
 
 const midiToFreq = (m) => 440 * Math.pow(2, (m - 69) / 12);
@@ -204,6 +269,44 @@ export class MusicPlayer {
     }
   }
 
+  /** 🔔 雪橇鈴：一小撮很高的沙沙聲（聖誕歌用） */
+  #jingle(time, velocity) {
+    const ctx = this.ctx;
+    if (!this.noise) {
+      const b = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.25), ctx.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      this.noise = b;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'bandpass';
+    hp.frequency.value = 7500;
+    hp.Q.value = 1.2;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(velocity, time);
+    g.gain.exponentialRampToValueAtTime(0.0001, time + 0.18);
+    src.connect(hp);
+    hp.connect(g);
+    g.connect(this.bus);
+    src.start(time);
+    src.stop(time + 0.2);
+    // 小鈴鐺的「叮」
+    for (const f of [2637, 3520]) {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f * (0.99 + Math.random() * 0.02);
+      const og = ctx.createGain();
+      og.gain.setValueAtTime(velocity * 0.12, time);
+      og.gain.exponentialRampToValueAtTime(0.0001, time + 0.25);
+      o.connect(og);
+      og.connect(this.bus);
+      o.start(time);
+      o.stop(time + 0.27);
+    }
+  }
+
   /** 很淡的和聲墊底（音樂盒那首用） */
   #pad(chord, time, length) {
     const ctx = this.ctx;
@@ -240,6 +343,8 @@ export class MusicPlayer {
       const mel = song.melody[barIdx]?.[this.step];
       const vary = () => 0.85 + Math.random() * 0.25;
 
+      // 🔔 聖誕歌：每一拍輕輕搖一下雪橇鈴（音樂盒那首比較慢、比較輕）
+      if (song.jingle && this.step % 2 === 0) this.#jingle(t, (song.instrument === 'musicbox' ? 0.05 : 0.08) * (this.step % 4 === 0 ? 1 : 0.6) * vary());
       if (song.instrument === 'file') {
         // 錄音檔由 AudioEngine 播放，這裡不排音
       } else if (song.instrument === 'kalimba') {

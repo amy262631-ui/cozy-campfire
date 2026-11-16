@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { lowpoly } from './shared.js';
+import { isXmas } from '../game/season.js';
 
 /**
  * 🎄 營火廣場的聖誕造景（作者 11/10、11/12）：只在聖誕期間（12/1～1/6，season.js）顯示。
@@ -7,6 +8,22 @@ import { lowpoly } from './shared.js';
  *   大聖誕樹＝心願大樹變身（wishTree.js），不在這裡。
  * 都是裝飾、沒有碰撞（不會擋路）。
  */
+/** 圓圓、邊緣柔柔的雪花貼圖（不然雪會是小方塊） */
+let _flakeTex = null;
+function flakeTex() {
+  if (_flakeTex) return _flakeTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const x = c.getContext('2d');
+  const gr = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.5, 'rgba(255,255,255,0.8)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = gr;
+  x.fillRect(0, 0, 32, 32);
+  _flakeTex = new THREE.CanvasTexture(c);
+  return _flakeTex;
+}
 export function buildXmasDecor() {
   const g = new THREE.Group();
   const rnd = (() => {
@@ -126,7 +143,7 @@ export function buildXmasDecor() {
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const flakes = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.09, transparent: true, opacity: 0.85, depthWrite: false }));
+  const flakes = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, map: flakeTex(), transparent: true, opacity: 0.9, depthWrite: false }));
   flakes.frustumCulled = false;
   g.add(flakes);
 
@@ -139,6 +156,48 @@ export function buildXmasDecor() {
     /** center：跟著誰下雪（鏡頭或玩家的位置） */
     update(dt, time, center) {
       for (const b of bulbs) b.visible = Math.sin(time * 2 + b.userData.ph) > -0.5;
+      const a = geo.attributes.position;
+      for (let i = 0; i < FLAKES; i++) {
+        let y = a.getY(i) - dt * (0.6 + (i % 5) * 0.12);
+        if (y < 0) y += 12;
+        a.setY(i, y);
+        a.setX(i, a.getX(i) + Math.sin(time * 0.7 + i) * dt * 0.15);
+      }
+      a.needsUpdate = true;
+      if (center) flakes.position.set(center.x, 0, center.z);
+    },
+  };
+}
+
+/**
+ * 🌨️ 只有飄雪（作者 11/16：營地也要飄雪）：帳篷營地、湖畔、迷霧森林用。
+ * 聖誕期間（isXmas）才看得到；跟著鏡頭的一小團，看起來整個地方都在下雪。
+ */
+export function buildSnowfall() {
+  const FLAKES = 450;
+  const pos = new Float32Array(FLAKES * 3);
+  for (let i = 0; i < FLAKES; i++) {
+    pos[i * 3] = (Math.random() - 0.5) * 30;
+    pos[i * 3 + 1] = Math.random() * 12;
+    pos[i * 3 + 2] = (Math.random() - 0.5) * 30;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const flakes = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, map: flakeTex(), transparent: true, opacity: 0.9, depthWrite: false }));
+  flakes.frustumCulled = false;
+  let on = isXmas();
+  flakes.visible = on;
+  let check = 0;
+  return {
+    obj: flakes,
+    update(dt, time, center) {
+      check -= dt;
+      if (check < 0) {
+        check = 60; // 每分鐘看一次日期（12/1、1/7 不用重新整理也會換）
+        on = isXmas();
+        flakes.visible = on;
+      }
+      if (!on) return;
       const a = geo.attributes.position;
       for (let i = 0; i < FLAKES; i++) {
         let y = a.getY(i) - dt * (0.6 + (i % 5) * 0.12);

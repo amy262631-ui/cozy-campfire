@@ -32,6 +32,22 @@ const mat = (color, extra) => {
   if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...extra }));
   return matCache.get(key);
 };
+/** 圓形柔光貼圖（豪華聖誕樹的星星光暈） */
+let _glowDot = null;
+const glowDot = () => {
+  if (_glowDot || typeof document === 'undefined') return _glowDot;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const x = c.getContext('2d');
+  const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.4, 'rgba(255,255,255,0.35)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = gr;
+  x.fillRect(0, 0, 64, 64);
+  _glowDot = new THREE.CanvasTexture(c);
+  return _glowDot;
+};
 const glow = (color) => {
   const key = `g${color}`;
   if (!matCache.has(key)) matCache.set(key, new THREE.MeshBasicMaterial({ color }));
@@ -1875,6 +1891,396 @@ export function buildFurniture(id, opts = {}) {
       for (let i = 0; i < 5; i++) box(0.04, 0.014, 0.41, mat(0xffffff), cx - 0.4 + i * 0.2, 0.432);
       for (const [x, z] of [[-0.22, -0.14], [1.02, -0.14], [-0.22, 0.14], [1.02, 0.14]]) box(0.05, 0.38, 0.05, wood, x, 0.19, z);
       for (const x of [0, 0.8]) for (const s of [1, -1]) chair(x, s * 0.5, s);
+      break;
+    }
+    case 'xm_cane': {
+      // 🍭 拐杖糖小燈：紅白條紋的拐杖糖立在小雪堆上，彎鉤下吊一顆暖黃小燈
+      const red = mat(0xd8433a);
+      const wht = mat(0xfffaf2);
+      add(new THREE.SphereGeometry(0.16, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat(0xf4f8ff), 0, 0, 0).scale.y = 0.4;
+      for (let i = 0; i < 8; i++) cyl(0.035, 0.035, 0.07, i % 2 ? red : wht, 0, 0.07 + i * 0.07, 0, 10);
+      const hook = torus(0.1, 0.035, red, -0.1, 0.62, 0, Math.PI, 12);
+      hook.userData.cane = 1;
+      ball(0.04, glow(0xffd27a), -0.2, 0.52, 0).userData.bulb = 0;
+      cyl(0.006, 0.006, 0.06, mat(0x4a3a2a), -0.2, 0.58, 0, 4);
+      break;
+    }
+    case 'xm_wreath': {
+      // 💚 聖誕花圈：木頭小畫架上立著一圈綠葉花圈，紅蝴蝶結＋小莓果
+      const w = mat(0x9a6a40);
+      for (const s of [-1, 1]) {
+        const leg = box(0.03, 0.7, 0.03, w, s * 0.16, 0.33, 0.04);
+        leg.rotation.z = s * 0.12;
+      }
+      box(0.03, 0.62, 0.03, w, 0, 0.3, -0.12).rotation.x = -0.3;
+      box(0.36, 0.03, 0.06, w, 0, 0.2, 0.06);
+      const leaves = [0x2f7a45, 0x3d9658, 0x267040];
+      for (let i = 0; i < 18; i++) {
+        const a = (i / 18) * Math.PI * 2;
+        ball(0.055, mat(leaves[i % 3]), Math.cos(a) * 0.17, 0.46 + Math.sin(a) * 0.17, 0.08, 1, 1, 0.6);
+      }
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + 0.3;
+        ball(0.022, mat(0xd8433a), Math.cos(a) * 0.19, 0.46 + Math.sin(a) * 0.19, 0.12);
+      }
+      for (const s of [-1, 1]) {
+        const lobe = cone(0.06, 0.12, mat(0xd8433a), s * 0.06, 0.3, 0.13, 10);
+        lobe.rotation.z = s * Math.PI / 2;
+      }
+      ball(0.03, mat(0xb02a24), 0, 0.3, 0.14);
+      break;
+    }
+    case 'xm_snowman': {
+      // ⛄ 揮手雪人：兩顆雪球＋紅帽子、綠圍巾、紅蘿蔔鼻子；有人走近就舉起樹枝手揮一揮
+      const snow = mat(0xfbfdff);
+      ball(0.2, snow, 0, 0.19, 0);
+      ball(0.15, snow, 0, 0.47, 0);
+      face(0, 0.5, 0, 0.15, { spread: 0.33 });
+      cone(0.025, 0.1, mat(0xf08a3c), 0, 0.48, 0.17, 6).rotation.x = Math.PI / 2;
+      const hat = cone(0.12, 0.2, mat(0xd8433a), 0, 0.68, -0.01, 10);
+      hat.rotation.x = -0.15;
+      ball(0.03, snow, 0, 0.78, -0.03);
+      add(new THREE.TorusGeometry(0.11, 0.02, 6, 14), mat(0xfbfdff), 0, 0.6, 0).rotation.x = Math.PI / 2;
+      add(new THREE.TorusGeometry(0.13, 0.03, 6, 16), mat(0x2f7a45), 0, 0.36, 0).rotation.x = Math.PI / 2;
+      box(0.05, 0.12, 0.02, mat(0x2f7a45), 0.08, 0.28, 0.13).rotation.z = 0.2;
+      for (const y of [0.24, 0.13]) ball(0.018, mat(0x3a2a1a), 0, y, 0.195);
+      const stick = (s) => {
+        const arm = new THREE.Group();
+        arm.position.set(s * 0.17, 0.4, 0);
+        g.add(arm);
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.24, 5), mat(0x6a4a30));
+        b.position.set(s * 0.1, 0.06, 0);
+        b.rotation.z = s * -1.1;
+        arm.add(b);
+        return arm;
+      };
+      stick(-1);
+      const wave = stick(1);
+      g.userData.tick = (dt, t) => {
+        const want = g.userData.near ? 1 : 0;
+        g.userData.w = (g.userData.w ?? 0) + (want - (g.userData.w ?? 0)) * Math.min(1, dt * 4);
+        wave.rotation.z = g.userData.w * (0.9 + Math.sin(t * 8) * 0.35);
+      };
+      break;
+    }
+    case 'xm_reindeer': {
+      // 🦌 麋鹿搖搖馬：木頭弧形底座上一隻胖胖小麋鹿，紅鼻子、紅馬鞍；坐上去會前後搖（homeRoom 的小搖椅那套）
+      const wood = mat(0xc08a5a);
+      for (const s of [-1, 1]) {
+        const rk = torus(0.7, 0.022, wood, s * 0.16, 0.72, 0, 0.9, 8);
+        rk.rotation.set(0, Math.PI / 2, -Math.PI / 2 - 0.45);
+      }
+      for (const z of [-0.2, 0.2]) box(0.36, 0.03, 0.04, wood, 0, 0.06, z);
+      const fur = mat(0xa8784e);
+      ball(0.17, fur, 0, 0.3, 0, 1, 0.8, 1.4);
+      for (const [x, z] of [[-0.09, -0.15], [0.09, -0.15], [-0.09, 0.15], [0.09, 0.15]]) cyl(0.03, 0.03, 0.14, fur, x, 0.14, z, 6);
+      ball(0.11, fur, 0, 0.48, 0.24);
+      ball(0.035, glow(0xff5a4a), 0, 0.47, 0.35);
+      face(0, 0.5, 0.24, 0.11, { spread: 0.4 });
+      for (const s of [-1, 1]) {
+        const an = cyl(0.012, 0.012, 0.16, mat(0x6a4a30), s * 0.06, 0.62, 0.22, 5);
+        an.rotation.z = s * -0.4;
+        const tip = cyl(0.01, 0.01, 0.08, mat(0x6a4a30), s * 0.11, 0.68, 0.22, 5);
+        tip.rotation.z = s * 0.6;
+      }
+      box(0.22, 0.05, 0.22, mat(0xd8433a), 0, 0.42, -0.02);
+      ball(0.04, mat(0xfbfdff), 0, 0.33, -0.25);
+      break;
+    }
+    case 'xm_sleigh': {
+      // 🛷 聖誕雪橇椅：兩格寬的紅色雪橇，金色滑板往前捲起，裡面奶油色坐墊，兩個人可以一起坐
+      const cx = 0.4;
+      const red = mat(0xc8322c);
+      const gold = mat(0xe0b44a, { metalness: 0.5, roughness: 0.35 });
+      box(1.12, 0.18, 0.46, red, cx, 0.2, -0.02);
+      box(1.12, 0.36, 0.08, red, cx, 0.36, -0.22);
+      for (const s of [-1, 1]) box(0.06, 0.26, 0.46, red, cx + s * 0.56, 0.3, -0.02);
+      box(1.02, 0.06, 0.38, mat(0xfff1d0), cx, 0.31, 0.0);
+      for (const z of [-0.16, 0.16]) {
+        box(1.2, 0.025, 0.03, gold, cx, 0.03, z);
+        const curl = torus(0.08, 0.015, gold, cx + 0.62, 0.11, z, Math.PI * 1.2, 10);
+        curl.rotation.z = -0.6;
+        for (const x of [-0.35, 0.35]) box(0.025, 0.1, 0.025, gold, cx + x, 0.08, z);
+      }
+      box(1.14, 0.03, 0.09, gold, cx, 0.55, -0.22);
+      for (const x of [-0.3, 0.3]) ball(0.06, mat(0x2f7a45), cx + x, 0.56, -0.24, 1.2, 0.8, 0.6);
+      ball(0.03, mat(0xd8433a), cx, 0.58, -0.2);
+      break;
+    }
+    case 'xm_arch': {
+      // 💡 燈串拱門：細細的木拱門（走得過去），掛綠葉和一串暖色小燈，燈慢慢變亮變暗
+      const w = mat(0x8a6a4a);
+      for (const s of [-1, 1]) cyl(0.025, 0.03, 0.9, w, s * 0.36, 0.45, 0, 6);
+      const top = torus(0.36, 0.025, w, 0, 0.9, 0, Math.PI, 14);
+      top.rotation.z = 0;
+      const leaf = [0x2f7a45, 0x3d9658];
+      const bulbs = [];
+      for (let i = 0; i <= 16; i++) {
+        const a = (i / 16) * Math.PI;
+        ball(0.04, mat(leaf[i % 2]), Math.cos(a) * 0.36, 0.9 + Math.sin(a) * 0.36, 0, 1, 1, 0.7);
+        if (i % 2) {
+          const b = ball(0.022, new THREE.MeshBasicMaterial({ color: [0xffd27a, 0xff9a9a, 0xb8e4ff, 0xa8f0b0][i % 4] }), Math.cos(a) * 0.34, 0.86 + Math.sin(a) * 0.34, 0.05);
+          b.userData.base = b.material.color.clone();
+          b.userData.ph = i * 0.5;
+          bulbs.push(b);
+        }
+      }
+      for (const s of [-1, 1]) for (let k = 0; k < 4; k++) ball(0.035, mat(leaf[k % 2]), s * 0.37, 0.2 + k * 0.2, 0.02, 1, 1, 0.7);
+      g.userData.tick = (dt, t) => {
+        for (const b of bulbs) b.material.color.copy(b.userData.base).multiplyScalar(0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * 1.2 + b.userData.ph))); // 慢慢變亮變暗
+      };
+      break;
+    }
+    case 'box12_lux': {
+      // 🌟 豪華聖誕樹（贊助大件，作者 11/16：要比一般的更高級、燈會閃）：比一般的大一圈、枝頭有雪、金色彩帶繞圈、
+      //    40 顆燈一閃一閃（按 E 換燈色）、頂端星星發光慢慢轉、樹下禮物盒輕輕跳
+      const h = 0.06;
+      cyl(0.3, 0.34, 0.06, mat(0xc9a24a, { metalness: 0.5, roughness: 0.35 }), 0, 0.03);
+      cyl(0.06, 0.07, 0.2, mat(0x6a4a30), 0, h + 0.1);
+      const greens = [0x23683b, 0x2b7845, 0x34884f, 0x3d9658];
+      const tiers = [[0.66, 0.6, h + 0.16], [0.54, 0.55, h + 0.52], [0.42, 0.5, h + 0.86], [0.29, 0.44, h + 1.16]];
+      tiers.forEach(([r, hh, y], i) => {
+        cone(r, hh, mat(greens[i]), 0, y + hh / 2, 0, 12);
+        // 枝頭積雪：每層下緣一圈小白點
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2 + i * 0.4;
+          ball(0.03, mat(0xffffff), Math.sin(a) * r * 0.93, y + 0.03, Math.cos(a) * r * 0.93, 1.4, 0.5, 1.4);
+        }
+      });
+      const top = h + 1.62;
+      // 金色彩帶（一圈一圈往上繞）
+      const pts = [];
+      for (let i = 0; i <= 80; i++) {
+        const k = i / 80;
+        const a = k * Math.PI * 7;
+        const r = 0.62 - k * 0.5 + 0.03;
+        pts.push(new THREE.Vector3(Math.sin(a) * r, h + 0.22 + k * 1.3, Math.cos(a) * r));
+      }
+      add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.012, 5), mat(0xf2c14e, { metalness: 0.6, roughness: 0.3, emissive: 0x6a4a10 }));
+      const ornCols = [0xd8433a, 0xf2c14e, 0x6aa8e0, 0xffffff, 0xb06ad8, 0xff8fb8];
+      for (let i = 0; i < 22; i++) {
+        const k = i / 22;
+        const a = i * 2.4;
+        const r = 0.6 - k * 0.48;
+        ball(0.045, mat(ornCols[i % 6], { metalness: 0.45, roughness: 0.25 }), Math.sin(a) * r, h + 0.28 + k * 1.2, Math.cos(a) * r);
+      }
+      const bulbs = [];
+      for (let i = 0; i < 40; i++) {
+        const k = i / 40;
+        const a = k * Math.PI * 9 + 1;
+        const r = 0.6 - k * 0.5 + 0.025;
+        const b = ball(0.026, new THREE.MeshBasicMaterial({ color: [0xffd27a, 0xff8a8a, 0x9ad0ff, 0xa8f0b0][i % 4] }), Math.sin(a) * r, h + 0.24 + k * 1.28, Math.cos(a) * r);
+        b.userData.bulb = i % 4;
+        b.userData.ph = Math.random() * 6;
+        bulbs.push(b);
+      }
+      const sh = new THREE.Shape();
+      for (let i = 0; i < 10; i++) {
+        const a = Math.PI / 2 + (i / 10) * Math.PI * 2;
+        const rr = i % 2 ? 0.07 : 0.16;
+        sh[i ? 'lineTo' : 'moveTo'](Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      const star = add(new THREE.ExtrudeGeometry(sh, { depth: 0.04, bevelEnabled: true, bevelSize: 0.01, bevelThickness: 0.01, bevelSegments: 1 }), glow(0xffe066), 0, top + 0.08, -0.02);
+      const shine = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowDot(), color: 0xffe9a0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+      shine.position.set(0, top + 0.08, 0);
+      shine.scale.setScalar(0.5);
+      g.add(shine);
+      // 樹下的禮物盒（會輕輕跳）
+      const gifts = [];
+      for (const [x, z, s, c, rb] of [[0.38, 0.3, 0.16, 0xd8433a, 0xf2c14e], [-0.36, 0.32, 0.13, 0x6aa8e0, 0xffffff], [0.05, 0.45, 0.11, 0xf2c14e, 0xd8433a], [-0.42, -0.1, 0.12, 0xb06ad8, 0xfffaf2]]) {
+        const gb = new THREE.Group();
+        gb.position.set(x, 0, z);
+        g.add(gb);
+        const m1 = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), mat(c));
+        m1.position.y = s / 2;
+        gb.add(m1);
+        const r1 = new THREE.Mesh(new THREE.BoxGeometry(s * 1.02, s * 1.02, s * 0.2), mat(rb));
+        r1.position.y = s / 2;
+        gb.add(r1);
+        const r2 = new THREE.Mesh(new THREE.BoxGeometry(s * 0.2, s * 1.02, s * 1.02), mat(rb));
+        r2.position.y = s / 2;
+        gb.add(r2);
+        gifts.push(gb);
+      }
+      g.userData.tick = (dt, t) => {
+        star.rotation.y = t * 0.8;
+        shine.material.opacity = 0.7 + Math.sin(t * 2.4) * 0.3;
+        for (const b of bulbs) b.visible = Math.sin(t * 2.6 + b.userData.ph) > -0.35; // 燈泡一閃一閃
+        gifts.forEach((gb, i) => (gb.position.y = Math.max(0, Math.sin(t * 2 + i * 1.7)) * 0.03));
+      };
+      break;
+    }
+    case 'box12_globe': {
+      // ❄️ 會下雪的水晶球：木頭底座＋玻璃球，裡面一棵小樹和小雪人，雪花一直飄（按 E 搖一搖，雪下得很大）
+      cyl(0.17, 0.2, 0.12, mat(0x8a5a34), 0, 0.06, 0, 16);
+      cyl(0.18, 0.18, 0.02, mat(0xc9a24a, { metalness: 0.5, roughness: 0.35 }), 0, 0.12, 0, 16);
+      add(new THREE.SphereGeometry(0.15, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat(0xffffff), 0, 0.12, 0).scale.y = 0.2;
+      cone(0.06, 0.16, mat(0x2f7a45), -0.04, 0.22, -0.02, 8);
+      ball(0.035, mat(0xffffff), 0.06, 0.16, 0.03);
+      ball(0.025, mat(0xffffff), 0.06, 0.21, 0.03);
+      add(new THREE.SphereGeometry(0.18, 20, 14), new THREE.MeshStandardMaterial({ color: 0xdff2ff, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.1, depthWrite: false }), 0, 0.27, 0);
+      const flakes = [];
+      for (let i = 0; i < 26; i++) {
+        const f = ball(0.008, glow(0xffffff), 0, 0, 0);
+        f.userData.s = [Math.random() * 6.28, Math.random() * 0.13, Math.random()];
+        flakes.push(f);
+      }
+      g.userData.shake = 0;
+      g.userData.tick = (dt, t) => {
+        g.userData.shake = Math.max(0, g.userData.shake - dt * 0.25);
+        const sp = 0.06 + g.userData.shake * 0.5;
+        for (const f of flakes) {
+          const [a, r] = f.userData.s;
+          f.userData.s[2] = (f.userData.s[2] - dt * sp + 1) % 1;
+          const y = f.userData.s[2];
+          f.position.set(Math.sin(a + t * 0.3) * r, 0.14 + y * 0.26, Math.cos(a + t * 0.3) * r);
+        }
+      };
+      break;
+    }
+    case 'box12_train': {
+      // 🚂 聖誕小火車：一圈小軌道，紅色火車頭拉兩節載禮物的車廂一直繞圈，煙囪冒小煙
+      const ring = torus(0.3, 0.012, mat(0x8a8a8a), 0, 0.012, 0, Math.PI * 2, 32);
+      ring.rotation.x = Math.PI / 2;
+      const ring2 = torus(0.36, 0.012, mat(0x8a8a8a), 0, 0.012, 0, Math.PI * 2, 32);
+      ring2.rotation.x = Math.PI / 2;
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const tie = box(0.1, 0.012, 0.025, mat(0x6a4a30), Math.cos(a) * 0.33, 0.006, Math.sin(a) * 0.33);
+        tie.rotation.y = -a;
+      }
+      cone(0.1, 0.24, mat(0x2f7a45), 0, 0.12, 0, 8);
+      ball(0.02, glow(0xffe066), 0, 0.25, 0);
+      const train = new THREE.Group();
+      g.add(train);
+      const car = (a, body, load) => {
+        const c = new THREE.Group();
+        c.position.set(Math.cos(a) * 0.33, 0, Math.sin(a) * 0.33);
+        c.rotation.y = -a;
+        train.add(c);
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.12), mat(body));
+        b.position.y = 0.05;
+        c.add(b);
+        for (const z of [-0.04, 0.04]) for (const x of [-0.04, 0.04]) {
+          const wl = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.01, 10), mat(0x2a2a2a));
+          wl.rotation.z = Math.PI / 2;
+          wl.position.set(x, 0.022, z);
+          c.add(wl);
+        }
+        if (load) {
+          const l = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.05), mat(load));
+          l.position.y = 0.105;
+          c.add(l);
+        }
+        return c;
+      };
+      const loco = car(0, 0xd8433a);
+      const chim = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.06, 8), mat(0x2a2a2a));
+      chim.position.set(0, 0.11, 0.035);
+      loco.add(chim);
+      const cab = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.06, 0.045), mat(0x2f7a45));
+      cab.position.set(0, 0.105, -0.035);
+      loco.add(cab);
+      car(-0.42, 0x2f7a45, 0xf2c14e);
+      car(-0.84, 0xf2c14e, 0x6aa8e0);
+      const puffs = [];
+      for (let i = 0; i < 4; i++) {
+        const p = ball(0.02, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }), 0, 0, 0);
+        p.userData.k = i / 4;
+        puffs.push(p);
+      }
+      const v = new THREE.Vector3();
+      g.userData.tick = (dt, t) => {
+        train.rotation.y = -t * 0.6;
+        chim.getWorldPosition(v);
+        g.worldToLocal(v);
+        for (const p of puffs) {
+          const k = (p.userData.k + t * 0.6) % 1;
+          p.position.set(v.x, v.y + 0.04 + k * 0.18, v.z);
+          p.scale.setScalar(0.6 + k * 1.4);
+          p.material.opacity = 0.8 * (1 - k);
+        }
+      };
+      break;
+    }
+    case 'box12_fire': {
+      // 🔥 聖誕壁爐：紅磚壁爐＋白色爐台，上面掛三隻聖誕襪和一圈綠葉，裡面的火一直燒（坐旁邊暖暖的，跟小暖爐一樣）
+      const brick = mat(0xb5523c);
+      box(0.66, 0.56, 0.24, brick, 0, 0.28, -0.08);
+      box(0.74, 0.05, 0.3, mat(0xfffaf2), 0, 0.585, -0.06);
+      box(0.36, 0.3, 0.02, mat(0x2a1a14), 0, 0.17, 0.045);
+      for (let y = 0.06; y < 0.56; y += 0.08) for (let x = -0.3; x < 0.31; x += 0.15) box(0.13, 0.006, 0.005, mat(0x9a4030), x + ((y * 12.5) % 2 ? 0.07 : 0), y, 0.042);
+      for (const s of [-1, 1]) box(0.08, 0.34, 0.04, mat(0xfffaf2), s * 0.22, 0.17, 0.05);
+      // 木柴＋火
+      for (const r of [-0.25, 0.25]) {
+        const log = cyl(0.03, 0.03, 0.26, mat(0x6a4a30), 0, 0.05, 0.0, 8);
+        log.rotation.set(0, r, Math.PI / 2);
+      }
+      const flames = [];
+      for (const [x, s, c] of [[0, 1, 0xff9a3a], [-0.06, 0.7, 0xffc04a], [0.06, 0.75, 0xff7a2a], [0, 0.45, 0xffe08a]]) {
+        const f = cone(0.05 * s, 0.18 * s, glow(c), x, 0.08 + 0.09 * s, 0.0, 7);
+        f.userData.fl = Math.random() * 6;
+        flames.push(f);
+      }
+      const fl = new THREE.PointLight(0xff9a4a, 0.6, 2.2);
+      fl.position.set(0, 0.2, 0.2);
+      g.add(fl);
+      // 爐台上的綠葉＋襪子
+      for (let i = 0; i < 9; i++) ball(0.04, mat(i % 2 ? 0x2f7a45 : 0x3d9658), -0.32 + i * 0.08, 0.6, 0.06, 1, 0.8, 0.8);
+      for (const [x, c] of [[-0.2, 0xd8433a], [0, 0x2f7a45], [0.2, 0xd8433a]]) {
+        box(0.07, 0.12, 0.03, mat(c), x, 0.5, 0.1);
+        box(0.08, 0.03, 0.035, mat(0xfffaf2), x, 0.565, 0.1);
+        box(0.06, 0.04, 0.03, mat(c), x + 0.03, 0.44, 0.1);
+      }
+      g.userData.tick = (dt, t) => {
+        for (const f of flames) f.scale.set(1, 0.8 + Math.abs(Math.sin(t * 7 + f.userData.fl)) * 0.35, 1);
+        fl.intensity = 0.5 + Math.sin(t * 9) * 0.12 + Math.sin(t * 13.7) * 0.08;
+      };
+      break;
+    }
+    case 'sp_nest': {
+      // 🧺 小精靈小窩：編織籃＋粉紅軟墊＋上面一道小拱門掛著發光小月亮
+      const rattan = mat(0xc8955a, { side: THREE.DoubleSide });
+      add(new THREE.CylinderGeometry(0.3, 0.25, 0.16, 16, 1, true), rattan, 0, 0.08, 0);
+      cyl(0.25, 0.25, 0.02, mat(0xb07a44), 0, 0.01, 0, 16);
+      torus(0.3, 0.035, mat(0xb07a44), 0, 0.16, 0, Math.PI * 2, 20).rotation.x = Math.PI / 2;
+      cyl(0.26, 0.26, 0.07, mat(0xf3c6d6), 0, 0.08, 0, 16);
+      torus(0.25, 0.025, mat(0xf6e7c8), 0, 0.16, -0.12, Math.PI, 14);
+      ball(0.055, glow(0xffe28a), 0, 0.44, -0.12);
+      g.userData.spSpot = { x: 0, y: 0.26, z: 0.02 };
+      break;
+    }
+    case 'sp_swing': {
+      // 🪢 小精靈鞦韆：小木架＋兩條繩子＋粉紅小木板，頂端兩顆小毛球
+      const w = mat(0x8a5a34);
+      for (const x of [-0.28, 0.28]) cyl(0.025, 0.03, 0.82, w, x, 0.41, 0);
+      for (const x of [-0.28, 0.28]) box(0.05, 0.03, 0.3, w, x, 0.015, 0);
+      cyl(0.022, 0.022, 0.62, w, 0, 0.82, 0).rotation.z = Math.PI / 2;
+      ball(0.035, mat(0xff9ec4), -0.2, 0.86, 0.02);
+      ball(0.035, mat(0xa8e0ff), 0.2, 0.86, 0.02);
+      const n0 = g.children.length;
+      for (const x of [-0.12, 0.12]) cyl(0.007, 0.007, 0.52, mat(0xe8d8b8), x, 0.56, 0, 4);
+      box(0.3, 0.03, 0.13, mat(0xf2b8c8), 0, 0.3, 0);
+      const seat = new THREE.Group();
+      seat.position.set(0, 0.82, 0);
+      seat.userData.spSwing = true;
+      for (const o of g.children.slice(n0)) {
+        o.position.sub(seat.position);
+        seat.add(o);
+      }
+      g.add(seat);
+      g.userData.spSpot = { x: 0, y: 0.44, z: 0 };
+      break;
+    }
+    case 'sp_toys': {
+      // 🧸 小精靈玩具：毛線球（拖一條線）、條紋小皮球、三塊積木
+      const yarn = mat(0xff8aa8);
+      add(new THREE.IcosahedronGeometry(0.1, 1), yarn, -0.05, 0.1, 0.05);
+      torus(0.15, 0.008, yarn, 0.08, 0.01, 0.1, Math.PI * 1.3, 18).rotation.x = Math.PI / 2;
+      ball(0.08, mat(0x7fd0ff), 0.2, 0.08, -0.15);
+      torus(0.08, 0.014, mat(0xffffff), 0.2, 0.08, -0.15, Math.PI * 2, 14);
+      for (const [x, y, c] of [[-0.24, 0.045, 0xffd24a], [-0.24, 0.135, 0x8ad07a], [-0.15, 0.045, 0xff9a5a]]) box(0.09, 0.09, 0.09, mat(c), x, y, -0.12);
+      g.userData.spSpot = { x: 0.05, y: 0.3, z: 0.02 };
       break;
     }
     default:

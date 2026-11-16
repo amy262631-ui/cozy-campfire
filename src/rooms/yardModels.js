@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { buildFurniture } from '../game/furniture.js';
 
 /**
  * 🚙 門口擺設的 3D 模型（原尺寸；營地裡會跟帳篷一起縮小）。
@@ -347,6 +348,34 @@ export function buildYard(id) {
       }
       g.add(rocker);
       g.userData.rocker = rocker;
+      break;
+    }
+    case 'xm_doorarch': {
+      // 💡 門口燈串拱門：跟屋內的燈串拱門同一個樣子（營地裡放大，立在進家門的小路上）
+      const a = buildFurniture('xm_arch');
+      g.add(a);
+      g.userData.tick = a.userData.tick;
+      break;
+    }
+    case 'xm_doorwreath': {
+      // 💚 門上聖誕花圈：直立的一圈綠葉＋紅莓果＋下面的紅蝴蝶結（面向 +z，掛在門上）
+      const leaves = [0x2f7a45, 0x3d9658, 0x267040];
+      for (let i = 0; i < 20; i++) {
+        const a = (i / 20) * Math.PI * 2;
+        const l = add(new THREE.IcosahedronGeometry(0.055, 0), mat(leaves[i % 3]), Math.cos(a) * 0.17, Math.sin(a) * 0.17, 0);
+        l.scale.set(1, 1, 0.6);
+      }
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + 0.3;
+        add(new THREE.SphereGeometry(0.022, 8, 6), mat(0xd8433a), Math.cos(a) * 0.19, Math.sin(a) * 0.19, 0.04);
+      }
+      for (const s of [-1, 1]) {
+        const lobe = add(new THREE.ConeGeometry(0.06, 0.12, 10), mat(0xd8433a), s * 0.06, -0.17, 0.05);
+        lobe.rotation.z = (s * Math.PI) / 2;
+        const tail = add(new THREE.BoxGeometry(0.03, 0.1, 0.01), mat(0xd8433a), s * 0.03, -0.24, 0.05);
+        tail.rotation.z = s * 0.3;
+      }
+      add(new THREE.SphereGeometry(0.03, 8, 6), mat(0xb02a24), 0, -0.17, 0.06);
       break;
     }
     default:
