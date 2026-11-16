@@ -2384,6 +2384,10 @@ io.on('connection', (socket) => {
           }
         }
       }
+      // 帳篷營地的分區房間叫 'campground@3'：拆成「帳篷營地＋第幾區」（11/15 log：朋友在營地 B 區以後時，用邀請連結進來會出錯、進不來）
+      const fz = /^campground@(\d+)$/.exec(friend?.room ?? '');
+      if (fz) friend.room = 'campground', (campZone = Number(fz[1]));
+      if (friend && !ROOM_DEFS[friend.room]) friend = null; // 不認得的地方：照一般方式進來
       if (friend) {
         wantCh = friend.ch;
         wanted = friend.room;
@@ -3493,8 +3497,12 @@ io.on('connection', (socket) => {
   let lastOrder = 0;
   // ☕ 贊助：這個月的假髮、能不能付款
   socket.on('sponsorInfo', (data, ack) => {
-    const wigs = sponsorOutfits(dayKey().slice(0, 7)).map((o) => o.id);
-    ack?.({ ok: true, on: PASS_ON, test: !ECPAY.prod, amounts: sponsorAmounts(dayKey().slice(0, 7)), min: sponsorMin(dayKey().slice(0, 7)), box: SPONSOR_BOX[dayKey().slice(0, 7)] ?? null, wigs, owned: wigs.filter((id) => wal?.outfits?.includes(id)), account: hasAccount(), total: wal?.spons ?? 0 });
+    // 👀 預覽下個月（網址 ?xmas=1 時前端帶 preview: '2026-12'）：只給看、不能付款（付款還是照真正的月份）
+    const real = dayKey().slice(0, 7);
+    const pv = typeof data?.preview === 'string' && /^\d{4}-\d{2}$/.test(data.preview) && data.preview > real ? data.preview : null;
+    const ym = pv ?? real;
+    const wigs = sponsorOutfits(ym).map((o) => o.id);
+    ack?.({ ok: true, preview: !!pv, on: PASS_ON, test: !ECPAY.prod, amounts: sponsorAmounts(ym), min: sponsorMin(ym), box: SPONSOR_BOX[ym] ?? null, wigs, owned: wigs.filter((id) => wal?.outfits?.includes(id)), account: hasAccount(), total: wal?.spons ?? 0 });
   });
   socket.on('sponsorOrder', (data = {}, ack) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });

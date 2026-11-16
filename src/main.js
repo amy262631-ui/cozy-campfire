@@ -2414,10 +2414,12 @@ async function init() {
   }
   async function openPass(tab) {
     if (tab) payTab = tab;
-    const [info, sp] = net.online ? await Promise.all([net.request('passInfo'), net.request('sponsorInfo')]) : [null, null];
+    // 👀 網址 ?xmas=1：支持營地也先看 12 月的禮盒（只能看，付款還是照真正的月份）
+    const pvMonth = new URLSearchParams(location.search).get('xmas') === '1' ? '2026-12' : undefined;
+    const [info, sp] = net.online ? await Promise.all([net.request('passInfo'), net.request('sponsorInfo', { preview: pvMonth })]) : [null, null];
     if (info?.ok) setPass(info);
     const off = !info?.on;
-    const month = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', month: 'numeric' }).format(new Date()));
+    const month = sp?.preview ? Number(pvMonth.slice(5)) : Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', month: 'numeric' }).format(new Date()));
     // 剩幾天：用台北的日期算（跟括號裡的「到 幾月幾日」一致）
     const tpDay = (ms) => Date.parse(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date(ms)));
     const left = passState.active ? Math.max(1, Math.round((tpDay(passState.until) - tpDay(Date.now())) / 86400000)) : 0;
@@ -2497,7 +2499,7 @@ async function init() {
         ${wigs.length ? `<div class="sw-cards">${wigs.map(card).join('')}</div>` : ''}
         <div class="dex-note">${t('先點選喜歡的那一款。同一個月再贊助一次，送你另一款。')}</div>
         ${allOwned ? `<div class="sw-has">${t('✅ 這個月的兩款你都有了，謝謝你的支持 💛')}</div>` : ''}
-        ${off ? `<div class="sw-has">${t('🎁 即將推出，敬請期待！')}</div>` : `<div class="sw-amts">${(sp?.amounts ?? []).map((a) => `<button type="button" data-amt="${a}"><small>💝 ${t('贊助')}</small><b>NT$ ${a}</b></button>`).join('')}</div>`}
+        ${sp?.preview ? `<div class="sw-has">${t('👀 這是 {m} 月的預覽，{m} 月 1 日才能贊助', { m: month })}</div>` : off ? `<div class="sw-has">${t('🎁 即將推出，敬請期待！')}</div>` : `<div class="sw-amts">${(sp?.amounts ?? []).map((a) => `<button type="button" data-amt="${a}"><small>💝 ${t('贊助')}</small><b>NT$ ${a}</b></button>`).join('')}</div>`}
         <div class="dex-note">${t('一次付清，不會自動續扣。可用台灣的信用卡、Apple Pay、綠界Pay、ATM、超商條碼。')}</div>
         ${sp && !sp.account ? `<div class="dex-note">${t('贊助前要先建立帳號（👤 存檔），假髮才不會不見')}</div>` : ''}
       </div>`;
