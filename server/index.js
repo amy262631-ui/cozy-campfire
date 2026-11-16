@@ -1859,34 +1859,43 @@ app.get('/admin', (req, res) => {
   const banRows = Object.entries(bans.v).filter(([, b]) => !b.until || b.until > Date.now()).map(([vid, b]) => `<tr><td><a href="#" data-q="${escH(homeId(vid))}">${escH(nameOfVid(vid))}</a><br><small>${escH(homeId(vid))}</small></td><td>${b.t === 'ban' ? '⛔ 停權' : '🔇 禁言'}</td><td>${b.until ? t(b.until) : '永久'}</td><td style="text-align:left">${escH(b.note ?? '')}</td></tr>`).join('');
   const grantRows = grants.slice(-50).reverse().map((g) => `<tr><td>${t(g.at)}</td><td>${escH(g.name)}<br><small>${escH(g.hid)}</small></td><td>${escH(g.what)}</td><td style="text-align:left">${escH(g.note)}</td></tr>`).join('');
   res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>營地管理</title>
-<style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px;max-width:1100px;margin:auto}h3{color:#ffb46b;margin-top:26px}table{border-collapse:collapse;font-size:13px;width:100%}th,td{padding:6px 8px;border-bottom:1px solid #3a2e27;text-align:left;vertical-align:top}th{color:#ffb46b}small{opacity:.6}.wrap{overflow-x:auto}.box{background:#2a211c;border-radius:12px;padding:12px 14px;margin:8px 0}input,select,button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3}button{background:#f08a3c;color:#2a1608;border:none;font-weight:700;cursor:pointer}a{color:#ffd08a}#card p{margin:4px 0}.ok{color:#9be29b}.err{color:#ff9a8a}p.hint{opacity:.7;font-size:13px}.re{background:#3a2e27;border-radius:8px;padding:6px 8px;white-space:pre-wrap;max-width:360px}textarea{font:inherit;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3;padding:6px}</style></head>
+<style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px;max-width:1100px;margin:auto}.tabs{position:sticky;top:0;z-index:5;background:#1d1714;padding:8px 0;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid #3a2e27;margin:10px 0}.tabs button{background:#2c231e;color:#f5e6d3;border:1px solid #4a3a30;border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer}.tabs button.on{background:#ff9a4a;color:#2a1a10;border-color:#ff9a4a;font-weight:700}section.tab{display:none}section.tab.on{display:block}section.tab h3{margin-top:8px}h3{color:#ffb46b;margin-top:26px}table{border-collapse:collapse;font-size:13px;width:100%}th,td{padding:6px 8px;border-bottom:1px solid #3a2e27;text-align:left;vertical-align:top}th{color:#ffb46b}small{opacity:.6}.wrap{overflow-x:auto}.box{background:#2a211c;border-radius:12px;padding:12px 14px;margin:8px 0}input,select,button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3}button{background:#f08a3c;color:#2a1608;border:none;font-weight:700;cursor:pointer}a{color:#ffd08a}#card p{margin:4px 0}.ok{color:#9be29b}.err{color:#ff9a8a}p.hint{opacity:.7;font-size:13px}.re{background:#3a2e27;border-radius:8px;padding:6px 8px;white-space:pre-wrap;max-width:360px}textarea{font:inherit;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3;padding:6px}</style></head>
 <body><h2>🛠️ 營地管理</h2><p class="hint">可以用名字、「玩家編號」或「帳號名稱」找人（名字大家會改，同名的會列出來讓你選；編號不會變，最準）。玩家用遊戲裡「✉️ 聯絡作者」寄信時會自動附上玩家編號；編號也顯示在「🔥 約朋友」和「👫 好友」視窗裡。</p>
-<p class="jump"><a href="#chat">💬 看大家聊天（${chatLog.length}）</a>　<a href="#notes">📝 留言板、繪馬</a>　<a href="#bans">⛔ 停權／禁言名單（${banRows ? banRows.split('<tr>').length - 1 : 0}）</a></p>
+<div class="tabs">${[['on', `🟢 現在在線（${onRows.length}）`], ['chat', `💬 聊天（${chatLog.length}）`], ['notes', '📝 留言板・繪馬'], ['mail', `✉️ 來信${support.filter((x) => !x.re).length ? `（${support.filter((x) => !x.re).length} 則沒回）` : ''}`], ['inv', '👫 邀請紀錄'], ['shout', '📣 大聲公'], ['ban', `⛔ 停權／禁言${banRows ? `（${banRows.split('<tr>').length - 1}）` : ''}`], ['grant', '🎁 補償紀錄'], ['money', '💸 退款・自己人']].map(([k, v]) => `<button type="button" data-tab="${k}">${v}</button>`).join('')}</div>
 <div class="box"><b>🔍 查玩家</b><br><input id="q" placeholder="名字、玩家編號 或 帳號名稱" size="28"> <button id="find">查詢</button><div id="card"></div></div>
 <div class="box" id="gbox" hidden><b>🎁 發補償給 <span id="gname"></span></b><br>
 <select id="gtype"><option value="outfit">👒 造型</option><option value="pc">🌰 松果</option><option value="furn">🪑 家具</option></select>
 <select id="gout">${outfitOpts}</select><select id="gfurn" hidden>${furnOpts}</select><input id="gn" type="number" min="1" max="1000" value="10" hidden>
 <input id="gnote" placeholder="備註（例：同網路沒算到的邀請補發）" size="30"> <button id="give">送出</button> <span id="gmsg"></span></div>
-<div class="box"><b>💸 退款後收回</b><br><span class="hint">先在綠界後台退款，再在這裡輸入那筆的訂單編號（/stats 月票表格最右邊那欄）。會扣回月票天數、先送的松果（已花掉就扣到 0）；支持營地會收回假髮。</span><br><input id="rno" placeholder="訂單編號" size="28"> <button id="refund">收回</button> <span id="rmsg"></span></div>
-<div class="box"><b>🏷️ 標成自己人（不算收入）</b><br><span class="hint">自己測試、家人朋友幫忙買的訂單，標了以後 /stats 收入不算它（東西不會收回）。再按一次就取消。用你自己裝置（打過 staff 的）買的會自動標。</span><br><input id="sno" placeholder="訂單編號" size="28"> <button id="selfo">標成自己人／取消</button> <span id="smsg"></span></div>
-<h3>🟢 現在在線（${onRows.length} 人）</h3><p class="hint">打開這頁那一刻在線上的人（重新整理才會更新；營地居民不算）。點名字可以查他、發補償。</p>
+<section class="tab" data-tab="money"><div class="box"><b>💸 退款後收回</b><br><span class="hint">先在綠界後台退款，再在這裡輸入那筆的訂單編號（/stats 月票表格最右邊那欄）。會扣回月票天數、先送的松果（已花掉就扣到 0）；支持營地會收回假髮。</span><br><input id="rno" placeholder="訂單編號" size="28"> <button id="refund">收回</button> <span id="rmsg"></span></div>
+<div class="box"><b>🏷️ 標成自己人（不算收入）</b><br><span class="hint">自己測試、家人朋友幫忙買的訂單，標了以後 /stats 收入不算它（東西不會收回）。再按一次就取消。用你自己裝置（打過 staff 的）買的會自動標。</span><br><input id="sno" placeholder="訂單編號" size="28"> <button id="selfo">標成自己人／取消</button> <span id="smsg"></span></div></section>
+<section class="tab" data-tab="on"><h3>🟢 現在在線（${onRows.length} 人）</h3><p class="hint">打開這頁那一刻在線上的人（重新整理才會更新；營地居民不算）。點名字可以查他、發補償。</p>
 <div class="wrap"><table><tr><th>名字／玩家編號</th><th>在哪裡</th><th>分流</th><th>第一次來</th><th>營位</th><th>月票</th></tr>${onRows.map((r) => r.row).join('') || '<tr><td colspan="6">現在沒有人在線上</td></tr>'}</table></div>
-<h3>✉️ 玩家來信（${support.filter((x) => !x.re).length} 則還沒回）</h3><p class="hint">玩家在遊戲裡按「✉️ 聯絡作者」寄來的，會自動附上玩家編號。點名字可以查他、發補償；回覆後玩家在線上會馬上收到，不在線上下次進來會看到。</p>
+</section><section class="tab" data-tab="mail"><h3>✉️ 玩家來信（${support.filter((x) => !x.re).length} 則還沒回）</h3><p class="hint">玩家在遊戲裡按「✉️ 聯絡作者」寄來的，會自動附上玩家編號。點名字可以查他、發補償；回覆後玩家在線上會馬上收到，不在線上下次進來會看到。</p>
 <div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>內容</th><th>回覆</th></tr>${supRows || '<tr><td colspan="4">還沒有來信</td></tr>'}</table></div>
-<h3>👫 邀請紀錄（最近 200 筆）</h3><p class="hint">點名字可以直接查那位玩家。「同網路」＝邀請人和朋友用同一個網路（同事、家人），要待 ${Math.round(SAMENET_STAY_MS / 60000)} 分鐘、朋友要玩一下（釣魚、採集、撿垃圾、做任務），同一個網路每天最多算 ${SAMENET_DAILY} 位。</p>
+</section><section class="tab" data-tab="inv"><h3>👫 邀請紀錄（最近 200 筆）</h3><p class="hint">點名字可以直接查那位玩家。「同網路」＝邀請人和朋友用同一個網路（同事、家人），要待 ${Math.round(SAMENET_STAY_MS / 60000)} 分鐘、朋友要玩一下（釣魚、採集、撿垃圾、做任務），同一個網路每天最多算 ${SAMENET_DAILY} 位。</p>
 <div class="wrap"><table><tr><th>時間</th><th>種類</th><th>邀請人</th><th>朋友</th><th></th><th>結果</th></tr>${invRows || '<tr><td colspan="6">還沒有紀錄（這版上線後才開始記）</td></tr>'}</table></div>
-<h3>📣 大聲公紀錄（最近 ${shouts.length} 則，伺服器重開會清空）</h3><div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>內容</th></tr>${shouts.slice().reverse().map((x) => `<tr><td>${new Date(x.at).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td><a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a></td><td>${escH(x.text)}</td></tr>`).join('') || '<tr><td colspan="3">還沒有</td></tr>'}</table></div>
-<h3 id="chat">💬 大家的聊天（最近 ${chatLog.length} 則，新的在上面）</h3><p class="hint">營火、湖邊、營地、帳篷裡的公開聊天和大聲公（好友密頻不在這裡）。伺服器重開（例如你上傳更新）會清空。點名字可以查他、禁言、停權。</p>
+</section><section class="tab" data-tab="shout"><h3>📣 大聲公紀錄（最近 ${shouts.length} 則，伺服器重開會清空）</h3><div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>內容</th></tr>${shouts.slice().reverse().map((x) => `<tr><td>${new Date(x.at).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td><a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a></td><td>${escH(x.text)}</td></tr>`).join('') || '<tr><td colspan="3">還沒有</td></tr>'}</table></div>
+</section><section class="tab" data-tab="chat"><h3 id="chat">💬 大家的聊天（最近 ${chatLog.length} 則，新的在上面）</h3><p class="hint">營火、湖邊、營地、帳篷裡的公開聊天和大聲公（好友密頻不在這裡）。伺服器重開（例如你上傳更新）會清空。點名字可以查他、禁言、停權。</p>
 <div class="wrap" style="max-height:480px;overflow:auto"><table><tr><th>時間</th><th>在哪裡</th><th>玩家</th><th>說了什麼</th></tr>${chatRows || '<tr><td colspan="4">還沒有人聊天（這版上線後才開始記）</td></tr>'}</table></div>
-<h3 id="notes">📝 告示牌留言（最近 60 張）</h3><p class="hint">有人亂寫可以直接刪掉，大家的畫面會馬上更新。這版之後貼的留言才有玩家編號（點名字可以直接查到人）。</p>
+</section><section class="tab" data-tab="notes"><h3 id="notes">📝 告示牌留言（最近 60 張）</h3><p class="hint">有人亂寫可以直接刪掉，大家的畫面會馬上更新。這版之後貼的留言才有玩家編號（點名字可以直接查到人）。</p>
 <div class="wrap" style="max-height:420px;overflow:auto"><table><tr><th>時間</th><th>玩家</th><th>留言</th><th></th></tr>${noteRows || '<tr><td colspan="4">沒有留言</td></tr>'}</table></div>
 <h3>🎋 繪馬（最近 30 塊）</h3><div class="wrap" style="max-height:300px;overflow:auto"><table><tr><th>時間</th><th>玩家</th><th>內容</th><th></th></tr>${wishRows || '<tr><td colspan="4">沒有繪馬</td></tr>'}</table></div>
-<h3 id="bans">⛔ 停權／🔇 禁言名單</h3><div class="wrap"><table><tr><th>玩家</th><th>種類</th><th>到什麼時候</th><th>原因</th></tr>${banRows || '<tr><td colspan="4">沒有人</td></tr>'}</table></div>
-<h3>🎁 補償紀錄</h3><div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>送了</th><th>備註</th></tr>${grantRows || '<tr><td colspan="4">還沒有</td></tr>'}</table></div>
+</section><section class="tab" data-tab="ban"><h3 id="bans">⛔ 停權／🔇 禁言名單</h3><div class="wrap"><table><tr><th>玩家</th><th>種類</th><th>到什麼時候</th><th>原因</th></tr>${banRows || '<tr><td colspan="4">沒有人</td></tr>'}</table></div>
+</section><section class="tab" data-tab="grant"><h3>🎁 補償紀錄</h3><div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>送了</th><th>備註</th></tr>${grantRows || '<tr><td colspan="4">還沒有</td></tr>'}</table></div></section></section>
 <script>
 (function () {
   var K = location.search, cur = '';
   var $ = function (id) { return document.getElementById(id); };
+  // 📑 分頁（作者 11/17：網頁太長 → 一次只看一區；記在網址 # 裡，重新整理還在同一頁）
+  function tab(k) {
+    if (!document.querySelector('section.tab[data-tab="' + k + '"]')) k = 'on';
+    document.querySelectorAll('section.tab').forEach(function (s) { s.classList.toggle('on', s.dataset.tab === k); });
+    document.querySelectorAll('.tabs [data-tab]').forEach(function (b) { b.classList.toggle('on', b.dataset.tab === k); });
+    history.replaceState(null, '', '#' + k);
+  }
+  document.querySelectorAll('.tabs [data-tab]').forEach(function (b) { b.onclick = function () { tab(b.dataset.tab); }; });
+  tab((location.hash || '#on').slice(1));
   var esc = function (x) { return String(x == null ? '' : x).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   function show(r) {
     if (!r.ok) {
