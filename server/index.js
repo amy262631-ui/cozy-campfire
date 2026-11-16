@@ -186,8 +186,8 @@ function pickChannel(wanted) {
 const DATA_DIR = path.resolve(__dirname, 'data');
 await storage.init(DATA_DIR);
 const asArray = (v) => (Array.isArray(v) ? v : []);
-const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog, savedAccounts, savedHomes, savedIdeas, savedTotals, savedMuseum, savedOrders, savedInvites, savedGrants, savedDms, savedSupport] = await Promise.all(
-  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json', 'ideas.json', 'totals.json', 'museum2.json', 'orders.json', 'invites.json', 'grants.json', 'dms.json', 'support.json'].map((f) =>
+const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog, savedAccounts, savedHomes, savedIdeas, savedTotals, savedMuseum, savedOrders, savedInvites, savedGrants, savedDms, savedSupport, savedBans] = await Promise.all(
+  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json', 'ideas.json', 'totals.json', 'museum2.json', 'orders.json', 'invites.json', 'grants.json', 'dms.json', 'support.json', 'bans.json'].map((f) =>
     storage.load(f),
   ),
 );
@@ -200,6 +200,22 @@ const homes = asObject(savedHomes);
 const invites = asArray(savedInvites);
 /** 💌 好友密頻：{ 'vidA|vidB'（排序過）: [{ f: 寄件人 vid, t, at }] }，每一對最多留 60 則 */
 const dms = asObject(savedDms);
+/** ⛔ 停權／🔇 禁言（作者 11/16）：{ v: { vid: { t: 'ban'|'mute', until（0＝永久）, at, note, name } }, n: { 網路雜湊: { until, vid, at } } } */
+const bans = asObject(savedBans);
+bans.v ??= {};
+bans.n ??= {};
+/** 這個人現在有沒有被停權／禁言（過期的自動不算） */
+const banOf = (vid, kind) => {
+  const b = vid && bans.v[vid];
+  if (!b || (kind && b.t !== kind && !(kind === 'mute' && b.t === 'ban'))) return null;
+  return !b.until || b.until > Date.now() ? b : null;
+};
+const netBanOf = (net) => {
+  const b = net && bans.n[net];
+  return b && (!b.until || b.until > Date.now()) ? b : null;
+};
+/** 💬 最近的公開聊天（/admin 看，最多 400 則，伺服器重開會清空；密頻不記在這裡） */
+const chatLog = [];
 /** ✉️ 聯絡作者：[{ id, vid, hid, name, t, at, re, reAt, seen }]（最多 500 則） */
 const support = asArray(savedSupport);
 /** 🎁 作者發的補償紀錄：[{ at, hid, name, what, note }] */
@@ -1662,6 +1678,30 @@ function findVid(q) {
   const v = vidOfCode(q);
   return v && players[v] ? v : null;
 }
+/** 🔍 用暱稱找（作者 11/16：看到奇怪的人只知道名字）：完全一樣的優先，再來是包含；在線的排前面，最多 20 個 */
+function findByName(q) {
+  q = String(q ?? '').trim().toLowerCase();
+  if (!q) return [];
+  const on = new Set([...io.sockets.sockets.values()].map((s) => s.data.vid).filter(Boolean));
+  const hit = [];
+  const seen = new Set();
+  // 在線上的人用他現在頭上的名字（有些人的名字還沒存進存檔）
+  for (const c of channels.values()) {
+    for (const r of c.rooms.values()) {
+      for (const p of r.players.values()) {
+        const n = String(p.name ?? '').toLowerCase();
+        if (p.vid && players[p.vid] && !seen.has(p.vid) && (n === q || n.includes(q))) seen.add(p.vid), hit.push({ vid: p.vid, exact: n === q, on: true, nm: p.name });
+      }
+    }
+  }
+  for (const vid of Object.keys(players)) {
+    if (seen.has(vid)) continue;
+    const n = String(nameOfVid(vid)).toLowerCase();
+    if (n === q || n.includes(q)) hit.push({ vid, exact: n === q, on: on.has(vid) });
+  }
+  hit.sort((a, b) => b.on - a.on || b.exact - a.exact);
+  return hit.slice(0, 20).map((h) => ({ hid: homeId(h.vid), name: h.nm ?? nameOfVid(h.vid), on: h.on, first: players[h.vid]?.fd ?? '' }));
+}
 const playerCard = (vid) => {
   const w = players[vid];
   const hid = homeId(vid);
@@ -1676,13 +1716,66 @@ const playerCard = (vid) => {
     refs: w.refs ?? 0,
     by: w.by ? `${w.by}（${byVid ? nameOfVid(byVid) : '?'}）` : '',
     tent: !!homes[vid]?.tent,
+    ban: banOf(vid) ?? null,
+    netBan: Object.values(bans.n).some((b) => b.vid === vid && (!b.until || b.until > Date.now())),
+    chats: chatLog.filter((c) => c.hid === hid).slice(-30).reverse(),
     log: invites.filter((x) => x.ref === hid || x.friend === hid).slice(-30).reverse(),
   };
 };
 app.get('/api/lookup', (req, res) => {
   if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
   const vid = findVid(req.query.q);
-  if (!vid) return res.json({ ok: false, reason: '找不到：請用玩家編號（遊戲「🔥 約朋友」或「👫 好友」視窗裡）或帳號名稱' });
+  if (!vid) {
+    const list = findByName(req.query.q);
+    if (list.length === 1) return res.json({ ok: true, ...playerCard(vidOfCode(list[0].hid)) });
+    if (list.length) return res.json({ ok: false, list, reason: `有 ${list.length} 個人叫這個名字，點一個查看` });
+    return res.json({ ok: false, reason: '找不到：可以用名字、玩家編號或帳號名稱找' });
+  }
+  res.json({ ok: true, ...playerCard(vid) });
+});
+/** 🗑️ 刪掉一張留言／繪馬（作者 11/16：有人在留言板亂寫作者的事）：{ kind: 'notes'|'wishes', at } */
+app.post('/api/delNote', express.json(), (req, res) => {
+  if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
+  const kind = req.body?.kind === 'wishes' ? 'wishes' : 'notes';
+  const at = Number(req.body?.at);
+  const before = shared[kind].length;
+  shared[kind] = shared[kind].filter((x) => x.at !== at);
+  if (shared[kind].length === before) return res.json({ ok: false, reason: '找不到（可能已經刪了）' });
+  saveJson(`${kind}.json`, shared[kind]);
+  if (kind === 'notes') emitAllChannels('forest_main', 'notes', { notes: recent(shared.notes, MAX_NOTES) });
+  else emitAllChannels('forest_main', 'wishes', { wishes: recent(shared.wishes, MAX_WISHES) });
+  console.log(`[管理] 刪掉一張${kind === 'notes' ? '留言' : '繪馬'}`);
+  res.json({ ok: true });
+});
+/** ⛔ 停權／🔇 禁言／✅ 解除（作者 11/16）：{ q: 玩家編號, t: 'ban'|'mute'|'clear', days（0＝永久）, net（停權時連同他現在的網路一起擋）, note } */
+app.post('/api/ban', express.json(), (req, res) => {
+  if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
+  const vid = findVid(req.body?.q);
+  if (!vid) return res.json({ ok: false, reason: '找不到這個玩家' });
+  const t = req.body?.t;
+  const name = nameOfVid(vid);
+  const socks = [...io.sockets.sockets.values()].filter((s) => s.data.vid === vid);
+  if (t === 'clear') {
+    delete bans.v[vid];
+    for (const [k, b] of Object.entries(bans.n)) if (b.vid === vid) delete bans.n[k];
+    for (const s of socks) s.emit('muted', { until: -1 });
+    saveJson('bans.json', bans);
+    console.log(`[管理] 解除 ${name}`);
+    return res.json({ ok: true, ...playerCard(vid) });
+  }
+  if (t !== 'ban' && t !== 'mute') return res.json({ ok: false, reason: '種類不對' });
+  const days = Math.max(0, Math.min(3650, Number(req.body?.days) || 0));
+  const until = days ? Date.now() + days * 86400000 : 0;
+  bans.v[vid] = { t, until, at: Date.now(), note: String(req.body?.note ?? '').slice(0, 100), name };
+  if (t === 'ban') {
+    if (req.body?.net) for (const s of socks) if (s.data.netKey) bans.n[s.data.netKey] = { until, vid, at: Date.now() };
+    for (const s of socks) {
+      s.emit('banned', { until });
+      setTimeout(() => s.disconnect(true), 800);
+    }
+  } else for (const s of socks) s.emit('muted', { until });
+  saveJson('bans.json', bans);
+  console.log(`[管理] ${t === 'ban' ? '停權' : '禁言'} ${name}（${days ? `${days} 天` : '永久'}）${req.body?.net ? '＋網路' : ''}`);
   res.json({ ok: true, ...playerCard(vid) });
 });
 /** 🏷️ 標成自己人／取消（作者 11/15）：作者測試、家人買的訂單不算進 /stats 收入 */
@@ -1759,11 +1852,17 @@ app.get('/admin', (req, res) => {
   const invRows = invites.slice(-200).reverse().map((x) => `<tr><td>${t(x.at)}</td><td>${KIND_ZH[x.kind] ?? x.kind}</td><td><a href="#" data-q="${escH(x.ref)}">${escH(x.rn)}</a><br><small>${escH(x.ref)}</small></td><td><a href="#" data-q="${escH(x.friend)}">${escH(x.fn)}</a><br><small>${escH(x.friend)}</small></td><td>${x.net ? '🏢 同網路' : ''}</td><td style="text-align:left">${escH(x.r)}</td></tr>`).join('');
   const supRows = support.slice(-100).reverse().map((x) => `<tr><td>${t(x.at)}</td><td><a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a><br><small>${escH(x.hid)}</small></td><td style="white-space:pre-wrap;max-width:360px">${escH(x.t)}</td><td>${x.re ? `<div class="re">${escH(x.re)}</div><small>${t(x.reAt)}${x.seen ? '・玩家看過了' : '・玩家還沒看'}</small>` : `<textarea data-re="${x.id}" rows="2" cols="34" placeholder="回覆（玩家下次上線會看到）"></textarea><br><button data-send="${x.id}">回覆</button>`}</td></tr>`).join('');
   const onRows = onlineList((hid, name) => `<a href="#" data-q="${escH(hid)}">${escH(name)}</a>`);
+  const chatRows = chatLog.slice().reverse().map((c) => `<tr><td>${t(c.at)}</td><td>${escH(c.where)}${c.ch ? ` <small>分流 ${c.ch}</small>` : ''}</td><td>${c.hid ? `<a href="#" data-q="${escH(c.hid)}">${escH(c.name)}</a>` : escH(c.name)}</td><td style="text-align:left">${escH(c.text)}</td></tr>`).join('');
+  const noteRow = (kind) => (x) => `<tr><td>${t(x.at)}</td><td>${x.hid ? `<a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a>` : `<a href="#" data-q="${escH(x.name)}">${escH(x.name)}</a>`}</td><td style="text-align:left">${escH(x.text)}</td><td><button data-del="${kind}:${x.at}">🗑️ 刪掉</button></td></tr>`;
+  const noteRows = shared.notes.slice(-60).reverse().map(noteRow('notes')).join('');
+  const wishRows = shared.wishes.slice(-30).reverse().map(noteRow('wishes')).join('');
+  const banRows = Object.entries(bans.v).filter(([, b]) => !b.until || b.until > Date.now()).map(([vid, b]) => `<tr><td><a href="#" data-q="${escH(homeId(vid))}">${escH(nameOfVid(vid))}</a><br><small>${escH(homeId(vid))}</small></td><td>${b.t === 'ban' ? '⛔ 停權' : '🔇 禁言'}</td><td>${b.until ? t(b.until) : '永久'}</td><td style="text-align:left">${escH(b.note ?? '')}</td></tr>`).join('');
   const grantRows = grants.slice(-50).reverse().map((g) => `<tr><td>${t(g.at)}</td><td>${escH(g.name)}<br><small>${escH(g.hid)}</small></td><td>${escH(g.what)}</td><td style="text-align:left">${escH(g.note)}</td></tr>`).join('');
   res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>營地管理</title>
 <style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px;max-width:1100px;margin:auto}h3{color:#ffb46b;margin-top:26px}table{border-collapse:collapse;font-size:13px;width:100%}th,td{padding:6px 8px;border-bottom:1px solid #3a2e27;text-align:left;vertical-align:top}th{color:#ffb46b}small{opacity:.6}.wrap{overflow-x:auto}.box{background:#2a211c;border-radius:12px;padding:12px 14px;margin:8px 0}input,select,button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3}button{background:#f08a3c;color:#2a1608;border:none;font-weight:700;cursor:pointer}a{color:#ffd08a}#card p{margin:4px 0}.ok{color:#9be29b}.err{color:#ff9a8a}p.hint{opacity:.7;font-size:13px}.re{background:#3a2e27;border-radius:8px;padding:6px 8px;white-space:pre-wrap;max-width:360px}textarea{font:inherit;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3;padding:6px}</style></head>
-<body><h2>🛠️ 營地管理</h2><p class="hint">用「玩家編號」或「帳號名稱」找人，不用暱稱（暱稱大家會改）。玩家用遊戲裡「✉️ 聯絡作者」寄信時會自動附上玩家編號；編號也顯示在「🔥 約朋友」和「👫 好友」視窗裡。</p>
-<div class="box"><b>🔍 查玩家</b><br><input id="q" placeholder="玩家編號 或 帳號名稱" size="28"> <button id="find">查詢</button><div id="card"></div></div>
+<body><h2>🛠️ 營地管理</h2><p class="hint">可以用名字、「玩家編號」或「帳號名稱」找人（名字大家會改，同名的會列出來讓你選；編號不會變，最準）。玩家用遊戲裡「✉️ 聯絡作者」寄信時會自動附上玩家編號；編號也顯示在「🔥 約朋友」和「👫 好友」視窗裡。</p>
+<p class="jump"><a href="#chat">💬 看大家聊天（${chatLog.length}）</a>　<a href="#notes">📝 留言板、繪馬</a>　<a href="#bans">⛔ 停權／禁言名單（${banRows ? banRows.split('<tr>').length - 1 : 0}）</a></p>
+<div class="box"><b>🔍 查玩家</b><br><input id="q" placeholder="名字、玩家編號 或 帳號名稱" size="28"> <button id="find">查詢</button><div id="card"></div></div>
 <div class="box" id="gbox" hidden><b>🎁 發補償給 <span id="gname"></span></b><br>
 <select id="gtype"><option value="outfit">👒 造型</option><option value="pc">🌰 松果</option><option value="furn">🪑 家具</option></select>
 <select id="gout">${outfitOpts}</select><select id="gfurn" hidden>${furnOpts}</select><input id="gn" type="number" min="1" max="1000" value="10" hidden>
@@ -1777,6 +1876,12 @@ app.get('/admin', (req, res) => {
 <h3>👫 邀請紀錄（最近 200 筆）</h3><p class="hint">點名字可以直接查那位玩家。「同網路」＝邀請人和朋友用同一個網路（同事、家人），要待 ${Math.round(SAMENET_STAY_MS / 60000)} 分鐘、朋友要玩一下（釣魚、採集、撿垃圾、做任務），同一個網路每天最多算 ${SAMENET_DAILY} 位。</p>
 <div class="wrap"><table><tr><th>時間</th><th>種類</th><th>邀請人</th><th>朋友</th><th></th><th>結果</th></tr>${invRows || '<tr><td colspan="6">還沒有紀錄（這版上線後才開始記）</td></tr>'}</table></div>
 <h3>📣 大聲公紀錄（最近 ${shouts.length} 則，伺服器重開會清空）</h3><div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>內容</th></tr>${shouts.slice().reverse().map((x) => `<tr><td>${new Date(x.at).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td><a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a></td><td>${escH(x.text)}</td></tr>`).join('') || '<tr><td colspan="3">還沒有</td></tr>'}</table></div>
+<h3 id="chat">💬 大家的聊天（最近 ${chatLog.length} 則，新的在上面）</h3><p class="hint">營火、湖邊、營地、帳篷裡的公開聊天和大聲公（好友密頻不在這裡）。伺服器重開（例如你上傳更新）會清空。點名字可以查他、禁言、停權。</p>
+<div class="wrap" style="max-height:480px;overflow:auto"><table><tr><th>時間</th><th>在哪裡</th><th>玩家</th><th>說了什麼</th></tr>${chatRows || '<tr><td colspan="4">還沒有人聊天（這版上線後才開始記）</td></tr>'}</table></div>
+<h3 id="notes">📝 告示牌留言（最近 60 張）</h3><p class="hint">有人亂寫可以直接刪掉，大家的畫面會馬上更新。這版之後貼的留言才有玩家編號（點名字可以直接查到人）。</p>
+<div class="wrap" style="max-height:420px;overflow:auto"><table><tr><th>時間</th><th>玩家</th><th>留言</th><th></th></tr>${noteRows || '<tr><td colspan="4">沒有留言</td></tr>'}</table></div>
+<h3>🎋 繪馬（最近 30 塊）</h3><div class="wrap" style="max-height:300px;overflow:auto"><table><tr><th>時間</th><th>玩家</th><th>內容</th><th></th></tr>${wishRows || '<tr><td colspan="4">沒有繪馬</td></tr>'}</table></div>
+<h3 id="bans">⛔ 停權／🔇 禁言名單</h3><div class="wrap"><table><tr><th>玩家</th><th>種類</th><th>到什麼時候</th><th>原因</th></tr>${banRows || '<tr><td colspan="4">沒有人</td></tr>'}</table></div>
 <h3>🎁 補償紀錄</h3><div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>送了</th><th>備註</th></tr>${grantRows || '<tr><td colspan="4">還沒有</td></tr>'}</table></div>
 <script>
 (function () {
@@ -1784,14 +1889,23 @@ app.get('/admin', (req, res) => {
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (x) { return String(x == null ? '' : x).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   function show(r) {
-    if (!r.ok) { $('card').innerHTML = '<p class="err">' + esc(r.reason) + '</p>'; $('gbox').hidden = true; return; }
+    if (!r.ok) {
+      $('card').innerHTML = '<p class="err">' + esc(r.reason) + '</p>' + (r.list ? '<ul>' + r.list.map(function (x) { return '<li><a href="#" data-q="' + esc(x.hid) + '">' + esc(x.name) + '</a> <small>' + esc(x.hid) + '　第一次來 ' + esc(x.first) + (x.on ? '　🟢 在線' : '') + '</small></li>'; }).join('') + '</ul>' : '');
+      $('gbox').hidden = true;
+      return;
+    }
     cur = r.hid;
     $('gname').textContent = r.name + '（' + r.hid + '）';
     $('gbox').hidden = false;
     var log = r.log.map(function (x) { return '<tr><td>' + new Date(x.at).toLocaleString('zh-TW', { hour12: false }) + '</td><td>' + esc(x.rn) + ' → ' + esc(x.fn) + '</td><td>' + (x.net ? '🏢' : '') + '</td><td>' + esc(x.r) + '</td></tr>'; }).join('');
     $('card').innerHTML = '<p>👤 <b>' + esc(r.name) + '</b>　玩家編號 <b>' + esc(r.hid) + '</b>　帳號 <b>' + (esc(r.account) || '（沒綁）') + '</b></p>' +
       '<p>第一次來 ' + esc(r.first || '?') + '　🌰 ' + r.pc + '　👒 ' + r.outfits + ' 款　' + (r.tent ? '⛺ 有帳篷' : '還沒帳篷') + '　邀請成功 ' + r.refs + ' 位' + (r.by ? '　被 ' + esc(r.by) + ' 邀請來的' : '') + '</p>' +
-      (log ? '<div class="wrap"><table><tr><th>時間</th><th>邀請人 → 朋友</th><th></th><th>結果</th></tr>' + log + '</table></div>' : '<p class="hint">沒有邀請紀錄</p>');
+      (log ? '<div class="wrap"><table><tr><th>時間</th><th>邀請人 → 朋友</th><th></th><th>結果</th></tr>' + log + '</table></div>' : '<p class="hint">沒有邀請紀錄</p>') +
+      '<div class="box" style="margin-top:10px"><b>🚫 處理這個人</b>　' + (r.ban ? '<span class="err">現在：' + (r.ban.t === 'ban' ? '⛔ 停權' : '🔇 禁言') + '（' + (r.ban.until ? '到 ' + new Date(r.ban.until).toLocaleString('zh-TW', { hour12: false }) : '永久') + '）' + (r.netBan ? '＋網路' : '') + '</span>' : '<span class="ok">現在：正常</span>') +
+      '<br><input id="bnote" placeholder="原因（自己看的）" size="24"> <select id="bdays"><option value="1">1 天</option><option value="7">7 天</option><option value="30">30 天</option><option value="0">永久</option></select>' +
+      ' <button data-ban="mute">🔇 禁言</button> <button data-ban="ban">⛔ 停權</button> <label><input type="checkbox" id="bnet"> 停權時連他現在的網路一起擋</label>' + (r.ban ? ' <button data-ban="clear">✅ 解除</button>' : '') +
+      '<div class="hint">🔇 禁言：還能玩，但不能聊天、大聲公、留言、繪馬、密頻。⛔ 停權：馬上踢出去，進不來。「連網路一起擋」可以擋他開新帳號，但同一個家裡、學校的人也會一起進不來，小心用（只有他在線上時才擋得到網路）。</div></div>' +
+      (r.chats && r.chats.length ? '<p><b>💬 他最近說的話</b></p><div class="wrap"><table>' + r.chats.map(function (c) { return '<tr><td>' + new Date(c.at).toLocaleString('zh-TW', { hour12: false }) + '</td><td>' + esc(c.where) + '</td><td style="text-align:left">' + esc(c.text) + '</td></tr>'; }).join('') + '</table></div>' : '');
   }
   function find(q) {
     $('q').value = q;
@@ -1799,7 +1913,25 @@ app.get('/admin', (req, res) => {
   }
   $('find').onclick = function () { find($('q').value); };
   $('q').onkeydown = function (e) { if (e.key === 'Enter') find($('q').value); };
-  document.querySelectorAll('[data-q]').forEach(function (a) { a.onclick = function (e) { e.preventDefault(); if (a.dataset.q) { find(a.dataset.q); scrollTo(0, 0); } }; });
+  // 點名字查人（卡片裡後來才出現的名字也要能點）
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('[data-q]');
+    if (a) { e.preventDefault(); if (a.dataset.q) { find(a.dataset.q); scrollTo(0, 0); } return; }
+    var b = e.target.closest('[data-ban]');
+    if (b) {
+      var t = b.dataset.ban, days = $('bdays').value;
+      var what = t === 'clear' ? '解除' : (t === 'ban' ? '停權' : '禁言') + (days === '0' ? '（永久）' : '（' + days + ' 天）');
+      if (!confirm('確定對 ' + $('gname').textContent + ' ' + what + '？')) return;
+      fetch('/api/ban' + K, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: cur, t: t, days: days, net: $('bnet') && $('bnet').checked, note: $('bnote') ? $('bnote').value : '' }) }).then(function (r) { return r.json(); }).then(function (r) { if (r.ok) show(r); else alert(r.reason); });
+      return;
+    }
+    var d = e.target.closest('[data-del]');
+    if (d) {
+      var p = d.dataset.del.split(':');
+      if (!confirm('確定刪掉這一張？大家都看不到了')) return;
+      fetch('/api/delNote' + K, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: p[0], at: Number(p[1]) }) }).then(function (r) { return r.json(); }).then(function (r) { if (r.ok) d.closest('tr').remove(); else alert(r.reason); });
+    }
+  });
   document.querySelectorAll('[data-send]').forEach(function (b) {
     b.onclick = function () {
       var ta = document.querySelector('[data-re="' + b.dataset.send + '"]');
@@ -2368,6 +2500,17 @@ io.on('connection', (socket) => {
 
   socket.on('join', (data = {}, ack) => {
     if (player) return;
+    // ⛔ 被停權（帳號或網路）：進不來
+    {
+      const jip = String(socket.handshake.headers['x-forwarded-for'] ?? socket.handshake.address ?? '').split(',')[0].trim();
+      const jnet = jip ? crypto.createHash('sha256').update(jip).digest('hex').slice(0, 12) : '';
+      const b = banOf(String(data.vid ?? '').slice(0, 24), 'ban') ?? netBanOf(jnet);
+      if (b) {
+        ack?.({ ok: false, reason: 'banned', until: b.until || 0 });
+        setTimeout(() => socket.disconnect(true), 500);
+        return;
+      }
+    }
     let wanted = ROOM_DEFS[data.room] ? data.room : DEFAULT_ROOM;
     campZone = Math.floor(num(data.zone, 0, 59, 0));
     let wantCh = Math.floor(num(data.ch, 0, 999, 0));
@@ -2849,6 +2992,7 @@ io.on('connection', (socket) => {
     if (!wal || !player?.vid) return ack?.({ ok: false });
     const text = String(data.text ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40);
     if (!text) return ack?.({ ok: false, reason: 'empty' });
+    if (banOf(player.vid, 'mute')) return ack?.({ ok: false, reason: 'muted' });
     const now = Date.now();
     if (now - lastShout < SHOUT_MY_MS) return ack?.({ ok: false, reason: 'wait', sec: Math.ceil((SHOUT_MY_MS - (now - lastShout)) / 1000) });
     if (now - shoutAt < SHOUT_ALL_MS) return ack?.({ ok: false, reason: 'busy', sec: Math.ceil((SHOUT_ALL_MS - (now - shoutAt)) / 1000) });
@@ -2859,6 +3003,7 @@ io.on('connection', (socket) => {
     socket.emit('wallet', { pc: wal.pc, delta: -SHOUT_PRICE, reason: 'shout' });
     const msg = { name: player.name, hid: homeId(player.vid), text, at: now };
     shouts.push(msg);
+    chatLog.push({ at: now, name: player.name, hid: msg.hid, where: '📣 大聲公', ch: 0, text });
     if (shouts.length > 50) shouts.splice(0, shouts.length - 50);
     bump('shouts');
     io.emit('shout', { name: msg.name, text, at: now });
@@ -2873,8 +3018,12 @@ io.on('connection', (socket) => {
     lastChat = now;
     const text = String(data.text ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40);
     if (!text) return;
+    const mu = banOf(player.vid, 'mute');
+    if (mu) return socket.emit('muted', { until: mu.until || 0 });
     bump('chats');
     io.to(rkey).emit('chat', { id: socket.id, name: player.name, text });
+    chatLog.push({ at: now, name: player.name, hid: player.vid ? homeId(player.vid) : '', where: ROOM_DEFS[roomId]?.label ?? roomId, ch: chan?.ch ?? 0, text });
+    if (chatLog.length > 400) chatLog.splice(0, chatLog.length - 400);
     // ☁️ 陪別人聊天（同一區有別人才算，每分鐘最多一次）
     if (room?.players.size > 1 && now - lastSpiritChat > 60000) (lastSpiritChat = now), spiritGain('chat');
   });
@@ -2893,12 +3042,14 @@ io.on('connection', (socket) => {
   let lastWish = 0;
   socket.on('wish', (data = {}) => {
     if (!player || roomId !== 'forest_main') return;
+    const mu = banOf(player.vid, 'mute');
+    if (mu) return socket.emit('muted', { until: mu.until || 0 });
     const now = Date.now();
     if (now - lastWish < 20000) return;
     lastWish = now;
     const text = String(data.text ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 30);
     if (!text) return;
-    shared.wishes.push({ name: player.name, text, at: now });
+    shared.wishes.push({ name: player.name, hid: player.vid ? homeId(player.vid) : '', text, at: now });
     spiritGain('wish'); // ⭐ 許願
     shared.wishes = shared.wishes.slice(-ARCHIVE_MAX);
     saveJson('wishes.json', shared.wishes);
@@ -4307,13 +4458,15 @@ io.on('connection', (socket) => {
   let lastNote = 0;
   socket.on('note', (data = {}) => {
     if (!player || roomId !== 'forest_main') return;
+    const mu = banOf(player.vid, 'mute');
+    if (mu) return socket.emit('muted', { until: mu.until || 0 });
     const now = Date.now();
     if (now - lastNote < 20000) return;
     const text = String(data.text ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 60);
     if (!text) return;
     lastNote = now;
     const color = Math.max(0, Math.min(3, data.color | 0));
-    shared.notes.push({ name: player.name, text, at: now, color, ch: chan.ch });
+    shared.notes.push({ name: player.name, hid: player.vid ? homeId(player.vid) : '', text, at: now, color, ch: chan.ch });
     shared.notes = shared.notes.slice(-ARCHIVE_MAX);
     saveJson('notes.json', shared.notes);
     bump('notes');
@@ -4633,6 +4786,7 @@ io.on('connection', (socket) => {
     const f = targetVid(data);
     if (!me || !f) return ack?.({ ok: false });
     if (!isFriend(me, f)) return ack?.({ ok: false, reason: 'notFriend' });
+    if (banOf(me, 'mute')) return ack?.({ ok: false, reason: 'muted' });
     const text = String(data.text ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 200);
     if (!text) return ack?.({ ok: false });
     const now = Date.now();

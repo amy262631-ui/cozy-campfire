@@ -1577,7 +1577,7 @@ async function init() {
     if (!confirm(t('花 30 🌰 用大聲公說：「{text}」？全營地的人都看得到', { text }))) return;
     const r = await net.request('shout', { text });
     if (r?.ok) return done?.();
-    hud.toast(r?.reason === 'wait' ? t('📣 大聲公每 3 分鐘可以用一次，再等 {n} 秒', { n: r.sec }) : r?.reason === 'busy' ? t('📣 剛剛有人用過大聲公，{n} 秒後再試', { n: r.sec }) : r?.reason === 'poor' ? t('松果不夠，需要 {n} 🌰', { n: 30 }) : t('沒送出去，再試一次'));
+    hud.toast(r?.reason === 'wait' ? t('📣 大聲公每 3 分鐘可以用一次，再等 {n} 秒', { n: r.sec }) : r?.reason === 'busy' ? t('📣 剛剛有人用過大聲公，{n} 秒後再試', { n: r.sec }) : r?.reason === 'poor' ? t('松果不夠，需要 {n} 🌰', { n: 30 }) : r?.reason === 'muted' ? t('🔇 你暫時不能說話') : t('沒送出去，再試一次'));
   };
 
   // ---------- ✨ 小精靈（作者 11/11：跟在肩膀旁邊飄、玩遊戲會長大） ----------
@@ -3143,7 +3143,25 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   });
   // 伺服器的拒絕原因用代碼判斷，再顯示成目前語言
   const fullMsg = () => t('這裡人數已滿，請稍後再來');
-  net.on('rejected', (res) => res?.reason === 'full' && hud.toast(fullMsg(), 4000));
+  net.on('rejected', (res) => {
+    if (res?.reason === 'full') hud.toast(fullMsg(), 4000);
+    if (res?.reason === 'banned') showBanned(res.until);
+  });
+  // ⛔ 被停權（作者 11/16 可以在後台停權）：蓋一層說明，進不了遊戲
+  function showBanned(until) {
+    if (document.getElementById('ban-card')) return;
+    const el = document.createElement('div');
+    el.id = 'ban-card';
+    el.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(20,14,10,.92);color:#f5e6d3;font-size:18px;text-align:center;padding:24px;line-height:1.7';
+    el.textContent = until ? t('⛔ 你的帳號暫停使用，到 {d} 才能再進來', { d: new Date(until).toLocaleDateString() }) : t('⛔ 你的帳號已經被停止使用');
+    document.body.appendChild(el);
+  }
+  net.on('banned', ({ until } = {}) => showBanned(until));
+  // 🔇 被禁言：不能聊天、大聲公、留言、繪馬、密頻
+  net.on('muted', ({ until } = {}) => {
+    if (until === -1) return hud.toast(t('✅ 你可以再聊天了'));
+    hud.toast(until ? t('🔇 你暫時不能說話，到 {d} 才可以', { d: new Date(until).toLocaleString() }) : t('🔇 你已經不能在營地說話了'), 4000);
+  });
   net.on('caught', ({ id, name, fish, size, rank, shiny }) => {
     const f = FISH[fish];
     if (shiny && id !== net.id) return; // ✨ 異色魚：bigCatch 那邊會跳大公告
@@ -3205,11 +3223,11 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   net.on('emoji', ({ id, e }) => id !== net.id && bubbles.show(id, e, { emoji: true }));
   net.on('notes', ({ notes, by, name }) => {
     applyNotes(notes);
-    if (by !== net.id) hud.toast(t('📌 {name} 在告示牌貼了一張留言', { name }));
+    if (by && by !== net.id) hud.toast(t('📌 {name} 在告示牌貼了一張留言', { name })); // 沒有 by＝作者在後台刪了一張
   });
   net.on('wishes', ({ wishes, by, name }) => {
     applyWishes(wishes);
-    if (by !== net.id) hud.toast(t('📝 {name} 在祈福處掛了一塊繪馬', { name }));
+    if (by && by !== net.id) hud.toast(t('📝 {name} 在祈福處掛了一塊繪馬', { name }));
   });
 
   // ---------- 房間管理 ----------
@@ -4259,7 +4277,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     setTimeout(() => sharePop(text, null, () => addFriend({ hid }), t('＋ 加好友'), 20000), 3000);
   });
   const friendErr = (r) =>
-    ({ notFound: t('找不到這個玩家編號'), self: t('這是你自己喔'), already: t('你們已經是好友了'), full: t('好友已經滿 100 位了'), tooFast: t('慢慢來 🙂'), notFriend: t('要互相加好友才能密頻'), short: t('多寫幾個字吧'), tooMany: t('今天已經寄很多封了，作者看到會回你'), offline: t('還沒連上伺服器') })[r?.reason] ?? t('沒有成功，再試一次');
+    ({ notFound: t('找不到這個玩家編號'), self: t('這是你自己喔'), already: t('你們已經是好友了'), full: t('好友已經滿 100 位了'), tooFast: t('慢慢來 🙂'), notFriend: t('要互相加好友才能密頻'), short: t('多寫幾個字吧'), tooMany: t('今天已經寄很多封了，作者看到會回你'), offline: t('還沒連上伺服器'), muted: t('🔇 你暫時不能說話') })[r?.reason] ?? t('沒有成功，再試一次');
   async function addFriend(data) {
     if (!net.online) return hud.toast(t('還沒連上伺服器'));
     const r = await net.request('friendAdd', data);
