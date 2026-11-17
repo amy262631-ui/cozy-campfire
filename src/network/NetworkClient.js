@@ -111,7 +111,8 @@ export class NetworkClient {
     socket.on('disconnect', () => this.#setStatus(socket.active ? 'connecting' : 'offline'));
     socket.on('connect_error', () => this.#setStatus(socket.active ? 'connecting' : 'offline'));
 
-    for (const ev of ['banned', 'muted', 'invitedGift', 'shinyDex', 'miniHuntShow', 'dineAte', 'playerJoined', 'playerLeft', 'states', 'fire', 'fireSync', 'song', 'caught', 'board', 'chat', 'emoji', 'wishes', 'notes', 'stone', 'lakeNews', 'wallet', 'ornament', 'event', 'friendJoined', 'cairnReset', 'homeUpdate', 'mini', 'miniBoard', 'miniHunt', 'areas', 'gift', 'friendCredit', 'bigCatch', 'outfit', 'outfitGift', 'dateFriend', 'museum', 'ate', 'cooked', 'dishGift', 'gardenWatered', 'treasures', 'trash', 'trashGot', 'pass', 'sponsored', 'friendSuggest', 'dupLogin', 'spiritMe', 'spirit', 'spiritAte', 'spiritHatch', 'shout', 'bgame']) {
+    // 💌 11/17 作者：密頻好友按鈕不閃 → dm、socialBadge 等 9 個事件一直沒列進來，前端從來沒收到過
+    for (const ev of ['dm', 'socialBadge', 'friendReq', 'friendNew', 'supportReply', 'giftGot', 'chal', 'dex', 'staffGift', 'banned', 'muted', 'invitedGift', 'shinyDex', 'miniHuntShow', 'dineAte', 'playerJoined', 'playerLeft', 'states', 'fire', 'fireSync', 'song', 'caught', 'board', 'chat', 'emoji', 'wishes', 'notes', 'stone', 'lakeNews', 'wallet', 'ornament', 'event', 'friendJoined', 'cairnReset', 'homeUpdate', 'mini', 'miniBoard', 'miniHunt', 'areas', 'gift', 'friendCredit', 'bigCatch', 'outfit', 'outfitGift', 'dateFriend', 'museum', 'ate', 'cooked', 'dishGift', 'gardenWatered', 'treasures', 'trash', 'trashGot', 'pass', 'sponsored', 'friendSuggest', 'dupLogin', 'spiritMe', 'spirit', 'spiritAte', 'spiritHatch', 'shout', 'bgame']) {
       socket.on(ev, (data) => this.#emit(ev, data));
     }
   }
