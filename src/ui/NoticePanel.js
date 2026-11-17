@@ -28,13 +28,13 @@ function ago(at) {
  *   onPost(text, color)  貼出留言
  */
 export class NoticePanel {
-  constructor({ hud, onPost, onIdea, onHistory, root = document.getElementById('ui') }) {
+  constructor({ hud, onPost, onContact, onHistory, root = document.getElementById('ui') }) {
     this.hud = hud;
     this.onHistory = onHistory;
     this.page = 0;
     this.reqId = 0;
     this.onPost = onPost;
-    this.onIdea = onIdea;
+    this.onContact = onContact;
     this.notes = [];
     this.tab = 'notes';
     this.color = 0;
@@ -68,9 +68,8 @@ export class NoticePanel {
           <div class="notice-page" data-page="idea" hidden>
             <div class="notice-idea">
               <p>${t('想要什麼新功能？哪裡不好玩、哪裡怪怪的？直接告訴作者 💌')}</p>
-              <textarea id="idea-text" maxlength="200" rows="4" placeholder="${t('例如：希望多一種魚、手機按鈕太小⋯（200 字內）')}"></textarea>
-              <button type="button" class="notice-post" id="idea-send">${t('💡 送出建議（每天第一則送 3 顆松果）')}</button>
-              <div class="notice-hint" id="idea-msg">${t('只有作者看得到，不會公開')}</div>
+              <div class="notice-hint">${t('想問問題、給建議，請到「👫 好友 → ✉️ 聯絡作者」')}</div>
+              <button type="button" class="notice-post" id="idea-go">${t('✉️ 聯絡作者')}</button>
             </div>
           </div>
 
@@ -115,23 +114,10 @@ export class NoticePanel {
       this.#post();
     });
 
-    $('#idea-text').addEventListener('keydown', (e) => e.stopPropagation());
-    $('#idea-send').addEventListener('click', async () => {
-      const box = $('#idea-text');
-      const text = box.value.trim();
-      const msg = $('#idea-msg');
-      if (text.length < 4) {
-        msg.textContent = t('多寫幾個字吧 🙂');
-        return;
-      }
-      if (this.ideaBusy) return;
-      this.ideaBusy = true;
-      const res = await this.onIdea?.(text);
-      this.ideaBusy = false;
-      if (res?.ok) {
-        box.value = '';
-        msg.textContent = res.gain ? t('謝謝你的建議！送你 {n} 顆松果 🌰', { n: res.gain }) : t('謝謝你的建議！作者會認真看 💌');
-      } else msg.textContent = res?.reason === 'tooFast' ? t('慢慢來，一分鐘後再送一則 🙂') : res?.reason === 'offline' ? t('連上伺服器後才能送出') : t('沒送成，再試一次吧');
+    // 💡 作者 11/17：告示牌不再收建議，帶去「👫 好友 → ✉️ 聯絡作者」
+    $('#idea-go').addEventListener('click', () => {
+      this.close();
+      this.onContact?.();
     });
 
     window.addEventListener('keydown', (e) => {

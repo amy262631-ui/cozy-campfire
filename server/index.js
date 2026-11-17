@@ -1339,6 +1339,36 @@ app.get('/api/sponsors', (_req, res) => {
 });
 
 app.get('/api/notes', (_req, res) => res.json(recent(shared.notes, MAX_NOTES)));
+
+// 🔗 11/17 從別的網站（嵌入）換到完整版：把這台的進度暫存一下，新分頁用一次性代碼接回來
+//   代碼 10 分鐘內有效、用一次就刪；只放在記憶體，不寫進存檔
+const xfers = new Map();
+const XFER_TTL = 10 * 60000;
+app.post('/api/xfer', express.json({ limit: '80kb' }), (req, res) => {
+  const now = Date.now();
+  for (const [k, v] of xfers) if (v.exp < now) xfers.delete(k);
+  if (xfers.size > 500) return res.status(429).json({ ok: false });
+  const src = req.body?.data;
+  if (!src || typeof src !== 'object' || Array.isArray(src)) return res.status(400).json({ ok: false });
+  const data = {};
+  let size = 0;
+  for (const [k, v] of Object.entries(src).slice(0, 60)) {
+    if (!/^cozy[\w-]{0,40}$/.test(k) || typeof v !== 'string') continue;
+    size += k.length + v.length;
+    if (size > 70000) break;
+    data[k] = v;
+  }
+  if (!data['cozy-campfire-vid']) return res.status(400).json({ ok: false });
+  const tok = crypto.randomBytes(12).toString('base64url');
+  xfers.set(tok, { data, exp: now + XFER_TTL });
+  res.json({ ok: true, tok });
+});
+app.get('/api/xfer/:tok', (req, res) => {
+  const x = xfers.get(String(req.params.tok));
+  xfers.delete(String(req.params.tok));
+  if (!x || x.exp < Date.now()) return res.status(404).json({ ok: false });
+  res.set('Cache-Control', 'no-store').json({ ok: true, data: x.data });
+});
 app.get('/api/channels', (_req, res) => {
   res.set('Access-Control-Allow-Origin', '*'); // 上架其他平台的版本從別的網址來問
   tidyChannels();
@@ -1557,7 +1587,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   const online = [...channels.values()].reduce((n, c) => n + chCount(c), 0);
   res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>營地統計</title>
 <style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px}h3{color:#ffb46b;margin-top:28px}code{background:#2a211c;padding:1px 5px;border-radius:4px}table{border-collapse:collapse;font-size:13px}th,td{padding:6px 9px;border-bottom:1px solid #3a2e27;text-align:right;white-space:nowrap}th{color:#ffb46b;position:sticky;top:0;background:#1d1714}td:first-child,th:first-child{text-align:left}.wrap{overflow-x:auto}p{opacity:.75;font-size:13px}.me{opacity:1;padding:8px 12px;border-radius:10px;background:#2a211c;display:inline-block}.me button{margin-left:6px;padding:4px 10px;border:none;border-radius:999px;background:#f08a3c;color:#2a1608;font-weight:700;cursor:pointer}.me small{opacity:.7}</style></head>
-<body><h2>🔥 營地統計</h2><p class="me">🛠️ <a style="color:#ffd08a" href="/admin${req.query.key ? `?key=${encodeURIComponent(req.query.key)}` : ''}">營地管理：查玩家、發補償、邀請紀錄</a></p>
+<body>${staffNav(req, 'stats')}<h2>🔥 營地統計</h2>
 <p class="me">這台裝置：<b id="me-st"></b> <button id="me-btn" type="button"></button><br><small>自己測試用的手機、平板、電腦，各打開這頁按一次，你自己進出就不會被算進「進來次數、停留時間、新旅人」。（只影響之後，之前的數字改不了）</small></p>
 <script>
 (function () {
@@ -1669,6 +1699,12 @@ app.post('/api/allOutfits', express.json(), (req, res) => {
 // 🛠️ 營地管理：/admin（要 STATS_KEY）—— 查玩家（用玩家編號或帳號，不用暱稱）、發補償、看邀請紀錄
 const keyOk = (req) => !process.env.STATS_KEY || req.query.key === process.env.STATS_KEY;
 const escH = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+/** 🧭 後台三頁（統計、管理、玩家建議）最上面共用的切換按鈕（作者 11/17） */
+const staffNav = (req, at) => {
+  const k = req.query.key ? `?key=${encodeURIComponent(req.query.key)}` : '';
+  const b = (id, href, label) => `<a href="${href}${k}" style="display:inline-block;padding:6px 14px;border-radius:999px;text-decoration:none;font-size:14px;font-weight:700;${id === at ? 'background:#ff9a4a;color:#2a1a10' : 'background:#2c231e;color:#f5e6d3;border:1px solid #4a3a30'}">${label}</a>`;
+  return `<nav style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px">${b('stats', '/stats', '📊 玩家統計')}${b('admin', '/admin', '🛠️ 營地管理')}${b('ideas', '/ideas', `💡 玩家建議（${ideas.length}）`)}</nav>`;
+};
 /** 玩家編號（例：RcdNgX-AF8qD）或帳號名稱 → vid */
 function findVid(q) {
   q = String(q ?? '').trim();
@@ -1860,7 +1896,7 @@ app.get('/admin', (req, res) => {
   const grantRows = grants.slice(-50).reverse().map((g) => `<tr><td>${t(g.at)}</td><td>${escH(g.name)}<br><small>${escH(g.hid)}</small></td><td>${escH(g.what)}</td><td style="text-align:left">${escH(g.note)}</td></tr>`).join('');
   res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>營地管理</title>
 <style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px;max-width:1100px;margin:auto}.tabs{position:sticky;top:0;z-index:5;background:#1d1714;padding:8px 0;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid #3a2e27;margin:10px 0}.tabs button{background:#2c231e;color:#f5e6d3;border:1px solid #4a3a30;border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer}.tabs button.on{background:#ff9a4a;color:#2a1a10;border-color:#ff9a4a;font-weight:700}section.tab{display:none}section.tab.on{display:block}section.tab h3{margin-top:8px}h3{color:#ffb46b;margin-top:26px}table{border-collapse:collapse;font-size:13px;width:100%}th,td{padding:6px 8px;border-bottom:1px solid #3a2e27;text-align:left;vertical-align:top}th{color:#ffb46b}small{opacity:.6}.wrap{overflow-x:auto}.box{background:#2a211c;border-radius:12px;padding:12px 14px;margin:8px 0}input,select,button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3}button{background:#f08a3c;color:#2a1608;border:none;font-weight:700;cursor:pointer}a{color:#ffd08a}#card p{margin:4px 0}.ok{color:#9be29b}.err{color:#ff9a8a}p.hint{opacity:.7;font-size:13px}.re{background:#3a2e27;border-radius:8px;padding:6px 8px;white-space:pre-wrap;max-width:360px}textarea{font:inherit;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3;padding:6px}</style></head>
-<body><h2>🛠️ 營地管理</h2><p class="hint">可以用名字、「玩家編號」或「帳號名稱」找人（名字大家會改，同名的會列出來讓你選；編號不會變，最準）。玩家用遊戲裡「✉️ 聯絡作者」寄信時會自動附上玩家編號；編號也顯示在「🔥 約朋友」和「👫 好友」視窗裡。</p>
+<body>${staffNav(req, 'admin')}<h2>🛠️ 營地管理</h2><p class="hint">可以用名字、「玩家編號」或「帳號名稱」找人（名字大家會改，同名的會列出來讓你選；編號不會變，最準）。玩家用遊戲裡「✉️ 聯絡作者」寄信時會自動附上玩家編號；編號也顯示在「🔥 約朋友」和「👫 好友」視窗裡。</p>
 <div class="tabs">${[['on', `🟢 現在在線（${onRows.length}）`], ['chat', `💬 聊天（${chatLog.length}）`], ['notes', '📝 留言板・繪馬'], ['mail', `✉️ 來信${support.filter((x) => !x.re).length ? `（${support.filter((x) => !x.re).length} 則沒回）` : ''}`], ['inv', '👫 邀請紀錄'], ['shout', '📣 大聲公'], ['ban', `⛔ 停權／禁言${banRows ? `（${banRows.split('<tr>').length - 1}）` : ''}`], ['grant', '🎁 補償紀錄'], ['money', '💸 退款・自己人']].map(([k, v]) => `<button type="button" data-tab="${k}">${v}</button>`).join('')}</div>
 <div class="box"><b>🔍 查玩家</b><br><input id="q" placeholder="名字、玩家編號 或 帳號名稱" size="28"> <button id="find">查詢</button><div id="card"></div></div>
 <div class="box" id="gbox" hidden><b>🎁 發補償給 <span id="gname"></span></b><br>
@@ -1988,7 +2024,7 @@ app.get('/ideas', (req, res) => {
   const rows = [...ideas].reverse().map((i) => `<div class="i"><b>${esc(i.n)}</b><small>${new Date(i.at).toLocaleString('zh-TW', { timeZone: STATS_TZ })}</small><p>${esc(i.t)}</p></div>`).join('');
   res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>玩家建議</title>
 <style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px;max-width:720px;margin:auto}.i{padding:10px 12px;margin:8px 0;border-radius:10px;background:#2a211c}.i b{color:#ffb46b}.i small{opacity:.6;margin-left:8px}.i p{margin:6px 0 0;white-space:pre-wrap}</style></head>
-<body><h2>💡 玩家建議（${ideas.length} 則）</h2>${rows || '<p>還沒有建議</p>'}</body></html>`);
+<body>${staffNav(req, 'ideas')}<h2>💡 玩家建議（${ideas.length} 則）</h2>${rows || '<p>還沒有建議</p>'}</body></html>`);
 });
 
 // 備份：/api/backup（有設 STATS_KEY 時要帶 ?key=），下載所有留言、繪馬、石塔、排行、統計
@@ -3526,14 +3562,9 @@ io.on('connection', (socket) => {
     ideas.push({ n: player.name, t: text, at: now });
     ideas = ideas.slice(-2000);
     saveJson('ideas.json', ideas);
-    let gain = 0;
-    if (wal && wal.ideaDay !== dayKey()) {
-      wal.ideaDay = dayKey();
-      gain = 3;
-      award(gain, 'idea');
-    }
+    // 作者 11/17：不再送松果（有人為了松果亂留言）
     console.log(`[建議] ${player.name}：${text.slice(0, 60)}`);
-    ack?.({ ok: true, gain });
+    ack?.({ ok: true, gain: 0 });
   });
 
   // 🎁 分享一次就送「營火明信片牆」（每人一次）

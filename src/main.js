@@ -106,6 +106,22 @@ const MODEL_URL = params.get('model') || DEFAULT_MODEL_URL;
 const PLACE = { forest_main: '營火旁', tent_focus: '帳篷裡', treehouse_music: '樹屋上', lake_dock: '湖畔', tent_social: '交流帳篷裡', campground: '帳篷營地', home: '帳篷裡', mist_forest: '迷霧森林' };
 
 async function init() {
+  // 🔗 11/17 從嵌入的網站按「用瀏覽器打開」過來：用一次性代碼把原本的角色、進度接過來，再重新整理一次
+  if (params.get('xfer')) {
+    const clean = new URL(location.href);
+    clean.searchParams.delete('xfer');
+    try {
+      const r = await fetch(`/api/xfer/${encodeURIComponent(params.get('xfer'))}`);
+      const j = r.ok ? await r.json() : null;
+      if (j?.ok && j.data?.['cozy-campfire-vid']) {
+        for (const [k, v] of Object.entries(j.data)) if (/^cozy/.test(k)) localStorage.setItem(k, v);
+      }
+    } catch {
+      /* 接不過來就當新的開始 */
+    }
+    location.replace(clean.href);
+    return;
+  }
   translateStatic(); // index.html 裡的固定文字
   // 📲 桌面捷徑的名字跟著遊戲語言（11/09）：iPhone 看 apple 標題、Android／電腦看 manifest
   try {
@@ -449,7 +465,7 @@ async function init() {
   const noticePanel = new NoticePanel({
     hud,
     onHistory: loadHistory,
-    onIdea: async (text) => (net.online ? ((await net.request('idea', { text })) ?? { ok: false }) : { ok: false, reason: 'offline' }),
+    onContact: () => openSupport(), // 💡 給建議 → ✉️ 聯絡作者（作者 11/17）
     onPost: (text, color) => {
       ritual?.event('note');
       if (net.online) net.note(text, color);
@@ -2763,6 +2779,28 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
         <div class="inapp-btns">${kind === 'line' || kind === 'iframe' ? `<a class="mini-btn" href="${url.href}" target="${kind === 'iframe' ? '_blank' : '_self'}" rel="noopener">${t('👉 用瀏覽器打開')}</a>` : ''}<button type="button" class="mini-btn ghost">${t('知道了')}</button></div>`;
         el.querySelector('button').addEventListener('click', () => el.remove());
         document.body.appendChild(el);
+        // 🔗 11/17 嵌在別的網站：按鈕帶一次性代碼，新分頁接著玩同一個角色（不然會變成全新的人）
+        if (kind === 'iframe') {
+          try {
+            const data = {};
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (/^cozy/.test(k) && k !== 'cozy-boot' && k !== 'cozy-campfire-staff') data[k] = localStorage.getItem(k);
+            }
+            fetch('/api/xfer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((j) => {
+                if (!j?.tok) return;
+                const u = new URL(url.href);
+                u.searchParams.set('xfer', j.tok);
+                const a = el.querySelector('a.mini-btn');
+                if (a) a.href = u.href;
+              })
+              .catch(() => {});
+          } catch {
+            /* 存不了就照舊開新的 */
+          }
+        }
         setTimeout(() => el.remove(), 30000); // 不理它也會自己收起來，不一直擋著
       };
       setTimeout(() => showInappTip(), 10 * 60 * 1000);
