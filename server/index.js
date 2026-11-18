@@ -1900,6 +1900,50 @@ app.post('/api/grant', express.json(), (req, res) => {
   console.log(`[補償] ${homeId(vid)}（${nameOfVid(vid)}）${what} ${note}`);
   res.json({ ok: true, what, card: playerCard(vid) });
 });
+/** ➖ 收回（作者 11/18）：把送給玩家的松果、造型、家具要回來。松果最多扣到 0；家具擺在家裡的也會拿掉。紀錄放在補償紀錄裡 */
+app.post('/api/take', express.json(), (req, res) => {
+  if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
+  const vid = findVid(req.body?.q);
+  const w = vid && players[vid];
+  if (!w) return res.json({ ok: false, reason: '找不到這位玩家' });
+  const type = String(req.body?.type ?? '');
+  const id = String(req.body?.id ?? '');
+  const note = String(req.body?.note ?? '').slice(0, 80);
+  let what = '';
+  if (type === 'pc') {
+    const n = Math.floor(Number(req.body?.n) || 0);
+    if (n < 1 || n > 1000000) return res.json({ ok: false, reason: '松果要填 1 顆以上' });
+    const took = Math.min(n, Math.max(0, w.pc ?? 0));
+    if (!took) return res.json({ ok: false, reason: '他現在沒有松果了' });
+    w.pc -= took;
+    saveJson('players.json', players);
+    for (const so of socketsOf(vid)) so.emit('wallet', { pc: w.pc, delta: -took, reason: 'staff' });
+    what = `🌰 ${took} 顆松果${took < n ? `（他只剩 ${took} 顆，要收 ${n} 顆）` : ''}`;
+  } else if (type === 'outfit') {
+    if (!w.outfits?.includes(id)) return res.json({ ok: false, reason: '他沒有這款造型' });
+    w.outfits = w.outfits.filter((x) => x !== id);
+    for (const [slot, oid] of Object.entries(w.wear ?? {})) if (oid === id) delete w.wear[slot];
+    syncRack(vid);
+    saveJson('players.json', players);
+    what = `👒 ${OUTFIT_BY_ID[id]?.zh ?? id}`;
+  } else if (type === 'furn') {
+    const h = homes[vid];
+    if (!h?.inv?.[id]) return res.json({ ok: false, reason: '他沒有這件家具' });
+    if (available(h, id, 0) <= 0) {
+      const i = h.items.findIndex((x) => x.i === id);
+      if (i >= 0) h.items.splice(i, 1);
+    }
+    h.inv[id] -= 1;
+    if (h.inv[id] <= 0) delete h.inv[id];
+    saveJson('homes.json', homes);
+    what = `🪑 ${CATALOG_BY_ID[id]?.zh ?? id}`;
+  } else return res.json({ ok: false, reason: '不知道要收回什麼' });
+  grants.push({ at: Date.now(), hid: homeId(vid), name: nameOfVid(vid), what: `➖ 收回 ${what}`, note });
+  if (grants.length > 300) grants.splice(0, grants.length - 300);
+  saveJson('grants.json', grants);
+  console.log(`[收回] ${homeId(vid)}（${nameOfVid(vid)}）${what} ${note}`);
+  res.json({ ok: true, what, card: playerCard(vid) });
+});
 app.post('/api/supportReply', express.json(), (req, res) => {
   if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
   const x = support.find((m) => m.id === String(req.body?.id ?? ''));
@@ -1932,10 +1976,10 @@ app.get('/admin', (req, res) => {
 <body>${staffNav(req, 'admin')}<h2>🛠️ 營地管理</h2><p class="hint">可以用名字、「玩家編號」或「帳號名稱」找人（名字大家會改，同名的會列出來讓你選；編號不會變，最準）。玩家用遊戲裡「✉️ 聯絡作者」寄信時會自動附上玩家編號；編號也顯示在「🔥 約朋友」和「👫 好友」視窗裡。</p>
 <div class="tabs">${[['on', `🟢 現在在線（${onRows.length}）`], ['chat', `💬 聊天（${chatLog.length}）`], ['notes', '📝 留言板・繪馬'], ['mail', `✉️ 來信${support.filter((x) => !x.re).length ? `（${support.filter((x) => !x.re).length} 則沒回）` : ''}`], ['inv', '👫 邀請紀錄'], ['shout', '📣 大聲公'], ['ban', `⛔ 停權／禁言${banRows ? `（${banRows.split('<tr>').length - 1}）` : ''}`], ['grant', '🎁 補償紀錄'], ['money', '💸 退款・自己人']].map(([k, v]) => `<button type="button" data-tab="${k}">${v}</button>`).join('')}</div>
 <div class="box"><b>🔍 查玩家</b><br><input id="q" placeholder="名字、玩家編號 或 帳號名稱" size="28"> <button id="find">查詢</button><div id="card"></div></div>
-<div class="box" id="gbox" hidden><b>🎁 發補償給 <span id="gname"></span></b><br>
+<div class="box" id="gbox" hidden><b>🎁 發補償／收回：<span id="gname"></span></b><br>
 <select id="gtype"><option value="outfit">👒 造型</option><option value="pc">🌰 松果</option><option value="furn">🪑 家具</option></select>
-<select id="gout">${outfitOpts}</select><select id="gfurn" hidden>${furnOpts}</select><input id="gn" type="number" min="1" max="1000" value="10" hidden>
-<input id="gnote" placeholder="備註（例：同網路沒算到的邀請補發）" size="30"> <button id="give">送出</button> <span id="gmsg"></span></div>
+<select id="gout">${outfitOpts}</select><select id="gfurn" hidden>${furnOpts}</select><input id="gn" type="number" min="1" value="10" hidden>
+<input id="gnote" placeholder="備註（例：同網路沒算到的邀請補發）" size="30"> <button id="give">送出</button> <button id="take" class="ghost">➖ 收回</button> <span id="gmsg"></span><div class="hint">「➖ 收回」：把選的造型、松果（填數量，最多扣到 0）、家具要回來；家具擺在家裡的也會拿掉。</div></div>
 <section class="tab" data-tab="money"><div class="box"><b>💸 退款後收回</b><br><span class="hint">先在綠界後台退款，再在這裡輸入那筆的訂單編號（/stats 月票表格最右邊那欄）。會扣回月票天數、先送的松果（已花掉就扣到 0）；支持營地會收回假髮。</span><br><input id="rno" placeholder="訂單編號" size="28"> <button id="refund">收回</button> <span id="rmsg"></span></div>
 <div class="box"><b>🏷️ 標成自己人（不算收入）</b><br><span class="hint">自己測試、家人朋友幫忙買的訂單，標了以後 /stats 收入不算它（東西不會收回）。再按一次就取消。用你自己裝置（打過 staff 的）買的會自動標。</span><br><input id="sno" placeholder="訂單編號" size="28"> <button id="selfo">標成自己人／取消</button> <span id="smsg"></span></div></section>
 <section class="tab" data-tab="on"><h3>🟢 現在在線（${onRows.length} 人）</h3><p class="hint">打開這頁那一刻在線上的人（重新整理才會更新；營地居民不算）。點名字可以查他、發補償。</p>
@@ -2042,6 +2086,18 @@ app.get('/admin', (req, res) => {
     fetch('/api/grant' + K, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (r) { return r.json(); }).then(function (r) {
       $('give').disabled = false;
       $('gmsg').innerHTML = r.ok ? '<span class="ok">✅ 送出 ' + esc(r.what) + '（玩家在線上會馬上收到通知）</span>' : '<span class="err">❌ ' + esc(r.reason) + '</span>';
+      if (r.ok) show(Object.assign({ ok: true }, r.card));
+    });
+  };
+  $('take').onclick = function () {
+    var v = $('gtype').value;
+    var label = v === 'pc' ? $('gn').value + ' 顆松果' : v === 'outfit' ? $('gout').selectedOptions[0].textContent : $('gfurn').selectedOptions[0].textContent;
+    var body = { q: cur, type: v, id: v === 'outfit' ? $('gout').value : $('gfurn').value, n: $('gn').value, note: $('gnote').value };
+    if (!confirm('確定從 ' + $('gname').textContent + ' 收回 ' + label + '？')) return;
+    $('take').disabled = true;
+    fetch('/api/take' + K, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (r) { return r.json(); }).then(function (r) {
+      $('take').disabled = false;
+      $('gmsg').innerHTML = r.ok ? '<span class="ok">✅ 收回 ' + esc(r.what) + '</span>' : '<span class="err">❌ ' + esc(r.reason) + '</span>';
       if (r.ok) show(Object.assign({ ok: true }, r.card));
     });
   };
