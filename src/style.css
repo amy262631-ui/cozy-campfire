@@ -7478,3 +7478,14 @@ body.touch .bg-panel { bottom: 250px; }
 .guest-note .guest-del { position: absolute; top: 4px; right: 4px; background: none; border: 0; cursor: pointer; font-size: 14px; opacity: 0.6; padding: 2px 4px; }
 .guest-note .guest-del:hover { opacity: 1; }
 .guest-note { padding-right: 28px; }
+
+/* ⚠️ 營地管理員的警告（作者 11/18） */
+#warn-card { position: fixed; inset: 0; z-index: 99998; display: flex; align-items: center; justify-content: center; background: rgba(15, 20, 28, 0.78); padding: 20px; }
+#warn-card .warn-box { background: #fff8ef; border: 3px solid #e2574c; border-radius: 18px; padding: 20px 18px 16px; max-width: 320px; width: 100%; text-align: center; color: #3b2a1e; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+#warn-card .warn-ic { font-size: 36px; line-height: 1; }
+#warn-card .warn-h { font-size: 19px; font-weight: 700; color: #a32d2d; margin: 8px 0 10px; }
+#warn-card .warn-t { font-size: 15px; line-height: 1.7; text-align: left; }
+#warn-card .warn-t b { color: #a32d2d; }
+#warn-card .warn-d { font-size: 13px; color: #7a6452; margin: 10px 0 14px; }
+#warn-card .warn-ok { width: 100%; border: 0; border-radius: 12px; padding: 11px; font-size: 15px; font-weight: 700; background: #e8873a; color: #fff; cursor: pointer; }
+#warn-card .warn-ok:disabled { background: #d8d0c6; color: #6f6458; cursor: default; }

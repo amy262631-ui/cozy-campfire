@@ -3195,6 +3195,42 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     document.body.appendChild(el);
   }
   net.on('banned', ({ until } = {}) => showBanned(until));
+  // ⚠️ 作者 11/18：營地管理員的警告（後台送的）。5 秒後才能按「我知道了」，按了告訴伺服器看過了
+  //   作者：大陸的小朋友用簡體字比較有感 → 瀏覽器是 zh-CN／zh-Hans／zh-SG，或後台勾了「用簡體字」，就用簡體
+  function showWarn(w = {}) {
+    document.getElementById('warn-card')?.remove();
+    const nav = (navigator.languages ?? [navigator.language ?? '']).join(',').toLowerCase();
+    const sc = w.sc || /zh-(cn|sg|hans)/.test(nav);
+    const zh = lang === 'zh' || sc;
+    const R = {
+      curse: ['罵人、說髒話', '骂人、说脏话'],
+      note: ['亂留言', '乱留言'],
+      name: ['取了不恰當的名字', '取了不恰当的名字'],
+      spam: ['洗版、一直刷聊天', '刷屏、一直刷聊天'],
+    };
+    const why = w.r === 'other' ? w.note : zh ? R[w.r]?.[sc ? 1 : 0] : t(R[w.r]?.[0] ?? '');
+    const txt = sc
+      ? { h: '营地管理员的警告', a: `你在营地里<b>${escapeHtml(why ?? '')}</b>，让其他人不舒服。`, b: '营地的对话都有记录。', c: '如果再这样，会被<b>禁止说话</b>或<b>封号</b>（进不了营地）。', d: '请大家当好邻居 🏕️', ok: '我知道了' }
+      : { h: t('營地管理員的警告'), a: t('你在營地裡{why}，讓其他人不舒服。', { why: `<b>${escapeHtml(why ?? '')}</b>` }), b: t('營地的對話都有紀錄。'), c: t('如果再這樣，會被禁止說話或停權（進不了營地）。'), d: t('請大家當好鄰居 🏕️'), ok: t('我知道了') };
+    const el = document.createElement('div');
+    el.id = 'warn-card';
+    el.innerHTML = `<div class="warn-box"><div class="warn-ic">⚠️</div><div class="warn-h">${txt.h}</div><div class="warn-t">${txt.a}<br>${txt.b}<br>${txt.c}</div><div class="warn-d">${txt.d}</div><button type="button" class="warn-ok" disabled>${txt.ok}（5）</button></div>`;
+    document.body.appendChild(el);
+    const btn = el.querySelector('.warn-ok');
+    let n = 5;
+    const tick = setInterval(() => {
+      n--;
+      if (n > 0) return void (btn.textContent = `${txt.ok}（${n}）`);
+      clearInterval(tick);
+      btn.textContent = txt.ok;
+      btn.disabled = false;
+    }, 1000);
+    btn.addEventListener('click', () => {
+      el.remove();
+      net.request('warnSeen', {}).catch(() => {});
+    });
+  }
+  net.on('warned', (w) => showWarn(w));
   // 🔇 被禁言：不能聊天、大聲公、留言、繪馬、密頻
   net.on('muted', ({ until } = {}) => {
     if (until === -1) return hud.toast(t('✅ 你可以再聊天了'));
