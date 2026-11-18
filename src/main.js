@@ -4419,7 +4419,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       },
     );
   }
-  async function openDm(hid) {
+  async function openDm(hid, focus = false) {
     const r = await net.request('dmHistory', { hid });
     if (!r?.ok) return hud.toast(t('找不到這位好友'));
     friendView = { hid };
@@ -4450,13 +4450,14 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
         }
         body.querySelector('#dm-back').addEventListener('click', openFriends);
         const inp = body.querySelector('#dm-text');
+        if (focus) inp?.focus();
         const send = async () => {
           const text = inp.value.trim();
           if (!text) return;
           const res = await net.request('dmSend', { hid, text });
           if (!res?.ok) return hud.toast(friendErr(res));
           inp.value = '';
-          openDm(hid);
+          openDm(hid, true); // 送出後輸入框繼續可以打字
         };
         inp?.addEventListener('keydown', (e) => {
           e.stopPropagation();
@@ -4586,8 +4587,29 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       },
     );
   }
-  net.on('dm', ({ hid, name, t: text }) => {
-    if (modal.isOpen && friendView?.hid === hid) return openDm(hid);
+  net.on('dm', ({ hid, name, t: text, at }) => {
+    // 💌 作者 11/18：密頻視窗開著時，對方回話只把新訊息加在最下面，不整個重畫（不然正在打的字會不見）
+    const dmList = modal.isOpen && friendView?.hid === hid && document.getElementById('dm-list');
+    if (dmList) {
+      dmList.querySelector('.dex-note')?.remove();
+      const nearBottom = dmList.scrollHeight - dmList.scrollTop - dmList.clientHeight < 60;
+      const el = document.createElement('div');
+      el.className = 'dm-msg';
+      el.innerHTML = `<span>${escapeHtml(text)}</span><small>${fmtTime(at ?? Date.now())}</small>`;
+      dmList.appendChild(el);
+      if (nearBottom) dmList.scrollTop = dmList.scrollHeight;
+      audio.sfx('tap');
+      translateChat(text).then((tr) => {
+        if (!tr || !el.isConnected) return;
+        const em = document.createElement('em');
+        em.className = 'dm-tr';
+        em.textContent = `🌐 ${tr}`;
+        el.querySelector('span').after(em);
+        if (nearBottom) dmList.scrollTop = dmList.scrollHeight;
+      });
+      net.request('dmHistory', { hid }).catch(() => {}); // 標成已讀（好友按鈕的紅點）
+      return;
+    }
     audio.sfx('tap');
     hud.toast(t('💌 {name}：{text}', { name, text: text.length > 30 ? `${text.slice(0, 30)}⋯` : text }), 5000);
   });

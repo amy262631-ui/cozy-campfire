@@ -22,7 +22,7 @@ export class ShopPanel {
   constructor({ getCoins, getHome, onBuy, onGoHome, onEdit, onGift, root = document.getElementById('ui') }) {
     Object.assign(this, { getCoins, getHome, onBuy, onGoHome, onEdit, onGift });
     this.busy = false;
-    this.tab = 'look';
+    this.tab = 'furn'; // 作者 11/18：分頁順序 家具→門口擺設→帳篷外觀→擴建→月票→小精靈，一打開是家具
     this.cat = 'all'; // 家具分類
     this.pick = null; // 預覽中的造型（還沒買的也能先看）
     this.preview = new TentPreview(360, 190);
@@ -177,6 +177,7 @@ export class ShopPanel {
   /** @param {string} [tab] 從哪裡打開就跳到相關分頁：帳篷布置→furn（家具）、營火區攤位→照舊 */
   open(tab) {
     if (tab) this.tab = tab;
+    else if (!this.getHome()?.tent) this.tab = 'tent'; // 還沒有帳篷：先看「我的帳篷」
     this.el.classList.add('show');
     this.pick = null;
     this.render();
@@ -210,7 +211,7 @@ export class ShopPanel {
     const max = sp?.max ?? 12;
     const block = sp?.egg ? t('🥚 蛋正在孵，大約再 {n} 分鐘', { n: Math.max(1, Math.ceil(sp.egg.left / 60000)) }) : total >= max ? t('已經養滿 {n} 隻了', { n: max }) : coins != null && coins < price ? t('還差 {n} 顆松果', { n: price - coins }) : '';
     const tabs = hasTent
-      ? `<div class="shop-tabs"><button type="button" data-tab="look">${t('⛺ 帳篷外觀')}</button><button type="button" data-tab="furn">${t('🪑 家具')}</button><button type="button" data-tab="expand">${t('📐 擴建')}</button><button type="button" data-tab="yard">${t('🚙 門口擺設')}</button>${this.passOn?.() ? `<button type="button" data-tab="pass">${t('🎫 月票')}</button>` : ''}<button type="button" data-tab="spirit" class="on">${t('✨ 小精靈')}</button></div>`
+      ? `<div class="shop-tabs"><button type="button" data-tab="furn">${t('🪑 家具')}</button><button type="button" data-tab="yard">${t('🚙 門口擺設')}</button><button type="button" data-tab="look">${t('⛺ 帳篷外觀')}</button><button type="button" data-tab="expand">${t('📐 擴建')}</button>${this.passOn?.() ? `<button type="button" data-tab="pass">${t('🎫 月票')}</button>` : ''}<button type="button" data-tab="spirit" class="on">${t('✨ 小精靈')}</button></div>`
       : this.#noTentTabs().outerHTML;
     this.body.innerHTML = `${tabs}
       <div class="shop-egg">
@@ -291,9 +292,9 @@ export class ShopPanel {
     const on = (id) => (this.tab === id ? 'on' : '');
     box.innerHTML = `<div class="shop-tabs">
         <button type="button" data-tab="tent" class="${on('tent')}">${t('⛺ 我的帳篷')}</button>
-        <button type="button" data-tab="look" class="${on('look')}">${t('⛺ 帳篷外觀')}</button>
         <button type="button" data-tab="furn" class="${on('furn')}">${t('🪑 家具')}</button>
         <button type="button" data-tab="yard" class="${on('yard')}">${t('🚙 門口擺設')}</button>
+        <button type="button" data-tab="look" class="${on('look')}">${t('⛺ 帳篷外觀')}</button>
         ${this.passOn?.() ? `<button type="button" data-tab="pass" class="${on('pass')}">${t('🎫 月票')}</button>` : ''}
         <button type="button" data-tab="spirit" class="${on('spirit')}">${t('✨ 小精靈')}</button>
       </div>`;
@@ -324,10 +325,10 @@ export class ShopPanel {
     }
     const tabs = `
       <div class="shop-tabs">
-        <button type="button" data-tab="look" class="${this.tab === 'look' ? 'on' : ''}">${t('⛺ 帳篷外觀')}</button>
         <button type="button" data-tab="furn" class="${this.tab === 'furn' ? 'on' : ''}">${t('🪑 家具')}</button>
-        <button type="button" data-tab="expand" class="${this.tab === 'expand' ? 'on' : ''}">${t('📐 擴建')}</button>
         <button type="button" data-tab="yard" class="${this.tab === 'yard' ? 'on' : ''}">${t('🚙 門口擺設')}</button>
+        <button type="button" data-tab="look" class="${this.tab === 'look' ? 'on' : ''}">${t('⛺ 帳篷外觀')}</button>
+        <button type="button" data-tab="expand" class="${this.tab === 'expand' ? 'on' : ''}">${t('📐 擴建')}</button>
         ${this.passOn?.() ? `<button type="button" data-tab="pass" class="${this.tab === 'pass' ? 'on' : ''}">${t('🎫 月票')}</button>` : ''}
         <button type="button" data-tab="spirit">${t('✨ 小精靈')}</button>
       </div>`;
