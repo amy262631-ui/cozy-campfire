@@ -186,8 +186,8 @@ function pickChannel(wanted) {
 const DATA_DIR = path.resolve(__dirname, 'data');
 await storage.init(DATA_DIR);
 const asArray = (v) => (Array.isArray(v) ? v : []);
-const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog, savedAccounts, savedHomes, savedIdeas, savedTotals, savedMuseum, savedOrders, savedInvites, savedGrants, savedDms, savedSupport, savedBans] = await Promise.all(
-  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json', 'ideas.json', 'totals.json', 'museum2.json', 'orders.json', 'invites.json', 'grants.json', 'dms.json', 'support.json', 'bans.json'].map((f) =>
+const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog, savedAccounts, savedHomes, savedIdeas, savedTotals, savedMuseum, savedOrders, savedInvites, savedGrants, savedDms, savedSupport, savedBans, savedChat] = await Promise.all(
+  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json', 'ideas.json', 'totals.json', 'museum2.json', 'orders.json', 'invites.json', 'grants.json', 'dms.json', 'support.json', 'bans.json', 'chatlog.json'].map((f) =>
     storage.load(f),
   ),
 );
@@ -214,8 +214,18 @@ const netBanOf = (net) => {
   const b = net && bans.n[net];
   return b && (!b.until || b.until > Date.now()) ? b : null;
 };
-/** 💬 最近的公開聊天（/admin 看，最多 400 則，伺服器重開會清空；密頻不記在這裡） */
-const chatLog = [];
+/** 💬 公開聊天＋大聲公紀錄（/admin 看；作者 11/18：存進存檔、保留 7 天，最多 6000 則；密頻不記在這裡） */
+const CHAT_KEEP_MS = 7 * 86400000;
+const chatLog = asArray(savedChat).filter((c) => c && c.at > Date.now() - CHAT_KEEP_MS);
+function logChat(entry) {
+  chatLog.push(entry);
+  const old = Date.now() - CHAT_KEEP_MS;
+  let cut = 0;
+  while (cut < chatLog.length && chatLog[cut].at < old) cut++;
+  if (chatLog.length - cut > 6000) cut = chatLog.length - 6000;
+  if (cut) chatLog.splice(0, cut);
+  storage.save('chatlog.json', chatLog, 60000); // 一分鐘存一次（聊天很多，不要每則都寫）
+}
 /** ✉️ 聯絡作者：[{ id, vid, hid, name, t, at, re, reAt, seen }]（最多 500 則） */
 const support = asArray(savedSupport);
 /** 🎁 作者發的補償紀錄：[{ at, hid, name, what, note }] */
@@ -1767,7 +1777,7 @@ const playerCard = (vid) => {
     netBan: Object.values(bans.n).some((b) => b.vid === vid && (!b.until || b.until > Date.now())),
     warns: (w.warns ?? []).slice(-10).reverse(),
     names: (w.nh ?? []).slice(-30).reverse(),
-    chats: chatLog.filter((c) => c.hid === hid).slice(-30).reverse(),
+    chats: chatLog.filter((c) => c.hid === hid).slice(-60).reverse(),
     log: invites.filter((x) => x.ref === hid || x.friend === hid).slice(-30).reverse(),
   };
 };
@@ -1965,7 +1975,7 @@ app.get('/admin', (req, res) => {
   const invRows = invites.slice(-200).reverse().map((x) => `<tr><td>${t(x.at)}</td><td>${KIND_ZH[x.kind] ?? x.kind}</td><td><a href="#" data-q="${escH(x.ref)}">${escH(x.rn)}</a><br><small>${escH(x.ref)}</small></td><td><a href="#" data-q="${escH(x.friend)}">${escH(x.fn)}</a><br><small>${escH(x.friend)}</small></td><td>${x.net ? '🏢 同網路' : ''}</td><td style="text-align:left">${escH(x.r)}</td></tr>`).join('');
   const supRows = support.slice(-100).reverse().map((x) => `<tr><td>${t(x.at)}</td><td><a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a><br><small>${escH(x.hid)}</small></td><td style="white-space:pre-wrap;max-width:360px">${escH(x.t)}</td><td>${x.re ? `<div class="re">${escH(x.re)}</div><small>${t(x.reAt)}${x.seen ? '・玩家看過了' : '・玩家還沒看'}</small>` : `<textarea data-re="${x.id}" rows="2" cols="34" placeholder="回覆（玩家下次上線會看到）"></textarea><br><button data-send="${x.id}">回覆</button>`}</td></tr>`).join('');
   const onRows = onlineList((hid, name) => `<a href="#" data-q="${escH(hid)}">${escH(name)}</a>`);
-  const chatRows = chatLog.slice().reverse().map((c) => `<tr><td>${t(c.at)}</td><td>${escH(c.where)}${c.ch ? ` <small>分流 ${c.ch}</small>` : ''}</td><td>${c.hid ? `<a href="#" data-q="${escH(c.hid)}">${escH(c.name)}</a>` : escH(c.name)}</td><td style="text-align:left">${escH(c.text)}</td></tr>`).join('');
+  const chatRows = chatLog.slice(-600).reverse().map((c) => `<tr><td>${t(c.at)}</td><td>${escH(c.where)}${c.ch ? ` <small>分流 ${c.ch}</small>` : ''}</td><td>${c.hid ? `<a href="#" data-q="${escH(c.hid)}">${escH(c.name)}</a>` : escH(c.name)}</td><td style="text-align:left">${escH(c.text)}</td></tr>`).join('');
   const noteRow = (kind) => (x) => `<tr><td>${t(x.at)}</td><td>${x.hid ? `<a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a>` : `<a href="#" data-q="${escH(x.name)}">${escH(x.name)}</a>`}</td><td style="text-align:left">${escH(x.text)}</td><td><button data-del="${kind}:${x.at}">🗑️ 刪掉</button></td></tr>`;
   const noteRows = shared.notes.slice(-60).reverse().map(noteRow('notes')).join('');
   const wishRows = shared.wishes.slice(-30).reverse().map(noteRow('wishes')).join('');
@@ -1974,7 +1984,7 @@ app.get('/admin', (req, res) => {
   res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>營地管理</title>
 <style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px;max-width:1100px;margin:auto}.tabs{position:sticky;top:0;z-index:5;background:#1d1714;padding:8px 0;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid #3a2e27;margin:10px 0}.tabs button{background:#2c231e;color:#f5e6d3;border:1px solid #4a3a30;border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer}.tabs button.on{background:#ff9a4a;color:#2a1a10;border-color:#ff9a4a;font-weight:700}section.tab{display:none}section.tab.on{display:block}section.tab h3{margin-top:8px}h3{color:#ffb46b;margin-top:26px}table{border-collapse:collapse;font-size:13px;width:100%}th,td{padding:6px 8px;border-bottom:1px solid #3a2e27;text-align:left;vertical-align:top}th{color:#ffb46b}small{opacity:.6}.wrap{overflow-x:auto}.box{background:#2a211c;border-radius:12px;padding:12px 14px;margin:8px 0}input,select,button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3}button{background:#f08a3c;color:#2a1608;border:none;font-weight:700;cursor:pointer}a{color:#ffd08a}#card p{margin:4px 0}.ok{color:#9be29b}.err{color:#ff9a8a}p.hint{opacity:.7;font-size:13px}.re{background:#3a2e27;border-radius:8px;padding:6px 8px;white-space:pre-wrap;max-width:360px}textarea{font:inherit;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3;padding:6px}</style></head>
 <body>${staffNav(req, 'admin')}<h2>🛠️ 營地管理</h2><p class="hint">可以用名字、「玩家編號」或「帳號名稱」找人（名字大家會改，同名的會列出來讓你選；編號不會變，最準）。玩家用遊戲裡「✉️ 聯絡作者」寄信時會自動附上玩家編號；編號也顯示在「🔥 約朋友」和「👫 好友」視窗裡。</p>
-<div class="tabs">${[['on', `🟢 現在在線（${onRows.length}）`], ['chat', `💬 聊天（${chatLog.length}）`], ['notes', '📝 留言板・繪馬'], ['mail', `✉️ 來信${support.filter((x) => !x.re).length ? `（${support.filter((x) => !x.re).length} 則沒回）` : ''}`], ['inv', '👫 邀請紀錄'], ['shout', '📣 大聲公'], ['ban', `⛔ 停權／禁言${banRows ? `（${banRows.split('<tr>').length - 1}）` : ''}`], ['grant', '🎁 補償紀錄'], ['money', '💸 退款・自己人']].map(([k, v]) => `<button type="button" data-tab="${k}">${v}</button>`).join('')}</div>
+<div class="tabs">${[['on', `🟢 現在在線（${onRows.length}）`], ['chat', `💬 聊天（${Math.min(chatLog.length, 600)}）`], ['notes', '📝 留言板・繪馬'], ['mail', `✉️ 來信${support.filter((x) => !x.re).length ? `（${support.filter((x) => !x.re).length} 則沒回）` : ''}`], ['inv', '👫 邀請紀錄'], ['shout', '📣 大聲公'], ['ban', `⛔ 停權／禁言${banRows ? `（${banRows.split('<tr>').length - 1}）` : ''}`], ['grant', '🎁 補償紀錄'], ['money', '💸 退款・自己人']].map(([k, v]) => `<button type="button" data-tab="${k}">${v}</button>`).join('')}</div>
 <div class="box"><b>🔍 查玩家</b><br><input id="q" placeholder="名字、玩家編號 或 帳號名稱" size="28"> <button id="find">查詢</button><div id="card"></div></div>
 <div class="box" id="gbox" hidden><b>🎁 發補償／收回：<span id="gname"></span></b><br>
 <select id="gtype"><option value="outfit">👒 造型</option><option value="pc">🌰 松果</option><option value="furn">🪑 家具</option></select>
@@ -1989,7 +1999,7 @@ app.get('/admin', (req, res) => {
 </section><section class="tab" data-tab="inv"><h3>👫 邀請紀錄（最近 200 筆）</h3><p class="hint">點名字可以直接查那位玩家。「同網路」＝邀請人和朋友用同一個網路（同事、家人），要待 ${Math.round(SAMENET_STAY_MS / 60000)} 分鐘、朋友要玩一下（釣魚、採集、撿垃圾、做任務），同一個網路每天最多算 ${SAMENET_DAILY} 位。</p>
 <div class="wrap"><table><tr><th>時間</th><th>種類</th><th>邀請人</th><th>朋友</th><th></th><th>結果</th></tr>${invRows || '<tr><td colspan="6">還沒有紀錄（這版上線後才開始記）</td></tr>'}</table></div>
 </section><section class="tab" data-tab="shout"><h3>📣 大聲公紀錄（最近 ${shouts.length} 則，伺服器重開會清空）</h3><div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>內容</th></tr>${shouts.slice().reverse().map((x) => `<tr><td>${new Date(x.at).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}</td><td><a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a></td><td>${escH(x.text)}</td></tr>`).join('') || '<tr><td colspan="3">還沒有</td></tr>'}</table></div>
-</section><section class="tab" data-tab="chat"><h3 id="chat">💬 大家的聊天（最近 ${chatLog.length} 則，新的在上面）</h3><p class="hint">營火、湖邊、營地、帳篷裡的公開聊天和大聲公（好友密頻不在這裡）。伺服器重開（例如你上傳更新）會清空。點名字可以查他、禁言、停權。</p>
+</section><section class="tab" data-tab="chat"><h3 id="chat">💬 大家的聊天（最近 ${Math.min(chatLog.length, 600)} 則，新的在上面）</h3><p class="hint">營火、湖邊、營地、帳篷裡的公開聊天和大聲公（好友密頻不在這裡）。保留 7 天（更新、重開也不會不見）；這裡只列最近 600 則，更早的用「查玩家」看他說過的話（最近 60 則）。點名字可以查他、禁言、停權。</p>
 <div class="wrap" style="max-height:480px;overflow:auto"><table><tr><th>時間</th><th>在哪裡</th><th>玩家</th><th>說了什麼</th></tr>${chatRows || '<tr><td colspan="4">還沒有人聊天（這版上線後才開始記）</td></tr>'}</table></div>
 </section><section class="tab" data-tab="notes"><h3 id="notes">📝 告示牌留言（最近 60 張）</h3><p class="hint">有人亂寫可以直接刪掉，大家的畫面會馬上更新。這版之後貼的留言才有玩家編號（點名字可以直接查到人）。</p>
 <div class="wrap" style="max-height:420px;overflow:auto"><table><tr><th>時間</th><th>玩家</th><th>留言</th><th></th></tr>${noteRows || '<tr><td colspan="4">沒有留言</td></tr>'}</table></div>
@@ -3151,7 +3161,7 @@ io.on('connection', (socket) => {
     socket.emit('wallet', { pc: wal.pc, delta: -SHOUT_PRICE, reason: 'shout' });
     const msg = { name: player.name, hid: homeId(player.vid), text, at: now };
     shouts.push(msg);
-    chatLog.push({ at: now, name: player.name, hid: msg.hid, where: '📣 大聲公', ch: 0, text });
+    logChat({ at: now, name: player.name, hid: msg.hid, where: '📣 大聲公', ch: 0, text });
     if (shouts.length > 50) shouts.splice(0, shouts.length - 50);
     bump('shouts');
     io.emit('shout', { name: msg.name, text, at: now });
@@ -3170,8 +3180,7 @@ io.on('connection', (socket) => {
     if (mu) return socket.emit('muted', { until: mu.until || 0 });
     bump('chats');
     io.to(rkey).emit('chat', { id: socket.id, name: player.name, text });
-    chatLog.push({ at: now, name: player.name, hid: player.vid ? homeId(player.vid) : '', where: ROOM_DEFS[roomId]?.label ?? roomId, ch: chan?.ch ?? 0, text });
-    if (chatLog.length > 400) chatLog.splice(0, chatLog.length - 400);
+    logChat({ at: now, name: player.name, hid: player.vid ? homeId(player.vid) : '', where: ROOM_DEFS[roomId]?.label ?? roomId, ch: chan?.ch ?? 0, text });
     // ☁️ 陪別人聊天（同一區有別人才算，每分鐘最多一次）
     if (room?.players.size > 1 && now - lastSpiritChat > 60000) (lastSpiritChat = now), spiritGain('chat');
   });
