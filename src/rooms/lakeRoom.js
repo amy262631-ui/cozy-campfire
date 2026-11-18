@@ -7,7 +7,7 @@ import { FOG_COLOR } from '../scene/World.js';
 import { createFishMesh, fishScale } from '../fishing/fishModel.js';
 import { rollFish, rollSize } from '../fishing/fishData.js';
 import { t } from '../i18n/i18n.js';
-import { buildSnowfall } from './xmasDecor.js';
+import { buildSnowfall, buildXmasExtras } from './xmasDecor.js';
 
 export const LAKE_WATER_Y = -0.35;
 
@@ -146,6 +146,14 @@ export function createLakeRoom() {
   }
   dock.position.y = -0.03;
   group.add(dock);
+
+  // 🎄 作者 11/18：湖畔釣魚區也有聖誕風：碼頭兩邊一串小燈、岸邊幾棵小聖誕樹
+  const xmasDeco = buildXmasExtras({
+    strings: [-1, 1].map((side) => ({ x0: side * 0.8, z0: 2.5, x1: side * 0.8, z1: DOCK_END + 0.1, y: 0.07, n: 22 })),
+    trees: [{ x: -2.4, z: 3.6, s: 1 }, { x: 2.6, z: 4.2, s: 0.9 }, { x: -4.6, z: 5.4, s: 1.1 }, { x: 4.8, z: 5.8, s: 1 }],
+    y: (x, z) => Math.sin(x * 0.7 + z * 0.3) * 0.05 + Math.max(0, z - 10) * 0.18,
+  });
+  group.add(xmasDeco.group);
 
   // 碼頭盡頭的提燈
   const lanterns = [];
@@ -336,6 +344,7 @@ export function createLakeRoom() {
     /** 由 RoomManager 每幀呼叫 */
     update(dt, t, _camera, actions) {
       snowfall.update(dt, t, _camera?.position);
+      xmasDeco.update(dt, t);
       water.material.uniforms.uTime.value = t;
       gather.update(dt, t, actions);
       lanterns.forEach((l, i) => (l.intensity = 3.2 * (0.92 + Math.sin(t * 2.7 + i) * 0.05)));

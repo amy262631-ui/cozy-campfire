@@ -566,16 +566,6 @@ export function createForestRoom() {
   // ---------- 心願大樹（大家用松果換裝飾掛上去） ----------
   const wishTree = buildWishTree(world);
   group.add(wishTree.group);
-  // 🎄 聖誕造景（12/1～1/6 自動出現；網址 ?xmas=1 可以先看）
-  const xmas = buildXmasDecor();
-  group.add(xmas.group);
-  const xmasCheck = () => {
-    const on = isXmas();
-    xmas.group.visible = on;
-    if (wishTree.xmas !== on) wishTree.setXmas(on);
-  };
-  xmasCheck();
-  setInterval(xmasCheck, 10 * 60 * 1000); // 跨日（12/1、1/7）不用重新整理也會換
 
   // ---------- 石塔祈願（祈福處步道旁） ----------
   const cairnGarden = buildCairnGarden(world);
@@ -591,6 +581,30 @@ export function createForestRoom() {
   extras.occluders.forEach((g) => g.traverse((o) => o.isMesh && occluders.push(o)));
   const treasures = createTreasures(group);
   const trash = createTrashLayer(group);
+
+  // 🎄 聖誕造景（12/1～1/6 自動出現；網址 ?xmas=1 可以先看）
+  //   作者 11/18：小聖誕樹散在廣場四周的空地（避開入口步道、其他東西），不圍成一圈
+  const xmasSpots = [];
+  for (let k = 0; k < 96 && xmasSpots.length < 10; k++) {
+    const a = ((k * 7) % 24) / 24 * Math.PI * 2 + 0.13;
+    const r = [6.2, 9, 7.6, 11][k % 4];
+    const x = Math.sin(a) * r;
+    const z = Math.cos(a) * r;
+    const nearPath = defs.some((d) => Math.abs(Math.atan2(Math.sin(a - d.angle), Math.cos(a - d.angle))) < 0.32);
+    if (nearPath) continue;
+    if (world.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + 1.1)) continue;
+    if (xmasSpots.some((p) => Math.hypot(p.x - x, p.z - z) < 4.2)) continue;
+    xmasSpots.push({ x, z, s: 0.9 + ((k * 37) % 5) * 0.08 });
+  }
+  const xmas = buildXmasDecor(xmasSpots);
+  group.add(xmas.group);
+  const xmasCheck = () => {
+    const on = isXmas();
+    xmas.group.visible = on;
+    if (wishTree.xmas !== on) wishTree.setXmas(on);
+  };
+  xmasCheck();
+  setInterval(xmasCheck, 10 * 60 * 1000); // 跨日（12/1、1/7）不用重新整理也會換
 
   // ---------- 整點小活動的道具（燈籠賽跑、金松果） ----------
   const mini = buildMiniLayer();

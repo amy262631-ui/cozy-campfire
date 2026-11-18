@@ -4,7 +4,7 @@ import { seededRandom } from '../scene/textures.js';
 import { GATHER_SPOTS, MIST_R } from '../game/gathering.js';
 import { createGatherLayer, buildDecor } from './gatherLayer.js';
 import { t } from '../i18n/i18n.js';
-import { buildSnowfall } from './xmasDecor.js';
+import { buildSnowfall, buildXmasExtras } from './xmasDecor.js';
 
 const MIST_COLOR = 0x1c2a33;
 
@@ -81,6 +81,22 @@ export function createMistForestRoom() {
   trunkMesh.castShadow = leafMesh.castShadow = true;
   group.add(trunkMesh, leafMesh);
   occluders.push(trunkMesh);
+
+  // 🎄 作者 11/18：迷霧森林也有聖誕風，燈少少的、保留安靜的迷霧感
+  //   裡面零星的大樹掛暖黃小燈球、綁紅緞帶；步道旁幾棵小聖誕樹
+  const xmasTrees = [];
+  for (let i = 0, tries = 0; i < 5 && tries < 300; tries++) {
+    const a = rand() * Math.PI * 2;
+    const r = 3.8 + rand() * (MIST_R - 5);
+    const x = Math.sin(a) * r;
+    const z = Math.cos(a) * r;
+    if (!free(x, z, 1.4) || trees.some((tr) => Math.hypot(tr.x - x, tr.z - z) < 2.2) || xmasTrees.some((p) => Math.hypot(p.x - x, p.z - z) < 3.5)) continue;
+    xmasTrees.push({ x, z, s: 0.8 + rand() * 0.25 });
+    colliders.push({ x, z, r: 0.5 });
+    i++;
+  }
+  const xmasDeco = buildXmasExtras({ trees: xmasTrees, glowTrees: trees.filter((tr) => tr.inner) });
+  group.add(xmasDeco.group);
 
   // 中央：長青苔的大樹墩＋發光小蘑菇圈
   const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 0.7, 12), lowpoly(0x5a4030));
@@ -185,6 +201,7 @@ export function createMistForestRoom() {
 
     update(dt, time, _camera, actions) {
       snowfall.update(dt, time, _camera?.position);
+      xmasDeco.update(dt, time);
       for (const m of motes) {
         const u = m.userData;
         m.position.set(u.x + Math.sin(time * 0.3 + u.p) * 0.6, u.y + Math.sin(time * 0.7 + u.p) * 0.25, u.z + Math.cos(time * 0.25 + u.p) * 0.6);

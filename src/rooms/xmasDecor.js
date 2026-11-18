@@ -3,8 +3,8 @@ import { lowpoly } from './shared.js';
 import { isXmas } from '../game/season.js';
 
 /**
- * 🎄 營火廣場的聖誕造景（作者 11/10、11/12）：只在聖誕期間（12/1～1/6，season.js）顯示。
- *   地上薄雪、飄雪、營火旁一圈小燈串（掛著聖誕襪）、兩個小雪人。
+ * 🎄 營火廣場的聖誕造景（作者 11/10、11/12、11/18）：只在聖誕期間（12/1～1/6，season.js）顯示。
+ *   地上薄雪、飄雪、四周散布的小聖誕樹（有的掛聖誕襪、樹下禮物盒）、兩個小雪人。
  *   大聖誕樹＝心願大樹變身（wishTree.js），不在這裡。
  * 都是裝飾、沒有碰撞（不會擋路）。
  */
@@ -24,7 +24,149 @@ function flakeTex() {
   _flakeTex = new THREE.CanvasTexture(c);
   return _flakeTex;
 }
-export function buildXmasDecor() {
+/** 燈泡一閃一閃（每顆時間錯開） */
+function blink(bulbs, time) {
+  for (const b of bulbs) b.visible = Math.sin(time * 2 + b.userData.ph) > -0.5;
+}
+const BULB_COLS = [0xffd27a, 0xff7a7a, 0x9fe39f, 0xffd27a, 0x8ac4ff];
+let _bulbGeo = null;
+/** 🎄 小聖誕樹（約一個人高）：三層樹葉、枝頭一點雪、彩色小燈、頂端星星；可選聖誕襪、樹下禮物盒 */
+export function xmasTree(s = 1, ph = 0, { sock = false, gifts = false } = {}) {
+  _bulbGeo ??= new THREE.SphereGeometry(0.05, 8, 6);
+  const g = new THREE.Group();
+  const bulbs = [];
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.35, 6), lowpoly(0x5b3d26));
+  trunk.position.y = 0.17;
+  g.add(trunk);
+  const leaf = lowpoly(0x2f6b3f);
+  const snow = lowpoly(0xf3f7ff);
+  [[0.62, 0.7, 0.55], [0.48, 0.6, 0.95], [0.32, 0.5, 1.3]].forEach(([r, h, y], k) => {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), leaf);
+    c.position.y = y;
+    g.add(c);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.55, h * 0.3, 8), snow);
+    cap.position.y = y + h * 0.36;
+    g.add(cap);
+    const n = 7 - k * 2;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + k;
+      const b = new THREE.Mesh(_bulbGeo, new THREE.MeshBasicMaterial({ color: BULB_COLS[(i + k) % BULB_COLS.length] }));
+      b.position.set(Math.sin(a) * r * 0.85, y - h * 0.32, Math.cos(a) * r * 0.85);
+      b.userData.ph = ph + i * 1.3 + k;
+      g.add(b);
+      bulbs.push(b);
+    }
+  });
+  const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.1, 0), new THREE.MeshBasicMaterial({ color: 0xffe08a }));
+  star.position.y = 1.62;
+  g.add(star);
+  if (sock) {
+    const red = lowpoly(0xc9483c);
+    const sk = new THREE.Group();
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.2, 0.07), red);
+    leg.position.y = -0.1;
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.08, 0.07), red);
+    foot.position.set(0.03, -0.2, 0);
+    const cuff = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 0.09), lowpoly(0xf6f2ea));
+    sk.add(leg, foot, cuff);
+    sk.position.set(0, 0.62, 0.5);
+    g.add(sk);
+  }
+  if (gifts) {
+    for (const [x, z, w, c] of [[0.42, 0.3, 0.22, 0xd8433a], [-0.38, 0.36, 0.18, 0x3f8a5a], [0.1, 0.55, 0.16, 0xe8c25a]]) {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(w, w * 0.85, w), lowpoly(c));
+      box.position.set(x, w * 0.42, z);
+      box.rotation.y = x * 2;
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, w * 0.87, w * 0.2), lowpoly(0xf6f2ea));
+      rib.position.copy(box.position);
+      rib.rotation.y = box.rotation.y;
+      g.add(box, rib);
+    }
+  }
+  g.scale.setScalar(s);
+  g.traverse((o) => o.isMesh && !o.material.isMeshBasicMaterial && (o.castShadow = true));
+  return { group: g, bulbs };
+}
+
+/**
+ * 🎄 湖畔碼頭、迷霧森林的聖誕裝飾（作者 11/18）：聖誕期間（isXmas）才出現，自己每分鐘看一次日期。
+ *   trees：小聖誕樹的位置 [{x,z,s}]
+ *   glowTrees：大樹 [{x,z,s}]（迷霧森林的錐形樹）→ 樹枝下掛暖黃小燈球、樹幹綁紅緞帶
+ *   strings：燈串 [{x0,z0,x1,z1,y,n}]（直的一條，例如碼頭兩邊）
+ *   y(x,z)：地面高度
+ */
+export function buildXmasExtras({ trees = [], glowTrees = [], strings = [], y = () => 0 } = {}) {
+  const g = new THREE.Group();
+  const bulbs = [];
+  const glows = [];
+  trees.forEach((p, i) => {
+    const tr = xmasTree(p.s ?? 1, i * 2.1, { gifts: i % 2 === 1 });
+    tr.group.position.set(p.x, y(p.x, p.z), p.z);
+    tr.group.rotation.y = i * 1.9;
+    g.add(tr.group);
+    bulbs.push(...tr.bulbs);
+  });
+  const glowGeo = new THREE.SphereGeometry(0.11, 10, 8);
+  const haloGeo = new THREE.SphereGeometry(0.22, 10, 8);
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0xffd896 });
+  const ribbon = lowpoly(0xc9483c);
+  glowTrees.forEach((tr, i) => {
+    const s = tr.s;
+    const n = 4;
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * Math.PI * 2 + i * 0.9;
+      const r = 1.25 * s;
+      const yy = 2.35 * s - (k % 2) * 0.25;
+      const thread = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.35, 3), new THREE.MeshBasicMaterial({ color: 0x8a7a60 }));
+      thread.position.set(tr.x + Math.sin(a) * r, yy + 0.18, tr.z + Math.cos(a) * r);
+      const ball = new THREE.Mesh(glowGeo, glowMat);
+      ball.position.set(tr.x + Math.sin(a) * r, yy, tr.z + Math.cos(a) * r);
+      const halo = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({ color: 0xffd896, transparent: true, opacity: 0.25, depthWrite: false }));
+      halo.position.copy(ball.position);
+      halo.userData.ph = i * 1.7 + k;
+      g.add(thread, ball, halo);
+      glows.push(halo);
+    }
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * s, 0.31 * s, 0.14, 8, 1, true), ribbon);
+    band.position.set(tr.x, 1.1 * s, tr.z);
+    const bow = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 4), ribbon);
+    bow.scale.set(1.6, 1, 0.6);
+    const a = Math.atan2(-tr.x, -tr.z);
+    bow.position.set(tr.x + Math.sin(a) * 0.31 * s, 1.1 * s, tr.z + Math.cos(a) * 0.31 * s);
+    bow.rotation.y = a;
+    g.add(band, bow);
+  });
+  _bulbGeo ??= new THREE.SphereGeometry(0.05, 8, 6);
+  strings.forEach((l, j) => {
+    for (let i = 0; i <= l.n; i++) {
+      const f = i / l.n;
+      const b = new THREE.Mesh(_bulbGeo, new THREE.MeshBasicMaterial({ color: BULB_COLS[(i + j) % BULB_COLS.length] }));
+      b.position.set(l.x0 + (l.x1 - l.x0) * f, l.y - Math.abs(Math.sin(f * l.n * 0.5 * Math.PI)) * 0.06, l.z0 + (l.z1 - l.z0) * f);
+      b.userData.ph = i * 1.1 + j;
+      g.add(b);
+      bulbs.push(b);
+    }
+  });
+  let on = isXmas();
+  g.visible = on;
+  let check = 0;
+  return {
+    group: g,
+    update(dt, time) {
+      check -= dt;
+      if (check < 0) {
+        check = 60;
+        on = isXmas();
+        g.visible = on;
+      }
+      if (!on) return;
+      blink(bulbs, time);
+      for (const h of glows) h.material.opacity = 0.18 + 0.12 * Math.sin(time * 1.2 + h.userData.ph);
+    },
+  };
+}
+
+export function buildXmasDecor(spots = []) {
   const g = new THREE.Group();
   const rnd = (() => {
     let s = 1225;
@@ -44,61 +186,15 @@ export function buildXmasDecor() {
     g.add(m);
   }
 
-  // ✨ 營火旁一圈小燈串：矮木樁圍一圈，中間的燈泡垂下來，有些掛著聖誕襪
-  const stakeMat = lowpoly(0x6b4a2e);
-  const R = 5.2;
-  const N = 10;
-  const bulbGeo = new THREE.SphereGeometry(0.06, 8, 6);
-  const cols = [0xffd27a, 0xff7a7a, 0x9fe39f, 0xffd27a, 0x8ac4ff];
+  // 🎄 作者 11/18：拿掉營火旁那一圈木樁燈串（像圍欄、有壓迫感）→ 廣場四周散布小聖誕樹（spots 由房間挑空地）
   const bulbs = [];
-  const stockRed = lowpoly(0xc9483c);
-  const stockWhite = lowpoly(0xf6f2ea);
-  for (let i = 0; i < N; i++) {
-    const a0 = (i / N) * Math.PI * 2 + 0.2;
-    const a1 = ((i + 1) / N) * Math.PI * 2 + 0.2;
-    const p0 = new THREE.Vector3(Math.sin(a0) * R, 1.15, Math.cos(a0) * R);
-    const p1 = new THREE.Vector3(Math.sin(a1) * R, 1.15, Math.cos(a1) * R);
-    const stake = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.2, 6), stakeMat);
-    stake.position.set(p0.x, 0.6, p0.z);
-    g.add(stake);
-    // 木樁頂上一個小花圈
-    if (i % 2 === 0) {
-      const wreath = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.05, 6, 12), lowpoly(0x2f7a45));
-      wreath.position.set(p0.x, 1.32, p0.z);
-      wreath.lookAt(0, 1.32, 0);
-      const bow = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4), lowpoly(0xd8433a));
-      bow.position.set(0, -0.12, 0.03);
-      wreath.add(bow);
-      g.add(wreath);
-    }
-    // 垂下來的燈串（兩個木樁之間）
-    for (let k = 1; k < 8; k++) {
-      const f = k / 8;
-      const p = p0.clone().lerp(p1, f);
-      p.y -= Math.sin(f * Math.PI) * 0.28;
-      const b = new THREE.Mesh(bulbGeo, new THREE.MeshBasicMaterial({ color: cols[(i * 8 + k) % cols.length] }));
-      b.position.copy(p);
-      b.userData.ph = i * 1.3 + k;
-      g.add(b);
-      bulbs.push(b);
-    }
-    // 聖誕襪（每隔一段掛一隻）
-    if (i % 3 === 1) {
-      const mid = p0.clone().lerp(p1, 0.5);
-      mid.y -= 0.28;
-      const sock = new THREE.Group();
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.26, 0.08), stockRed);
-      leg.position.y = -0.17;
-      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.08), stockRed);
-      foot.position.set(0.04, -0.3, 0);
-      const cuff = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.07, 0.1), stockWhite);
-      cuff.position.y = -0.04;
-      sock.add(leg, foot, cuff);
-      sock.position.copy(mid);
-      sock.lookAt(0, mid.y, 0);
-      g.add(sock);
-    }
-  }
+  spots.forEach((p, i) => {
+    const tr = xmasTree(p.s ?? 1, i * 1.7, { sock: i % 3 === 1, gifts: i % 2 === 0 });
+    tr.group.position.set(p.x, 0, p.z);
+    tr.group.rotation.y = rnd() * 6;
+    g.add(tr.group);
+    bulbs.push(...tr.bulbs);
+  });
 
   // ⛄ 兩個小雪人
   const white = lowpoly(0xf6f9ff);
@@ -155,7 +251,7 @@ export function buildXmasDecor() {
     group: g,
     /** center：跟著誰下雪（鏡頭或玩家的位置） */
     update(dt, time, center) {
-      for (const b of bulbs) b.visible = Math.sin(time * 2 + b.userData.ph) > -0.5;
+      blink(bulbs, time);
       const a = geo.attributes.position;
       for (let i = 0; i < FLAKES; i++) {
         let y = a.getY(i) - dt * (0.6 + (i % 5) * 0.12);

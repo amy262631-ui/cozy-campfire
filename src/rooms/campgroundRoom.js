@@ -12,7 +12,8 @@ import { slotLocal } from '../game/garden.js';
 import { createTrashLayer } from './trashLayer.js';
 import { buildYard, yardRadius } from './yardModels.js';
 import { buildSign } from './signModels.js';
-import { buildSnowfall } from './xmasDecor.js';
+import { buildSnowfall, xmasTree } from './xmasDecor.js';
+import { isXmas } from '../game/season.js';
 import { YARD_USES, YARD_BY_ID } from '../game/yardCatalog.js';
 const YARD_ICON = Object.fromEntries(Object.entries(YARD_BY_ID).map(([k, v]) => [k, v.icon]));
 const YARD_NAME = Object.fromEntries(Object.entries(YARD_BY_ID).map(([k, v]) => [k, v.zh]));
@@ -437,9 +438,73 @@ export function createCampgroundRoom() {
   const wireGeo = new THREE.BufferGeometry();
   wireGeo.setAttribute('position', new THREE.Float32BufferAttribute(wire, 3));
   group.add(new THREE.LineSegments(wireGeo, new THREE.LineBasicMaterial({ color: 0x2a2018 })));
-  group.add(instanced(new THREE.SphereGeometry(0.06, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }), bulbs, (_, i) => BULB[i % BULB.length]));
+  const bulbMesh = instanced(new THREE.SphereGeometry(0.06, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }), bulbs, (_, i) => BULB[i % BULB.length]);
+  group.add(bulbMesh);
   const bulbHalo = halo(0.75, 0.55);
   group.add(haloPoints(bulbs, bulbHalo));
+
+  // 🎄 作者 11/18：聖誕期間（12/1～1/6）帳篷營地也有聖誕風
+  //   小路串燈換成紅綠金白藍、一閃一閃；每根燈柱頂上一個小花圈；入口拱門掛大花圈、兩旁小聖誕樹
+  const XBULB = [0xff5a4e, 0x5fd27a, 0xffd35a, 0xf6f4ff, 0x7ab8ff];
+  const xmasG = new THREE.Group();
+  group.add(xmasG);
+  {
+    const wreathGeo = new THREE.TorusGeometry(0.16, 0.055, 6, 12);
+    const bowGeo = new THREE.SphereGeometry(0.05, 6, 4);
+    xmasG.add(instanced(wreathGeo, lowpoly(0x2f7a45), posts.map((p) => ({ ...p, y: POST_H - 0.32, ry: Math.atan2(p.x - LOOP_CENTER.x, p.z - LOOP_CENTER.z) }))));
+    xmasG.add(instanced(bowGeo, lowpoly(0xd8433a), posts.map((p) => {
+      const a = Math.atan2(p.x - LOOP_CENTER.x, p.z - LOOP_CENTER.z);
+      return { x: p.x + Math.sin(a) * 0.07, y: POST_H - 0.47, z: p.z + Math.cos(a) * 0.07, sx: 1.6, sy: 1, sz: 0.7, ry: a };
+    })));
+  }
+  const xmasBulbs = [];
+  {
+    const big = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.12, 8, 18), lowpoly(0x2f7a45));
+    big.position.set(0, 2.72, ENTRY_Z - 1.05);
+    const bow = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), lowpoly(0xd8433a));
+    bow.scale.set(1.8, 1, 0.7);
+    bow.position.set(0, 2.32, ENTRY_Z - 0.98);
+    xmasG.add(big, bow);
+    for (const [x, sc] of [[-5.4, 1.15], [-6.6, 0.85]]) {
+      const tr = xmasTree(sc, x);
+      tr.group.position.set(x, 0, ENTRY_Z - 0.7);
+      xmasG.add(tr.group);
+      xmasBulbs.push(...tr.bulbs);
+      colliders.push({ x, z: ENTRY_Z - 0.7, r: 0.45 * sc });
+    }
+  }
+  let xmasOn = null;
+  let xmasCheck = 0;
+  let xmasBlink = 0;
+  let xmasStep = 0;
+  const bulbCol = new THREE.Color();
+  const updateXmas = (dt, time) => {
+    xmasCheck -= dt;
+    if (xmasCheck < 0) {
+      xmasCheck = 60;
+      const on = isXmas();
+      if (on !== xmasOn) {
+        xmasOn = on;
+        xmasG.visible = on;
+        if (!on) {
+          bulbs.forEach((_, i) => bulbMesh.setColorAt(i, bulbCol.set(BULB[i % BULB.length])));
+          bulbMesh.instanceColor.needsUpdate = true;
+        }
+      }
+    }
+    if (!xmasOn) return;
+    for (const b of xmasBulbs) b.visible = Math.sin(time * 2 + b.userData.ph) > -0.5;
+    xmasBlink -= dt;
+    if (xmasBlink > 0) return;
+    xmasBlink = 0.5;
+    xmasStep++;
+    bulbs.forEach((_, i) => {
+      bulbCol.set(XBULB[i % XBULB.length]);
+      if ((i + xmasStep) % 3 === 0) bulbCol.multiplyScalar(0.3);
+      bulbMesh.setColorAt(i, bulbCol);
+    });
+    bulbMesh.instanceColor.needsUpdate = true;
+  };
 
   // ---- 每塊地旁邊一盞小燈籠 ----
   const lanternMat = new THREE.MeshBasicMaterial({ color: 0xffcf86 });
@@ -1201,6 +1266,7 @@ export function createCampgroundRoom() {
     },
     update(dt, time, camera) {
       snowfall.update(dt, time, camera?.position);
+      updateXmas(dt, time);
       clockNow = time;
       // 🌳 樹屋鞦韆：自己坐著照選的力道盪（1 輕輕、2 高一點、3 用力）；別人坐著輕輕盪；沒人慢慢停
       const me = seatedOn();
