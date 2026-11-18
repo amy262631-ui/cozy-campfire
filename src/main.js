@@ -3201,7 +3201,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     document.getElementById('warn-card')?.remove();
     const nav = (navigator.languages ?? [navigator.language ?? '']).join(',').toLowerCase();
     const sc = w.sc || /zh-(cn|sg|hans)/.test(nav);
-    const zh = lang === 'zh' || sc;
+    const zh = String(lang).startsWith('zh') || sc;
     const R = {
       curse: ['罵人、說髒話', '骂人、说脏话'],
       note: ['亂留言', '乱留言'],

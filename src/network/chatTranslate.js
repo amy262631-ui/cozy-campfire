@@ -4,7 +4,7 @@ import { lang } from '../i18n/i18n.js';
  * 聊天自動翻譯：別人用其他語言打字時，翻成你現在的介面語言。
  * 用 MyMemory 免費翻譯（不用金鑰，在每個人自己的瀏覽器裡呼叫；每人每天約 5000 字的額度）。
  */
-const TARGET = { 'zh-Hant': 'zh-TW', en: 'en', ja: 'ja', ko: 'ko', ru: 'ru' }[lang] ?? 'en';
+const TARGET = { 'zh-Hant': 'zh-TW', 'zh-Hans': 'zh-TW', en: 'en', ja: 'ja', ko: 'ko', ru: 'ru' }[lang] ?? 'en';
 const KEY = 'cozy-translate';
 const cache = new Map();
 

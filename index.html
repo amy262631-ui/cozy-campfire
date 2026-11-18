@@ -69,13 +69,14 @@
           en: ['Lighting the campfire…', 'Slow connection — almost there 🔥', "This browser can't show 3D — try Chrome or Safari"],
           ja: ['たき火をおこしています…', '回線が少し遅いみたい。もう少しだけ 🔥', 'このブラウザでは3D画面が開けません。Chrome か Safari で試してね'],
           ko: ['모닥불을 피우는 중⋯', '인터넷이 조금 느려요. 조금만 기다려요 🔥', '이 브라우저에서는 3D 화면을 열 수 없어요. Chrome이나 Safari로 해 보세요'],
+          'zh-Hans': ['正在生火⋯', '网络有点慢，再等一下下 🔥', '这个浏览器打不开 3D 画面，换成 Chrome 或 Safari 试试看'],
           ru: ['Разжигаем костёр…', 'Интернет немного медленный. Ещё чуть-чуть 🔥', 'В этом браузере 3D не открывается. Попробуй Chrome или Safari'],
         };
         var l = new URLSearchParams(location.search).get('lang');
         try { l = T[l] ? l : localStorage.getItem('cozy-campfire-lang'); } catch (e) {}
         if (!T[l]) {
           var n = (navigator.language || '').toLowerCase();
-          l = n.indexOf('ja') === 0 ? 'ja' : n.indexOf('ko') === 0 ? 'ko' : /^(ru|uk|be|kk)/.test(n) ? 'ru' : n.indexOf('en') === 0 ? 'en' : 'zh-Hant';
+          l = n.indexOf('ja') === 0 ? 'ja' : n.indexOf('ko') === 0 ? 'ko' : /^(ru|uk|be|kk)/.test(n) ? 'ru' : /^zh-(cn|sg|hans|my)/.test(n) ? 'zh-Hans' : n.indexOf('en') === 0 ? 'en' : 'zh-Hant';
         }
         var t = T[l];
         document.getElementById('boot-msg').textContent = t[0];
