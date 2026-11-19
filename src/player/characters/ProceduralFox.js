@@ -627,6 +627,11 @@ export class ProceduralFox {
     this.headStone.position.y = hatTop ? hat.position.y + hatTop * hat.scale.y + 0.07 : 0.4 + vol;
     // 🐟 舉魚炫耀：戴帽子（尤其大大的蘑菇帽）時魚舉高一點，不會卡在帽子裡（作者 11/12 回報）
     this.fishY = Math.max(1.42, 0.82 + (hatTop ? hat.position.y + hatTop * hat.scale.y + 0.3 : 0.4 + vol + 0.2));
+    // 😵 吃了黑暗料理的時候換了頭髮：重新套一次（假髮要變焦黑、捲捲頭要拿掉或加回來）
+    if (this.burnt) {
+      this.setBurnt(false);
+      this.setBurnt(true);
+    }
     this.#placeAccessory();
   }
 
@@ -706,11 +711,16 @@ export class ProceduralFox {
     if (!on) {
       if (this.burnt) this.head.remove(this.burnt.g);
       this.burnt = null;
+      this.#charHair(false);
       return;
     }
     if (this.burnt) return;
     const g = new THREE.Group();
-    addSoot(g, new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 1 }), new THREE.MeshStandardMaterial({ color: 0x120e0c, roughness: 1 }));
+    // 戴假髮（或灰頭土臉造型）時：不加捲捲頭，假髮變成焦黑色（作者 11/19 選 B）
+    const wig = !!this.outfit?.hair;
+    addSoot(g, new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 1 }), new THREE.MeshStandardMaterial({ color: 0x120e0c, roughness: 1 }), { curls: !wig });
+    this.#charHair(wig);
+    this.smokeY = wig ? 0.58 : 0.44;
     // 綠煙：幾顆小球一直往上飄
     const smokeMat = new THREE.MeshStandardMaterial({ color: 0x8fd07a, transparent: true, opacity: 0.6, roughness: 1, depthWrite: false });
     const puffs = [];
@@ -724,12 +734,31 @@ export class ProceduralFox {
     this.burnt = { g, puffs };
   }
 
+  /** 🔥 假髮燒焦：材質複製一份、顏色往焦黑色拉；off 換回原本的材質 */
+  #charHair(on) {
+    const hair = this.outfit?.hair;
+    if (!hair) return;
+    const soot = new THREE.Color(0x2a2220);
+    hair.traverse((m) => {
+      if (!m.isMesh) return;
+      if (on && !m.userData.origMat) {
+        m.userData.origMat = m.material;
+        m.material = m.material.clone();
+        m.material.color?.lerp(soot, 0.72);
+      } else if (!on && m.userData.origMat) {
+        m.material.dispose?.();
+        m.material = m.userData.origMat;
+        delete m.userData.origMat;
+      }
+    });
+  }
+
   update(dt, t, speed) {
     this.poseTime += dt;
     if (this.burnt) {
       for (const p of this.burnt.puffs) {
         const f = (t * 0.45 + p.userData.ph) % 1;
-        p.position.set(Math.sin(f * 9 + p.userData.ph * 6) * 0.06, 0.44 + f * 0.55, Math.cos(f * 7) * 0.04);
+        p.position.set(Math.sin(f * 9 + p.userData.ph * 6) * 0.06, (this.smokeY ?? 0.44) + f * 0.55, Math.cos(f * 7) * 0.04);
         p.scale.setScalar(0.6 + f * 1.4);
         p.material.opacity = 0.6 * (1 - f);
       }

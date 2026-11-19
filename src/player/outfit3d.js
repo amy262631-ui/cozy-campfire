@@ -73,12 +73,13 @@ function buildDotScarf(g, add, sphere, base, dotM) {
 }
 
 /** 😵 炸開的頭髮（頭頂一圈尖刺）＋臉上幾塊焦黑（黑暗料理、灰頭土臉造型共用；座標以頭的中心為原點） */
-export function addSoot(g, hairM, sootM) {
+/** opts.curls＝false：不加捲捲頭（戴假髮時：作者 11/19 選「假髮變焦黑」，不加捲捲） */
+export function addSoot(g, hairM, sootM, opts = {}) {
   // 💇 作者 11/19：頭髮要「一條一條捲捲的線」（像炸開的義大利麵），不要整坨 → 細管子沿著螺旋線往外捲
   const curlM = new THREE.MeshStandardMaterial({ color: 0x2e2826, roughness: 1 });
   let seed = 3;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const N = 22;
+  const N = opts.curls === false ? 0 : 22;
   for (let k = 0; k < N; k++) {
     // 髮根：頭頂附近一圈一圈（黃金角分布）
     const ang = k * 2.39996;
