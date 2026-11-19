@@ -25,11 +25,11 @@ function leaves(g, n, size, h) {
 export function buildSoil(n = 3) {
   const g = new THREE.Group();
   for (let i = 0; i < n; i++) {
-    const p = slotLocal(i);
-    const soil = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.4), m(0x6a4a32));
+    const p = slotLocal(i, n);
+    const soil = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, n > 6 ? 0.36 : 0.4), m(0x6a4a32));
     soil.position.set(p.x, 0.03, p.z);
     g.add(soil);
-    const top = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.03, 0.32), m(0x5a3c26));
+    const top = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.03, n > 6 ? 0.29 : 0.32), m(0x5a3c26));
     top.position.set(p.x, 0.07, p.z);
     g.add(top);
   }
@@ -128,11 +128,45 @@ export function buildCrop(id, stage) {
       }
       break;
     }
+    case 'rice': {
+      // 🌾 稻米：一叢細細的稻子，熟了稻穗變金黃、往下垂
+      for (let k = 0; k < 9; k++) {
+        const a = k * 2.4;
+        const r = 0.03 + (k % 3) * 0.025;
+        const st = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.007, 0.34, 4), m(ready ? 0xb8a84a : 0x6aa84a));
+        st.position.set(Math.sin(a) * r, 0.2, Math.cos(a) * r);
+        st.rotation.set(Math.sin(a) * 0.25, 0, Math.cos(a) * 0.25);
+        g.add(st);
+        if (ready) {
+          const ear = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.06, 3, 6), veg);
+          ear.position.set(Math.sin(a) * (r + 0.05), 0.36, Math.cos(a) * (r + 0.05));
+          ear.rotation.set(Math.sin(a) * 1.0, 0, Math.cos(a) * 1.0);
+          g.add(ear);
+        }
+      }
+      break;
+    }
+    case 'scallion': {
+      // 🌿 青蔥：一根一根直直的綠管子，下面白白的
+      for (let k = 0; k < 6; k++) {
+        const a = k * 1.05;
+        const h = ready ? 0.34 : 0.22;
+        const st = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.012, h, 6), m(0x5fae4a));
+        st.position.set(Math.sin(a) * 0.035, 0.08 + h / 2, Math.cos(a) * 0.035);
+        st.rotation.set(Math.sin(a) * 0.12, 0, Math.cos(a) * 0.12);
+        g.add(st);
+        const wb = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.06, 6), m(0xf4f0e2));
+        wb.position.set(Math.sin(a) * 0.035, 0.1, Math.cos(a) * 0.035);
+        g.add(wb);
+      }
+      break;
+    }
+    case 'garlic':
     case 'onion':
     case 'moon_radish': {
       // 洋蔥、月光白蘿蔔：細長的葉子＋土上露出圓圓的頭（月光白蘿蔔會微微發光）
       for (let k = 0; k < 5; k++) {
-        const l = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.012, ready ? 0.26 : 0.18, 4), m(id === 'onion' ? 0x6aa84a : 0x8ac9a0));
+        const l = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.012, ready ? 0.26 : 0.18, 4), m(id === 'moon_radish' ? 0x8ac9a0 : 0x6aa84a));
         l.position.set(Math.sin(k * 1.3) * 0.02, ready ? 0.22 : 0.18, Math.cos(k * 1.3) * 0.02);
         l.rotation.set(Math.sin(k) * 0.3, 0, Math.cos(k) * 0.3);
         g.add(l);
@@ -141,7 +175,7 @@ export function buildCrop(id, stage) {
         const glow = id === 'moon_radish' ? m(c.color, { emissive: 0x9fd8ff, emissiveIntensity: 0.6, roughness: 0.4 }) : veg;
         const head = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), glow);
         head.position.y = 0.1;
-        head.scale.set(1, id === 'moon_radish' ? 1.3 : 0.9, 1);
+        head.scale.set(1, id === 'moon_radish' ? 1.3 : id === 'garlic' ? 1.05 : 0.9, 1);
         g.add(head);
       }
       break;

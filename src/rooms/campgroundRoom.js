@@ -8,6 +8,7 @@ import { styleOf, tentTexture } from '../game/tentStyles.js';
 import { t } from '../i18n/i18n.js';
 import { LAYOUT, CAMP_SIZE, ENTRY_Z, BOUNDS, LOOP_CENTER, plotSpots, frame, zoneName } from './campLayout.js';
 import { buildSoil, buildCrop } from './gardenModels.js';
+import { buildChicken, buildPen, PEN_IN } from './chickens.js';
 import { slotLocal } from '../game/garden.js';
 import { createTrashLayer } from './trashLayer.js';
 import { buildYard, yardRadius } from './yardModels.js';
@@ -710,7 +711,7 @@ export function createCampgroundRoom() {
 
   let zoneNow = 0; // 🏕️ 現在顯示哪一區（門牌寫「A 區 7 號」用）
   const plotTitle = (i) => t('{z} 區 {n} 號', { z: zoneName(zoneNow), n: i + 1 });
-  const tentKey = (tent) => (tent ? [zoneNow, tent.sign ?? '', tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.frame ?? '', tent.open, tent.likes, tent.n, tent.yard ?? '', (tent.sm ?? []).join(','), (tent.dc ?? []).join(','), JSON.stringify(tent.garden ?? null)].join('|') : `empty:${zoneNow}`);
+  const tentKey = (tent) => (tent ? [zoneNow, tent.sign ?? '', tent.hid, tent.mine, tent.demo, tent.name, tent.shape, tent.style, tent.frame ?? '', tent.open, tent.likes, tent.n, tent.yard ?? '', (tent.sm ?? []).join(','), (tent.dc ?? []).join(','), JSON.stringify(tent.garden ?? null), JSON.stringify(tent.hens ?? null)].join('|') : `empty:${zoneNow}`);
   const trash = createTrashLayer(group);
   const ridePicked = new Set(); // 騎車自動撿過的垃圾（避免同一件一直送）
   const _sw = new THREE.Vector3();
@@ -793,7 +794,7 @@ export function createCampgroundRoom() {
       if (!slot) return;
       const crop = buildCrop(slot[0], slot[1]);
       gg.userData.crops[i] = crop;
-      const sp = slotLocal(i);
+      const sp = slotLocal(i, tent.garden?.length ?? 3);
       crop.position.set(sp.x, 0, sp.z);
       crop.scale.setScalar(1.2); // 營地鏡頭比較遠，作物放大一點才看得到
       gg.add(crop);
@@ -809,9 +810,70 @@ export function createCampgroundRoom() {
     const yards = [];
     const side = p.gardenSide || 1;
     const place = [];
+    let coop = null;
+    // 作者 11/19：要注意跟其他擺件干涉 → 幾個候選位置一個一個試，避開帳篷（含船屋的水池）、菜園、門牌、門口擺設、小路、鄰居
+    const fr = frame(p.ry);
+    const toW = (lx, lz) => ({ x: p.x + fr.fx * lz + fr.rx * lx, z: p.z + fr.fz * lz + fr.rz * lx });
+    const coopSpot = () => {
+      const hw = (sh.kind === 'rect' ? sh.W : sh.R) * SCALE + 0.6;
+      const hd = front + 0.6;
+      const busy = [
+        [1.75 * side, 3.75, 1.45], // 菜園
+        [0.85 * side, 5.0, 0.9], // 門牌
+        ...SMALL_SPOTS.map((q) => [q.x * side, q.z, 0.9]), // 小型門口擺設
+        [BIG_SPOT.x * side, BIG_SPOT.z, 1.8], // 大型門口擺設
+      ];
+      let best = null;
+      for (const [lx, lz] of [
+        [3.3, 3.5],
+        [3.45, 2.2],
+        [3.5, 4.8],
+        [2.7, 5.5],
+        [4.3, 3.2],
+        [4.6, 1.2],
+        [5.2, 3.6],
+        [4.4, 5.6],
+        [5.8, 1.8],
+        [6.0, 4.6],
+        [3.6, 6.4],
+        [6.2, 0.2],
+        // 大帳篷（船屋）：照帳篷大小往旁邊、後面找
+        [(hw + 1.6) / 1, 0],
+        [(hw + 1.6) / 1, hd],
+        [hw * 0.5, -(hd + 1.7)],
+        [0, -(hd + 1.9)],
+        [-(hw * 0.5), -(hd + 1.7)],
+      ]) {
+        const x = lx * side;
+        if (Math.abs(x) < hw + 1.0 && Math.abs(lz) < hd + 0.9) continue; // 帳篷本身
+        if (sh.id === 'houseboat' && Math.hypot(x, lz - 0.6 * SCALE) < sh.W * 2.3 * SCALE + 0.8) continue; // ⛵ 船屋外面那一片水
+        if (sh.id === 'treehouse' && Math.hypot(x - TREEHOUSE_SPOTS.branch.x * SCALE, lz - TREEHOUSE_SPOTS.branch.z * SCALE) < 1.6) continue; // 🌳 樹屋的鞦韆
+        if (busy.some(([bx, bz, r]) => Math.hypot(x - bx, lz - bz) < r + 1.0)) continue; // 圍籬比雞舍寬
+        const w = toW(x, lz);
+        const pd = pathDist(w.x, w.z);
+        if (pd < 1.25) continue; // 小路
+        if (PLOTS.some((q, k) => q !== PLOTS[p.i] && (Math.hypot(q.x - w.x, q.z - w.z) < 3.6 || Math.hypot(spots[k].garden.x - w.x, spots[k].garden.z - w.z) < 1.8))) continue; // 鄰居
+        if (!best || pd > best.pd) best = { x, z: lz, w, pd }; // 離小路越遠越好
+        if (pd >= 1.6) break;
+      }
+      if (best) return best;
+      // 作者 11/19：盡量在門口，不然就把門口擺設少一個來放 → 先借第 3 個小型擺設的位置，再借大型擺設的位置
+      for (const [take, lx, lz] of [
+        ['sm2', SMALL_SPOTS[2].x - 0.2, SMALL_SPOTS[2].z + 0.1],
+        ['big', BIG_SPOT.x, BIG_SPOT.z + 0.4],
+      ]) {
+        const x = lx * side;
+        const w = toW(x, lz);
+        if (pathDist(w.x, w.z) < 0.9) continue;
+        if (PLOTS.some((q, k) => q !== PLOTS[p.i] && Math.hypot(q.x - w.x, q.z - w.z) < 3.2)) continue;
+        return { x, z: lz, w, take };
+      }
+      return null;
+    };
+    const cs = tent.hens?.length ? coopSpot() : null;
     // 11/07 作者：遮陽棚、門那一側不要朝自己的房子；坐著的人要面向小路（不要背對步道）
     //   拖車屋：整台轉半圈（露台、躺椅朝小路，遮陽棚朝外）；露營車：門和遮陽棚翻到外側；天幕：椅子面向小路
-    if (tent.yard) {
+    if (tent.yard && cs?.take !== 'big') {
       const y0 = tent.yard;
       const ry = y0 === 'airstream' ? Math.PI / 2 : y0 === 'tarp' ? 0 : -Math.PI / 2;
       const mirror = y0 === 'tarp' ? false : y0 === 'camper' ? side !== 1 : side === 1;
@@ -845,7 +907,7 @@ export function createCampgroundRoom() {
     }
     g.userData.ticks = ticks;
     // 小型擺設：郵筒的門要朝小路（11/08 作者），模型的門在 +x，所以多轉 -90 度
-    (tent.sm ?? []).slice(0, SMALL_SPOTS.length).forEach((id, i) => place.push([id, SMALL_SPOTS[i].x * side, SMALL_SPOTS[i].z, SMALL_SPOTS[i].ry * side + (id === 'mailbox' ? -Math.PI / 2 : 0), false]));
+    (tent.sm ?? []).slice(0, SMALL_SPOTS.length).forEach((id, i) => !(i === 2 && cs?.take === 'sm2') && place.push([id, SMALL_SPOTS[i].x * side, SMALL_SPOTS[i].z, SMALL_SPOTS[i].ry * side + (id === 'mailbox' ? -Math.PI / 2 : 0), false]));
     for (const [id, lx, lz, ry, mirror] of place) {
       if (!id) continue;
       const y = buildYard(id);
@@ -868,6 +930,64 @@ export function createCampgroundRoom() {
       }
       const f = frame(p.ry);
       yards.push({ id, obj: y, col: { x: p.x + f.fx * lz + f.rx * lx, z: p.z + f.fz * lz + f.rz * lx, r: yardRadius(id) * yardScale(id) } });
+    }
+    // 🐔 小肥雞（11/27）：雞舍在菜園再往外一點，小雞在雞舍前面晃來晃去、低頭啄啄
+    if (cs) {
+      // 作者 11/19：雞舍改成一圈矮圍籬，小雞在裡面走
+      const cx = cs.x;
+      const cz = cs.z;
+      const PS = 0.85; // 圍籬在營地裡的大小
+      const pen = buildPen();
+      pen.scale.setScalar(PS);
+      pen.position.set(cx, 0, cz);
+      g.add(pen);
+      const inW = PEN_IN.w * PS;
+      const inD = PEN_IN.d * PS;
+      const hens = tent.hens.slice(0, 4).map(([c, fat], i) => {
+        const o = buildChicken(fat, c);
+        o.scale.setScalar(0.85); // 作者 11/19：比例不要太大（大約到角色的膝蓋）
+        const a = { o, x: cx + [-0.5, 0.5, -0.15, 0.3][i] * inW, z: cz + [0.2, -0.3, 0.5, 0.4][i] * inD, tx: 0, tz: 0, wait: i * 0.7, peck: 0 };
+        o.position.set(a.x, 0, a.z);
+        g.add(o);
+        return a;
+      });
+      for (const o of [pen, ...hens.map((h) => h.o)]) o.traverse((m) => m.isMesh && (m.userData.ownGeo = true));
+      ticks.push({
+        userData: {
+          tick: (dt, time) => {
+            for (const h of hens) {
+              h.o.userData.tick?.(time);
+              if (h.wait > 0) {
+                h.wait -= dt;
+                h.peck = Math.max(0, h.peck - dt);
+                h.o.rotation.x = h.peck > 0 ? Math.sin(h.peck * 18) * 0.35 + 0.3 : 0; // 低頭啄啄
+                if (h.wait <= 0) {
+                  // 圍籬裡隨便找一個地方走過去（橢圓形裡面）
+                  const a = Math.random() * Math.PI * 2;
+                  const r = Math.sqrt(Math.random());
+                  h.tx = cx + Math.cos(a) * r * inW;
+                  h.tz = cz + Math.sin(a) * r * inD;
+                }
+                continue;
+              }
+              const dx = h.tx - h.x;
+              const dz = h.tz - h.z;
+              const d = Math.hypot(dx, dz);
+              if (d < 0.05) {
+                h.wait = 1 + Math.random() * 3;
+                if (Math.random() < 0.6) h.peck = 1.2;
+                continue;
+              }
+              const v = Math.min(d, dt * 0.3);
+              h.x += (dx / d) * v;
+              h.z += (dz / d) * v;
+              h.o.position.set(h.x, 0, h.z);
+              h.o.rotation.y = Math.atan2(dx, dz);
+            }
+          },
+        },
+      });
+      coop = cs.w;
     }
     // 🌳 私人樹屋：樹枝下的鞦韆（會盪、可以坐，3 段力道）、陽台的小桌椅（可以坐）
     if (sh.id === 'treehouse') {
@@ -903,7 +1023,7 @@ export function createCampgroundRoom() {
       g.add(balc);
       yards.push({ id: 'th_table', icon: '☕', name: t('樹屋陽台的小桌椅'), obj: balc, seats: TREEHOUSE_SPOTS.chairs, col: { x: tw.x, z: tw.z, r: 0.45 } });
     }
-    return { g, gg, door: sp.door, out: sp.out, collider: { x: p.x, z: p.z, r: front * 0.92 }, yards };
+    return { g, gg, door: sp.door, out: sp.out, collider: { x: p.x, z: p.z, r: front * 0.92 }, yards, coop, coopCol: coop ? { x: coop.x, z: coop.z, r: 0.95 } : null };
   }
 
   function setTents(list = []) {
@@ -937,7 +1057,7 @@ export function createCampgroundRoom() {
     });
     if (!changed) return;
     colliders.length = 0;
-    colliders.push(...staticColliders, ...plots.flatMap((p) => [p.collider, ...(p.yards ?? []).map((y) => y.col)]).filter(Boolean));
+    colliders.push(...staticColliders, ...plots.flatMap((p) => [p.collider, p.coopCol, ...(p.yards ?? []).map((y) => y.col)]).filter(Boolean)); // 🐔 雞舍也擋人
   }
   setTents([]);
 
@@ -1035,8 +1155,24 @@ export function createCampgroundRoom() {
     }
     return best;
   }
+  /** 🐔 站在哪一個雞舍旁邊 */
+  function coopAt(pos) {
+    let best = null;
+    let bd = 1.8; // 圍籬比較大，站在圍籬外面就算
+    for (const p of plots) {
+      if (!p.coop || !p.tent || p.tent.demo) continue;
+      const d = Math.hypot(pos.x - p.coop.x, pos.z - p.coop.z);
+      if (d < bd) {
+        bd = d;
+        best = p;
+      }
+    }
+    return best;
+  }
   /** 門口和菜園都在旁邊：比較近的那個 */
   function targetAt(pos) {
+    const cp = coopAt(pos);
+    if (cp) return { coop: cp };
     const door = plotAt(pos);
     const gd = gardenAt(pos);
     if (door && gd) {
@@ -1050,7 +1186,7 @@ export function createCampgroundRoom() {
   const dirtMat = new THREE.MeshStandardMaterial({ color: 0x6a4a32, roughness: 1 });
   const splashMat = new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false });
   const slotWorld = (p, i) => {
-    const sp = slotLocal(i);
+    const sp = slotLocal(i, p.tent?.garden?.length ?? 3);
     return p.gg.localToWorld(new THREE.Vector3(sp.x, 0.1, sp.z));
   };
   /**
@@ -1371,7 +1507,8 @@ export function createCampgroundRoom() {
         return true;
       }
       if (!tg) return false;
-      if (tg.garden) actions.onGarden?.(tg.garden);
+      if (tg.coop) actions.onCoop?.(tg.coop);
+      else if (tg.garden) actions.onGarden?.(tg.garden);
       else actions.onVisit?.(tg.door);
       return true;
     },
@@ -1383,6 +1520,7 @@ export function createCampgroundRoom() {
       const tg = targetAt(actions.player.position);
       const yd = pickYard(actions.player.position);
       if (yd) return t('<kbd>E</kbd> {icon} {name}', { icon: yd.yard.icon ?? YARD_ICON[yd.yard.id] ?? '🚙', name: yd.yard.name ?? t(YARD_NAME[yd.yard.id] ?? '') });
+      if (tg?.coop) return tg.coop.tent.mine ? t('<kbd>E</kbd> 🐔 我的小肥雞') : t('<kbd>E</kbd> 🐔 看看「{name}」的小肥雞', { name: tg.coop.tent.name || t('旅人') });
       if (tg?.garden) return tg.garden.tent.mine ? t('<kbd>E</kbd> 🥕 我的小菜園') : t('<kbd>E</kbd> 💧 看看「{name}」的菜園', { name: tg.garden.tent.name || t('旅人') });
       const p = tg?.door;
       if (!p) return null;
@@ -1401,6 +1539,7 @@ export function createCampgroundRoom() {
       const yd0 = pickYard(actions.player.position);
       if (yd0) return [yd0.yard.icon ?? YARD_ICON[yd0.yard.id] ?? '🚙', t('使用')];
       const tg = targetAt(actions.player.position);
+      if (tg?.coop) return ['🐔', t('小肥雞')];
       if (tg?.garden) return ['🥕', t('菜園')];
       return tg ? ['🚪', t('拜訪')] : null;
     },

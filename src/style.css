@@ -7521,3 +7521,5 @@ body.touch .bg-panel { bottom: 250px; }
 .pot-progress { color: #e8a96a; }
 .pot-result .mini-btn { background: #e8873a; color: #2a1608; opacity: 1; }
 .pot-result.dark .mini-btn { background: #8a6ab0; color: #fff; }
+.hen-name { display: flex; gap: 6px; margin-top: 4px; }
+.hen-name input { flex: 1; min-width: 0; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(0, 0, 0, 0.2); color: inherit; padding: 4px 8px; font: inherit; font-size: 13px; }

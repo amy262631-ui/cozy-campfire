@@ -9,9 +9,9 @@ import { GATHER_ITEMS } from './gathering.js';
  */
 export const FISH_BOOST = 3;
 /** 🗓️ 作者 11/16：精靈家具、小精靈造型（蝴蝶結、翅膀）、每日限定、營火之約新 3 款 → 11/20（台北時間）自動打開＋跳更新說明 */
-export const LAUNCH_1120 = '2026-11-20';
+export const LAUNCH_1120 = '2026-11-19'; // 作者 11/19 晚上：推上去就打開，不用等 11/20 凌晨
 /** 🏮🏰🐉 風格系列（作者 11/19：先藏起來，12/1 聖誕大更新一起開） */
-export const LAUNCH_STYLE = '2026-12-01';
+export const LAUNCH_STYLE = '2026-11-27'; // 作者 11/19：原本 12/1 的全部提早到 11/27
 /** 東西有 from（'YYYY-MM-DD'）：台北時間到那天才打開；網址 ?open1120=1 可以先看（只影響自己的畫面） */
 export function isOpen(x, now = new Date()) {
   if (!x?.from) return true;

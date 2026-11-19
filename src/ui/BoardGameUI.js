@@ -41,6 +41,12 @@ export class BoardGameUI {
     } catch {
       this.quiet = false;
     }
+    // 🚫 完全不參與（作者 11/19）：別人發起桌遊不跳邀請、不響；自己還是可以按 🎲 發起或改回來
+    try {
+      this.off = localStorage.getItem('cozy-bg-off') === '1';
+    } catch {
+      this.off = false;
+    }
     this.el = document.createElement('div');
     this.el.className = 'bg-panel';
     this.el.hidden = true;
@@ -105,7 +111,7 @@ export class BoardGameUI {
     // 音效（作者 11/13：小聲一點、只在跟自己有關時響）：坐著的人收到邀請、輪到我、我有玩的那局結束、我戳的那一下
     const me = this.self();
     const inIt = v.players?.some((p) => p.id === me.id);
-    if (v.state === 'invite' && (!prev || prev.id !== v.id) && v.host.id !== me.id && me.sitting) this.#sfx('ding');
+    if (v.state === 'invite' && (!prev || prev.id !== v.id) && v.host.id !== me.id && me.sitting && !this.off) this.#sfx('ding');
     if (v.state === 'play' && v.turn === me.id && prev?.turn !== me.id) this.#sfx('ding');
     if (v.game === 'frog' && prev?.id === v.id && (v.holes ?? []).some((h, i) => h === me.id && prev.holes?.[i] !== me.id)) this.#sfx('tap'); // 我戳了一下
     if (v.state === 'done' && prev?.state !== 'done') {
@@ -211,6 +217,17 @@ export class BoardGameUI {
       }
       this.hud.toast(this.quiet ? t('🔕 桌遊聲音關掉了') : t('🔔 桌遊聲音打開了'));
       this._key = '';
+    } else if (act === 'off') {
+      this.off = !this.off;
+      try {
+        localStorage.setItem('cozy-bg-off', this.off ? '1' : '0');
+      } catch {
+        /* 存不了就算了 */
+      }
+      if (this.off) this.dismissed = this.g?.state === 'invite' ? this.g.id : this.dismissed;
+      this.picking = false;
+      this.hud.toast(this.off ? t('🚫 好，之後不會跳別人的桌遊邀請了（想改回來：按 🎲 桌遊）') : t('🔔 會收到別人的桌遊邀請了'), 5000);
+      this._key = '';
     } else if (act === 'open') {
       this.picking = true;
       this._key = '';
@@ -248,7 +265,7 @@ export class BoardGameUI {
     if (!g || (g.state === 'done' && this.dismissed === g.id)) {
       if (!me.sitting) return '';
       if (!this.picking) return `<button type="button" class="bg-open" data-act="open">🎲 ${t('桌遊')}</button>`;
-      return `<div class="bg-card"><div class="bg-head">${t('🎲 玩什麼？')}<button type="button" class="bg-x" data-act="close">✕</button></div><div class="bg-games">${BOARD_GAMES.map((x) => `<button type="button" data-act="pick" data-game="${x.id}"><span>${x.icon}</span><b>${t(x.zh)}</b><small>${t(x.how)}</small></button>`).join('')}</div><small class="bg-note">${t('坐在營火旁的人都可以加入，{a}～{b} 人；贏的人 +{n} 🌰', { a: BOARD_MIN, b: BOARD_MAX, n: BOARD_WIN })}</small></div>`;
+      return `<div class="bg-card"><div class="bg-head">${t('🎲 玩什麼？')}<button type="button" class="bg-x" data-act="close">✕</button></div><div class="bg-games">${BOARD_GAMES.map((x) => `<button type="button" data-act="pick" data-game="${x.id}"><span>${x.icon}</span><b>${t(x.zh)}</b><small>${t(x.how)}</small></button>`).join('')}</div><small class="bg-note">${t('坐在營火旁的人都可以加入，{a}～{b} 人；贏的人 +{n} 🌰', { a: BOARD_MIN, b: BOARD_MAX, n: BOARD_WIN })}</small><button type="button" class="bg-sub" data-act="off">${this.off ? t('🔔 打開別人的桌遊邀請') : t('🚫 不要收到別人的桌遊邀請')}</button></div>`;
     }
     const G = GAME[g.game];
     const title = `${G.icon} ${t(G.zh)}`;
@@ -257,9 +274,9 @@ export class BoardGameUI {
         const host = g.host.id === me.id;
         return `<div class="bg-card"><div class="bg-head">${title}・${t('等大家加入（{n} 秒）', { n: left })}</div>${chips()}${host ? `<button type="button" class="bg-go" data-act="start" ${g.players.length < BOARD_MIN ? 'disabled' : ''}>${g.players.length < BOARD_MIN ? t('還要 1 個人') : t('開始（{n} 人）', { n: g.players.length })}</button><button type="button" class="bg-sub" data-act="leave">${t('取消')}</button>` : `<small class="bg-note">${t('等 {name} 按開始⋯', { name: g.host.name })}</small><button type="button" class="bg-sub" data-act="leave">${t('退出')}</button>`}</div>`;
       }
-      if (this.dismissed === g.id) return me.sitting ? '' : '';
+      if (this.dismissed === g.id || this.off) return ''; // 🚫 不參與：別人的邀請完全不顯示
       if (!me.sitting) return me.inForest ? `<div class="bg-card bg-mini">🎲 ${t('{name} 在營火邊邀大家玩 {game}，坐到圓木上就能加入', { name: g.host.name, game: title })}</div>` : '';
-      return `<div class="bg-card"><div class="bg-head">🎲 ${t('{name} 邀大家玩 {game}', { name: g.host.name, game: title })}</div>${chips()}<small class="bg-note">${t(G.how)}</small><button type="button" class="bg-go" data-act="join" ${g.players.length >= BOARD_MAX ? 'disabled' : ''}>${t('加入')}</button><button type="button" class="bg-sub" data-act="no">${t('先不要')}</button></div>`;
+      return `<div class="bg-card"><div class="bg-head">🎲 ${t('{name} 邀大家玩 {game}', { name: g.host.name, game: title })}</div>${chips()}<small class="bg-note">${t(G.how)}</small><button type="button" class="bg-go" data-act="join" ${g.players.length >= BOARD_MAX ? 'disabled' : ''}>${t('加入')}</button><button type="button" class="bg-sub" data-act="no">${t('先不要')}</button><button type="button" class="bg-sub" data-act="off">${t('🚫 以後都不要邀我')}</button></div>`;
     }
     // 🐸 戳戳樂的格子：戳過的破一個洞（🌿＝沒事）；結束時青蛙躲的那格「啵」跳出來
     const frogBoard = (myTurn) =>
@@ -387,7 +404,7 @@ export class BoardGameUI {
     }
     // 小視窗：內容變了才重畫（倒數秒數也算）
     const left = g?.endsAt && g.state !== 'done' ? Math.max(0, Math.ceil((g.endsAt - Date.now()) / 1000)) : 0; // 結束後不再倒數（不然每秒重畫，青蛙動畫一直重來）
-    const key = JSON.stringify([g?.id, g?.state, g?.turn, g?.players?.map((p) => [p.id, p.len, p.popped, p.done]), g?.holes, left, me.sitting, me.inForest, this.picking, this.dismissed, g?.winners, this.quiet]);
+    const key = JSON.stringify([g?.id, g?.state, g?.turn, g?.players?.map((p) => [p.id, p.len, p.popped, p.done]), g?.holes, left, me.sitting, me.inForest, this.picking, this.dismissed, g?.winners, this.quiet, this.off]);
     if (key !== this._key && !this.blowing) {
       this._key = key;
       let html = me.inForest ? this.#render(me) : '';

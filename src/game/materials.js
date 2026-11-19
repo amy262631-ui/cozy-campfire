@@ -11,13 +11,19 @@ import { CROPS, CROP_BY_ID } from './garden.js';
 import { TRASH, TRASH_BY_ID } from './trash.js';
 
 /** ♻️ 回收材料（11/07）：回收桶選「留著做手作」，垃圾就放進採集籃，可以做回收手作家具 */
-export const MATERIAL_TYPES = [...GATHER_TYPES, { id: 'veg', icon: '🥕', zh: '蔬菜' }, { id: 'trash', icon: '♻️', zh: '回收材料' }];
+export const MATERIAL_TYPES = [...GATHER_TYPES, { id: 'veg', icon: '🥕', zh: '蔬菜' }, { id: 'trash', icon: '♻️', zh: '回收材料' }, { id: 'egg', icon: '🥚', zh: '雞蛋' }];
+/** 🐔 小肥雞下的蛋（11/27 起） */
+export const EGGS = [
+  { id: 'egg', icon: '🥚', zh: '雞蛋', type: 'egg', rarity: 1 },
+  { id: 'gold_egg', icon: '🌟', zh: '金蛋', type: 'egg', rarity: 3 },
+];
+const EGG_BY_ID = Object.fromEntries(EGGS.map((x) => [x.id, x]));
 export const MATERIAL_TYPE_BY_ID = Object.fromEntries(MATERIAL_TYPES.map((x) => [x.id, x]));
 
 /** 材料的資料（採集品或蔬菜） */
 export const materialOf = (id) =>
-  GATHER_BY_ID[id] ?? (CROP_BY_ID[id] ? { ...CROP_BY_ID[id], type: 'veg', rarity: 1 } : TRASH_BY_ID[id] ? { ...TRASH_BY_ID[id], type: 'trash' } : null);
-export const ALL_MATERIAL_IDS = [...Object.keys(GATHER_BY_ID), ...CROPS.map((c) => c.id), ...TRASH.map((x) => x.id)];
+  GATHER_BY_ID[id] ?? (CROP_BY_ID[id] ? { ...CROP_BY_ID[id], type: 'veg', rarity: 1 } : TRASH_BY_ID[id] ? { ...TRASH_BY_ID[id], type: 'trash' } : (EGG_BY_ID[id] ?? null));
+export const ALL_MATERIAL_IDS = [...Object.keys(GATHER_BY_ID), ...CROPS.map((c) => c.id), ...TRASH.map((x) => x.id), ...EGGS.map((x) => x.id)];
 
 /** 這些材料只能被「指定」使用，不會被「某一類」拿走（在 crafting.js、cooking.js 裡登記） */
 export const RESERVED = new Set();

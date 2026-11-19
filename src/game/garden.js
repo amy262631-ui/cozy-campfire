@@ -10,6 +10,8 @@
  *
  * ⚠️ id 存檔用，不能改。
  */
+import { isOpen } from './dailySpecial.js';
+
 export const CROPS = [
   { id: 'carrot', icon: '🥕', zh: '紅蘿蔔', hours: 2, seed: 1, yield: [2, 3], color: 0xf08a3c },
   { id: 'tomato', icon: '🍅', zh: '番茄', hours: 3, seed: 2, yield: [2, 4], color: 0xe0443c },
@@ -28,16 +30,22 @@ export const CROPS = [
   { id: 'eggplant', icon: '🍆', zh: '茄子', hours: 4, seed: 2, yield: [2, 3], color: 0x5a2a6a },
   { id: 'chili', icon: '🌶️', zh: '辣椒', hours: 4, seed: 2, yield: [3, 5], color: 0xd2282a },
   { id: 'moon_radish', icon: '🌙', zh: '月光白蘿蔔', hours: 6, seed: 3, yield: [1, 2], color: 0xeef6ff, night: true }, // 只能晚上收成
+  // 🌾 11/19 作者：煮菜用的新蔬菜（11/27 開）
+  { id: 'rice', icon: '🌾', zh: '稻米', hours: 4, seed: 2, yield: [3, 5], color: 0xe8d27a, from: '2026-11-27' },
+  { id: 'garlic', icon: '🧄', zh: '大蒜', hours: 3, seed: 2, yield: [2, 4], color: 0xf4efe6, from: '2026-11-27' },
+  { id: 'scallion', icon: '🌿', zh: '青蔥', hours: 2, seed: 1, yield: [2, 4], color: 0x5fae4a, from: '2026-11-27' },
 ];
 export const CROP_BY_ID = Object.fromEntries(CROPS.map((c) => [c.id, c]));
 /** 菜園的格數：一開始 3 格，可以用松果開墾到 6 格 */
 export const GARDEN_BASE = 3;
-export const GARDEN_MAX = 6;
+export const GARDEN_MAX = 9; // 作者 11/19：11/27 起 6 → 9 格（之前還是 6）
+/** 現在最多幾格（11/27 前 6 格） */
+export const gardenMax = () => (isOpen({ from: '2026-11-27' }) ? 9 : 6);
 /** 開墾第 n 格要幾顆松果 */
-export const GARDEN_EXPAND = { 4: 10, 5: 15, 6: 20 };
-export const gardenSlotsOf = (h) => Math.min(GARDEN_MAX, Math.max(GARDEN_BASE, h?.gslots ?? GARDEN_BASE));
-/** 菜園第 i 格在菜園裡的位置（兩排，每排 3 格） */
-export const slotLocal = (i) => ({ x: ((i % 3) - 1) * 0.5, z: i < 3 ? -0.24 : 0.24 });
+export const GARDEN_EXPAND = { 4: 10, 5: 15, 6: 20, 7: 30, 8: 40, 9: 50 };
+export const gardenSlotsOf = (h) => Math.min(gardenMax(), Math.max(GARDEN_BASE, h?.gslots ?? GARDEN_BASE));
+/** 菜園第 i 格在菜園裡的位置（每排 3 格；超過 6 格變三排，排得密一點） */
+export const slotLocal = (i, n = 6) => (n > 6 ? { x: ((i % 3) - 1) * 0.5, z: [-0.42, 0, 0.42][Math.floor(i / 3)] } : { x: ((i % 3) - 1) * 0.5, z: i < 3 ? -0.24 : 0.24 });
 /** 朋友澆一次水少等多久、每格最多幾位朋友澆 */
 export const WATER_MS = 30 * 60 * 1000;
 export const WATER_MAX = 3;

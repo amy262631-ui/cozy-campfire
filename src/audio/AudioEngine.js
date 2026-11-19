@@ -1,6 +1,6 @@
 import { MusicPlayer, SONGS, XMAS_SONG_OF } from './music.js';
 
-/** 🎄 12/1～12/31（台北時間；網址 ?xmas=1 也算）：營地背景音樂換成聖誕歌（作者 11/16） */
+/** 🎄 11/27～12/31（台北時間；網址 ?xmas=1 也算）：營地背景音樂換成聖誕歌（作者 11/16；11/19 改從 11/27 開始） */
 const xmasMusic = () => {
   try {
     const q = new URLSearchParams(location.search).get('xmas');
@@ -9,7 +9,10 @@ const xmasMusic = () => {
   } catch {
     /* 沒有網址 */
   }
-  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', month: 'numeric' }).format(new Date()) === '12';
+  const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric' }).formatToParts(new Date());
+  const m = Number(p.find((x) => x.type === 'month').value);
+  const d = Number(p.find((x) => x.type === 'day').value);
+  return m === 12 || (m === 11 && d >= 27);
 };
 import { t } from '../i18n/i18n.js';
 

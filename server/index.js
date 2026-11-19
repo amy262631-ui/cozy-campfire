@@ -30,10 +30,11 @@ import { GATHER_SPOTS, GATHER_ITEMS, regrowMs, GATHER_FIRST_GAIN, GATHER_DEX_BON
 import { SOURCES, cleanSource, sourceFrom } from '../src/game/sources.js';
 import { GATHER_BY_ID, treasureTime, TREASURE_MAX, taipeiMonth } from '../src/game/gathering.js';
 import { giftInfo, basketCat, GIFT_DAILY_CAP, GIFT_MIN_DAYS, GIFT_SEND_MAX, GIFT_MAX_N } from '../src/game/gifts.js';
-import { CROP_BY_ID, GARDEN_MAX, GARDEN_EXPAND, gardenSlotsOf, WATER_MAX, CROP_FIRST_GAIN, readyAtOf, stageOf } from '../src/game/garden.js';
-import { canMake, takeMaterials } from '../src/game/materials.js';
+import { CROP_BY_ID, GARDEN_MAX, gardenMax, GARDEN_EXPAND, gardenSlotsOf, WATER_MAX, CROP_FIRST_GAIN, readyAtOf, stageOf } from '../src/game/garden.js';
+import { canMake, takeMaterials, materialOf } from '../src/game/materials.js';
 import { RECIPE_BY_ID } from '../src/game/crafting.js';
 import { DISH_BY_ID, dishFirstGain, BUFF_MS, DISH_FX, activeBuff, homeCanCook } from '../src/game/cooking.js';
+import { HEN_FROM, COOP_PRICE, HEN_PRICE, HEN_MAX, FEED_PER_DAY, GOLD_EGG, HEN_COLORS, fatOf, fatNext, eggsOf, eggIn, canFeed } from '../src/game/hens.js';
 import { LEGENDS, LEGEND_GAIN, legendHour } from '../src/game/legendRules.js';
 import { SOOTY_AT, potResult, parseToken, SEASON_BY_ID, SEASON_PRICE, SEASON_USES, SEASON_CAP, SEASON_MAX, POT_MAX, FISH_KEEP_CAP, POT_BY_ID } from '../src/game/potCooking.js';
 import { MUSEUM_BY_ID, DONATE_PER_DAY } from '../src/game/museum.js';
@@ -452,6 +453,7 @@ function campList(zone = 0, selfVid = null) {
       likes: h.likes?.length ?? 0,
       n: homeRooms.get(vid)?.players.size ?? 0,
       garden: gardenView(h),
+      hens: isOpen({ from: HEN_FROM }) ? (h.hens ?? []).map((x) => [x.c, fatOf(x.fed)]) : [], // 🐔 小肥雞（毛色、胖胖等級）
       yard: normYard(h.yard)?.on ?? null, // 大型擺設
       sm: h.yard?.sm ?? [], // 小型擺設（最多 3 個）
       dc: h.yard ? normYard(h.yard).dc : [], // 🎄 門口裝飾（拱門、門上花圈）
@@ -556,7 +558,7 @@ const legendMsg = (lg) => ({ id: lg.id, el: Date.now() - lg.t0, dur: lg.dur, dir
 function tickLegends() {
   const now = Date.now();
   const test = Number(process.env.LEGEND_TEST) || 0; // 本機測試：LEGEND_TEST=1 每次都出現、不看時間（Render 不要設）
-  if (!test && !isOpen({ from: '2026-11-20' })) return; // 🗓️ 11/20 才開
+  if (!test && !isOpen({ from: '2026-11-19' })) return; // 🗓️ 11/20 才開
   for (const c of channels.values()) {
     for (const [rid, r] of c.rooms) {
       const k = key(c.ch, rid);
@@ -649,7 +651,7 @@ const MINI_SLOTS = (() => {
   return list;
 })();
 /** 今天有哪些場次（中午那場 11/20 才開） */
-const miniSlots = () => (isOpen({ from: '2026-11-20' }) ? MINI_SLOTS : MINI_SLOTS.filter((x) => !x.noon));
+const miniSlots = () => (isOpen({ from: '2026-11-19' }) ? MINI_SLOTS : MINI_SLOTS.filter((x) => !x.noon));
 function taipeiClock(now = new Date()) {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-GB', { timeZone: process.env.STATS_TZ || 'Asia/Taipei', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
@@ -4174,7 +4176,7 @@ io.on('connection', (socket) => {
   });
   // 🧂 買調味料：5 顆松果一包，一包用 5 次
   socket.on('buySeason', (data = {}, ack) => {
-    if (!wal || !isOpen({ from: '2026-11-20' })) return ack?.({ ok: false, reason: 'later' }); // 🗓️ 11/20 跟小精靈更新一起開
+    if (!wal || !isOpen({ from: '2026-11-19' })) return ack?.({ ok: false, reason: 'later' }); // 🗓️ 11/20 跟小精靈更新一起開
     const s = SEASON_BY_ID[String(data.id ?? '')];
     if (!s) return ack?.({ ok: false });
     wal.sea ??= {};
@@ -4188,7 +4190,7 @@ io.on('connection', (socket) => {
     ack?.({ ok: true, ...potView() });
   });
   socket.on('potCook', (data = {}, ack) => {
-    if (!wal || !player || !isOpen({ from: '2026-11-20' })) return ack?.({ ok: false, reason: 'later' }); // 🗓️ 11/20 才開
+    if (!wal || !player || !isOpen({ from: '2026-11-19' })) return ack?.({ ok: false, reason: 'later' }); // 🗓️ 11/20 才開
     const atGrill = roomId === 'campground' && hasYard(homes[player.vid], 'bbq');
     const atHome = roomId === 'home' && homeOwner === player.vid && (homes[player.vid]?.items ?? []).some((it) => CATALOG_BY_ID[it.i]?.cook);
     if (roomId !== 'forest_main' && !atGrill && !atHome) return ack?.({ ok: false, reason: 'notHere' });
@@ -4452,8 +4454,8 @@ io.on('connection', (socket) => {
       ok: true,
       now: Date.now(),
       mine: owner === player.vid,
-      max: GARDEN_MAX,
-      next: gardenSlotsOf(h) < GARDEN_MAX ? GARDEN_EXPAND[gardenSlotsOf(h) + 1] : null,
+      max: gardenMax(),
+      next: gardenSlotsOf(h) < gardenMax() ? GARDEN_EXPAND[gardenSlotsOf(h) + 1] : null,
       slots: Array.from({ length: gardenSlotsOf(h) }, (_, i) => {
         const sl = h?.garden?.[i];
         if (!sl?.c) return null;
@@ -4474,7 +4476,7 @@ io.on('connection', (socket) => {
     if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
     const i = Math.floor(num(data.slot, 0, GARDEN_MAX - 1, 0));
     const c = CROP_BY_ID[String(data.c ?? '')];
-    if (!c) return ack?.({ ok: false, reason: 'unknown' });
+    if (!c || !isOpen(c)) return ack?.({ ok: false, reason: 'unknown' }); // 🌾 新蔬菜 11/27 才開
     if (i >= gardenSlotsOf(h)) return ack?.({ ok: false, reason: 'locked' });
     h.garden ??= [];
     if (h.garden[i]?.c) return ack?.({ ok: false, reason: 'busy' });
@@ -4493,7 +4495,7 @@ io.on('connection', (socket) => {
     const h = homes[player.vid];
     if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
     const n = gardenSlotsOf(h);
-    if (n >= GARDEN_MAX) return ack?.({ ok: false, reason: 'max' });
+    if (n >= gardenMax()) return ack?.({ ok: false, reason: 'max' }); // 11/27 起 9 格
     const price = GARDEN_EXPAND[n + 1];
     if (wal.pc < price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
     wal.pc -= price;
@@ -4549,6 +4551,99 @@ io.on('connection', (socket) => {
     chal('water');
     for (const s2 of io.sockets.sockets.values()) if (s2.data.vid === owner) s2.emit('gardenWatered', { name: player.name, c: sl.c });
     ack?.(gardenInfo(owner));
+  });
+  // ---------- 🐔 小肥雞（11/27 開）：菜園旁邊的雞舍 ----------
+  const henInfo = (owner) => {
+    const h = homes[owner];
+    const now = Date.now();
+    const today = dayKey();
+    return {
+      ok: true,
+      open: isOpen({ from: HEN_FROM }),
+      mine: owner === player.vid,
+      max: HEN_MAX,
+      price: h?.hens?.length ? HEN_PRICE : COOP_PRICE,
+      hens: (h?.hens ?? []).map((x) => ({ c: x.c, nm: x.nm ?? '', fed: x.fed ?? 0, fat: fatOf(x.fed), next: fatNext(x.fed), eggs: eggsOf(x, now), eggIn: eggIn(x, now), fn: x.fd === today ? (x.fn ?? 0) : 0 })),
+    };
+  };
+  socket.on('henInfo', (data = {}, ack) => {
+    if (!player?.vid) return ack?.({ ok: false });
+    const owner = ownerOf(data.hid);
+    if (!homes[owner]?.tent) return ack?.({ ok: false, reason: 'noTent' });
+    ack?.(henInfo(owner));
+  });
+  socket.on('henBuy', (data = {}, ack) => {
+    if (!player?.vid || !wal) return ack?.({ ok: false });
+    if (!isOpen({ from: HEN_FROM })) return ack?.({ ok: false, reason: 'later' });
+    const h = homes[player.vid];
+    if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
+    h.hens ??= [];
+    if (h.hens.length >= HEN_MAX) return ack?.({ ok: false, reason: 'max' });
+    const c = HEN_COLORS.some((x) => x.id === data.c) ? data.c : 0;
+    const price = h.hens.length ? HEN_PRICE : COOP_PRICE;
+    if (wal.pc < price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
+    wal.pc -= price;
+    h.hens.push({ c, nm: '', fed: 0, t: Date.now() });
+    saveJson('players.json', players);
+    saveJson('homes.json', homes);
+    socket.emit('wallet', { pc: wal.pc, delta: 0 });
+    bump('buys');
+    console.log(`[小肥雞] ${player.name} 養了第 ${h.hens.length} 隻`);
+    ack?.(henInfo(player.vid));
+  });
+  socket.on('henName', (data = {}, ack) => {
+    const hen = homes[player?.vid]?.hens?.[Math.floor(num(data.i, 0, HEN_MAX - 1, 0))];
+    if (!hen) return ack?.({ ok: false });
+    hen.nm = String(data.nm ?? '').replace(/[<>&"']/g, '').trim().slice(0, 8);
+    saveJson('homes.json', homes);
+    ack?.(henInfo(player.vid));
+  });
+  // 🍞 餵蔬菜或果實：每隻一天 3 次，越餵越圓
+  socket.on('henFeed', (data = {}, ack) => {
+    if (!player?.vid || !wal) return ack?.({ ok: false });
+    const hen = homes[player.vid]?.hens?.[Math.floor(num(data.i, 0, HEN_MAX - 1, 0))];
+    const id = String(data.id ?? '');
+    if (!hen || !canFeed(materialOf(id))) return ack?.({ ok: false });
+    if (!(wal.bk?.[id] > 0)) return ack?.({ ok: false, reason: 'none' });
+    const today = dayKey();
+    if (hen.fd !== today) {
+      hen.fd = today;
+      hen.fn = 0;
+    }
+    if (hen.fn >= FEED_PER_DAY) return ack?.({ ok: false, reason: 'full' });
+    const before = fatOf(hen.fed);
+    hen.fn++;
+    hen.fed = (hen.fed ?? 0) + 1;
+    wal.bk[id]--;
+    if (!wal.bk[id]) delete wal.bk[id];
+    saveJson('players.json', players);
+    saveJson('homes.json', homes);
+    ack?.({ ...henInfo(player.vid), basket: wal.bk, up: fatOf(hen.fed) > before ? fatOf(hen.fed) : 0 });
+  });
+  // 🥚 撿蛋：全部的雞一起撿；1% 是金蛋
+  socket.on('henEggs', (data, ack) => {
+    if (!player?.vid || !wal) return ack?.({ ok: false });
+    const hens = homes[player.vid]?.hens ?? [];
+    const now = Date.now();
+    let egg = 0;
+    let gold = 0;
+    for (const x of hens) {
+      const n = eggsOf(x, now);
+      if (!n) continue;
+      for (let k = 0; k < n; k++) Math.random() < GOLD_EGG ? gold++ : egg++;
+      x.t = now;
+    }
+    if (!egg && !gold) return ack?.({ ok: false, reason: 'none' });
+    wal.bk ??= {};
+    if (egg) wal.bk.egg = (wal.bk.egg ?? 0) + egg;
+    if (gold) wal.bk.gold_egg = (wal.bk.gold_egg ?? 0) + gold;
+    wal.cnt ??= {};
+    wal.cnt.eggs = (wal.cnt.eggs ?? 0) + egg + gold;
+    saveJson('players.json', players);
+    saveJson('homes.json', homes);
+    bump('eggs');
+    if (gold) console.log(`[小肥雞] ${player.name} 撿到金蛋 ×${gold}`);
+    ack?.({ ...henInfo(player.vid), got: { egg, gold }, basket: wal.bk });
   });
   // 拜訪別人的帳篷：按讚（再按一次收回）
   socket.on('homeLike', (data, ack) => {

@@ -17,6 +17,7 @@
 import { FISH } from '../fishing/fishData.js';
 import { materialOf } from './materials.js';
 import { TRASH_BY_ID } from './trash.js';
+import { isOpen } from './dailySpecial.js';
 
 export const SEASONINGS = [
   { id: 'sugar', icon: '🍬', zh: '糖' },
@@ -106,6 +107,20 @@ export const POT_RECIPES = [
   { id: 'garden_salad', icon: '🌼', zh: '花園沙拉', need: ['@flower', '@flower', 'cabbage'], fx: ['speed', 1] },
   { id: 'chestnut_rice', icon: '🌰', zh: '栗子炊飯', need: ['chestnut', '@mush', 'carrot'], fx: ['idle', 1] },
   { id: 'pumpkin_pie', icon: '🥧', zh: '南瓜派', need: ['pumpkin', '@fruit', 'hazelnut'], fx: ['idle', 2] },
+  // ---- 🥚 雞蛋、🌾 稻米、🧄 大蒜、🌿 青蔥（11/27 跟小肥雞一起開）----
+  { id: 'tomato_egg', icon: '🍳', zh: '番茄炒蛋', need: ['egg', 'tomato'], fx: ['speed', 1], from: '2026-11-27' },
+  { id: 'tamagoyaki', icon: '🥚', zh: '玉子燒', need: ['egg', 'egg'], fx: ['idle', 1], from: '2026-11-27' },
+  { id: 'egg_soup', icon: '🥣', zh: '蛋花湯', need: ['egg', 'cabbage'], fx: ['gather', 1], from: '2026-11-27' },
+  { id: 'omelet', icon: '🍳', zh: '歐姆蛋', need: ['egg', 'tomato', 'onion'], fx: ['speed', 2], from: '2026-11-27' },
+  { id: 'pudding', icon: '🍮', zh: '雞蛋布丁', need: ['egg', '@fruit'], fx: ['idle', 1], from: '2026-11-27' },
+  { id: 'fried_rice', icon: '🍛', zh: '蛋炒飯', need: ['egg', 'rice', 'scallion'], fx: ['gather', 2], from: '2026-11-27' },
+  { id: 'omurice', icon: '🍛', zh: '蛋包飯', need: ['egg', 'rice', 'tomato'], fx: ['speed', 2], from: '2026-11-27' },
+  { id: 'onigiri', icon: '🍙', zh: '飯糰', need: ['rice'], fx: ['idle', 1], from: '2026-11-27' },
+  { id: 'fish_onigiri', icon: '🍙', zh: '{fish}飯糰', need: ['F', 'rice'], fx: ['fish', 1], from: '2026-11-27' },
+  { id: 'scallion_fish', icon: '🐟', zh: '蔥爆{fish}', need: ['F', 'scallion'], fx: ['fish', 1], from: '2026-11-27' },
+  { id: 'garlic_fish', icon: '🧄', zh: '蒜香{fish}', need: ['F', 'garlic'], fx: ['fish', 1], from: '2026-11-27' },
+  { id: 'garlic_shroom', icon: '🍄', zh: '蒜炒蘑菇', need: ['garlic', '@mush'], fx: ['gather', 1], from: '2026-11-27' },
+  { id: 'scallion_pancake', icon: '🥞', zh: '蔥油餅', need: ['scallion', 'scallion', 'egg'], fx: ['speed', 1], from: '2026-11-27' },
   // ---- ❓ 隱藏（顯示 ??? 和提示）----
   { id: 'stargazy', icon: '🥧', zh: '仰望星空派', need: ['f*', 't:telescope'], kind: 'hidden', hint: '任意一條魚＋可以看星星的東西', fx: ['fish', 2] },
   { id: 'king_feast', icon: '👑', zh: '魚王盛宴', need: ['f7', '@veg', '@veg', '@veg'], kind: 'hidden', hint: '魚王＋三種蔬菜', fx: ['fish', 2] },
@@ -114,6 +129,7 @@ export const POT_RECIPES = [
   { id: 'unicorn_parfait', icon: '🦄', zh: '彩虹獨角魚聖代', need: ['f44', 'gold_berry'], kind: 'hidden', hint: '帶來好運的魚＋金色的果實', fx: ['speed', 2] },
   { id: 'pinecone_bake', icon: '🌰', zh: '焗烤松果魚', need: ['f41', 'acorn', 'hazelnut'], kind: 'hidden', hint: '營地吉祥物魚＋兩種堅果', fx: ['idle', 2] },
   { id: 'panda_bento', icon: '🐼', zh: '熊貓便當', need: ['f40', 'cabbage', 'moon_radish'], kind: 'hidden', hint: '黑白配色的魚＋綠色的菜＋白色的菜', fx: ['gather', 2] },
+  { id: 'gold_pudding', icon: '🌟', zh: '黃金布丁', need: ['gold_egg', 'gold_berry'], kind: 'hidden', hint: '很稀有的蛋＋金色的果實', fx: ['speed', 2], from: '2026-11-27' },
   { id: 'shroom_king', icon: '🍄', zh: '菇菇之王鍋', need: ['morel', 'glow_mush', 'lions_mane', 'earthstar'], kind: 'hidden', hint: '四種很難找到的菇', fx: ['gather', 2] },
   // ---- 🔒 解鎖型隱藏食譜（達成條件才煮得出來）----
   { id: 'salmon_set', icon: '🍱', zh: '國寶鮭魚定食', need: ['f5', 'cabbage', 'carrot'], kind: 'unlock', unlock: { fish: 5, n: 5 }, fx: ['fish', 2] },
@@ -133,7 +149,7 @@ export const POT_RECIPES = [
   { id: 'can_soup', icon: '🥫', zh: '鋁罐蔬菜湯', need: ['t:can', '@veg'], kind: 'survival', fx: ['burnt', 1] },
   { id: 'bbq_tire', icon: '🛞', zh: '炭烤輪胎', need: ['t:tire'], kind: 'survival', fx: ['burnt', 1] },
   // ---- 🍲 家常：沒有對到食譜、但都是正常食材的時候（不會變黑暗料理）----
-  { id: 'stirfry', icon: '🥬', zh: '家常炒時蔬', basic: ['veg', 'mush'], need: [], fx: ['speed', 1] },
+  { id: 'stirfry', icon: '🥬', zh: '家常炒時蔬', basic: ['veg', 'mush', 'egg'], need: [], fx: ['speed', 1] },
   { id: 'sweet_soup', icon: '🍧', zh: '花果甜湯', basic: ['fruit', 'flower'], need: [], fx: ['gather', 1] },
   { id: 'homefish', icon: '🐟', zh: '家常煮{fish}', basic: ['veg', 'mush'], fishT: true, need: [], fx: ['fish', 1] },
   // 11/19 作者：怪東西再多 6 樣＋原本的垃圾也能煮（有幾道其實還不錯吃，沒有懲罰）
@@ -247,6 +263,7 @@ export function potResult(tokens, sea, w) {
   let best = null;
   let locked = null;
   for (const r of POT_RECIPES) {
+    if (!isOpen(r)) continue; // 🗓️ 還沒開的食譜
     const f = fit(r, items);
     if (!f) continue;
     const score = f.score + (r.kind === 'hidden' || r.kind === 'unlock' ? 10 : 0);

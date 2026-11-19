@@ -259,7 +259,7 @@ export class ShopPanel {
         return `<button type="button" class="shop-item${on ? ' on' : ''}" data-sacc="${x.id}" data-own="${own ? 1 : 0}" ${!own && (coins == null || coins < x.price) ? 'disabled' : ''}>
           <span class="si-icon">${x.icon}</span><span class="si-name">${t(x.zh)}</span><span class="si-price">${on ? t('戴著') : own ? t('戴上') : `🌰 ${x.price}`}</span></button>`;
       }).join('')}</div><div class="shop-hint">${t('（買了每隻小精靈都能戴）')}・${t('再按一次拿下來')}</div><div class="shop-hint">${t('🎀 頭上一次戴一個（蝴蝶結、帽子、圍巾）；🦋 翅膀要長大的小精靈才看得到')}</div>` : ''}
-      ${later.length ? `<div class="shop-hint">${t('🎄 12/1 起開賣：{list}', { list: later.map((x) => x.icon).join(' ') })}</div>` : ''}`;
+      ${later.length ? `<div class="shop-hint">${t('🎄 11/27 起開賣：{list}', { list: later.map((x) => x.icon).join(' ') })}</div>` : ''}`;
   }
 
   /** 🛒 還沒買帳篷也能逛整間小舖（作者 11/15：不要像強迫買帳篷；看完自己決定要買還是存錢），只是家具、外觀要先有帳篷才能買 */

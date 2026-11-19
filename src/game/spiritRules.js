@@ -82,14 +82,14 @@ export const SPIRIT_ACCS = [
   { id: 'scarf', icon: '🧣', zh: '小精靈紅色雪人圍巾', price: 60, season: 'xmas' },
   { id: 'scarf2', icon: '⛄', zh: '小精靈綠色雪人圍巾', price: 60, season: 'xmas' }, // 作者 11/12：拿掉鹿角，圍巾紅綠兩款
   // 🎀 11/16 作者：蝴蝶結 4 色（60）、翅膀配色 5 色（40，作者：翅膀便宜點），一直賣。蝴蝶結跟帽子、圍巾一樣戴在頭上（一次一個）；翅膀另外一格（slot: wing），長大的小精靈才看得到
-  { id: 'bow_pink', icon: '🎀', zh: '粉紅蝴蝶結', price: 60, from: '2026-11-20' },
-  { id: 'bow_blue', icon: '🩵', zh: '水藍蝴蝶結', price: 60, from: '2026-11-20' },
-  { id: 'bow_yellow', icon: '💛', zh: '鵝黃蝴蝶結', price: 60, from: '2026-11-20' },
-  { id: 'bow_purple', icon: '💜', zh: '薰衣草蝴蝶結', price: 60, from: '2026-11-20' },
-  { id: 'wing_pink', icon: '🩷', zh: '粉紅翅膀', price: 40, slot: 'wing', from: '2026-11-20' },
-  { id: 'wing_gold', icon: '🌟', zh: '金色翅膀', price: 40, slot: 'wing', from: '2026-11-20' },
-  { id: 'wing_sky', icon: '🦋', zh: '天空藍翅膀', price: 40, slot: 'wing', from: '2026-11-20' },
-  { id: 'wing_lavender', icon: '🪻', zh: '薰衣草翅膀', price: 40, slot: 'wing', from: '2026-11-20' },
-  { id: 'wing_mint', icon: '🍃', zh: '薄荷綠翅膀', price: 40, slot: 'wing', from: '2026-11-20' },
+  { id: 'bow_pink', icon: '🎀', zh: '粉紅蝴蝶結', price: 60, from: '2026-11-19' },
+  { id: 'bow_blue', icon: '🩵', zh: '水藍蝴蝶結', price: 60, from: '2026-11-19' },
+  { id: 'bow_yellow', icon: '💛', zh: '鵝黃蝴蝶結', price: 60, from: '2026-11-19' },
+  { id: 'bow_purple', icon: '💜', zh: '薰衣草蝴蝶結', price: 60, from: '2026-11-19' },
+  { id: 'wing_pink', icon: '🩷', zh: '粉紅翅膀', price: 40, slot: 'wing', from: '2026-11-19' },
+  { id: 'wing_gold', icon: '🌟', zh: '金色翅膀', price: 40, slot: 'wing', from: '2026-11-19' },
+  { id: 'wing_sky', icon: '🦋', zh: '天空藍翅膀', price: 40, slot: 'wing', from: '2026-11-19' },
+  { id: 'wing_lavender', icon: '🪻', zh: '薰衣草翅膀', price: 40, slot: 'wing', from: '2026-11-19' },
+  { id: 'wing_mint', icon: '🍃', zh: '薄荷綠翅膀', price: 40, slot: 'wing', from: '2026-11-19' },
 ];
 export const SPIRIT_ACC_BY_ID = Object.fromEntries(SPIRIT_ACCS.map((a) => [a.id, a]));
