@@ -4038,17 +4038,25 @@ io.on('connection', (socket) => {
 
   // ---------- 🏛️ 營地標本櫃：大家一起捐，寫上第一個捐的人 ----------
   const donatedToday = () => (wal?.mday === dayKey() ? wal.mcount ?? 1 : 0);
-  socket.on('museumInfo', (data, ack) => ack?.({ ok: true, museum, left: wal ? Math.max(0, DONATE_PER_DAY - donatedToday()) : 0, fishDex: Object.keys(dexView(wal)) }));
+  socket.on('museumInfo', (data, ack) => ack?.({ ok: true, museum, left: wal ? Math.max(0, DONATE_PER_DAY - donatedToday()) : 0, fishDex: Object.keys(dexView(wal)), shinyDex: Object.keys(wal?.shiny ?? {}), crops: Object.keys(wal?.crops ?? {}), tbag: wal?.tbag ?? {}, tdex: Object.keys(wal?.tdex ?? {}) }));
   socket.on('donate', (data = {}, ack) => {
     if (!wal || !player) return ack?.({ ok: false });
     const id = String(data.id ?? '');
     const it = MUSEUM_BY_ID[id];
-    if (!it) return ack?.({ ok: false, reason: 'unknown' });
+    if (!it || !isOpen(it)) return ack?.({ ok: false, reason: 'unknown' });
     if (museum[id]) return ack?.({ ok: false, reason: 'done', by: museum[id].n });
     // 每個人每天只能捐一件：大家慢慢一起填滿
     if (donatedToday() >= DONATE_PER_DAY) return ack?.({ ok: false, reason: 'daily' });
     if (it.type === 'fish') {
       if (!(dexView(wal)[it.fish] > 0)) return ack?.({ ok: false, reason: 'none' }); // 釣過才能捐魚拓
+    } else if (it.type === 'shiny') {
+      if (!(wal.shiny?.[it.fish] > 0)) return ack?.({ ok: false, reason: 'none' }); // ✨ 釣過那種的異色魚
+    } else if (it.type === 'trash') {
+      // ♻️ 垃圾袋裡的優先，沒有再看採集籃（留著做手作的）
+      const bag = wal.tbag?.[it.trash] > 0 ? wal.tbag : wal.bk?.[it.trash] > 0 ? wal.bk : null;
+      if (!bag) return ack?.({ ok: false, reason: 'none' });
+      bag[it.trash]--;
+      if (!bag[it.trash]) delete bag[it.trash];
     } else {
       if (!(wal.bk?.[id] > 0)) return ack?.({ ok: false, reason: 'none' });
       wal.bk[id]--;
@@ -4064,7 +4072,7 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     bump('donates');
     emitAllChannels('forest_main', 'museum', { id, n: player.name });
-    ack?.({ ok: true, gain, count: wal.bk?.[id] ?? 0, left: Math.max(0, DONATE_PER_DAY - donatedToday()) });
+    ack?.({ ok: true, gain, count: wal.bk?.[id] ?? 0, tbag: wal.tbag ?? {}, basket: wal.bk ?? {}, left: Math.max(0, DONATE_PER_DAY - donatedToday()) });
   });
 
   // ---------- 🔨 手作家具：用採集籃的東西做，放進帳篷背包 ----------

@@ -89,7 +89,7 @@ import { LegendShow } from './rooms/legendShow.js';
 import { LEGENDS, LEGEND_BY_ID } from './game/legendRules.js';
 import { SOOTY_AT, SEASONINGS, SEASON_BY_ID, SEASON_PRICE, SEASON_USES, SEASON_MAX, POT_MAX, POT_RECIPES, DARK, FLAVORS, FLAVOR_TOTAL, unlockHave, unlockLabel } from './game/potCooking.js';
 import { DISHES, DISH_BY_ID, dishName, myDishes as ownedDishes, activeBuff, DISH_FX, BUFFS, BUFF_MS, homeCanCook } from './game/cooking.js';
-import { MUSEUM_ITEMS, MUSEUM_CATS, MUSEUM_BY_ID } from './game/museum.js';
+import { museumItems, museumCats, MUSEUM_BY_ID } from './game/museum.js';
 import { TRASH, TRASH_BY_ID, RECYCLE_DAILY_CAP } from './game/trash.js';
 import { PASS, PASS_TIERS, PASS_TIER_LIST, PASS_PLANS, FREE, sponsorTier } from './game/pass.js';
 import { detectSource, inAppKind, isStandalone, installKind } from './game/sources.js';
@@ -1240,22 +1240,30 @@ async function init() {
     if (!info?.ok) return hud.toast(t('連上伺服器才能看標本櫃'));
     setMuseum(info.museum);
     const fishDex = new Set((info.fishDex ?? []).map(Number));
-    const has = (x) => (x.type === 'fish' ? fishDex.has(x.fish) : basket[x.id] > 0);
-    const known = (x) => (x.type === 'fish' ? fishDex.has(x.fish) : found(x.id));
-    const nameOf = (x) => (x.type === 'fish' ? x.name : t(x.zh));
-    const total = MUSEUM_ITEMS.length;
-    const n = Object.keys(museum).length;
-    const tabs = MUSEUM_CATS.map((c) => {
-      const items = MUSEUM_ITEMS.filter((x) => x.type === c.id);
+    const shinyDex = new Set((info.shinyDex ?? []).map(Number));
+    const crops = new Set(info.crops ?? []);
+    const tdex = new Set(info.tdex ?? []);
+    const tbag = info.tbag ?? {};
+    // 🥕✨♻️ 11/22 擴充：菜園蔬菜看收成過、異色魚拓看異色圖鑑、怪東西看垃圾袋（或採集籃）
+    const has = (x) =>
+      x.type === 'fish' ? fishDex.has(x.fish) : x.type === 'shiny' ? shinyDex.has(x.fish) : x.type === 'trash' ? tbag[x.trash] > 0 || basket[x.trash] > 0 : basket[x.id] > 0;
+    const known = (x) => (x.type === 'fish' ? fishDex.has(x.fish) : x.type === 'shiny' ? shinyDex.has(x.fish) : x.type === 'trash' ? tdex.has(x.trash) : x.type === 'veg' ? crops.has(x.id) || basket[x.id] > 0 : found(x.id));
+    const nameOf = (x) => (x.type === 'fish' || x.type === 'shiny' ? x.name : t(x.zh));
+    const ITEMS = museumItems();
+    const total = ITEMS.length;
+    const n = Object.keys(museum).filter((id) => MUSEUM_BY_ID[id] && ITEMS.includes(MUSEUM_BY_ID[id])).length;
+    if (!museumCats().some((c) => c.id === museumCat)) museumCat = 'mush';
+    const tabs = museumCats().map((c) => {
+      const items = ITEMS.filter((x) => x.type === c.id);
       const done = items.filter((x) => museum[x.id]).length;
       return `<button type="button" data-mcat="${c.id}" class="${c.id === museumCat ? 'on' : ''}">${c.icon} ${t(c.zh)}<small>${done}/${items.length}</small></button>`;
     }).join('');
-    const cards = MUSEUM_ITEMS.filter((x) => x.type === museumCat)
+    const cards = ITEMS.filter((x) => x.type === museumCat)
       .map((x) => {
         const d = museum[x.id];
         if (d) return `<div class="dex-card rarity-${x.rarity}"><i class="dex-emoji">${x.icon}</i><b>${nameOf(x)}</b><small>${t('第一個捐的人')}</small><em>${escapeHtml(d.n)}</em></div>`;
         const can = has(x) && info.left > 0;
-        return `<div class="dex-card ${has(x) ? 'can-donate' : 'unknown'}"><i class="dex-emoji">${x.icon}</i><b>${known(x) ? nameOf(x) : t('？？？')}</b><small>${rarityStars(x.rarity)}</small>${has(x) ? `<button type="button" class="mini-btn" data-donate="${x.id}" ${can ? '' : 'disabled'}>${x.type === 'fish' ? t('🎣 捐魚拓') : t('🎁 捐出')}</button>` : `<em>${t('還沒有人捐')}</em>`}</div>`;
+        return `<div class="dex-card ${has(x) ? 'can-donate' : 'unknown'}"><i class="dex-emoji">${x.icon}</i><b>${known(x) ? nameOf(x) : t('？？？')}</b><small>${rarityStars(x.rarity)}</small>${has(x) ? `<button type="button" class="mini-btn" data-donate="${x.id}" ${can ? '' : 'disabled'}>${x.type === 'fish' || x.type === 'shiny' ? t('🎣 捐魚拓') : t('🎁 捐出')}</button>` : `<em>${t('還沒有人捐')}</em>`}</div>`;
       })
       .join('');
     modal.open(
@@ -1276,7 +1284,9 @@ async function init() {
             b.disabled = true;
             const res = await net.request('donate', { id: b.dataset.donate });
             if (res?.ok) {
-              if (MUSEUM_BY_ID[b.dataset.donate]?.type !== 'fish') {
+              const mt = MUSEUM_BY_ID[b.dataset.donate]?.type;
+              if (mt === 'trash') basket = res.basket ?? basket; // 垃圾袋沒有的話是從採集籃拿的
+              else if (mt !== 'fish' && mt !== 'shiny') {
                 basket[b.dataset.donate] = res.count;
                 if (!res.count) delete basket[b.dataset.donate];
               }
@@ -1295,7 +1305,7 @@ async function init() {
     museum = { ...museum, [id]: { n, at: Date.now() } };
     forest.drawMuseum(museum);
     const it = MUSEUM_BY_ID[id];
-    if (it && n !== myName) hud.toast(t('🏛️ {name} 把{icon} {item}捐進了標本櫃', { name: n, icon: it.icon, item: it.type === 'fish' ? it.name : t(it.zh) }), 4000);
+    if (it && n !== myName) hud.toast(t('🏛️ {name} 把{icon} {item}捐進了標本櫃', { name: n, icon: it.icon, item: it.type === 'fish' || it.type === 'shiny' ? it.name : t(it.zh) }), 4000);
     if (modal.isOpen && fishingUI._modal === 'custom' && fishingUI.el.modalTitle.textContent.startsWith('🏛️')) openMuseum();
   });
 

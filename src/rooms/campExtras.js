@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { lowpoly, makeSign } from './shared.js';
-import { MUSEUM_ITEMS } from '../game/museum.js';
+import { museumItems } from '../game/museum.js';
 import { t } from '../i18n/i18n.js';
 
 const polar = (a, r) => ({ x: Math.sin(a) * r, z: Math.cos(a) * r });
@@ -59,8 +59,9 @@ function buildMuseum() {
     g.add(leg);
   }
   // 正面玻璃格子（畫布貼圖）
-  const COLS = 12;
-  const ROWS = Math.ceil(MUSEUM_ITEMS.length / COLS);
+  const ITEMS = museumItems(); // 11/22 擴充後格子變多：一排放 16 格
+  const COLS = ITEMS.length > 160 ? 16 : 12;
+  const ROWS = Math.ceil(ITEMS.length / COLS);
   const c = document.createElement('canvas');
   c.width = 1024;
   c.height = Math.round((1024 * (H - 0.3)) / (W - 0.2));
@@ -82,7 +83,7 @@ function buildMuseum() {
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    MUSEUM_ITEMS.forEach((it, i) => {
+    ITEMS.forEach((it, i) => {
       const x = (i % COLS) * cw;
       const y = Math.floor(i / COLS) * ch;
       const has = !!museum[it.id];
