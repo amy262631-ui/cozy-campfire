@@ -1248,6 +1248,500 @@ export function buildFurniture(id, opts = {}) {
       box(0.03, 0.42, 0.03, mat(0x5a3c26), 0, 0.2, -0.16).rotation.x = -0.22;
       break;
     }
+    // ---- 🏮 日系風（作者 11/19：風格系列第一彈） ----
+    case 'jp_tatami': {
+      box(0.78, 0.05, 0.78, mat(0xc9c27a), 0, 0.025, 0);
+      for (const z of [-0.37, 0.37]) box(0.78, 0.052, 0.05, mat(0x3a5a4a), 0, 0.026, z);
+      for (let k = -3; k <= 3; k++) box(0.004, 0.051, 0.7, mat(0xb4ad68), k * 0.1, 0.026, 0);
+      break;
+    }
+    case 'jp_zabuton': {
+      const c = box(0.5, 0.08, 0.5, mat(0x9a3a4a), 0, 0.04, 0);
+      c.scale.set(1, 1, 1);
+      box(0.46, 0.02, 0.46, mat(0xb04a5a), 0, 0.085, 0);
+      for (const [x, z] of [[-0.24, -0.24], [0.24, -0.24], [-0.24, 0.24], [0.24, 0.24]]) ball(0.025, mat(0xe8c25a), x, 0.06, z);
+      ball(0.025, mat(0xe8c25a), 0, 0.1, 0);
+      break;
+    }
+    case 'jp_chabudai': {
+      const wd = mat(0x7a4a2c);
+      cyl(0.36, 0.36, 0.04, wd, 0, 0.3, 0, 20);
+      cyl(0.355, 0.355, 0.01, mat(0x8e5a36), 0, 0.325, 0, 20);
+      for (let k = 0; k < 4; k++) {
+        const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+        box(0.05, 0.28, 0.05, wd, Math.cos(a) * 0.24, 0.14, Math.sin(a) * 0.24);
+      }
+      cyl(0.05, 0.04, 0.07, mat(0x5a7a5a), 0.08, 0.36, 0.04, 10); // 茶杯
+      cyl(0.08, 0.07, 0.1, mat(0x3a3a3a), -0.1, 0.37, -0.06, 10); // 小茶壺
+      cyl(0.02, 0.02, 0.06, mat(0x3a3a3a), -0.01, 0.38, -0.06, 6).rotation.z = 1.2;
+      break;
+    }
+    case 'jp_futon': {
+      const z0 = -0.3;
+      box(0.76, 0.1, 1.36, mat(0xf3eee2), 0, 0.05, z0); // 墊被
+      const cover = box(0.74, 0.08, 0.84, mat(0x4a6a9a), 0, 0.13, 0.0); // 掛被（藍）
+      cover.userData.noShadow = true;
+      for (let k = 0; k < 4; k++) box(0.75, 0.081, 0.04, mat(0xf3eee2), 0, 0.131, -0.32 + k * 0.22); // 白條紋
+      ball(0.13, mat(0xf6f0e0), 0, 0.17, -0.8, 1.8, 0.55, 1.0); // 枕頭
+      break;
+    }
+    case 'jp_andon': {
+      const wd = mat(0x3a2a1e);
+      for (const [x, z] of [[-0.11, -0.11], [0.11, -0.11], [-0.11, 0.11], [0.11, 0.11]]) box(0.025, 0.62, 0.025, wd, x, 0.31, z);
+      box(0.2, 0.36, 0.2, glow(0xfff0c8), 0, 0.36, 0);
+      for (const y of [0.18, 0.54]) box(0.25, 0.025, 0.25, wd, 0, y, 0);
+      for (const y of [0.3, 0.42]) box(0.205, 0.006, 0.205, mat(0x8a7a5a), 0, y, 0);
+      box(0.25, 0.025, 0.25, wd, 0, 0.62, 0);
+      break;
+    }
+    case 'jp_ikebana': {
+      cyl(0.13, 0.15, 0.05, mat(0x2a2a2a), 0, 0.025, 0, 14); // 黑色淺盆
+      cyl(0.11, 0.11, 0.01, mat(0x6a9ac8), 0, 0.05, 0, 14);
+      const st = mat(0x4a6a3a);
+      for (const [a, h, c] of [[-0.35, 0.5, 0xf2a0b8], [0.2, 0.38, 0xffffff], [0.6, 0.28, 0xf2a0b8]]) {
+        const stem = cyl(0.008, 0.008, h, st, Math.sin(a) * h * 0.25, h / 2 + 0.05, 0, 4);
+        stem.rotation.z = -a * 0.5;
+        ball(0.045, mat(c), Math.sin(a) * h * 0.5, h + 0.05, 0);
+      }
+      for (const a of [-0.8, 0.9]) {
+        const leaf = cyl(0.004, 0.02, 0.26, st, Math.sin(a) * 0.08, 0.17, 0.02, 4);
+        leaf.rotation.z = -a;
+      }
+      break;
+    }
+    case 'jp_scroll': {
+      // 掛軸：靠後面的小木架上掛一幅山水
+      const wd = mat(0x5a3c26);
+      for (const x of [-0.2, 0.2]) box(0.03, 1.2, 0.03, wd, x, 0.6, -0.3);
+      box(0.46, 0.03, 0.04, wd, 0, 1.2, -0.3);
+      box(0.32, 0.8, 0.01, mat(0x6a5a3a), 0, 0.78, -0.28);
+      box(0.28, 0.6, 0.012, mat(0xf3ead2), 0, 0.8, -0.275);
+      for (const [x, y, h] of [[-0.06, 0.62, 0.22], [0.05, 0.6, 0.3], [0.1, 0.58, 0.16]]) cone(0.07, h, mat(0x6a7a8a), x, y + h / 2, -0.268, 4).scale.z = 0.05;
+      ball(0.03, mat(0xd2453c), 0.08, 0.98, -0.266, 1, 1, 0.2); // 紅太陽
+      for (const y of [0.37, 1.19]) cyl(0.02, 0.02, 0.38, mat(0x3a2a1e), 0, y, -0.28, 6).rotation.z = Math.PI / 2;
+      break;
+    }
+    case 'jp_bonsai': {
+      box(0.34, 0.1, 0.22, mat(0x6a4a8a), 0, 0.05, 0); // 紫色淺盆
+      box(0.3, 0.02, 0.18, mat(0x5a4a3a), 0, 0.1, 0);
+      const trunk = mat(0x6a4a30);
+      const t1 = cyl(0.03, 0.04, 0.28, trunk, -0.04, 0.24, 0, 6);
+      t1.rotation.z = 0.35;
+      const t2 = cyl(0.02, 0.03, 0.2, trunk, 0.04, 0.4, 0, 6);
+      t2.rotation.z = -0.7;
+      const lf = mat(0x3f6a3a);
+      for (const [x, y, z, r] of [[-0.12, 0.42, 0, 0.09], [0.12, 0.48, 0.02, 0.1], [0.0, 0.55, -0.02, 0.08], [0.18, 0.4, -0.03, 0.06]]) ball(r, lf, x, y, z, 1.4, 0.55, 1.1);
+      break;
+    }
+    case 'jp_sakura': {
+      // 🌸 室內櫻花樹（月票）：花瓣一直慢慢飄下來
+      box(0.5, 0.06, 0.5, mat(0x8a8a82), 0, 0.03, 0);
+      cyl(0.22, 0.24, 0.16, mat(0x5a3c2c), 0, 0.12, 0, 12);
+      const trunk = mat(0x5a3a2c);
+      const tr = cyl(0.06, 0.09, 1.0, trunk, 0, 0.7, 0, 7);
+      tr.rotation.z = 0.08;
+      for (const [a, l] of [[0.7, 0.45], [-0.8, 0.5], [2.2, 0.4]]) {
+        const br = cyl(0.025, 0.04, l, trunk, Math.cos(a) * 0.12, 1.15, Math.sin(a) * 0.12, 5);
+        br.rotation.set(Math.sin(a) * 0.7, 0, -Math.cos(a) * 0.7);
+      }
+      const pinks = [0xf6c0d0, 0xf2a8c0, 0xfad4e0];
+      for (const [x, y, z, r] of [[0, 1.55, 0, 0.36], [0.3, 1.42, 0.1, 0.28], [-0.3, 1.45, -0.05, 0.3], [0.05, 1.4, 0.3, 0.26], [-0.05, 1.42, -0.3, 0.26], [0.18, 1.7, -0.15, 0.22]]) ball(r, mat(pinks[Math.round(r * 10) % 3]), x, y, z, 1.2, 0.8, 1.2);
+      const petals = [];
+      const pm = mat(0xf8c8d8, { side: THREE.DoubleSide });
+      for (let k = 0; k < 14; k++) {
+        const p = add(new THREE.PlaneGeometry(0.035, 0.025), pm, 0, 0, 0);
+        p.userData.s = { x: (Math.sin(k * 7.3) * 0.5), z: (Math.cos(k * 5.1) * 0.5), ph: k * 0.37, sp: 0.25 + (k % 4) * 0.05 };
+        petals.push(p);
+      }
+      g.userData.tick = (_dt, t) => {
+        for (const p of petals) {
+          const s = p.userData.s;
+          const f = (t * s.sp + s.ph) % 1;
+          p.position.set(s.x + Math.sin(t * 1.3 + s.ph * 9) * 0.08, 1.3 * (1 - f) + 0.05, s.z + Math.cos(t * 1.1 + s.ph * 7) * 0.08);
+          p.rotation.set(t * 2 + s.ph, t * 1.5, 0);
+          p.visible = f < 0.97;
+        }
+      };
+      break;
+    }
+    case 'jp_shoji': {
+      // 和紙拉門
+      const E = -0.37;
+      const wd = mat(0x6a4a30);
+      box(0.8, 1.9, 0.05, mat(0xf6f0e0, { transparent: true, opacity: 0.92 }), 0, 0.95, E);
+      for (const x of [-0.39, 0, 0.39]) box(0.035, 1.92, 0.07, wd, x, 0.96, E);
+      for (let k = 0; k <= 6; k++) box(0.8, 0.025, 0.065, wd, 0, 0.12 + k * 0.29, E);
+      for (const x of [-0.2, 0.2]) box(0.018, 1.75, 0.062, wd, x, 1.0, E);
+      box(0.82, 0.06, 0.08, wd, 0, 0.03, E);
+      break;
+    }
+    case 'jp_sudare': {
+      // 竹簾：上面一根橫桿，垂下來細細的竹條，下面留一點空
+      const E = -0.37;
+      box(0.84, 0.05, 0.06, mat(0x6a4a30), 0, 1.9, E);
+      const bam = mat(0xc8b070);
+      for (let k = 0; k < 22; k++) box(0.03, 1.35, 0.012, k % 2 ? bam : mat(0xb89e60), -0.39 + k * 0.037, 1.2, E);
+      for (const y of [0.9, 1.5]) box(0.8, 0.012, 0.02, mat(0x7a5a3a), 0, y, E + 0.01);
+      for (const x of [-0.3, 0.3]) box(0.012, 0.3, 0.012, mat(0xd2453c), x, 1.72, E + 0.02);
+      break;
+    }
+    case 'jp_lattice': {
+      // 格子窗牆：下面木板、上面細格子
+      const E = -0.37;
+      const wd = mat(0x5a3a26);
+      box(0.8, 0.7, 0.07, mat(0x7a5236), 0, 0.35, E);
+      box(0.8, 0.06, 0.08, wd, 0, 1.9, E);
+      box(0.8, 0.05, 0.08, wd, 0, 0.72, E);
+      for (let k = 0; k <= 8; k++) box(0.025, 1.15, 0.05, wd, -0.38 + k * 0.095, 1.3, E);
+      for (let k = 0; k < 3; k++) box(0.8, 0.02, 0.05, wd, 0, 0.98 + k * 0.32, E);
+      box(0.76, 1.12, 0.015, mat(0xf3ead2, { transparent: true, opacity: 0.55 }), 0, 1.3, E - 0.01);
+      break;
+    }
+    // ---- 🏰 歐風（作者 11/19：風格系列第二彈） ----
+    case 'eu_rug': {
+      box(0.78, 0.02, 0.78, mat(0x8a2f3a), 0, 0.01, 0);
+      box(0.66, 0.022, 0.66, mat(0xd8c08a), 0, 0.011, 0);
+      box(0.56, 0.024, 0.56, mat(0x8a2f3a), 0, 0.012, 0);
+      const md = add(new THREE.CylinderGeometry(0.14, 0.14, 0.026, 4), mat(0xd8c08a), 0, 0.013, 0);
+      md.rotation.y = Math.PI / 4;
+      break;
+    }
+    case 'eu_armchair': {
+      const vel = mat(0x2f5a6a);
+      const gold = mat(0xc8a050, { metalness: 0.5, roughness: 0.4 });
+      box(0.52, 0.14, 0.5, vel, 0, 0.3, 0.02);
+      box(0.52, 0.5, 0.12, vel, 0, 0.52, -0.21);
+      ball(0.26, vel, 0, 0.78, -0.21, 1, 0.35, 0.45);
+      for (const x of [-0.26, 0.26]) {
+        box(0.08, 0.2, 0.46, vel, x, 0.42, 0.0);
+        ball(0.06, vel, x, 0.53, 0.2, 1, 1, 1);
+      }
+      for (const [x, z] of [[-0.22, -0.2], [0.22, -0.2], [-0.22, 0.22], [0.22, 0.22]]) cyl(0.025, 0.018, 0.24, gold, x, 0.12, z, 6);
+      break;
+    }
+    case 'eu_sofa': {
+      const vel = mat(0xb04a5a);
+      const gold = mat(0xc8a050, { metalness: 0.5, roughness: 0.4 });
+      box(1.4, 0.14, 0.5, vel, 0.4, 0.3, 0.02);
+      box(1.4, 0.42, 0.12, vel, 0.4, 0.48, -0.21);
+      for (let k = 0; k < 3; k++) ball(0.24, vel, -0.06 + k * 0.46, 0.7, -0.21, 1, 0.3, 0.45);
+      for (const x of [-0.3, 1.1]) box(0.1, 0.24, 0.48, vel, x, 0.42, 0);
+      for (const x of [-0.25, 1.05]) for (const z of [-0.2, 0.22]) cyl(0.025, 0.018, 0.24, gold, x, 0.12, z, 6);
+      for (const x of [0, 0.8]) box(0.42, 0.04, 0.44, mat(0xc85a6a), x, 0.39, 0.04);
+      break;
+    }
+    case 'eu_teacart': {
+      const gold = mat(0xc8a050, { metalness: 0.5, roughness: 0.4 });
+      for (const y of [0.18, 0.55]) box(0.6, 0.03, 0.38, mat(0xf3eee2), 0, y, 0);
+      for (const [x, z] of [[-0.28, -0.17], [0.28, -0.17], [-0.28, 0.17], [0.28, 0.17]]) cyl(0.015, 0.015, 0.56, gold, x, 0.29, z, 6);
+      const h = torus(0.12, 0.012, gold, 0.33, 0.62, 0, Math.PI, 10);
+      h.rotation.set(0, Math.PI / 2, Math.PI / 2);
+      for (const x of [-0.28, 0.28]) for (const z of [-0.17, 0.17]) cyl(0.035, 0.035, 0.02, mat(0x3a3a3a), x, 0.02, z, 8).rotation.x = Math.PI / 2;
+      cyl(0.07, 0.06, 0.1, mat(0xffffff), -0.12, 0.62, 0, 10);
+      cyl(0.02, 0.02, 0.06, mat(0xffffff), -0.04, 0.63, 0, 5).rotation.z = 1.1;
+      for (const x of [0.06, 0.18]) cyl(0.04, 0.03, 0.05, mat(0xffffff), x, 0.595, 0.06, 10);
+      cyl(0.1, 0.02, 0.12, mat(0xf2c0d0), 0.12, 0.25, 0, 12);
+      ball(0.05, mat(0xd2453c), 0.12, 0.33, 0);
+      break;
+    }
+    case 'eu_candle': {
+      const gold = mat(0xc8a050, { metalness: 0.5, roughness: 0.4 });
+      cyl(0.12, 0.14, 0.04, gold, 0, 0.02, 0, 12);
+      cyl(0.02, 0.03, 0.55, gold, 0, 0.3, 0, 8);
+      for (const x of [-0.16, 0, 0.16]) {
+        if (x) {
+          const arm = cyl(0.012, 0.012, 0.2, gold, x / 2, 0.48, 0, 5);
+          arm.rotation.z = -Math.sign(x) * 1.0;
+        }
+        cyl(0.03, 0.025, 0.03, gold, x, x ? 0.55 : 0.6, 0, 8);
+        cyl(0.018, 0.018, 0.1, mat(0xfaf3e0), x, x ? 0.61 : 0.66, 0, 8);
+        ball(0.018, glow(0xffc46b), x, x ? 0.68 : 0.73, 0, 0.8, 1.6, 0.8);
+      }
+      break;
+    }
+    case 'eu_painting': {
+      const gold = mat(0xc8a050, { metalness: 0.5, roughness: 0.4 });
+      for (const x of [-0.2, 0.2]) box(0.03, 0.9, 0.03, mat(0x5a3c26), x, 0.45, -0.3).rotation.x = -0.12;
+      box(0.62, 0.5, 0.05, gold, 0, 1.0, -0.33);
+      box(0.52, 0.4, 0.02, mat(0x8ab0c8), 0, 1.0, -0.3);
+      box(0.52, 0.16, 0.022, mat(0x6a9a5a), 0, 0.88, -0.299);
+      ball(0.05, mat(0xfff0b0), 0.15, 1.1, -0.29, 1, 1, 0.2);
+      for (const [x, h] of [[-0.12, 0.2], [0.02, 0.14]]) cone(0.06, h, mat(0x3f6a3a), x, 0.96 + h / 2, -0.29, 5).scale.z = 0.2;
+      break;
+    }
+    case 'eu_clock': {
+      const wd = mat(0x6a3a22);
+      const gold = mat(0xc8a050, { metalness: 0.5, roughness: 0.4 });
+      box(0.36, 1.5, 0.26, wd, 0, 0.75, -0.1);
+      box(0.42, 0.08, 0.3, wd, 0, 0.04, -0.1);
+      box(0.42, 0.1, 0.3, wd, 0, 1.55, -0.1);
+      cone(0.22, 0.14, wd, 0, 1.67, -0.1, 4).rotation.y = Math.PI / 4;
+      cyl(0.13, 0.13, 0.02, mat(0xfaf3e0), 0, 1.3, 0.035, 20).rotation.x = Math.PI / 2;
+      torus(0.13, 0.012, gold, 0, 1.3, 0.04, Math.PI * 2, 20);
+      box(0.012, 0.09, 0.01, mat(0x2a2a2a), 0, 1.33, 0.05);
+      box(0.07, 0.012, 0.01, mat(0x2a2a2a), 0.03, 1.3, 0.05);
+      box(0.24, 0.7, 0.01, glass(0xfff3d8, 0.3), 0, 0.72, 0.035);
+      const pend = new THREE.Group();
+      pend.position.set(0, 1.05, 0.0);
+      g.add(pend);
+      const rod = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.42, 0.012), gold);
+      rod.position.y = -0.21;
+      const bob = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.015, 14), gold);
+      bob.rotation.x = Math.PI / 2;
+      bob.position.y = -0.44;
+      pend.add(rod, bob);
+      g.userData.tick = (_dt, t) => (pend.rotation.z = Math.sin(t * 3) * 0.25);
+      break;
+    }
+    case 'eu_roses': {
+      cyl(0.08, 0.06, 0.24, mat(0xf3eee2), 0, 0.12, 0, 12);
+      cyl(0.09, 0.08, 0.03, mat(0xc8a050), 0, 0.24, 0, 12);
+      for (let k = 0; k < 7; k++) {
+        const a = (k / 7) * Math.PI * 2;
+        const r = k ? 0.08 : 0;
+        ball(0.045, mat(k % 3 ? 0xd2453c : 0xf2a0b0), Math.cos(a) * r, 0.36 + (k ? 0 : 0.05), Math.sin(a) * r);
+      }
+      for (let k = 0; k < 4; k++) ball(0.03, mat(0x4a7a3a), Math.cos(k * 1.6) * 0.11, 0.3, Math.sin(k * 1.6) * 0.11, 1.3, 0.5, 1);
+      break;
+    }
+    case 'eu_piano': {
+      // 🎹 小鋼琴（月票）：直立式，按 E 會彈一小段
+      const blk = mat(0x1e1a1a, { roughness: 0.3 });
+      box(1.0, 0.95, 0.36, blk, 0.1, 0.62, -0.2);
+      box(1.0, 0.06, 0.5, blk, 0.1, 0.66, 0.06);
+      box(0.94, 0.03, 0.22, mat(0xfaf6ee), 0.1, 0.7, 0.13);
+      for (let k = 0; k < 15; k++) if (k % 7 !== 2 && k % 7 !== 6) box(0.03, 0.03, 0.12, blk, 0.1 - 0.42 + k * 0.06 + 0.03, 0.725, 0.08);
+      for (const x of [-0.36, 0.56]) box(0.05, 0.6, 0.05, blk, x, 0.3, 0.2);
+      box(0.3, 0.2, 0.02, mat(0xfaf3e0), 0.1, 0.98, -0.01).rotation.x = -0.25;
+      box(0.5, 0.06, 0.3, blk, 0.1, 0.42, 0.62);
+      for (const x of [-0.1, 0.3]) box(0.04, 0.4, 0.04, blk, x, 0.2, 0.62);
+      box(0.46, 0.03, 0.26, mat(0xb04a5a), 0.1, 0.46, 0.62);
+      for (const c of g.children) c.position.x += 0.3; // 兩格寬（wide）：往右挪到兩格中間
+      break;
+    }
+    case 'eu_arch': {
+      // 白色拱門牆（走得過去）
+      const E = -0.37;
+      const w = mat(0xf3eee2);
+      box(0.14, 1.9, 0.12, w, -0.33, 0.95, E);
+      box(0.14, 1.9, 0.12, w, 0.33, 0.95, E);
+      box(0.8, 0.22, 0.12, w, 0, 1.79, E);
+      const arc = add(new THREE.TorusGeometry(0.27, 0.06, 6, 16, Math.PI), w, 0, 1.5, E);
+      arc.scale.set(1, 0.7, 1);
+      for (const x of [-0.33, 0.33]) box(0.18, 0.08, 0.16, mat(0xd8cfbf), x, 0.04, E);
+      break;
+    }
+    case 'eu_iron': {
+      // 鐵藝隔屏：黑色鐵框裡有捲捲的花紋，看得到另一邊
+      const E = -0.37;
+      const iron = mat(0x2a2522, { metalness: 0.5, roughness: 0.4 });
+      for (const x of [-0.38, 0.38]) box(0.04, 1.8, 0.04, iron, x, 0.9, E);
+      for (const y of [0.05, 0.9, 1.78]) box(0.8, 0.035, 0.04, iron, 0, y, E);
+      for (const [x, y] of [[-0.19, 0.48], [0.19, 0.48], [-0.19, 1.34], [0.19, 1.34]]) {
+        const c = add(new THREE.TorusGeometry(0.15, 0.012, 4, 18), iron, x, y, E);
+        c.scale.y = 1.3;
+        add(new THREE.TorusGeometry(0.06, 0.01, 4, 12), iron, x, y, E);
+      }
+      for (const y of [1.0, 1.7]) for (const x of [-0.25, 0.25]) ball(0.035, mat(0x4a7a3a), x, y, E + 0.03, 1.4, 0.6, 0.6);
+      break;
+    }
+    case 'eu_french': {
+      // 落地窗牆：白框、上面半圓窗
+      const E = -0.37;
+      const w = mat(0xf6f2ea);
+      for (const x of [-0.37, 0, 0.37]) box(0.05, 1.6, 0.07, w, x, 0.8, E);
+      for (const y of [0.03, 0.55, 1.08, 1.6]) box(0.8, 0.04, 0.07, w, 0, y, E);
+      box(0.72, 1.55, 0.015, glass(0xcfeeff, 0.3), 0, 0.8, E);
+      const half = add(new THREE.CircleGeometry(0.4, 18, 0, Math.PI), glass(0xcfeeff, 0.3), 0, 1.6, E);
+      half.material.side = THREE.DoubleSide;
+      add(new THREE.TorusGeometry(0.4, 0.03, 4, 18, Math.PI), w, 0, 1.6, E);
+      for (const a of [Math.PI / 4, Math.PI / 2, (3 * Math.PI) / 4]) {
+        const sp = box(0.025, 0.4, 0.03, w, Math.cos(a) * 0.2, 1.6 + Math.sin(a) * 0.2, E);
+        sp.rotation.z = a - Math.PI / 2;
+      }
+      break;
+    }
+    // ---- 🐉 古風（中式，作者 11/19：風格系列第三彈） ----
+    case 'cn_mat': {
+      box(0.78, 0.025, 0.78, mat(0xc8a868), 0, 0.012, 0);
+      for (let k = -4; k <= 4; k++) box(0.012, 0.027, 0.76, mat(0xa88848), k * 0.085, 0.013, 0);
+      for (const z of [-0.37, 0.37]) box(0.78, 0.03, 0.04, mat(0x8a2a22), 0, 0.015, z);
+      break;
+    }
+    case 'cn_chair': {
+      // 太師椅：深紅木，圓弧椅背
+      const wd = mat(0x5a2418);
+      box(0.52, 0.06, 0.46, wd, 0, 0.42, 0);
+      for (const [x, z] of [[-0.23, -0.2], [0.23, -0.2], [-0.23, 0.2], [0.23, 0.2]]) box(0.05, 0.42, 0.05, wd, x, 0.21, z);
+      box(0.48, 0.03, 0.42, wd, 0, 0.08, 0);
+      box(0.46, 0.5, 0.05, wd, 0, 0.7, -0.21);
+      box(0.18, 0.38, 0.055, mat(0x8a3a28), 0, 0.68, -0.205);
+      ball(0.05, mat(0xc8a050), 0, 0.82, -0.18, 1, 1, 0.4);
+      const top = add(new THREE.TorusGeometry(0.26, 0.035, 6, 16, Math.PI), wd, 0, 0.95, -0.21);
+      top.scale.y = 0.3;
+      for (const x of [-0.25, 0.25]) {
+        box(0.05, 0.2, 0.44, wd, x, 0.55, 0);
+        box(0.06, 0.04, 0.46, wd, x, 0.66, 0);
+      }
+      box(0.42, 0.04, 0.38, mat(0xb83a2a), 0, 0.47, 0.02);
+      break;
+    }
+    case 'cn_teatable': {
+      const wd = mat(0x5a2418);
+      box(0.6, 0.05, 0.6, wd, 0, 0.4, 0);
+      for (const [x, z] of [[-0.26, -0.26], [0.26, -0.26], [-0.26, 0.26], [0.26, 0.26]]) box(0.05, 0.38, 0.05, wd, x, 0.19, z);
+      for (const z of [-0.26, 0.26]) box(0.52, 0.04, 0.03, wd, 0, 0.33, z);
+      ball(0.07, mat(0x5a8aa8), -0.08, 0.48, 0, 1, 0.8, 1);
+      cyl(0.03, 0.02, 0.04, mat(0x5a8aa8), -0.08, 0.55, 0, 6);
+      cyl(0.012, 0.012, 0.08, mat(0x5a8aa8), 0.0, 0.5, 0, 5).rotation.z = 1.0;
+      for (const [x, z] of [[0.12, 0.1], [0.16, -0.06], [0.0, 0.16]]) cyl(0.03, 0.022, 0.035, mat(0xf3eee2), x, 0.442, z, 8);
+      box(0.3, 0.012, 0.18, mat(0x3a2418), 0.05, 0.43, 0.02);
+      break;
+    }
+    case 'cn_desk': {
+      // 書案：毛筆、硯台、紙
+      const wd = mat(0x5a2418);
+      box(1.0, 0.05, 0.42, wd, 0.1, 0.62, 0);
+      for (const x of [-0.37, 0.57]) {
+        box(0.05, 0.6, 0.38, wd, x, 0.3, 0);
+        box(0.1, 0.04, 0.42, wd, x, 0.66, 0).rotation.x = 0;
+      }
+      for (const x of [-0.37, 0.57]) box(0.12, 0.05, 0.44, wd, x, 0.67, 0);
+      box(0.4, 0.008, 0.28, mat(0xf6f0e0), 0.05, 0.65, 0.02);
+      for (const [x, z, w] of [[-0.02, 0.0, 0.1], [0.12, 0.06, 0.08]]) box(w, 0.01, 0.015, mat(0x1e1a1a), x, 0.656, z);
+      box(0.16, 0.03, 0.1, mat(0x2a2a2a), 0.4, 0.66, -0.05);
+      box(0.12, 0.012, 0.06, mat(0x111111), 0.4, 0.676, -0.05);
+      cyl(0.04, 0.04, 0.12, mat(0x5a8aa8), 0.42, 0.7, 0.1, 10);
+      for (let k = 0; k < 3; k++) {
+        const b = cyl(0.008, 0.008, 0.22, mat(0xb08a4a), 0.4 + k * 0.02, 0.8, 0.1, 5);
+        b.rotation.z = (k - 1) * 0.15;
+      }
+      for (const c of g.children) c.position.x += 0.3; // 兩格寬（wide）：往右挪到兩格中間
+      break;
+    }
+    case 'cn_lantern': {
+      // 宮燈：六角木框、紅色燈身、下面紅穗子
+      const wd = mat(0x5a2418);
+      box(0.06, 1.2, 0.06, wd, 0.25, 0.6, 0);
+      box(0.3, 0.04, 0.04, wd, 0.12, 1.2, 0);
+      box(0.24, 0.06, 0.24, mat(0x3a2a1e), 0.25, 0.03, 0.0);
+      const lamp = new THREE.Group();
+      lamp.position.set(0, 0.8, 0);
+      g.add(lamp);
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.32, 6), glow(0xff9a6a));
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.18, 0.06, 6), wd);
+      top.position.y = 0.19;
+      const bot = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.1, 0.06, 6), wd);
+      bot.position.y = -0.19;
+      const tas = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.2, 6), mat(0xd2453c));
+      tas.position.y = -0.33;
+      tas.rotation.x = Math.PI;
+      lamp.add(body, top, bot, tas);
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        const e = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.33, 0.02), wd);
+        e.position.set(Math.cos(a) * 0.155, 0, Math.sin(a) * 0.155);
+        lamp.add(e);
+      }
+      box(0.01, 0.2, 0.01, mat(0x2a2a2a), 0, 1.1, 0);
+      break;
+    }
+    case 'cn_vase': {
+      // 青花瓷瓶
+      const pts = [[0.0, 0], [0.09, 0], [0.12, 0.08], [0.15, 0.22], [0.12, 0.34], [0.06, 0.4], [0.05, 0.48], [0.08, 0.52]].map(([x, y]) => new THREE.Vector2(x, y));
+      add(new THREE.LatheGeometry(pts, 14), mat(0xf6f4ee, { side: THREE.DoubleSide }), 0, 0, 0);
+      for (const y of [0.12, 0.3]) {
+        const band = add(new THREE.TorusGeometry(y === 0.12 ? 0.135 : 0.13, 0.012, 4, 20), mat(0x2a4a9a), 0, y + 0.02, 0);
+        band.rotation.x = Math.PI / 2;
+      }
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * Math.PI * 2;
+        ball(0.025, mat(0x2a4a9a), Math.cos(a) * 0.15, 0.22, Math.sin(a) * 0.15, 1, 1.4, 0.4);
+      }
+      for (const a of [-0.3, 0.2]) {
+        const br = cyl(0.008, 0.008, 0.36, mat(0x5a3a2a), Math.sin(a) * 0.05, 0.68, 0, 4);
+        br.rotation.z = a;
+        for (let k = 0; k < 3; k++) ball(0.025, mat(0xf2b0c0), Math.sin(a) * (0.08 + k * 0.05), 0.6 + k * 0.08, 0.02);
+      }
+      break;
+    }
+    case 'cn_lotus': {
+      // 荷花缸
+      cyl(0.3, 0.22, 0.42, mat(0x8a5a3a), 0, 0.21, 0, 16);
+      torus(0.3, 0.03, mat(0x6a4028), 0, 0.42, 0, Math.PI * 2, 20).rotation.x = Math.PI / 2;
+      cyl(0.28, 0.28, 0.01, mat(0x4a7a8a), 0, 0.4, 0, 16);
+      for (const [x, z, r] of [[-0.1, 0.05, 0.1], [0.1, -0.08, 0.12], [0.06, 0.13, 0.08]]) cyl(r, r, 0.008, mat(0x4a8a4a), x, 0.41, z, 12);
+      const st = cyl(0.008, 0.008, 0.3, mat(0x4a7a3a), -0.05, 0.55, -0.05, 4);
+      st.rotation.z = 0.1;
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        const pt = ball(0.04, mat(k % 2 ? 0xf6b8c8 : 0xfad4de), -0.07 + Math.cos(a) * 0.04, 0.72, -0.05 + Math.sin(a) * 0.04, 0.7, 1.4, 0.7);
+        pt.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5);
+      }
+      ball(0.025, mat(0xf2d060), -0.07, 0.72, -0.05);
+      break;
+    }
+    case 'cn_screen': {
+      // 山水屏風：三片，畫著山和雲
+      const E = -0.37;
+      const wd = mat(0x5a2418);
+      for (const [x, ry] of [[-0.27, 0.12], [0, 0], [0.27, -0.12]]) {
+        const p = new THREE.Group();
+        p.position.set(x, 0, E);
+        p.rotation.y = ry;
+        g.add(p);
+        const fr = new THREE.Mesh(new THREE.BoxGeometry(0.27, 1.6, 0.04), wd);
+        fr.position.y = 0.85;
+        const pap = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.4, 0.045), mat(0xf3ead2));
+        pap.position.y = 0.88;
+        p.add(fr, pap);
+        for (const [mx, my, h] of [[-0.04, 0.55, 0.4], [0.05, 0.5, 0.3]]) {
+          const m = new THREE.Mesh(new THREE.ConeGeometry(0.1, h, 4), mat(0x6a7a8a));
+          m.position.set(mx, my + h / 2 + 0.2, 0.03);
+          m.scale.z = 0.1;
+          p.add(m);
+        }
+        const cl = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), mat(0xffffff));
+        cl.position.set(0.02, 1.2, 0.03);
+        cl.scale.set(1.6, 0.6, 0.2);
+        p.add(cl);
+        const ft = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.18), wd);
+        ft.position.y = 0.03;
+        p.add(ft);
+      }
+      break;
+    }
+    case 'cn_moongate': {
+      // 🌕 月洞門（月票）：白牆中間一個圓洞，走得過去
+      const E = -0.37;
+      const w = mat(0xf3eee2);
+      const shape = new THREE.Shape();
+      shape.moveTo(-0.42, 0);
+      shape.lineTo(0.42, 0);
+      shape.lineTo(0.42, 2.0);
+      shape.lineTo(-0.42, 2.0);
+      shape.lineTo(-0.42, 0);
+      const hole = new THREE.Path();
+      hole.absarc(0, 0.95, 0.36, 0, Math.PI * 2, false);
+      shape.holes.push(hole);
+      const wall = add(new THREE.ExtrudeGeometry(shape, { depth: 0.12, bevelEnabled: false }), w, 0, 0, E - 0.06);
+      wall.userData.keep = true;
+      add(new THREE.TorusGeometry(0.37, 0.035, 6, 28), mat(0x8a8a82), 0, 0.95, E);
+      box(0.9, 0.08, 0.18, mat(0x3a3a3a), 0, 2.04, E);
+      for (let k = 0; k < 6; k++) box(0.13, 0.04, 0.2, mat(0x4a4a4a), -0.37 + k * 0.148, 2.1, E).rotation.z = 0.15;
+      box(0.86, 0.06, 0.16, mat(0x8a8a82), 0, 0.03, E);
+      break;
+    }
+    case 'cn_beads': {
+      // 珠簾：一串串紅色、金色小珠子
+      const E = -0.37;
+      box(0.84, 0.05, 0.06, mat(0x5a2418), 0, 1.92, E);
+      for (let k = 0; k < 14; k++) {
+        const x = -0.36 + k * 0.055;
+        for (let j = 0; j < 12; j++) ball(0.018, mat((j + k) % 3 ? 0xc83a2a : 0xe8c25a), x, 1.85 - j * 0.11, E, 1, 1.4, 1);
+      }
+      break;
+    }
     // ---- 🧱 隔間牆：貼在格子後面那一邊（轉方向就換邊） ----
     case 'wall_log': {
       const E = -0.37;
@@ -2321,6 +2815,29 @@ function tankFish(index, y, range, k0, DARK) {
 
 /** 🎨 換家具的配色：有顏色的部分換成這一組的色調（木頭、白色、黑色保留） */
 const tintCache = new Map();
+/**
+ * 🎨 作者 11/19：這件家具換顏色看不看得出來（有沒有「會被換色」的部分）。
+ *   換色只換有顏色的地方（木頭色、灰白、透明的不換），全身都是這些的家具選了顏色也不會變 → 小舖標「固定顏色」、不帶顏色買
+ */
+const tintableCache = new Map();
+export function canTint(id) {
+  if (tintableCache.has(id)) return tintableCache.get(id);
+  let ok = false;
+  try {
+    const g = buildFurniture(id);
+    const hsl = {};
+    g.traverse((o) => {
+      if (ok || !o.isMesh || !o.material?.isMeshStandardMaterial) return;
+      o.material.color.getHSL(hsl);
+      const wood = hsl.h > 0.03 && hsl.h < 0.13 && hsl.l < 0.42;
+      if (!(hsl.s < 0.15 || wood || o.material.transparent)) ok = true;
+    });
+  } catch {
+    ok = true;
+  }
+  tintableCache.set(id, ok);
+  return ok;
+}
 function tint(g, cv) {
   if (!cv?.hue && cv?.hue !== 0) return;
   const hsl = {};

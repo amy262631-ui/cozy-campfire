@@ -62,9 +62,10 @@ export function gadgetKind(id) {
   if (id === 'chime' || id === 'shellchime') return 'chime';
   if (id.startsWith('tank')) return 'feed';
   const f = CATALOG_BY_ID[id];
-  if (f?.cat === 'toy') return 'plush';
-  if (f?.cat === 'light') return 'lamp';
-  if (f?.cat === 'plant') return 'water';
+  const cat = f?.style ? f.cat2 : f?.cat; // 🏮 風格系列（日系…）照原本那一類：燈可以開關、植物可以澆水
+  if (cat === 'toy') return 'plush';
+  if (cat === 'light') return 'lamp';
+  if (cat === 'plant') return 'water';
   return null;
 }
 // 🍽️ 餐桌上的盤子、料理小圖示（圖示做成貼圖，同一種共用一張）
@@ -131,7 +132,8 @@ export function createHomeRoom() {
   let floor = null;
   let shapeKey = null;
   let grid = GRID_BASE;
-  let scale = 1; // 擴建後整頂帳篷放大的倍數
+  let scale = 1; // 擴建後整頂帳篷放大的倍數（前後左右）
+  let scaleY = 1; // 高度放大的倍數（作者 11/18：20×20 進去覺得人物變小了 → 高度不要跟著等比例放大，只長高一點點）
   let offX = 0; // 雙層小屋整間往右挪多少（右邊留樓梯）
   let lightBase = 9;
   const bounds = [tentBounds('bell'), { type: 'rect', minX: -0.6, maxX: 0.6, minZ: 2.6, maxZ: R + 0.2 }];
@@ -150,6 +152,7 @@ export function createHomeRoom() {
     //   雙層的（小木屋、船屋）：右邊要留樓梯 → 整間往右挪 offX，左牆、前後牆跟格子的距離一樣維持 6×6 的樣子（樹屋有樹幹，先照舊）
     const fit = sh.id === 'treehouse' ? { k: g / GRID_BASE, x: 0 } : fitScale(sh, g);
     const k = (scale = fit.k);
+    const ky = (scaleY = Math.min(k, 1 + (k - 1) * 0.22));
     offX = fit.x;
     shell.position.x = offX;
     for (const c of shell.children) c.traverse((o) => o.geometry?.dispose());
@@ -158,7 +161,16 @@ export function createHomeRoom() {
     const noPole = g % 2 === 1;
     const body = buildTentShell(sh.id, mats, { noPole, frame, plus });
     shellUpdate = body.userData.update ?? null;
-    body.scale.setScalar(k);
+    body.scale.set(k, ky, k);
+    body.traverse((o) => {
+      if (o.userData.pole) o.scale.set(1 / k, 1, 1 / k); // 中柱維持原本的粗細
+      // 二樓欄杆、扶手（作者 11/19：2F 欄杆很高）：維持原本離地板的高度、粗細
+      if (o.userData.railOff != null) {
+        o.position.y = CABIN.loftY + o.userData.railOff / ky;
+        o.scale.set(o.geometry.parameters.width > 1 ? 1 : 1 / k, 1 / ky, o.geometry.parameters.depth > 0.5 ? 1 : 1 / k);
+      }
+      if (o.userData.handOff != null) o.position.y = CABIN.loftY / 2 + o.userData.handOff / ky;
+    });
     shell.add(body);
     floor = buildTentFloor(sh.id, floorMat);
     floor.scale.set(k, k, 1);
@@ -193,8 +205,8 @@ export function createHomeRoom() {
     bounds[1].maxX = offX + 0.6;
     spawn.z = door - 1.0; // 從門口往裡面一步，免得一進來就踩到出口
     spawn.x = offX;
-    light.position.y = sh.light * k;
-    bulb.position.y = sh.light * k;
+    light.position.y = sh.light * ky;
+    bulb.position.y = sh.light * ky;
     light.distance = 9 * k;
     lightBase = 9 * k ** 1.5;
     hasPole = (sh.id === 'bell' || sh.id === 'circus') && !noPole;
@@ -225,7 +237,7 @@ export function createHomeRoom() {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
       loftGrid = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xffd28a, transparent: true, opacity: 0.7 }));
-      loftGrid.position.y = CABIN.loftY * k + 0.03;
+      loftGrid.position.y = CABIN.loftY * scaleY + 0.03;
       group.add(loftGrid);
     }
     showGrid();
@@ -242,7 +254,7 @@ export function createHomeRoom() {
    */
   function hideUpper() {
     const hide = building && buildFloor === 1 && !!loftShape;
-    const top = CABIN.loftY * scale - 0.25;
+    const top = CABIN.loftY * scaleY - 0.25;
     if (hide) shell.updateMatrixWorld(true);
     shell.traverse((o) => {
       if (!o.isMesh || o === floor) return;
@@ -315,7 +327,7 @@ export function createHomeRoom() {
   const cellPos = (x, z) => {
     if (isLoftCell(z)) {
       const c = cellCenter(x, z - LOFT_Z, grid);
-      return { x: c.x, z: c.z, y: CABIN.loftY * scale };
+      return { x: c.x, z: c.z, y: CABIN.loftY * scaleY };
     }
     const c = cellCenter(x, z, grid);
     return { x: c.x, z: c.z, y: 0 };
@@ -419,7 +431,7 @@ export function createHomeRoom() {
       }
     }
     const ramp = clamp((C.stairBottom - pos.z / k) / (C.stairBottom - C.loftFront), 0, 1);
-    pos.y = (level === 2 ? C.loftY : level === 1 ? ramp * C.loftY : 0) * k;
+    pos.y = (level === 2 ? C.loftY : level === 1 ? ramp * C.loftY : 0) * scaleY;
     // 站在一樓、而且在二樓底下：二樓地板變半透明，看得到自己
     const under = level === 0 && pos.z / k < C.loftFront + 0.6;
     const want = building ? (buildFloor === 1 ? 0.15 : 1) : under ? 0.25 : 1;
@@ -434,9 +446,9 @@ export function createHomeRoom() {
     const ux = (x - offX) / k;
     const uz = z / k;
     if (ux > C.stairX0 - 0.1 && uz > C.loftFront && uz < C.stairBottom && (prevY > 0.05 || uz > C.stairBottom - 0.5)) {
-      return clamp((C.stairBottom - uz) / (C.stairBottom - C.loftFront), 0, 1) * C.loftY * k;
+      return clamp((C.stairBottom - uz) / (C.stairBottom - C.loftFront), 0, 1) * C.loftY * scaleY;
     }
-    if (uz <= C.loftFront && prevY > C.loftY * k * 0.5) return C.loftY * k;
+    if (uz <= C.loftFront && prevY > C.loftY * scaleY * 0.5) return C.loftY * scaleY;
     return 0;
   }
   buildShape('bell');
@@ -742,7 +754,7 @@ export function createHomeRoom() {
     },
     /** 二樓中間（布置二樓時鏡頭看這裡） */
     get loftCenter() {
-      return loftShape ? { x: offX, y: CABIN.loftY * scale, z: ((-loftShape.D + CABIN.loftFront) / 2) * scale } : null;
+      return loftShape ? { x: offX, y: CABIN.loftY * scaleY, z: ((-loftShape.D + CABIN.loftFront) / 2) * scale } : null;
     },
     /**
      * ✋ 拖曳布置（作者 11/14：像線上遊戲一樣，點住家具直接拖）

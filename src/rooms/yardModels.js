@@ -350,6 +350,243 @@ export function buildYard(id) {
       g.userData.rocker = rocker;
       break;
     }
+    // ---- 🏮 日系風門口（作者 11/19） ----
+    case 'jp_lantern': {
+      // 石燈籠：一層一層的石頭，中間的火袋亮著
+      const st = mat(0x9a968c);
+      const st2 = mat(0x8a867c);
+      box(0.5, 0.12, 0.5, st2, 0, 0.06);
+      cyl(0.09, 0.55, st, 0, 0.395, 0, 8);
+      box(0.42, 0.1, 0.42, st2, 0, 0.72);
+      box(0.3, 0.28, 0.3, st, 0, 0.91);
+      for (const [x, z] of [[0, 0.151], [0, -0.151]]) box(0.16, 0.16, 0.01, glowMat(0xffd98a), x, 0.92, z);
+      for (const [x, z] of [[0.151, 0], [-0.151, 0]]) box(0.01, 0.16, 0.16, glowMat(0xffd98a), x, 0.92, z);
+      add(new THREE.ConeGeometry(0.4, 0.22, 4), st2, 0, 1.16, 0).rotation.y = Math.PI / 4;
+      add(new THREE.SphereGeometry(0.07, 8, 6), st, 0, 1.3, 0);
+      g.userData.glow = { x: 0, y: 0.92, z: 0, color: 0xffc070 };
+      break;
+    }
+    case 'jp_fence': {
+      // 竹籬笆：一排竹子，用麻繩綁著
+      const bam = mat(0xb8a868);
+      const bam2 = mat(0x9a8a4e);
+      for (let k = 0; k < 14; k++) cyl(0.035, 0.9 + (k % 3) * 0.04, k % 2 ? bam : bam2, -0.78 + k * 0.12, 0.45 + (k % 3) * 0.02, 0, 7);
+      for (const y of [0.3, 0.7]) {
+        const bar = cyl(0.03, 1.72, bam2, 0, y, 0.05, 7);
+        bar.rotation.z = Math.PI / 2;
+        for (let k = 0; k < 4; k++) box(0.05, 0.06, 0.09, mat(0x4a3a2a), -0.6 + k * 0.4, y, 0.05);
+      }
+      break;
+    }
+    case 'jp_garden': {
+      // 枯山水小庭園：白砂耙出波紋、三塊石頭、一點青苔、小松樹
+      const fr = mat(0x7a5a3a);
+      box(2.2, 0.06, 1.5, mat(0xeae6da), 0, 0.03);
+      for (const [w, d, x, z] of [[2.3, 0.1, 0, 0.8], [2.3, 0.1, 0, -0.8], [0.1, 1.6, 1.15, 0], [0.1, 1.6, -1.15, 0]]) box(w, 0.12, d, fr, x, 0.06, z);
+      const ripple = mat(0xd4cfbf);
+      for (let k = -5; k <= 5; k++) box(2.1, 0.012, 0.025, ripple, 0, 0.066, k * 0.13);
+      for (const [x, z, r] of [[-0.55, -0.2, 0.32], [0.45, 0.15, 0.36]]) {
+        for (let k = 1; k <= 3; k++) {
+          const ring = add(new THREE.TorusGeometry(r + k * 0.1, 0.012, 4, 24), mat(0xd4cfbf), x, 0.07, z);
+          ring.rotation.x = Math.PI / 2;
+        }
+        add(new THREE.CircleGeometry(r + 0.32, 20), mat(0xeae6da), x, 0.064, z).rotation.x = -Math.PI / 2;
+      }
+      const rock = mat(0x6a6660);
+      add(new THREE.DodecahedronGeometry(0.28, 0), rock, -0.55, 0.18, -0.2).scale.set(1.2, 0.9, 1);
+      add(new THREE.DodecahedronGeometry(0.2, 0), rock, -0.3, 0.12, -0.05);
+      add(new THREE.DodecahedronGeometry(0.32, 0), mat(0x5a5650), 0.45, 0.2, 0.15).scale.set(1, 1.2, 0.9);
+      add(new THREE.SphereGeometry(0.18, 8, 5), mat(0x5a8a4a), -0.55, 0.1, 0.05).scale.set(1.4, 0.35, 1);
+      add(new THREE.SphereGeometry(0.16, 8, 5), mat(0x5a8a4a), 0.62, 0.08, 0.35).scale.set(1.3, 0.35, 1.1);
+      // 角落小松樹
+      const pt = cyl(0.05, 0.6, mat(0x6a4a30), 0.85, 0.36, -0.5, 6);
+      pt.rotation.z = -0.25;
+      for (const [x, y, r] of [[0.95, 0.72, 0.2], [0.75, 0.62, 0.16], [1.0, 0.55, 0.14]]) add(new THREE.SphereGeometry(r, 8, 5), mat(0x3f6a3a), x, y, -0.5).scale.set(1.5, 0.5, 1.1);
+      break;
+    }
+    case 'jp_torii': {
+      // ⛩️ 小鳥居（月票）：朱紅色，可以從中間走過去
+      const red = mat(0xd2452c);
+      const blk = mat(0x2a2522);
+      for (const x of [-0.8, 0.8]) {
+        cyl(0.09, 2.1, red, x, 1.05, 0, 12);
+        cyl(0.12, 0.2, blk, x, 0.1, 0, 12);
+      }
+      box(2.0, 0.14, 0.18, red, 0, 1.75);
+      const top = box(2.5, 0.12, 0.26, blk, 0, 2.18);
+      top.scale.set(1, 1, 1);
+      box(2.3, 0.14, 0.24, red, 0, 2.06);
+      for (const s of [-1, 1]) box(0.24, 0.1, 0.26, blk, s * 1.25, 2.24).rotation.z = s * 0.25;
+      box(0.12, 0.32, 0.14, red, 0, 1.9);
+      box(0.3, 0.2, 0.04, mat(0x2a2522), 0, 1.92, 0.08);
+      box(0.24, 0.14, 0.01, mat(0xe8c25a), 0, 1.92, 0.105);
+      break;
+    }
+    // ---- 🏰 歐風門口（作者 11/19） ----
+    case 'eu_lamp': {
+      const iron = mat(0x2a2522);
+      box(0.3, 0.08, 0.3, iron, 0, 0.04);
+      cyl(0.04, 1.8, iron, 0, 0.94, 0, 8);
+      box(0.24, 0.04, 0.24, iron, 0, 1.86);
+      box(0.18, 0.26, 0.18, glowMat(0xffe0a0), 0, 2.0);
+      for (const [x, z] of [[-0.1, -0.1], [0.1, -0.1], [-0.1, 0.1], [0.1, 0.1]]) box(0.02, 0.3, 0.02, iron, x, 2.0, z);
+      add(new THREE.ConeGeometry(0.17, 0.16, 4), iron, 0, 2.21, 0).rotation.y = Math.PI / 4;
+      add(new THREE.SphereGeometry(0.035, 6, 4), iron, 0, 2.31, 0);
+      g.userData.glow = { x: 0, y: 2.0, z: 0, color: 0xffd080 };
+      break;
+    }
+    case 'eu_planter': {
+      // 鐵藝花架：三層小盆花
+      const iron = mat(0x2a2522);
+      for (const [x, z] of [[-0.3, -0.12], [0.3, -0.12], [-0.3, 0.12], [0.3, 0.12]]) cyl(0.015, 0.9, iron, x, 0.45, z, 5);
+      const cols = [0xd2453c, 0xf2a0c0, 0xf6e070, 0xb07ad8];
+      [0.3, 0.6, 0.9].forEach((y, i) => {
+        box(0.66, 0.025, 0.28, iron, 0, y);
+        for (let k = 0; k < 3; k++) {
+          const x = -0.2 + k * 0.2;
+          cyl(0.06, 0.1, mat(0xc8704a), x, y + 0.06, 0, 8);
+          add(new THREE.SphereGeometry(0.07, 7, 5), mat(0x4a7a3a), x, y + 0.14, 0).scale.y = 0.7;
+          add(new THREE.SphereGeometry(0.035, 6, 4), mat(cols[(k + i) % 4]), x, y + 0.19, 0.02);
+        }
+      });
+      break;
+    }
+    case 'eu_rosearch': {
+      // 玫瑰花拱門：白色拱門爬滿玫瑰，中間可以走過去
+      const w = mat(0xf6f2ea);
+      for (const x of [-0.8, 0.8]) for (const z of [-0.2, 0.2]) cyl(0.04, 1.6, w, x, 0.8, z, 6);
+      for (const z of [-0.2, 0.2]) {
+        const arc = add(new THREE.TorusGeometry(0.8, 0.04, 6, 20, Math.PI), w, 0, 1.6, z);
+        arc.scale.y = 0.55;
+      }
+      for (let k = 0; k <= 8; k++) {
+        const a = (k / 8) * Math.PI;
+        box(0.03, 0.03, 0.44, w, Math.cos(a) * 0.8, 1.6 + Math.sin(a) * 0.44, 0);
+      }
+      const leaf = mat(0x4a7a3a);
+      const rose = [mat(0xd2453c), mat(0xf2a0b0), mat(0xffffff)];
+      for (let k = 0; k < 34; k++) {
+        const t = k / 33;
+        const a = t * Math.PI;
+        const onArc = k % 3 !== 0;
+        const x = onArc ? Math.cos(a) * 0.8 : (k % 2 ? -0.8 : 0.8);
+        const y = onArc ? 1.6 + Math.sin(a) * 0.44 : 0.3 + (k % 11) * 0.12;
+        add(new THREE.SphereGeometry(0.09, 6, 4), leaf, x, y, (k % 2 ? 0.22 : -0.22)).scale.set(1.3, 0.8, 1);
+        add(new THREE.SphereGeometry(0.055, 6, 4), rose[k % 3], x + 0.04, y + 0.03, (k % 2 ? 0.27 : -0.27));
+      }
+      break;
+    }
+    case 'eu_fountain': {
+      // ⛲ 小噴水池（月票）：水會一直往上噴、落下來
+      const st = mat(0xd8d2c4);
+      add(new THREE.CylinderGeometry(1.0, 1.05, 0.4, 20), st, 0, 0.2, 0);
+      add(new THREE.CylinderGeometry(0.9, 0.9, 0.02, 20), mat(0x6ab0d8, { transparent: true, opacity: 0.8 }), 0, 0.38, 0);
+      cyl(0.12, 0.7, st, 0, 0.6, 0, 10);
+      add(new THREE.CylinderGeometry(0.42, 0.2, 0.14, 16), st, 0, 0.98, 0);
+      add(new THREE.CylinderGeometry(0.36, 0.36, 0.02, 16), mat(0x6ab0d8, { transparent: true, opacity: 0.8 }), 0, 1.04, 0);
+      cyl(0.06, 0.3, st, 0, 1.18, 0, 8);
+      add(new THREE.SphereGeometry(0.1, 8, 6), st, 0, 1.36, 0);
+      const drops = [];
+      const dm = mat(0xbfe6ff, { transparent: true, opacity: 0.85 });
+      for (let k = 0; k < 24; k++) {
+        const d = add(new THREE.SphereGeometry(0.025, 5, 4), dm, 0, 1.4, 0);
+        d.userData.a = (k / 24) * Math.PI * 2;
+        d.userData.ph = (k * 0.37) % 1;
+        drops.push(d);
+      }
+      g.userData.tick = (_dt, t) => {
+        for (const d of drops) {
+          const f = (t * 0.7 + d.userData.ph) % 1;
+          const r = 0.1 + f * 0.32;
+          d.position.set(Math.cos(d.userData.a) * r, 1.42 + Math.sin(f * Math.PI) * 0.35 - f * 0.4, Math.sin(d.userData.a) * r);
+        }
+      };
+      break;
+    }
+    // ---- 🐉 古風門口（作者 11/19） ----
+    case 'cn_redlanterns': {
+      // 一對紅燈籠：木架掛兩顆，下面有金色穗子
+      const wd = mat(0x5a2418);
+      for (const x of [-0.55, 0.55]) cyl(0.05, 1.9, wd, x, 0.95, 0, 8);
+      box(1.3, 0.07, 0.07, wd, 0, 1.88);
+      for (const x of [-0.28, 0.28]) {
+        box(0.01, 0.16, 0.01, mat(0x2a2a2a), x, 1.77);
+        const l = add(new THREE.SphereGeometry(0.2, 12, 8), glowMat(0xe8402a), x, 1.48, 0);
+        l.scale.y = 0.85;
+        for (const y of [1.66, 1.3]) cyl(0.09, 0.04, mat(0xe8c25a), x, y, 0, 10);
+        add(new THREE.ConeGeometry(0.035, 0.18, 6), mat(0xe8c25a), x, 1.17, 0).rotation.x = Math.PI;
+      }
+      g.userData.glow = { x: 0, y: 1.48, z: 0, color: 0xff7050 };
+      break;
+    }
+    case 'cn_lions': {
+      // 一對石獅子：坐在方形台座上
+      const st = mat(0xa8a49a);
+      const st2 = mat(0x8a867c);
+      for (const s of [-1, 1]) {
+        const x = s * 0.55;
+        box(0.42, 0.3, 0.42, st2, x, 0.15);
+        add(new THREE.SphereGeometry(0.17, 8, 6), st, x, 0.48, 0).scale.set(1, 1.1, 1.2);
+        add(new THREE.SphereGeometry(0.15, 8, 6), st, x, 0.74, 0.06);
+        add(new THREE.SphereGeometry(0.17, 8, 6), mat(0x9a968c), x, 0.76, 0.0).scale.set(1.15, 1.05, 0.8);
+        for (const e of [-1, 1]) add(new THREE.SphereGeometry(0.03, 6, 4), mat(0x3a3a3a), x + e * 0.06, 0.78, 0.2);
+        add(new THREE.SphereGeometry(0.05, 6, 4), st, x, 0.72, 0.21).scale.set(1.3, 0.8, 0.8);
+        for (const e of [-1, 1]) cyl(0.04, 0.22, st, x + e * 0.08, 0.41, 0.12, 6);
+        add(new THREE.SphereGeometry(0.08, 6, 4), st, x - s * 0.12, 0.33, 0.12);
+      }
+      break;
+    }
+    case 'cn_bamboo': {
+      // 竹林小景：一叢竹子＋石頭
+      const bam = mat(0x6a9a4a);
+      const bam2 = mat(0x5a8a3a);
+      for (let k = 0; k < 9; k++) {
+        const x = Math.sin(k * 2.3) * 0.45;
+        const z = Math.cos(k * 1.7) * 0.3;
+        const h = 1.6 + (k % 3) * 0.35;
+        const c = cyl(0.04, h, k % 2 ? bam : bam2, x, h / 2, z, 6);
+        c.rotation.z = Math.sin(k) * 0.06;
+        for (let j = 1; j < 4; j++) box(0.09, 0.02, 0.09, mat(0x4a7a2a), x, (h / 4) * j, z);
+        for (let j = 0; j < 3; j++) {
+          const lf = add(new THREE.ConeGeometry(0.05, 0.32, 3), mat(0x4a8a3a), x + (j - 1) * 0.12, h - 0.1 - j * 0.15, z);
+          lf.rotation.z = (j - 1) * 1.2;
+          lf.scale.z = 0.3;
+        }
+      }
+      add(new THREE.DodecahedronGeometry(0.26, 0), mat(0x7a766c), 0.6, 0.16, 0.3).scale.set(1.3, 0.7, 1);
+      add(new THREE.DodecahedronGeometry(0.16, 0), mat(0x8a867c), 0.85, 0.1, 0.05);
+      break;
+    }
+    case 'cn_pavilion': {
+      // 🏯 小涼亭（月票）：紅柱、黑瓦屋頂（四個角翹起來），裡面石桌、兩張石凳可以坐
+      const red = mat(0xb8382a);
+      const tile = mat(0x2e2a28);
+      const st = mat(0xa8a49a);
+      box(2.2, 0.12, 2.2, mat(0x8a867c), 0, 0.06);
+      for (const x of [-0.85, 0.85]) for (const z of [-0.85, 0.85]) cyl(0.07, 1.9, red, x, 1.07, z, 10);
+      for (const z of [-0.85, 0.85]) box(1.84, 0.1, 0.1, red, 0, 1.95, z);
+      for (const x of [-0.85, 0.85]) box(0.1, 0.1, 1.84, red, x, 1.95, 0);
+      for (const z of [-0.85, 0.85]) box(1.6, 0.16, 0.04, mat(0x2a6a5a), 0, 1.82, z);
+      const roof = add(new THREE.ConeGeometry(1.75, 0.8, 4), tile, 0, 2.38, 0);
+      roof.rotation.y = Math.PI / 4;
+      box(2.3, 0.08, 2.3, tile, 0, 2.02);
+      for (const x of [-1, 1]) for (const z of [-1, 1]) {
+        const tip = box(0.08, 0.08, 0.45, tile, x * 1.18, 2.12, z * 1.18);
+        tip.rotation.y = Math.atan2(x, z);
+        tip.rotation.x = -0.6;
+      }
+      add(new THREE.SphereGeometry(0.1, 8, 6), mat(0xc8a050), 0, 2.84, 0);
+      // 石桌、石凳
+      cyl(0.12, 0.6, st, 0, 0.42, 0, 10);
+      cyl(0.34, 0.07, st, 0, 0.74, 0, 14);
+      for (const x of [-0.6, 0.6]) {
+        cyl(0.16, 0.34, st, x, 0.29, 0, 10);
+        cyl(0.18, 0.04, mat(0xb8b4aa), x, 0.47, 0, 10);
+      }
+      cyl(0.05, 0.06, mat(0x5a8aa8), 0.08, 0.8, 0.04, 8); // 茶壺
+      for (const [x, z] of [[-0.1, 0.1], [-0.05, -0.12]]) cyl(0.025, 0.035, mat(0xf3eee2), x, 0.795, z, 8);
+      break;
+    }
     case 'xm_doorarch': {
       // 💡 門口燈串拱門：跟屋內的燈串拱門同一個樣子（營地裡放大，立在進家門的小路上）
       const a = buildFurniture('xm_arch');
@@ -386,4 +623,4 @@ export function buildYard(id) {
 }
 
 /** 擺設佔多大（營地裡擋路用，原尺寸的半徑） */
-export const yardRadius = (id) => ({ jeep: 1.6, camper: 2.2, airstream: 2.4, tarp: 1.6, hammock: 1.4, canoe: 1.3, picnic: 1.0, bench: 0.95, bistro: 1.0, firestool: 0.9, swing: 1.35 })[id] ?? 0.6;
+export const yardRadius = (id) => ({ jeep: 1.6, camper: 2.2, airstream: 2.4, tarp: 1.6, hammock: 1.4, canoe: 1.3, picnic: 1.0, bench: 0.95, bistro: 1.0, firestool: 0.9, swing: 1.35, jp_garden: 1.25, jp_fence: 0.9, jp_lantern: 0.4, jp_torii: 0.05, eu_lamp: 0.25, eu_planter: 0.45, eu_rosearch: 0.05, eu_fountain: 1.1, cn_redlanterns: 0.1, cn_lions: 0.8, cn_bamboo: 0.7, cn_pavilion: 1.15 })[id] ?? 0.6; // ⛩️ 小鳥居中間走得過去

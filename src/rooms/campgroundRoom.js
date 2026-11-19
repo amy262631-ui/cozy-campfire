@@ -854,6 +854,7 @@ export function createCampgroundRoom() {
       // 大型擺設：車頭一律朝小路；門、遮陽棚那一側朝自己的帳篷（菜園在右邊時要鏡像，座位跟著一起翻）
       if (mirror) y.scale.z *= -1;
       if (y.userData.rocker) rockers.add(y); // 🪢 鞦韆：有人坐就會搖
+      if (y.userData.tick) ticks.push(y); // ⛲ 會動的擺設（噴水池、荷花池漣漪）
       y.position.set(lx, 0, lz);
       y.rotation.y = ry;
       g.add(y);

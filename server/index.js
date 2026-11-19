@@ -746,6 +746,13 @@ const nameOfVid = (vid) => players[vid]?.nm || players[vid]?.look?.name || homes
 function noteName(wal, name) {
   if (!name) return;
   if (wal.nm && wal.nm !== name) {
+    // 作者 11/19：登入帳號那一瞬間會先用隨機名字連線、不到 1 秒又換回來 → 1 分鐘內改回原本的名字，兩筆都不算
+    const last = wal.nh?.at(-1);
+    if (last && last.from === name && last.to === wal.nm && Date.now() - last.at < 60000) {
+      wal.nh.pop();
+      wal.nm = name;
+      return;
+    }
     (wal.nh ??= []).push({ at: Date.now(), from: wal.nm, to: name });
     if (wal.nh.length > 30) wal.nh.splice(0, wal.nh.length - 30);
     console.log(`[改名] ${wal.nm} → ${name}`);
@@ -3343,6 +3350,7 @@ io.on('connection', (socket) => {
       normYard((h.yard ??= { own: [], on: null, sm: [] }));
       if (h.yard.own.includes(yardId)) return ack?.({ ok: false, reason: 'owned' });
       if (y.season === 'xmas' && !isXmasShopDay(dayKey())) return ack?.({ ok: false, reason: 'season' }); // 🎄 12/1～1/15 才賣
+      if (!isOpen(y)) return ack?.({ ok: false, reason: 'later' }); // 🏮 風格系列 12/1 才開
       if (y.pass && !PASS_ON) return ack?.({ ok: false, reason: 'off' });
       if (y.pass && (passTier(wal)?.rank ?? 0) < y.pass) return ack?.({ ok: false, reason: 'needPass' });
       if (wal.pc < y.price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });

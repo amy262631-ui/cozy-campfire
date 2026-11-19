@@ -28,6 +28,10 @@ export const FURNITURE_CATS = [
   { id: 'fish', icon: '🐟', zh: '魚缸' },
   { id: 'spirit', icon: '✨', zh: '小精靈' }, // 11/16 作者：精靈家具
   { id: 'xmas', icon: '🎄', zh: '聖誕' }, // 11/16 作者：聖誕家具自己一類（聖誕期間才在小舖出現）；cat2＝也放在原本那一類（椅子在「坐臥」也找得到）
+  // 11/19 作者：風格系列（style、cat2＝原本那一類；12/1 才開，from: '2026-12-01'）
+  { id: 'jp', icon: '🏮', zh: '日系' },
+  { id: 'eu', icon: '🏰', zh: '歐風' },
+  { id: 'cn', icon: '🐉', zh: '古風' },
   { id: 'wall', icon: '🧱', zh: '隔間' },
 ];
 
@@ -224,6 +228,43 @@ export const FURNITURE_CATALOG = [
   { id: 'box12_globe', icon: '❄️', zh: '下雪水晶球', cat: 'xmas', cat2: 'deco', kind: 'small', box: 1, gift: 'box', color: false },
   { id: 'box12_train', icon: '🚂', zh: '聖誕小火車', cat: 'xmas', cat2: 'toy', box: 1, gift: 'box', color: false, walk: true },
   { id: 'box12_fire', icon: '🔥', zh: '聖誕壁爐', cat: 'xmas', cat2: 'deco', box: 1, gift: 'box', color: false },
+  // ---- 🏮 日系風（作者 11/19：風格系列第一彈；cat: 'jp'，cat2＝原本那一類，兩邊都找得到）----
+  { id: 'jp_tatami', icon: '🟩', zh: '榻榻米', price: 10, cat: 'jp', cat2: 'rug', style: 'jp', from: '2026-12-01', kind: 'mat', top: 0.05, walk: true },
+  { id: 'jp_zabuton', icon: '🟥', zh: '和室座墊', price: 8, cat: 'jp', cat2: 'sit', style: 'jp', from: '2026-12-01', walk: true, seat: 0.09 },
+  { id: 'jp_chabudai', icon: '🍵', zh: '和室矮桌', price: 16, cat: 'jp', cat2: 'table', style: 'jp', from: '2026-12-01', top: 0.33 },
+  { id: 'jp_futon', icon: '🛏️', zh: '日式被褥', price: 32, cat: 'jp', cat2: 'sit', style: 'jp', from: '2026-12-01', top: 0.17, seat: 0.17, sleep: true, long: 0.6 },
+  { id: 'jp_andon', icon: '🏮', zh: '紙燈籠', price: 14, cat: 'jp', cat2: 'light', style: 'jp', from: '2026-12-01' },
+  { id: 'jp_ikebana', icon: '💐', zh: '插花', price: 10, cat: 'jp', cat2: 'plant', style: 'jp', from: '2026-12-01', kind: 'small' },
+  { id: 'jp_scroll', icon: '📜', zh: '掛軸', price: 14, cat: 'jp', cat2: 'deco', style: 'jp', from: '2026-12-01' },
+  { id: 'jp_bonsai', icon: '🌲', zh: '松樹盆景', price: 16, cat: 'jp', cat2: 'plant', style: 'jp', from: '2026-12-01', kind: 'small' },
+  { id: 'jp_shoji', icon: '🚪', zh: '和紙拉門', price: 15, cat: 'jp', cat2: 'wall', style: 'jp', from: '2026-12-01', kind: 'wall', color: false },
+  { id: 'jp_sudare', icon: '🎋', zh: '竹簾', price: 12, cat: 'jp', cat2: 'wall', style: 'jp', from: '2026-12-01', kind: 'wall', color: false },
+  { id: 'jp_lattice', icon: '🪟', zh: '格子窗牆', price: 15, cat: 'jp', cat2: 'wall', style: 'jp', from: '2026-12-01', kind: 'wall', color: false },
+  { id: 'jp_sakura', icon: '🌸', zh: '室內櫻花樹', price: 70, cat: 'jp', cat2: 'plant', style: 'jp', from: '2026-12-01', pass: 1, color: false },
+  // ---- 🏰 歐風（作者 11/19：第二彈）----
+  { id: 'eu_rug', icon: '🟥', zh: '歐式花紋地毯', price: 12, cat: 'eu', cat2: 'rug', style: 'eu', from: '2026-12-01', kind: 'mat', top: 0.025, walk: true },
+  { id: 'eu_armchair', icon: '💺', zh: '絨布扶手椅', price: 22, cat: 'eu', cat2: 'sit', style: 'eu', from: '2026-12-01', seat: 0.37 },
+  { id: 'eu_sofa', icon: '🛋️', zh: '絨布長沙發', price: 40, cat: 'eu', cat2: 'sit', style: 'eu', from: '2026-12-01', seat: 0.37, wide: 0.8 },
+  { id: 'eu_teacart', icon: '🫖', zh: '下午茶推車', price: 18, cat: 'eu', cat2: 'table', style: 'eu', from: '2026-12-01' },
+  { id: 'eu_candle', icon: '🕯️', zh: '三叉燭台', price: 14, cat: 'eu', cat2: 'light', style: 'eu', from: '2026-12-01', color: false },
+  { id: 'eu_painting', icon: '🖼️', zh: '金框油畫', price: 15, cat: 'eu', cat2: 'deco', style: 'eu', from: '2026-12-01', color: false },
+  { id: 'eu_clock', icon: '🕰️', zh: '落地擺鐘', price: 30, cat: 'eu', cat2: 'deco', style: 'eu', from: '2026-12-01', color: false },
+  { id: 'eu_roses', icon: '🌹', zh: '玫瑰花瓶', price: 10, cat: 'eu', cat2: 'plant', style: 'eu', from: '2026-12-01', kind: 'small' },
+  { id: 'eu_arch', icon: '🤍', zh: '白色拱門牆', price: 14, cat: 'eu', cat2: 'wall', style: 'eu', from: '2026-12-01', kind: 'wall', walk: true, color: false },
+  { id: 'eu_iron', icon: '🌀', zh: '鐵藝隔屏', price: 15, cat: 'eu', cat2: 'wall', style: 'eu', from: '2026-12-01', kind: 'wall', color: false },
+  { id: 'eu_french', icon: '🪟', zh: '落地窗牆', price: 18, cat: 'eu', cat2: 'wall', style: 'eu', from: '2026-12-01', kind: 'wall', color: false },
+  { id: 'eu_piano', icon: '🎹', zh: '小鋼琴', price: 90, cat: 'eu', cat2: 'deco', style: 'eu', from: '2026-12-01', pass: 1, color: false, wide: 0.8 },
+  // ---- 🐉 古風（作者 11/19：第三彈）----
+  { id: 'cn_mat', icon: '🟨', zh: '竹編地墊', price: 10, cat: 'cn', cat2: 'rug', style: 'cn', from: '2026-12-01', kind: 'mat', top: 0.025, walk: true },
+  { id: 'cn_chair', icon: '🪑', zh: '太師椅', price: 24, cat: 'cn', cat2: 'sit', style: 'cn', from: '2026-12-01', seat: 0.47 },
+  { id: 'cn_teatable', icon: '🍵', zh: '茶几和茶具', price: 18, cat: 'cn', cat2: 'table', style: 'cn', from: '2026-12-01', color: false },
+  { id: 'cn_desk', icon: '🖌️', zh: '書案', price: 30, cat: 'cn', cat2: 'table', style: 'cn', from: '2026-12-01', color: false, wide: 0.8 },
+  { id: 'cn_lantern', icon: '🏮', zh: '宮燈', price: 18, cat: 'cn', cat2: 'light', style: 'cn', from: '2026-12-01' },
+  { id: 'cn_vase', icon: '🏺', zh: '青花瓷瓶', price: 14, cat: 'cn', cat2: 'deco', style: 'cn', from: '2026-12-01', color: false },
+  { id: 'cn_lotus', icon: '🪷', zh: '荷花缸', price: 22, cat: 'cn', cat2: 'plant', style: 'cn', from: '2026-12-01' },
+  { id: 'cn_screen', icon: '🏞️', zh: '山水屏風', price: 18, cat: 'cn', cat2: 'wall', style: 'cn', from: '2026-12-01', kind: 'wall', color: false },
+  { id: 'cn_beads', icon: '📿', zh: '珠簾', price: 14, cat: 'cn', cat2: 'wall', style: 'cn', from: '2026-12-01', kind: 'wall', walk: true, color: false },
+  { id: 'cn_moongate', icon: '🌕', zh: '月洞門', price: 60, cat: 'cn', cat2: 'wall', style: 'cn', from: '2026-12-01', kind: 'wall', walk: true, pass: 1, color: false },
 ];
 /** 🍽️ 餐桌上的盤子放哪（相對格子中心；大餐桌往右多一格） */
 export const DINE_SLOTS = {

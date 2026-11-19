@@ -1,6 +1,9 @@
 import { t } from '../i18n/i18n.js';
 import { FURNITURE, TENT_PRICE, CATS } from '../game/furniture.js';
 import { gridOf, expandPrice, EXPAND_PRICES, GRID_MAX, ALL_COLORS, hasColors, inCat } from '../game/furnitureCatalog.js';
+import { canTint } from '../game/furniture.js';
+/** 🎨 作者 11/19：選了顏色看得出變化的才算能換色（全身木頭色、灰白的家具是固定顏色） */
+const tintable = (f) => hasColors(f) && canTint(f.id);
 import { TENT_SHAPES, TENT_SHAPE_BY_ID, PASS_SHAPES, FRAME_COLORS, shapeOnSale } from '../game/tentShapes.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TentPreview } from './TentPreview.js';
@@ -372,9 +375,9 @@ export class ShopPanel {
       this.body.innerHTML = `${tabs}
         <div class="shop-sub">${t('擺在帳篷營地裡、你家門口，大家經過都看得到。大型擺設 1 個、小型擺設最多 3 個，買過的可以隨時換')}</div>
         <div class="yard-sec">${t('🚙 大型擺設（擺 1 個）')}</div>
-        <div class="yard-list">${YARD_ITEMS.filter((y) => isBigYard(y.id)).map(row).join('')}</div>
+        <div class="yard-list">${YARD_ITEMS.filter((y) => isBigYard(y.id) && (isOpen(y) || own.includes(y.id))).map(row).join('')}</div>
         <div class="yard-sec">${t('🪑 小型擺設（最多 3 個，現在 {n} 個）', { n: yd.sm.length })}</div>
-        <div class="yard-list">${YARD_ITEMS.filter((y) => !isBigYard(y.id) && !isDoorYard(y.id)).map(row).join('')}</div>
+        <div class="yard-list">${YARD_ITEMS.filter((y) => !isBigYard(y.id) && !isDoorYard(y.id) && (isOpen(y) || own.includes(y.id))).map(row).join('')}</div>
         ${isXmas() || yd.dc.length || YARD_ITEMS.some((y) => isDoorYard(y.id) && own.includes(y.id)) ? `<div class="yard-sec">${t('🎄 門口聖誕裝飾（不佔格子，可以一起擺）')}</div>
         <div class="yard-list">${YARD_ITEMS.filter((y) => isDoorYard(y.id) && (isXmas() || own.includes(y.id))).map(row).join('')}</div>` : ''}
         <div class="yard-sec">${t('🪧 門牌（寫著你的營位和名字）')}</div>
@@ -454,7 +457,7 @@ export class ShopPanel {
     }
     const cats = `<div class="shop-cats">
       <button type="button" data-cat="all" class="${this.cat === 'all' ? 'on' : ''}">${t('全部')}</button>
-      ${CATS.filter((c) => (c.id !== 'spirit' || FURNITURE.some((f) => f.cat === 'spirit' && isOpen(f))) && (c.id !== 'xmas' || isXmas())).map((c) => `<button type="button" data-cat="${c.id}" class="${this.cat === c.id ? 'on' : ''}">${c.icon} ${c.name}</button>`).join('')}
+      ${CATS.filter((c) => (c.id !== 'spirit' || FURNITURE.some((f) => f.cat === 'spirit' && isOpen(f))) && (c.id !== 'xmas' || isXmas()) && (!['jp', 'eu', 'cn'].includes(c.id) || FURNITURE.some((f) => f.cat === c.id && isOpen(f)))).map((c) => `<button type="button" data-cat="${c.id}" class="${this.cat === c.id ? 'on' : ''}">${c.icon} ${c.name}</button>`).join('')}
     </div>`;
     const isPass = this.tab === 'pass';
     const pool = FURNITURE.filter((f) => !!f.pass === isPass && (!f.season || isXmas()) && isOpen(f)); // 🗓️ 精靈家具 11/20 才開 // 🎫 月票家具只在「月票」分頁；🎄 聖誕家具 12/1～1/15 才賣
@@ -464,11 +467,13 @@ export class ShopPanel {
     const tag = (f) => (f.fish ? (f.fish >= 6 ? t('👑 魚王也行') : t('⭐{n} 以下', { n: f.fish })) : f.kind === 'small' ? t('可放桌上') : f.kind === 'mat' ? t('可墊底') : f.top ? t('上面可放') : '');
     const color = this.color ?? 0;
     // 🎫 月票跳色：月票開通後才列出來；沒有月票的人看得到、按了跳說明
-    const colors = `<div class="shop-colors"><span>${t('🎨 顏色')}</span>${ALL_COLORS.filter((c) => !c.pass || this.passOn?.()).map(
+    // 這一類全部都是固定顏色（隔間、魚缸…）：顏色按鈕變灰、不能按
+    const anyTint = list.some(tintable);
+    const colors = `<div class="shop-colors${anyTint ? '' : ' off'}"><span>${t('🎨 顏色')}</span>${ALL_COLORS.filter((c) => !c.pass || this.passOn?.()).map(
       (c) => c.pass && rank < c.pass
-        ? `<button type="button" data-needpass="1" class="pass-lock">🔒 ${c.icon} ${t(c.zh)}</button>`
-        : `<button type="button" data-color="${c.id}" class="${c.id === color ? 'on' : ''}${c.pass ? ' pass-c' : ''}">${c.icon} ${t(c.zh)}</button>`,
-    ).join('')}</div>`;
+        ? `<button type="button" data-needpass="1" class="pass-lock" ${anyTint ? '' : 'disabled'}>🔒 ${c.icon} ${t(c.zh)}</button>`
+        : `<button type="button" data-color="${c.id}" class="${anyTint && c.id === color ? 'on' : ''}${c.pass ? ' pass-c' : ''}" ${anyTint ? '' : 'disabled'}>${c.icon} ${t(c.zh)}</button>`,
+    ).join('')}${anyTint ? '' : `<small class="shop-colors-note">${t('這一類都是固定顏色')}</small>`}</div>`;
     // 🎁 星空月票：每月免費挑 1 件月票家具（free＝現在可以拿；freeNext＝下次可以拿的時間）
     const fr = isPass ? this.passFree?.() : null;
     const freeNow = !!fr?.ok;
@@ -485,7 +490,8 @@ export class ShopPanel {
         ${list.map((f) => {
           const owned = home.inv?.[f.id] ?? 0;
           const tg = tag(f);
-          const c = hasColors(f) ? color : 0;
+          const fixed = !tintable(f);
+          const c = fixed ? 0 : color;
           const locked = f.pass && rank < f.pass;
           return `
           <button type="button" class="shop-item${f.pass ? ' pass-item' : ''}" ${locked ? 'data-needpass="1"' : `data-buy="${f.id}"`} ${c ? `data-c="${c}"` : ''} ${!locked && !(freeNow && f.pass) && (coins == null || coins < f.price || owned >= (f.kind === 'wall' ? 80 : 20)) ? 'disabled' : ''}>
@@ -494,6 +500,7 @@ export class ShopPanel {
             <span class="si-name">${f.name}</span>
             <span class="si-price">🌰 ${f.price}</span>
             ${tg ? `<span class="si-tag${f.fish ? ' fish' : ''}">${tg}</span>` : ''}
+            ${fixed && color && anyTint ? `<span class="si-fixed">${t('固定顏色')}</span>` : ''}
             ${owned ? `<span class="si-owned">${t('有 {n} 個', { n: owned })}</span>` : ''}
             ${f.pass ? `<span class="si-pass">${f.pass >= 2 ? t('✨ 星空月票才可買') : t('🔥✨ 月票才可買')}</span>` : ''}
             ${freeNow && f.pass ? `<span class="shop-free-btn" data-free="${f.id}" role="button">${t('🎁 免費拿')}</span>` : ''}

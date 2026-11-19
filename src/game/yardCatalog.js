@@ -22,6 +22,21 @@ export const YARD_ITEMS = [
   // ---- 🎄 門口聖誕裝飾（作者 11/16；slot: 'door'＝另外一格，不佔大型、小型的位置，可以同時擺；12/1～1/15 才賣，買了永久）----
   { id: 'xm_doorarch', icon: '💡', zh: '門口燈串拱門', price: 80, note: '立在進家門的小路上，大家走進你家都會穿過它，燈會慢慢變亮變暗', slot: 'door', season: 'xmas', pass: 1 },
   { id: 'xm_doorwreath', icon: '💚', zh: '門上聖誕花圈', price: 30, note: '掛在帳篷門上的綠葉花圈，有紅莓果和紅蝴蝶結', slot: 'door', season: 'xmas' },
+  // ---- 🏮 日系風（作者 11/19）：小型 2、大型 2（小鳥居月票限定）----
+  { id: 'jp_lantern', icon: '🏮', zh: '石燈籠', price: 60, note: '一層一層的石頭燈籠，晚上裡面亮著暖暖的光', style: 'jp', from: '2026-12-01' },
+  { id: 'jp_fence', icon: '🎋', zh: '竹籬笆', price: 50, note: '一排用麻繩綁起來的竹子籬笆', style: 'jp', from: '2026-12-01' },
+  { id: 'jp_garden', icon: '🪨', zh: '枯山水庭園', price: 300, note: '白砂耙出波紋，配上石頭、青苔和小松樹的安靜庭園', style: 'jp', from: '2026-12-01' },
+  { id: 'jp_torii', icon: '⛩️', zh: '小鳥居', price: 400, note: '朱紅色的小鳥居，立在家門前', style: 'jp', from: '2026-12-01', pass: 1 },
+  // ---- 🏰 歐風（作者 11/19）----
+  { id: 'eu_lamp', icon: '🏮', zh: '歐式路燈', price: 70, note: '黑色鐵柱的歐式路燈，晚上亮著暖黃的光', style: 'eu', from: '2026-12-01' },
+  { id: 'eu_planter', icon: '🌷', zh: '鐵藝花架', price: 60, note: '三層鐵架上放滿小盆花', style: 'eu', from: '2026-12-01' },
+  { id: 'eu_rosearch', icon: '🌹', zh: '玫瑰花拱門', price: 320, note: '爬滿玫瑰的白色拱門，從中間走過去', style: 'eu', from: '2026-12-01' },
+  { id: 'eu_fountain', icon: '⛲', zh: '小噴水池', price: 450, note: '兩層的石頭噴水池，水一直往上噴', style: 'eu', from: '2026-12-01', pass: 1 },
+  // ---- 🐉 古風（作者 11/19）----
+  { id: 'cn_redlanterns', icon: '🏮', zh: '一對紅燈籠', price: 70, note: '木架上掛著兩顆紅燈籠，晚上紅紅亮亮的', style: 'cn', from: '2026-12-01' },
+  { id: 'cn_lions', icon: '🦁', zh: '一對石獅子', price: 90, note: '守在門口的兩隻小石獅子', style: 'cn', from: '2026-12-01' },
+  { id: 'cn_bamboo', icon: '🎍', zh: '竹林小景', price: 280, note: '一叢高高的竹子配上石頭', style: 'cn', from: '2026-12-01' },
+  { id: 'cn_pavilion', icon: '🏯', zh: '小涼亭', price: 420, note: '紅柱黑瓦的小亭子，裡面有石桌和兩張石凳，可以坐下來喝茶', style: 'cn', from: '2026-12-01', pass: 1 }, // 作者 11/19：荷花池跟室內錦鯉池太像，改成小涼亭
 ];
 export const YARD_BY_ID = Object.fromEntries(YARD_ITEMS.map((x) => [x.id, x]));
 /**
@@ -31,7 +46,7 @@ export const YARD_BY_ID = Object.fromEntries(YARD_ITEMS.map((x) => [x.id, x]));
  * 存檔：homes[vid].yard = { own: [...買過的], on: 大型 id 或 null, sm: [小型 id，最多 3 個] }
  * 舊存檔的 seat（門口桌椅）、以前放在 on 的小東西，用 normYard() 自動搬到 sm，不會不見。
  */
-export const YARD_BIG = new Set(['hammock', 'canoe', 'tarp', 'jeep', 'camper', 'airstream']);
+export const YARD_BIG = new Set(['hammock', 'canoe', 'tarp', 'jeep', 'camper', 'airstream', 'jp_garden', 'jp_torii', 'eu_rosearch', 'eu_fountain', 'cn_bamboo', 'cn_pavilion']);
 export const YARD_SMALL_MAX = 3;
 export const isBigYard = (id) => YARD_BIG.has(id);
 /** 🎄 門口裝飾（拱門、門上花圈）：另外一格 dc，可以同時擺 */
@@ -83,5 +98,6 @@ export const YARD_USES = {
   bench: { seats: [{ x: -0.6, y: 0.42, z: 0, face: 0 }, { x: 0.6, y: 0.42, z: 0, face: 0 }] },
   bistro: { seats: [{ x: -0.55, y: 0.45, z: 0, face: Math.PI / 2 }, { x: 0.55, y: 0.45, z: 0, face: -Math.PI / 2 }] },
   firestool: { seats: [{ x: -0.6, y: 0.35, z: 0.1, face: Math.PI / 2 }, { x: 0.6, y: 0.35, z: 0.1, face: -Math.PI / 2 }] },
+  cn_pavilion: { seats: [{ x: -0.6, y: 0.5, z: 0, face: Math.PI / 2 }, { x: 0.6, y: 0.5, z: 0, face: -Math.PI / 2 }] }, // 🏯 小涼亭的兩張石凳
   swing: { seats: [{ x: -0.6, y: 0.5, z: 0, face: 0, swing: true }, { x: 0.6, y: 0.5, z: 0, face: 0, swing: true }] },
 };

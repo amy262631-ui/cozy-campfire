@@ -10,15 +10,20 @@ import { GATHER_ITEMS } from './gathering.js';
 export const FISH_BOOST = 3;
 /** 🗓️ 作者 11/16：精靈家具、小精靈造型（蝴蝶結、翅膀）、每日限定、營火之約新 3 款 → 11/20（台北時間）自動打開＋跳更新說明 */
 export const LAUNCH_1120 = '2026-11-20';
+/** 🏮🏰🐉 風格系列（作者 11/19：先藏起來，12/1 聖誕大更新一起開） */
+export const LAUNCH_STYLE = '2026-12-01';
 /** 東西有 from（'YYYY-MM-DD'）：台北時間到那天才打開；網址 ?open1120=1 可以先看（只影響自己的畫面） */
 export function isOpen(x, now = new Date()) {
   if (!x?.from) return true;
   try {
-    if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('open1120') === '1') return true;
+    const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+    if (q?.get('open1120') === '1') return true;
+    if (q?.get('xmas') === '1' && x.from <= '2026-12-01') return true; // 🎄 ?xmas=1：12/1 的東西也先看得到（只有自己的畫面）
   } catch {
     /* 伺服器 */
   }
   if (globalThis.process?.env?.OPEN_1120 === '1') return true; // 本機測試（Render 不要設）
+  if (globalThis.process?.env?.XMAS_TEST === '1' && x.from <= '2026-12-01') return true; // 本機測試（Render 不要設）
   return taipeiDay(now).key >= x.from;
 }
 export const SHINY_DAY_MULT = 3;

@@ -87,7 +87,12 @@ export function buildTentShell(shapeId, mats, { outside = false, noPole = false,
     for (const s of [-1, 1]) add(new THREE.CylinderGeometry(0.08, 0.08, h, 8), mat, s * x, h / 2, z);
   };
   // noPole：擴建成奇數格時中間那格要能擺家具，就不放中柱
-  const pole = (h) => !noPole && add(new THREE.CylinderGeometry(0.06, 0.07, h, 8), mats.wood, 0, h / 2, 0);
+  const pole = (h) => {
+    if (noPole) return;
+    const m = add(new THREE.CylinderGeometry(0.06, 0.07, h, 8), mats.wood, 0, h / 2, 0);
+    m.userData.pole = true; // 擴建放大時柱子不要跟著變粗（homeRoom 會把粗細縮回來）
+    return m;
+  };
 
   if (sh.id === 'bell') {
     const R = sh.R;
@@ -688,9 +693,9 @@ function buildCabin(sh, mats, add, outside) {
     win(0, WALL + 0.7, D + 0.03, 0, 0.55, 0.55); // 屋頂下的小閣樓窗
     // 二樓小陽台
     add(new THREE.BoxGeometry(2.4, 0.12, 0.9), mats.wood, 0, loftY + 0.1, D + 0.45);
-    for (let i = 0; i <= 6; i++) add(new THREE.BoxGeometry(0.06, 0.7, 0.06), mats.wood, -1.15 + i * 0.383, loftY + 0.5, D + 0.86);
-    add(new THREE.BoxGeometry(2.4, 0.08, 0.08), mats.wood, 0, loftY + 0.86, D + 0.86);
-    for (const sx of [-1, 1]) add(new THREE.BoxGeometry(0.08, 0.08, 0.9), mats.wood, sx * 1.2, loftY + 0.86, D + 0.45);
+    for (let i = 0; i <= 6; i++) add(new THREE.BoxGeometry(0.06, 0.7, 0.06), mats.wood, -1.15 + i * 0.383, loftY + 0.5, D + 0.86).userData.railOff = 0.5;
+    add(new THREE.BoxGeometry(2.4, 0.08, 0.08), mats.wood, 0, loftY + 0.86, D + 0.86).userData.railOff = 0.86;
+    for (const sx of [-1, 1]) add(new THREE.BoxGeometry(0.08, 0.08, 0.9), mats.wood, sx * 1.2, loftY + 0.86, D + 0.45).userData.railOff = 0.86;
     // 木門
     add(new THREE.BoxGeometry(DOOR * 2 - 0.1, DOOR_H - 0.06, 0.08), mats.wood, 0, DOOR_H / 2, D - 0.02);
     add(new THREE.SphereGeometry(0.06, 8, 6), mats.gold ?? mats.accent, 0.5, 1.0, D + 0.05);
@@ -707,8 +712,9 @@ function buildCabin(sh, mats, add, outside) {
   // 閣樓前緣的欄杆（樓梯那邊留開口）
   const railEnd = stairX0 - 0.05;
   const railLen = railEnd + W;
-  add(new THREE.BoxGeometry(railLen, 0.07, 0.07), mats.wood, (railEnd - W) / 2, loftY + 0.8, loftFront);
-  for (let x = -W + 0.2; x < railEnd; x += 0.45) add(new THREE.BoxGeometry(0.06, 0.8, 0.06), mats.wood, x, loftY + 0.4, loftFront);
+  // userData.railOff：離二樓地板多高（擴建放大時 homeRoom 會讓欄杆維持原本的高度、粗細）
+  add(new THREE.BoxGeometry(railLen, 0.07, 0.07), mats.wood, (railEnd - W) / 2, loftY + 0.8, loftFront).userData.railOff = 0.8;
+  for (let x = -W + 0.2; x < railEnd; x += 0.45) add(new THREE.BoxGeometry(0.06, 0.8, 0.06), mats.wood, x, loftY + 0.4, loftFront).userData.railOff = 0.4;
   // 樓梯：一階一階（靠右牆，從前面往後面爬）
   const steps = 14;
   const run = (stairBottom - loftFront) / steps;
@@ -722,6 +728,7 @@ function buildCabin(sh, mats, add, outside) {
   const hand = add(new THREE.BoxGeometry(0.06, 0.06, len), mats.wood, stairX0, loftY / 2 + 0.8, (stairBottom + loftFront) / 2);
   hand.rotation.x = Math.atan2(loftY, stairBottom - loftFront);
   hand.userData.loftRail = true; // 布置一樓時藏起來
+  hand.userData.handOff = 0.8; // 擴建放大時扶手離樓梯的高度維持原本的樣子
   // 後牆的圓窗（二樓可以自己擺家具）
   const round = add(new THREE.CircleGeometry(0.42, 16), mats.windowIn ?? winMat, 0, loftY + 1.3, -D + 0.03);
   round.rotation.y = 0;
