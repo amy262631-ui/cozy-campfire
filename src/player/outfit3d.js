@@ -72,6 +72,127 @@ function buildDotScarf(g, add, sphere, base, dotM) {
   return g;
 }
 
+/** 😵 炸開的頭髮（頭頂一圈尖刺）＋臉上幾塊焦黑（黑暗料理、灰頭土臉造型共用；座標以頭的中心為原點） */
+export function addSoot(g, hairM, sootM) {
+  // 💇 作者 11/19：頭髮要「一條一條捲捲的線」（像炸開的義大利麵），不要整坨 → 細管子沿著螺旋線往外捲
+  const curlM = new THREE.MeshStandardMaterial({ color: 0x2e2826, roughness: 1 });
+  let seed = 3;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const N = 22;
+  for (let k = 0; k < N; k++) {
+    // 髮根：頭頂附近一圈一圈（黃金角分布）
+    const ang = k * 2.39996;
+    const lat = 0.35 + (k / N) * 0.75; // 離頭頂的角度
+    const base = new THREE.Vector3(Math.sin(lat) * Math.cos(ang) * 0.36, Math.cos(lat) * 0.34 - 0.04, Math.sin(lat) * Math.sin(ang) * 0.33 - 0.03);
+    if (base.z > 0.22 && base.y < 0.2) continue; // 不要蓋到臉
+    const dir = base.clone().normalize().add(new THREE.Vector3(0, 0.5, 0)).normalize();
+    const u = new THREE.Vector3(0, 1, 0).cross(dir).normalize();
+    if (u.lengthSq() < 0.01) u.set(1, 0, 0);
+    const v = dir.clone().cross(u).normalize();
+    const L = 0.16 + rnd() * 0.1;
+    const turns = 2.5 + rnd() * 1.5;
+    const r = 0.025 + rnd() * 0.012;
+    const ph = rnd() * Math.PI * 2;
+    const pts = [];
+    for (let t = 0; t <= 1.0001; t += 1 / 36) {
+      const a = ph + t * turns * Math.PI * 2;
+      pts.push(base.clone().addScaledVector(dir, t * L).addScaledVector(u, Math.cos(a) * r * (0.4 + t)).addScaledVector(v, Math.sin(a) * r * (0.4 + t)));
+    }
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, 0.011, 5, false), curlM);
+    g.add(tube);
+  }
+  // 🖍️ 作者 11/19：要像炭灰、不要實心圖塊 → 用一張半透明的「炭粉」貼圖貼在臉上（顆粒感、邊緣淡淡的）
+  const tex = sootTexture();
+  if (!tex) return;
+  const face = new THREE.Mesh(
+    new THREE.SphereGeometry(0.375 * 1.012, 32, 24, Math.PI / 2 - 0.95, 1.9, 0.75, 1.75),
+    new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }),
+  );
+  face.scale.set(1.1, 0.95, 1);
+  g.add(face);
+}
+
+/** 炭粉貼圖（畫一次就共用）：臉頰幾道炭筆斜線、額頭和鼻頭一點炭灰，全部用很多小顆粒疊出來 */
+let sootTex = null;
+/** 臉上的炭灰樣式：soft 淡淡兩團／cute 小炭痕／full 原本那版／none 不畫 */
+const SOOT_FACE = 'full'; // 作者 11/19：臉用這版
+function sootTexture() {
+  if (sootTex || typeof document === 'undefined') return sootTex;
+  const style = SOOT_FACE;
+  if (style === 'none') return null;
+  const S = 256;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const c = cv.getContext('2d');
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const dust = (x, y, r, n, a) => {
+    // 一團炭灰：中間濃、外面淡，用小點點疊
+    const grd = c.createRadialGradient(x, y, 0, x, y, r);
+    grd.addColorStop(0, `rgba(40,32,28,${a * 0.55})`);
+    grd.addColorStop(1, 'rgba(40,32,28,0)');
+    c.fillStyle = grd;
+    c.beginPath();
+    c.arc(x, y, r, 0, Math.PI * 2);
+    c.fill();
+    for (let i = 0; i < n; i++) {
+      const ang = rnd() * Math.PI * 2;
+      const d = Math.pow(rnd(), 0.7) * r;
+      c.fillStyle = `rgba(${20 + rnd() * 40},${16 + rnd() * 30},${14 + rnd() * 24},${a * (0.25 + rnd() * 0.6)})`;
+      c.fillRect(x + Math.cos(ang) * d, y + Math.sin(ang) * d, 1 + rnd() * 2, 1 + rnd() * 2);
+    }
+  };
+  const stroke = (x0, y0, x1, y1, w, a) => {
+    // 炭筆劃過：沿著線撒顆粒，頭尾淡
+    for (let k = 0; k <= 40; k++) {
+      const u = k / 40;
+      const fade = Math.sin(u * Math.PI);
+      for (let i = 0; i < 6; i++) {
+        c.fillStyle = `rgba(30,24,20,${a * fade * (0.3 + rnd() * 0.7)})`;
+        c.fillRect(x0 + (x1 - x0) * u + (rnd() - 0.5) * w, y0 + (y1 - y0) * u + (rnd() - 0.5) * w, 1.5 + rnd() * 2, 1.5 + rnd() * 2);
+      }
+    }
+  };
+  if (style === 'soft') {
+    // A：只有兩邊臉頰淡淡一團灰（像灰色的腮紅）
+    for (const side of [-1, 1]) dust(S / 2 + side * 78, 150, 30, 160, 0.45);
+    dust(S / 2 + 4, 126, 9, 40, 0.35);
+    sootTex = new THREE.CanvasTexture(cv);
+    sootTex.colorSpace = THREE.SRGBColorSpace;
+    return sootTex;
+  }
+  if (style === 'cute') {
+    // B：鼻頭一點灰＋一邊臉頰兩道小炭痕＋額頭一小抹
+    dust(S / 2 + 4, 128, 11, 60, 0.5);
+    stroke(S / 2 + 62, 140, S / 2 + 96, 148, 4, 0.85);
+    stroke(S / 2 + 60, 154, S / 2 + 92, 162, 4, 0.85);
+    dust(S / 2 - 70, 152, 22, 90, 0.35);
+    dust(S / 2 - 26, 46, 16, 70, 0.4);
+    sootTex = new THREE.CanvasTexture(cv);
+    sootTex.colorSpace = THREE.SRGBColorSpace;
+    return sootTex;
+  }
+  // 兩邊臉頰：一團炭灰＋三道斜斜的炭筆線
+  for (const side of [-1, 1]) {
+    const cx = S / 2 + side * 78;
+    dust(cx, 150, 34, 260, 0.55);
+    for (let k = 0; k < 3; k++) stroke(cx - side * 22, 132 + k * 13, cx + side * 20, 142 + k * 13, 5, 0.9);
+  }
+  // 額頭、鼻頭、下巴一點點
+  dust(S / 2 - 30, 40, 26, 200, 0.5);
+  stroke(S / 2 - 48, 52, S / 2 - 12, 38, 6, 0.8);
+  dust(S / 2 + 4, 128, 12, 70, 0.45);
+  dust(S / 2 + 40, 200, 18, 90, 0.35);
+  // 整張臉零星的灰
+  for (let i = 0; i < 260; i++) {
+    c.fillStyle = `rgba(40,32,28,${0.08 + rnd() * 0.18})`;
+    c.fillRect(rnd() * S, rnd() * S, 1 + rnd() * 1.5, 1 + rnd() * 1.5);
+  }
+  sootTex = new THREE.CanvasTexture(cv);
+  sootTex.colorSpace = THREE.SRGBColorSpace;
+  return sootTex;
+}
+
 export function buildOutfit(id, opts = {}) {
   const o = OUTFIT_BY_ID[id];
   if (!o) return null;
@@ -101,6 +222,11 @@ export function buildOutfit(id, opts = {}) {
     // ---------------- 💇 頭髮（贊助限定假髮，模型在 hair3d.js） ----------------
     case 'hair':
       g.add(buildHair(o.hair, o.c1, o.c2, opts));
+      break;
+
+    // ---------------- 😵 灰頭土臉（煮失敗 10 次）：炸開的頭髮＋臉頰的焦黑 ----------------
+    case 'sooty':
+      addSoot(g, m1, m2);
       break;
 
     // ---------------- 頭 ----------------

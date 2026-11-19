@@ -300,7 +300,7 @@ export class FishingUI {
       ${this.#tabsHtml('fish')}
       ${subs}
       ${body}
-      <div class="creel-total">${t('總共釣了 {n} 次（每條魚都放回湖裡了）', { n: total })}</div>`;
+      <div class="creel-total">${t('總共釣了 {n} 次（11/20 起釣到的魚會放進保冷箱，可以拿去「🍳 自由料理鍋」煮）', { n: total })}</div>`;
     this.#bindTabs();
     for (const b of this.el.modalBody.querySelectorAll('[data-fsub]')) b.addEventListener('click', () => this.openCreel('fish', b.dataset.fsub));
     this.el.modal.classList.add('show');

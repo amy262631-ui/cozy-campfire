@@ -1,3 +1,4 @@
+import { isOpen } from '../game/dailySpecial.js';
 import { zoneName } from '../rooms/campLayout.js';
 import { t } from '../i18n/i18n.js';
 
@@ -323,7 +324,7 @@ export class HUD {
             : '';
       el.textContent = (RULE[m.kind] ?? '') + lead;
     } else if (m.startsIn > 2 * 3600) {
-      el.textContent = t('🌙 每晚 7 點～11 點，每半小時一場小活動（早晚 9:30 營火時間有魚王）');
+      el.textContent = isOpen({ from: '2026-11-20' }) ? t('🎣 中午 12:30 釣魚大賽；🌙 每晚 7 點～11 點，每半小時一場小活動（早晚 9:30 營火時間有魚王）') : t('🌙 每晚 7 點～11 點，每半小時一場小活動（早晚 9:30 營火時間有魚王）');
     } else {
       const mins = Math.max(1, Math.ceil(m.startsIn / 60));
       el.textContent = t('下一場 {name}：{time}（{m} 分鐘後）', { name: NAME[m.kind] ?? '', time: `${m.hour}:${String(m.minute ?? 0).padStart(2, '0')}`, m: mins });

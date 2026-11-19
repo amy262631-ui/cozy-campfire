@@ -7494,3 +7494,30 @@ body.touch .bg-panel { bottom: 250px; }
 .shop-colors.off button { opacity: 0.35; cursor: default; }
 .shop-colors .shop-colors-note { opacity: 0.75; margin-left: 6px; }
 .shop-item .si-fixed { font-size: 11px; color: #c8b8a4; background: rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 1px 6px; }
+
+/* 🍳 自由料理鍋（11/19） */
+.pot-tabs, .pot-cats { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+.pot-tabs button, .pot-cats button { border: 0; border-radius: 10px; padding: 6px 10px; background: rgba(255, 255, 255, 0.08); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.pot-tabs button.on, .pot-cats button.on { background: #e8873a; color: #2a1608; font-weight: 700; }
+.pot-box { background: rgba(232, 135, 58, 0.12); border-radius: 14px; padding: 10px; margin-bottom: 8px; text-align: center; }
+.pot-slots { display: flex; gap: 8px; justify-content: center; margin: 8px 0; }
+.pot-slot { width: 64px; height: 64px; border-radius: 12px; border: 2px dashed rgba(255, 255, 255, 0.3); background: rgba(0, 0, 0, 0.15); color: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 22px; padding: 2px; }
+.pot-slot.f { border-style: solid; border-color: #e8a96a; cursor: pointer; }
+.pot-slot i { font-style: normal; font-size: 26px; line-height: 1.1; }
+.pot-slot small { font-size: 10px; line-height: 1.1; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pot-seas { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.pot-sea { border: 0; border-radius: 10px; padding: 3px 9px; background: rgba(255, 255, 255, 0.15); color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.inv-cell.off { opacity: 0.4; }
+.pot-go { width: 100%; margin-top: 10px; }
+.pot-result { background: #fff8ef; color: #3b2a1e; border-radius: 16px; padding: 16px; text-align: center; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.pot-result.dark { background: #3a2a4a; color: #efe2ff; }
+.pot-result .big { font-size: 56px; line-height: 1.1; }
+.pot-result b { font-size: 18px; }
+.pot-result .tag { display: inline-block; background: #ffe2c4; color: #a0521e; border-radius: 8px; padding: 2px 8px; font-size: 12px; margin: 2px; }
+.pot-result.dark .tag { background: #5a4472; color: #f2d8ff; }
+.pot-lock { color: #c05a1e; }
+.pot-btns { display: flex; gap: 8px; }
+.craft-row.lock { opacity: 0.85; }
+.pot-progress { color: #e8a96a; }
+.pot-result .mini-btn { background: #e8873a; color: #2a1608; opacity: 1; }
+.pot-result.dark .mini-btn { background: #8a6ab0; color: #fff; }

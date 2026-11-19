@@ -76,16 +76,19 @@ import { ShareCard } from './ui/ShareCard.js';
 import { ORNAMENT_BY_ID } from './game/ornaments.js';
 import { STONE_FLAG, CAIRN_MAX } from './rooms/cairns.js';
 import { FishingGame } from './fishing/FishingGame.js';
-import { FISH, packFish } from './fishing/fishData.js';
+import { FISH, packFish, stars } from './fishing/fishData.js';
 import { todaySpecial, isOpen } from './game/dailySpecial.js';
 import { FishingUI } from './ui/FishingUI.js';
 import { createMistForestRoom } from './rooms/mistForestRoom.js';
 import { OUTFITS, OUTFIT_BY_ID, OUTFIT_SLOTS } from './game/outfits.js';
 import { GATHER_ITEMS, GATHER_BY_ID, GATHER_TYPES, GATHER_DEX_BONUS, NET_PRICE, isNight, taipeiMonth } from './game/gathering.js';
 import { CROPS, CROP_BY_ID, WATER_MAX } from './game/garden.js';
-import { haveOf, canMake, specLabel } from './game/materials.js';
+import { haveOf, canMake, specLabel, materialOf } from './game/materials.js';
 import { RECIPES } from './game/crafting.js';
-import { DISHES, DISH_BY_ID, activeBuff, DISH_FX, BUFFS, homeCanCook } from './game/cooking.js';
+import { LegendShow } from './rooms/legendShow.js';
+import { LEGENDS, LEGEND_BY_ID } from './game/legendRules.js';
+import { SOOTY_AT, SEASONINGS, SEASON_BY_ID, SEASON_PRICE, SEASON_USES, SEASON_MAX, POT_MAX, POT_RECIPES, DARK, FLAVORS, FLAVOR_TOTAL, unlockHave, unlockLabel } from './game/potCooking.js';
+import { DISHES, DISH_BY_ID, dishName, myDishes as ownedDishes, activeBuff, DISH_FX, BUFFS, BUFF_MS, homeCanCook } from './game/cooking.js';
 import { MUSEUM_ITEMS, MUSEUM_CATS, MUSEUM_BY_ID } from './game/museum.js';
 import { TRASH, TRASH_BY_ID, RECYCLE_DAILY_CAP } from './game/trash.js';
 import { PASS, PASS_TIERS, PASS_TIER_LIST, PASS_PLANS, FREE, sponsorTier } from './game/pass.js';
@@ -290,7 +293,10 @@ async function init() {
     net.addWood();
     ritual?.event('wood');
   };
-  actions.onRoastDone = (d) => ritual?.event('roast', d);
+  actions.onRoastDone = (d) => {
+    ritual?.event('roast', d);
+    if (net.online) net.socket?.emit('roasted', { burnt: d >= 1 }); // 🍳 烤棉花糖幾次（解鎖隱藏食譜）
+  };
   actions.onMeteor = () => ritual?.event('meteor');
 
   let roomMgr = null;
@@ -889,6 +895,7 @@ async function init() {
     eco: [t('垃圾圖鑑全部收集完就拿到'), t('垃圾圖鑑收集完')],
     sponsor: [t('贊助限定：那個月贊助就送一頂（上方「💝 支持營地」→ 🎁）'), t('贊助限定')],
     xmas: [t('聖誕限定：12/1～1/6 連續上線每滿 3 天送一款'), t('聖誕期間連續上線 3 天')],
+    cook: [t('自由料理鍋煮失敗（黑暗料理）10 次就拿到'), t('煮失敗 10 次')],
   };
   // 🎄 聖誕造型：聖誕期間、或已經拿到的才顯示（11 月先不出現，也不算在總數裡）
   const showOutfit = (o) => (payOn || o.src !== 'sponsor') && (o.src !== 'xmas' || isXmas() || look.outfits.includes(o.id)) && (isOpen(o) || look.outfits.includes(o.id));
@@ -905,7 +912,7 @@ async function init() {
         .map((o) => {
           const has = owned.has(o.id);
           const worn = look.wear?.[o.slot] === o.id;
-          const tag = o.src === 'weekly' ? t('每週限定') : o.src === 'date' ? t('營火之約') : o.src === 'eco' ? t('淨灘小隊') : o.src === 'sponsor' ? t('{m} 贊助限定', { m: o.month }) : o.src === 'xmas' ? t('聖誕限定') : o.id === look.daily ? t('今天的') : t('每日');
+          const tag = o.src === 'weekly' ? t('每週限定') : o.src === 'date' ? t('營火之約') : o.src === 'eco' ? t('淨灘小隊') : o.src === 'sponsor' ? t('{m} 贊助限定', { m: o.month }) : o.src === 'xmas' ? t('聖誕限定') : o.src === 'cook' ? t('煮失敗紀念') : o.id === look.daily ? t('今天的') : t('每日');
           return has
             ? `<div class="dex-card outfit${worn ? ' worn' : ''}" data-id="${o.id}"><i class="dex-emoji">${o.icon}</i><b>${t(o.zh)}</b><small>${tag}</small><em>${worn ? t('穿著中・點一下脫掉') : t('點一下穿上')}</em></div>`
             : `<div class="dex-card unknown" title="${HOW[o.src][0]}"><i class="dex-emoji">${o.icon}</i><b>${t('？？？')}</b><small>${tag}</small><em>${HOW[o.src][1]}</em></div>`;
@@ -1077,6 +1084,8 @@ async function init() {
           ? t('🔥 營火之約成立！拿到限定造型：{name}', { name: outfitName(id) })
           : why === 'xmas'
             ? t('🎄 連續上線 3 天！拿到聖誕造型：{name}', { name: outfitName(id) })
+          : why === 'cook'
+            ? t('😵 煮失敗 10 次了⋯⋯拿到「灰頭土臉」造型！到「👒 造型 → 頭髮」可以戴', { name: outfitName(id) })
           : why === 'daily'
             ? t('👒 朋友點了你的連結！拿到今天的每日造型：{name}', { name: outfitName(id) })
             : why === 'chal'
@@ -1345,7 +1354,8 @@ async function init() {
   const setBuff = (b) => {
     buff = activeBuff(b) ? b : null;
     const a = activeBuff(buff);
-    actions.buffSpeed = a?.k === 'speed' ? a.v : 1;
+    actions.buffSpeed = a?.k === 'speed' || a?.k === 'burnt' ? a.v : 1;
+    player.character.setBurnt?.(a?.k === 'burnt'); // 😵 黑暗料理：臉焦黑、頭髮炸開、冒綠煙
     hud.setBuff?.(a ? { icon: a.icon, name: t(a.zh), desc: t(a.desc), until: a.until } : null);
   };
   setInterval(() => {
@@ -1372,20 +1382,227 @@ async function init() {
     }
     return best ? CATALOG_BY_ID[best.item]?.cook ?? null : null;
   };
+  // ---------- 🍳 自由料理鍋（11/19 作者：進階玩法；原本的食譜保留給新手）----------
+  let cookView = 'menu'; // menu＝原本的食譜、pot＝自由料理鍋、book＝料理圖鑑
+  let pot = null; // 伺服器給的 { fk, sea, basket, tbag, fc, crops, cnt, pc, dishes, cooked }
+  let potSel = []; // 鍋子裡的材料 token
+  let potSea = {}; // 加了幾份調味料
+  let potCat = 'veg';
+  let potDone = null; // 剛煮好的結果卡
+  const potHas = (tok) => {
+    const [k, id] = tok.split(':');
+    const n = (k === 'f' ? pot?.fk : k === 't' ? pot?.tbag : pot?.basket)?.[id] ?? 0;
+    return n - potSel.filter((x) => x === tok).length;
+  };
+  const tokInfo = (tok) => {
+    const [k, id] = tok.split(':');
+    if (k === 'f') {
+      const f = FISH[Number(id)];
+      return { icon: f?.legend ? '🐉' : '🐟', name: f?.name ?? '', star: f ? stars(f.rarity) : '' };
+    }
+    const m = k === 't' ? TRASH_BY_ID[id] : materialOf(id);
+    return { icon: m?.icon ?? '❔', name: t(m?.zh ?? id), star: '' };
+  };
+  const seaN = () => Object.values(potSea).reduce((a, b) => a + b, 0);
+  const POT_CATS = [
+    ['veg', t('🥬 蔬菜')],
+    ['fruit', t('🍓 果實')],
+    ['mush', t('🍄 蘑菇')],
+    ['flower', t('🌼 花')],
+    ['fish', t('🐟 魚')],
+    ['weird', t('🥾 怪東西')],
+    ['sea', t('🧂 調味料')],
+  ];
+  const potItems = () => {
+    if (potCat === 'fish') return Object.keys(pot?.fk ?? {}).map((i) => `f:${i}`).sort((a, b) => FISH[a.slice(2)].rarity - FISH[b.slice(2)].rarity);
+    if (potCat === 'weird')
+      return [
+        ...Object.keys(pot?.tbag ?? {}).map((id) => `t:${id}`),
+        ...Object.keys(pot?.basket ?? {}).filter((id) => ['bug', 'stone', 'shell', 'treasure', 'trash'].includes(materialOf(id)?.type)).map((id) => `m:${id}`),
+      ];
+    return Object.keys(pot?.basket ?? {}).filter((id) => materialOf(id)?.type === potCat).map((id) => `m:${id}`);
+  };
+  const specText = (sp) =>
+    sp === '*'
+      ? t('❔ 任意一樣')
+      : sp === 'F' || sp === 'f*'
+      ? t('🐟 任意魚')
+      : /^f\d+$/.test(sp)
+        ? `🐟 ${FISH[Number(sp.slice(1))]?.name ?? ''}`
+        : sp.startsWith('t:')
+          ? `${TRASH_BY_ID[sp.slice(2)]?.icon ?? ''} ${t(TRASH_BY_ID[sp.slice(2)]?.zh ?? '')}`
+          : sp[0] === '@'
+            ? specLabel({ type: sp.slice(1) }, t)
+            : specLabel({ id: sp }, t);
+  const cookTabs = () =>
+    !isOpen({ from: '2026-11-20' })
+      ? '' // 🗓️ 11/20 跟小精靈更新一起開（網址 ?open1120=1 可以先看）
+      : `<div class="pot-tabs">${[
+      ['menu', t('🍲 食譜')],
+      ['pot', t('🍳 自由料理鍋')],
+      ['book', t('📖 料理圖鑑')],
+    ]
+      .map(([id, label]) => `<button type="button" class="${cookView === id ? 'on' : ''}" data-cookview="${id}">${label}</button>`)
+      .join('')}</div>`;
+  function potHtml() {
+    if (!pot) return `<div class="dex-note">${t('讀取中⋯')}</div>`;
+    const here = atPot() || atGrill() || !!homeCookAt();
+    if (potDone) {
+      const d = DISH_BY_ID[potDone.dish];
+      const fx = d && DISH_FX[d.id];
+      const b = fx && BUFFS[fx[0]];
+      const tags = [
+        potDone.firstKind ? t('🆕 新料理！') : potDone.first ? t('🆕 新口味！') : '',
+        potDone.gain ? `+${potDone.gain} 🌰` : '',
+        d?.dark ? t('💀 黑暗料理') : d?.kind === 'survival' ? t('🥾 求生料理') : d?.kind === 'hidden' || d?.kind === 'unlock' ? t('✨ 隱藏食譜') : '',
+      ].filter(Boolean);
+      return `<div class="pot-result ${d?.dark ? 'dark' : ''}"><div class="big">${d?.icon ?? '🍲'}</div><b>${dishName(d, t)}</b>
+        <div>${tags.map((x) => `<span class="tag">${x}</span>`).join('')}</div>
+        ${b ? `<small>${t('吃了：')}${b.icon} ${t(b.zh)}・${t(b.desc)}・${t('10 分鐘')}</small>` : ''}
+        ${potDone.locked ? `<small class="pot-lock">${t('🤔 好像差一點點⋯⋯這個組合要先解鎖，去料理圖鑑看看條件吧')}</small>` : ''}
+        <div class="pot-btns"><button type="button" class="mini-btn" data-eat="${potDone.dish}">${t('😋 現在吃')}</button><button type="button" class="mini-btn" data-potagain>${t('🍳 再煮一鍋')}</button></div></div>`;
+    }
+    const slots = [0, 1, 2, 3]
+      .map((i) => {
+        const tok = potSel[i];
+        if (!tok) return `<div class="pot-slot">＋</div>`;
+        const x = tokInfo(tok);
+        return `<button type="button" class="pot-slot f" data-potout="${i}"><i>${x.icon}</i><small>${escapeHtml(x.name)}</small></button>`;
+      })
+      .join('');
+    const seaChips = Object.entries(potSea)
+      .filter(([, n]) => n > 0)
+      .map(([k, n]) => `<button type="button" class="pot-sea" data-seaout="${k}">${SEASON_BY_ID[k].icon} ${t(SEASON_BY_ID[k].zh)} ×${n}</button>`)
+      .join('');
+    let list;
+    if (potCat === 'sea') {
+      list = `<div class="dex-note">${t('調味料：{n} 🌰 一包，一包可以用 {u} 次；一鍋最多加 {m} 份', { n: SEASON_PRICE, u: SEASON_USES, m: SEASON_MAX })}</div>${SEASONINGS.map((s) => {
+        const have = (pot.sea?.[s.id] ?? 0) - (potSea[s.id] ?? 0);
+        return `<div class="craft-row"><i class="dex-emoji">${s.icon}</i><div class="craft-info"><b>${t(s.zh)}</b><small>${t('還可以用 {n} 次', { n: have })}</small></div>
+          <button type="button" class="mini-btn" data-seain="${s.id}" ${have > 0 && seaN() < SEASON_MAX ? '' : 'disabled'}>${t('加一份')}</button>
+          <button type="button" class="mini-btn" data-seabuy="${s.id}" ${pot.pc >= SEASON_PRICE ? '' : 'disabled'}>${t('買一包 {n}🌰', { n: SEASON_PRICE })}</button></div>`;
+      }).join('')}`;
+    } else {
+      const items = potItems().filter((tok) => potHas(tok) > 0 || potSel.includes(tok));
+      list = items.length
+        ? `<div class="inv-grid">${items
+            .map((tok) => {
+              const x = tokInfo(tok);
+              const n = potHas(tok);
+              return `<button type="button" class="inv-cell ${n > 0 ? '' : 'off'}" data-potin="${tok}" ${n > 0 && potSel.length < POT_MAX ? '' : 'disabled'}><i>${x.icon}</i><em>${n}</em><small>${escapeHtml(x.name)}${x.star ? `<br>${x.star}` : ''}</small></button>`;
+            })
+            .join('')}</div>`
+        : `<div class="dex-note">${potCat === 'fish' ? t('保冷箱裡還沒有魚。從現在開始釣到的魚，都會放進保冷箱喔 🧊') : potCat === 'weird' ? t('還沒有怪東西。釣魚偶爾會釣到舊皮鞋、破襪子⋯⋯') : t('這一類還沒有材料')}</div>`;
+    }
+    return `<div class="pot-box"><div class="dex-note">${t('放 1～4 樣材料，想加調味料也可以。煮出什麼？試試看就知道！')}</div>
+      <div class="pot-slots">${slots}</div><div class="pot-seas">${seaChips || `<small>${t('（還沒加調味料）')}</small>`}</div></div>
+      <div class="pot-cats">${POT_CATS.map(([id, label]) => `<button type="button" class="${potCat === id ? 'on' : ''}" data-potcat="${id}">${label}</button>`).join('')}</div>
+      ${list}
+      <button type="button" class="shop-buy-tent pot-go" data-potgo ${potSel.length && here && net.online ? '' : 'disabled'}>${t('🔥 開煮！')}</button>
+      <div class="dex-note">${here ? t('魚、材料、調味料用了會扣掉') : t('到中央營火的料理鍋、自家門口的烤肉爐，或帳篷裡的爐子旁邊才能煮')}</div>`;
+  }
+  function bookHtml() {
+    if (!pot) return `<div class="dex-note">${t('讀取中⋯')}</div>`;
+    const ck = new Set((pot.cooked ?? []).filter((k) => k.startsWith('p.')));
+    const made = (rid) => [...ck].filter((k) => k === `p.${rid}` || k.startsWith(`p.${rid}.`) || k.startsWith(`p.${rid}~`));
+    const flavorsMade = new Set([...ck].map((k) => k.split('~')[1]).filter(Boolean));
+    const rows = (list) =>
+      list
+        .map((r) => {
+          const m = made(r.id);
+          const fishN = new Set(m.map((k) => k.split('~')[0].split('.')[2]).filter(Boolean)).size;
+          const flN = new Set(m.map((k) => k.split('~')[1]).filter(Boolean)).size;
+          const name = r.need.includes('F') || r.fishT ? t(r.zh, { fish: t('魚') }) : t(r.zh);
+          if (m.length)
+            return `<div class="craft-row"><i class="dex-emoji">${r.icon}</i><div class="craft-info"><b>${name}</b><small>${[fishN ? t('做過 {n} 種魚', { n: fishN }) : '', t('口味 {n}／{all}', { n: flN, all: FLAVOR_TOTAL })].filter(Boolean).join('・')}</small>${r.basic ? '' : `<div class="needs">${r.need.map((sp) => `<span class="need ok">${specText(sp)}</span>`).join('')}</div>`}</div></div>`;
+          if (r.kind === 'unlock') {
+            const have = unlockHave(pot, r.unlock);
+            const open = have >= r.unlock.n;
+            return `<div class="craft-row lock"><i class="dex-emoji">${open ? r.icon : '🔒'}</i><div class="craft-info"><b>${open ? `${name} ${t('（已解鎖！）')}` : t('？？？（解鎖型隱藏食譜）')}</b><small>${unlockLabel(r.unlock, t)}（${Math.min(have, r.unlock.n)}/${r.unlock.n}）</small>${open ? `<div class="needs">${r.need.map((sp) => `<span class="need">${specText(sp)}</span>`).join('')}</div>` : ''}</div></div>`;
+          }
+          if (r.kind === 'hidden') return `<div class="craft-row lock"><i class="dex-emoji">❓</i><div class="craft-info"><b>${t('？？？（隱藏食譜）')}</b><small>${t('提示：')}${t(r.hint)}</small></div></div>`;
+          if (r.kind === 'survival') return `<div class="craft-row lock"><i class="dex-emoji">❓</i><div class="craft-info"><b>？？？</b><small>${t('用怪東西煮煮看⋯⋯')}</small></div></div>`;
+          return `<div class="craft-row lock"><i class="dex-emoji">❔</i><div class="craft-info"><b>${t('？？？（還沒煮過）')}</b>${r.basic ? `<small>${t('隨便放幾樣正常的食材就會煮出來')}</small>` : `<div class="needs">${r.need.map((sp) => `<span class="need">${specText(sp)}</span>`).join('')}</div>`}</div></div>`;
+        })
+        .join('');
+    const normal = POT_RECIPES.filter((r) => !r.kind);
+    const secret = POT_RECIPES.filter((r) => r.kind === 'hidden' || r.kind === 'unlock');
+    const surv = POT_RECIPES.filter((r) => r.kind === 'survival');
+    const doneOf = (list) => list.filter((r) => made(r.id).length).length;
+    const darkDone = DARK.filter((d) => ck.has(`p.d_${d.id}`)).length;
+    return `<div class="dex-note pot-progress">${t('收集進度：一般 {a}/{A}・隱藏 {b}/{B}・口味 {c}/{C}・黑暗 {d}/{D}・求生 {e}/{E}', { a: doneOf(normal), A: normal.length, b: doneOf(secret), B: secret.length, c: flavorsMade.size, C: FLAVOR_TOTAL, d: darkDone, D: DARK.length, e: doneOf(surv), E: surv.length })}</div>
+      <div class="dex-note">${t('🍳 一般料理（第一次做出來 +3 🌰）')}</div>${rows(normal)}
+      <div class="dex-note">${t('✨ 隱藏食譜（第一次做出來 +10 🌰）')}</div>${rows(secret)}
+      <div class="dex-note">${t('🥾 求生料理')}</div>${rows(surv)}
+      <div class="dex-note">${t('🧂 做過的口味')}</div><div class="needs">${Object.entries(FLAVORS).map(([k, v]) => `<span class="need ${flavorsMade.has(k) ? 'ok' : ''}">${flavorsMade.has(k) ? t(v) : '？？？'}</span>`).join('')}</div>
+      <div class="dex-note">${t('💀 黑暗料理（吃了臉會焦黑 😵）')}・${t('煮失敗 {n}/{m} 次 → 😵 灰頭土臉造型', { n: Math.min(pot.cnt?.dark ?? 0, SOOTY_AT), m: SOOTY_AT })}</div><div class="inv-grid">${DARK.map((d) => `<div class="inv-cell ${ck.has(`p.d_${d.id}`) ? '' : 'off'}"><i>${ck.has(`p.d_${d.id}`) ? d.icon : '❔'}</i><small>${ck.has(`p.d_${d.id}`) ? t(d.zh) : '？？？'}</small></div>`).join('')}</div>`;
+  }
+  async function loadPot() {
+    const res = await net.request('potInfo');
+    if (res?.ok) {
+      pot = res;
+      dishes = res.dishes;
+      cooked = new Set(res.cooked);
+      basket = res.basket;
+    }
+    if (fishingUI._tab === 'cook' && fishingUI.el.modal.classList.contains('show')) fishingUI.openCreel('cook');
+  }
+  function bindPot(body) {
+    const re = () => fishingUI.openCreel('cook');
+    for (const b of body.querySelectorAll('[data-potcat]')) b.addEventListener('click', () => ((potCat = b.dataset.potcat), re()));
+    for (const b of body.querySelectorAll('[data-potin]')) b.addEventListener('click', () => (potSel.length < POT_MAX && potSel.push(b.dataset.potin), audio.sfx('tap'), re()));
+    for (const b of body.querySelectorAll('[data-potout]')) b.addEventListener('click', () => (potSel.splice(Number(b.dataset.potout), 1), re()));
+    for (const b of body.querySelectorAll('[data-seain]')) b.addEventListener('click', () => ((potSea[b.dataset.seain] = (potSea[b.dataset.seain] ?? 0) + 1), audio.sfx('tap'), re()));
+    for (const b of body.querySelectorAll('[data-seaout]'))
+      b.addEventListener('click', () => {
+        const k = b.dataset.seaout;
+        potSea[k]--;
+        if (potSea[k] <= 0) delete potSea[k];
+        re();
+      });
+    for (const b of body.querySelectorAll('[data-seabuy]'))
+      b.addEventListener('click', async () => {
+        b.disabled = true;
+        const res = await net.request('buySeason', { id: b.dataset.seabuy });
+        if (res?.ok) {
+          pot = { ...pot, ...res };
+          hud.toast(t('🧂 買了一包{name}（可以用 {n} 次）', { name: t(SEASON_BY_ID[b.dataset.seabuy].zh), n: SEASON_USES }));
+        } else hud.toast(res?.reason === 'full' ? t('調味料已經放滿了') : t('松果不夠喔'));
+        re();
+      });
+    body.querySelector('[data-potagain]')?.addEventListener('click', () => ((potDone = null), re()));
+    body.querySelector('[data-potgo]')?.addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      const res = await net.request('potCook', { items: potSel, sea: potSea });
+      if (res?.ok) {
+        pot = res;
+        dishes = res.dishes;
+        cooked = new Set(res.cooked);
+        basket = res.basket;
+        potSel = [];
+        potSea = {};
+        potDone = res;
+        audio.sfx('bell');
+      } else hud.toast(res?.reason === 'notHere' ? t('到營火旁的料理鍋才能煮') : res?.reason === 'later' ? t('11/20 才開放喔') : t('材料不夠喔'));
+      re();
+    });
+  }
   fishingUI.extraTabs.push({
     id: 'cook',
     label: t('🍲 料理'),
     title: () => t('🍲 營火料理 {n}／{total}', { n: DISHES.filter((d) => !d.month && cooked.has(d.id)).length, total: DISHES.filter((d) => !d.month).length }),
     render: () => {
+      if (cookView === 'pot') return cookTabs() + potHtml();
+      if (cookView === 'book') return cookTabs() + bookHtml();
       const grill = atGrill();
       const homeAt = homeCookAt();
       const here = atPot() || grill || !!homeAt;
-      const mine = DISHES.filter((d) => dishes[d.id] > 0);
+      const mine = ownedDishes(dishes);
       const others = [...remotes.players.values()].filter((r) => !r.npc);
       const myDishes = mine.length
         ? mine
             .map(
-              (d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${t(d.zh)} ×${dishes[d.id]}</b>${fxTag(d.id)}</div>
+              (d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${dishName(d, t)} ×${dishes[d.id]}</b>${fxTag(d.id)}</div>
                 <button type="button" class="mini-btn" data-eat="${d.id}">${t('😋 吃')}</button>
                 ${others.length ? `<select class="mini-sel" data-gift="${d.id}"><option value="">${t('🎁 送給⋯')}</option>${others.map((r) => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('')}</select>` : ''}</div>`,
             )
@@ -1396,13 +1613,25 @@ async function init() {
         const season = !d.month || d.month === taipeiMonth();
         const ok = canMake(basket, d.need) && (homeAt ? homeCanCook(d, homeAt) : !d.grill || grill) && season;
         const tag = d.grill ? `<small class="grill-tag">${t('🍖 門口烤肉爐限定')}</small>` : homeAt === 'oven' && !homeCanCook(d, 'oven') ? `<small class="grill-tag">${t('🥧 烤箱做不了，用瓦斯爐或灶台')}</small>` : d.month ? `<small class="grill-tag">${t('🗓️ {m} 月限定', { m: d.month })}</small>` : '';
-        return `<div class="craft-row ${cooked.has(d.id) ? '' : 'new-dish'}"><i class="dex-emoji">${cooked.has(d.id) ? d.icon : '❔'}</i><div class="craft-info"><b>${cooked.has(d.id) ? t(d.zh) : t('？？？（還沒煮過）')}</b>${tag}${cooked.has(d.id) ? fxTag(d.id) : ''}<div class="needs">${needHtml(d.need)}</div></div><button type="button" class="mini-btn" data-cook="${d.id}" ${ok && here && net.online ? '' : 'disabled'}>${t('煮')}</button></div>`;
+        return `<div class="craft-row ${cooked.has(d.id) ? '' : 'new-dish'}"><i class="dex-emoji">${cooked.has(d.id) ? d.icon : '❔'}</i><div class="craft-info"><b>${cooked.has(d.id) ? dishName(d, t) : t('？？？（還沒煮過）')}</b>${tag}${cooked.has(d.id) ? fxTag(d.id) : ''}<div class="needs">${needHtml(d.need)}</div></div><button type="button" class="mini-btn" data-cook="${d.id}" ${ok && here && net.online ? '' : 'disabled'}>${t('煮')}</button></div>`;
       }).join('');
-      return `<div class="dex-note">${homeAt === 'oven' ? t('🥧 在小烤箱旁邊：可以烤甜點、烤地瓜、烤玉米') : homeAt ? t('🍳 在家裡的爐子旁邊，可以開始煮了！') : grill ? t('🍖 在自家門口的烤肉爐旁邊，可以開始煮了！（烤肉爐限定的料理也能做）') : here ? t('🔥 在料理鍋旁邊，可以開始煮了！') : t('到中央營火旁的「🍲 營火料理」鍋子才能煮（自家門口有烤肉爐的話，在家也能煮）。蔬菜在帳篷前的小菜園種。')}</div>
+      return `${cookTabs()}<div class="dex-note">${homeAt === 'oven' ? t('🥧 在小烤箱旁邊：可以烤甜點、烤地瓜、烤玉米') : homeAt ? t('🍳 在家裡的爐子旁邊，可以開始煮了！') : grill ? t('🍖 在自家門口的烤肉爐旁邊，可以開始煮了！（烤肉爐限定的料理也能做）') : here ? t('🔥 在料理鍋旁邊，可以開始煮了！') : t('到中央營火旁的「🍲 營火料理」鍋子才能煮（自家門口有烤肉爐的話，在家也能煮）。蔬菜在帳篷前的小菜園種。')}</div>
         <div class="dex-note">${t('🍱 我的料理')}</div>${myDishes}
         <div class="dex-note">${t('📖 食譜（第一次煮出新料理送松果）')}</div>${recipes}`;
     },
     bind: (body) => {
+      for (const b of body.querySelectorAll('[data-cookview]'))
+        b.addEventListener('click', () => {
+          cookView = b.dataset.cookview;
+          potDone = null;
+          if (cookView !== 'menu') loadPot();
+          fishingUI.openCreel('cook');
+        });
+      if (cookView !== 'menu') {
+        bindPot(body);
+        bindEat(body);
+        return;
+      }
       for (const b of body.querySelectorAll('[data-cook]')) {
         b.addEventListener('click', async () => {
           b.disabled = true;
@@ -1414,7 +1643,7 @@ async function init() {
             cooked = new Set(res.cooked);
             const d = DISH_BY_ID[b.dataset.cook];
             audio.sfx('bell');
-            hud.toast(res.first ? t('🍲 第一次煮出「{icon} {name}」！+{n} 🌰', { icon: d.icon, name: t(d.zh), n: res.gain }) : t('🍲 煮好了：{icon} {name}', { icon: d.icon, name: t(d.zh) }), 4500);
+            hud.toast(res.first ? t('🍲 第一次煮出「{icon} {name}」！+{n} 🌰', { icon: d.icon, name: dishName(d, t), n: res.gain }) : t('🍲 煮好了：{icon} {name}', { icon: d.icon, name: dishName(d, t) }), 4500);
             if (res.shared) setTimeout(() => hud.toast(t('🥢 大菜分給附近的 {n} 個人一起吃了', { n: res.shared }), 4000), 1200);
           } else hud.toast(res?.reason === 'notHere' ? t('到營火旁的料理鍋才能煮') : res?.reason === 'oven' ? t('🥧 烤箱做不了，用瓦斯爐或灶台') : res?.reason === 'grill' ? t('這道要用自家門口的烤肉爐做') : t('材料不夠喔'));
           fishingUI.openCreel('cook');
@@ -1429,7 +1658,7 @@ async function init() {
           if (res?.ok) {
             dishes = res.dishes;
             const d = DISH_BY_ID[sel.dataset.gift];
-            hud.toast(t('🎁 把{icon} {dish}送給 {name} 了', { icon: d.icon, dish: t(d.zh), name }), 4000);
+            hud.toast(t('🎁 把{icon} {dish}送給 {name} 了', { icon: d.icon, dish: dishName(d, t), name }), 4000);
           } else hud.toast(t('對方剛好離開了'));
           fishingUI.openCreel('cook');
         });
@@ -1437,6 +1666,48 @@ async function init() {
     },
   });
   actions.onCook = () => fishingUI.openCreel('cook');
+
+  // ---------- 🌟 森林傳說（11/19）：伺服器說「出現了」→ 在背景經過；看到 3 秒算遇見 ----------
+  const legendShow = new LegendShow(scene, camera);
+  let legendLg = null; // { id: 看過幾次 }
+  net.on('legend', (d) => {
+    if (!LEGEND_BY_ID[d.id] || roomMgr.busy) return;
+    legendShow.start(d, roomMgr.current.id, player.position.clone());
+    hud.toast(t('✨ 好像有什麼很大的東西經過了⋯⋯'), 4000);
+    audio.sfx('ding');
+    setTimeout(async () => {
+      if (!legendShow.active) return;
+      const r = await net.request('legendSeen', { id: d.id });
+      if (!r?.ok) return;
+      legendLg = r.lg;
+      const L = LEGEND_BY_ID[d.id];
+      hud.toast(
+        r.first
+          ? t('🌟 你遇見了傳說中的{icon} {name}！+{n} 🌰（📖 圖鑑 → 🌟 傳說）', { icon: L.icon, name: t(L.zh), n: r.gain })
+          : t('🌟 {icon} {name} 經過了⋯⋯（看過 {n} 次）', { icon: L.icon, name: t(L.zh), n: r.lg[d.id] }),
+        6000,
+      );
+    }, 3000);
+  });
+  const LEGEND_HINT = { tortoise: '迷霧森林・深夜', whale: '湖畔碼頭・深夜', sleigh: '聖誕期間的晚上・抬頭看天空' };
+  if (isOpen({ from: '2026-11-20' })) fishingUI.extraTabs.push({
+    id: 'legend',
+    label: t('🌟 傳說'),
+    title: () => t('🌟 森林傳說 {n}／{total}', { n: LEGENDS.filter((L) => legendLg?.[L.id]).length, total: LEGENDS.length }),
+    render: () => {
+      if (!legendLg) {
+        net.request('legendInfo').then((r) => {
+          legendLg = r?.lg ?? {};
+          if (fishingUI._tab === 'legend' && fishingUI.el.modal.classList.contains('show')) fishingUI.openCreel('legend');
+        });
+        return `<div class="dex-note">${t('讀取中⋯')}</div>`;
+      }
+      return `<div class="dex-note">${t('很少很少才會出現的大大守護神。同一區的人會一起看到，第一次遇見 +20 🌰')}</div>${LEGENDS.map((L) => {
+        const n = legendLg[L.id] ?? 0;
+        return `<div class="craft-row ${n ? '' : 'lock'}"><i class="dex-emoji">${n ? L.icon : '❔'}</i><div class="craft-info"><b>${n ? t(L.zh) : '？？？'}</b><small>${t('出沒：')}${t(LEGEND_HINT[L.id])}${n ? `・${t('看過 {n} 次', { n })}` : ''}</small></div></div>`;
+      }).join('')}`;
+    },
+  });
   /** 😋 吃料理（圖鑑的料理頁、🎒 背包共用） */
   function bindEat(body) {
     for (const b of body.querySelectorAll('[data-eat]')) {
@@ -1455,7 +1726,7 @@ async function init() {
           const bf = activeBuff(res.buff);
           const d = DISH_BY_ID[b.dataset.eat];
           actions.eatDish(d?.color ?? 0xe8a050); // 🍲 捧著小碗吃的動作（大家看得到）
-          hud.toast(bf ? t('😋 {icon} {name}：{bicon} {buff} 10 分鐘', { icon: d?.icon ?? '', name: t(d?.zh ?? ''), bicon: bf.icon, buff: t(bf.zh) }) : t('😋 好吃！{icon} {name}', { icon: d?.icon ?? '', name: t(d?.zh ?? '') }), 5000);
+          hud.toast(bf ? t('😋 {icon} {name}：{bicon} {buff} 10 分鐘', { icon: d?.icon ?? '', name: dishName(d, t), bicon: bf.icon, buff: t(bf.zh) }) : t('😋 好吃！{icon} {name}', { icon: d?.icon ?? '', name: dishName(d, t) }), 5000);
         } else {
           for (const x of body.querySelectorAll('[data-eat]')) x.disabled = false;
           if (res?.reason === 'tooFast') hud.toast(t('慢慢吃，一口一口來 😋'));
@@ -1476,10 +1747,10 @@ async function init() {
     let html = '';
     const info = {}; // 點格子後下面顯示的說明
     if (tab === 'dish') {
-      const mine = DISHES.filter((d) => dishes[d.id] > 0);
-      for (const d of mine) info[d.id] = `<b>${d.icon} ${t(d.zh)} ×${dishes[d.id]}</b>${fxTag(d.id)}<button type="button" class="mini-btn" data-eat="${d.id}">${t('😋 吃')}</button>${giftInfo('dish', d.id) ? `<button type="button" class="mini-btn" data-giftfr="dish|${d.id}">${t('🎁 送朋友')}</button>` : ''}`;
+      const mine = ownedDishes(dishes);
+      for (const d of mine) info[d.id] = `<b>${d.icon} ${dishName(d, t)} ×${dishes[d.id]}</b>${fxTag(d.id)}<button type="button" class="mini-btn" data-eat="${d.id}">${t('😋 吃')}</button>${giftInfo('dish', d.id) ? `<button type="button" class="mini-btn" data-giftfr="dish|${d.id}">${t('🎁 送朋友')}</button>` : ''}`;
       html = mine.length
-        ? `<div class="inv-grid">${mine.map((d) => cell(d.icon, t(d.zh), dishes[d.id], d.id)).join('')}</div>`
+        ? `<div class="inv-grid">${mine.map((d) => cell(d.icon, dishName(d, t), dishes[d.id], d.id)).join('')}</div>`
         : `<div class="dex-note">${t('還沒有料理。到營火旁的「🍲 營火料理」鍋子煮一道吧！')}</div>`;
     } else if (tab === 'basket') {
       const groups = [
@@ -1832,12 +2103,12 @@ async function init() {
     const c = sp.c ?? {};
     const style = sp.stage === 0 ? `<div class="sp-style">${t('現在最像：')}<b>${[['💧', c.fish ?? 0], ['🔥', c.fire ?? 0], ['🍃', c.gather ?? 0], ['☁️', c.cloud ?? 0], ['⭐', c.star ?? 0], ['🍄', c.mush ?? 0]].map(([i, n]) => `${i} ${Math.floor(n)}`).join('　')}</b><small>${t('變成小精靈時，看你最常做什麼：釣魚 💧、顧火・煮菜 🔥、採集 🍃、休息・陪人聊天 ☁️、看星星・許願・晚上玩 ⭐、迷霧森林・採蘑菇・種菜收成 🍄')}</small></div>` : '';
     const favs = new Set(sp.fav ?? []);
-    const mine = DISHES.filter((d) => dishes[d.id] > 0).sort((a, b) => favs.has(b.id) - favs.has(a.id));
+    const mine = ownedDishes(dishes).sort((a, b) => favs.has(b.id) - favs.has(a.id));
     const feedLeft = sp.feedMax - sp.feed;
     const feed = mine.length
-      ? `<div class="inv-grid sp-feed">${mine.map((d) => `<button type="button" class="inv-cell${favs.has(d.id) ? ' fav' : ''}" data-feed="${d.id}" ${feedLeft > 0 ? '' : 'disabled'}><i>${d.icon}</i><em>${dishes[d.id]}</em><small>${favs.has(d.id) ? '💗 ' : ''}${t(d.zh)}</small></button>`).join('')}</div>`
+      ? `<div class="inv-grid sp-feed">${mine.map((d) => `<button type="button" class="inv-cell${favs.has(d.id) ? ' fav' : ''}" data-feed="${d.id}" ${feedLeft > 0 ? '' : 'disabled'}><i>${d.icon}</i><em>${dishes[d.id]}</em><small>${favs.has(d.id) ? '💗 ' : ''}${dishName(d, t)}</small></button>`).join('')}</div>`
       : `<div class="dex-note">${t('還沒有料理。到營火旁的「🍲 營火料理」鍋子煮一道吧！')}</div>`;
-    const favLine = sp.fav ? `<div class="dex-note">${t('💗 最喜歡：')}${sp.fav.map((id) => DISH_BY_ID[id]).filter(Boolean).map((d) => `${d.icon} ${t(d.zh)}`).join('、')}${t('（長得比較快）')}</div>` : '';
+    const favLine = sp.fav ? `<div class="dex-note">${t('💗 最喜歡：')}${sp.fav.map((id) => DISH_BY_ID[id]).filter(Boolean).map((d) => `${d.icon} ${dishName(d, t)}`).join('、')}${t('（長得比較快）')}</div>` : '';
     const forms = sp.stage === 2
       ? `<div class="dex-note">${t('🌟 長大以後可以換樣子（每次 {n} 🌰）', { n: sp.price })}</div><div class="sp-forms">${SPIRIT_TYPES.map((x) => `<button type="button" data-form="${x.id}" class="${x.id === sp.t ? 'on' : ''}" ${x.id === sp.t ? 'disabled' : ''}>${x.icon}<small>${t(x.zh)}</small></button>`).join('')}</div>`
       : `<div class="dex-note">${t('🌟 長大以後可以花 {n} 🌰 換成任何樣子', { n: sp.price })}</div>`;
@@ -1941,18 +2212,25 @@ async function init() {
   net.on('ate', ({ id, dish }) => {
     const d = DISH_BY_ID[dish];
     if (!d) return;
-    bubbles.show(id === net.id ? 'self' : id, `${d.icon}😋💕`, { emoji: true });
+    const burnt = DISH_FX[dish]?.[0] === 'burnt';
+    bubbles.show(id === net.id ? 'self' : id, burnt ? `${d.icon}😵💨` : `${d.icon}😋💕`, { emoji: true });
+    // 😵 別人吃了黑暗料理：大家都看得到他的臉焦黑 10 分鐘
+    if (burnt && id !== net.id) {
+      const c = remotes.get(id)?.character;
+      c?.setBurnt?.(true);
+      setTimeout(() => c?.setBurnt?.(false), BUFF_MS);
+    }
   });
   net.on('cooked', ({ id, name, dish }) => {
     const d = DISH_BY_ID[dish];
-    if (d && id !== net.id) hud.toast(t('🍲 {name} 煮了一道{icon} {dish}', { name, icon: d.icon, dish: t(d.zh) }), 3500);
+    if (d && id !== net.id) hud.toast(t('🍲 {name} 煮了一道{icon} {dish}', { name, icon: d.icon, dish: dishName(d, t) }), 3500);
   });
   net.on('dishGift', ({ from, dish, dishes: all, share }) => {
     dishes = all ?? dishes;
     const d = DISH_BY_ID[dish];
     audio.sfx('bell');
-    if (share) return hud.toast(t('🥢 {name} 煮了一大鍋{icon} {dish}，分你一份！點「🎒 背包」就能吃', { name: from, icon: d?.icon ?? '', dish: t(d?.zh ?? '') }), 6000);
-    hud.toast(t('🎁 {name} 送你一份{icon} {dish}！點「🎒 背包」就能吃', { name: from, icon: d?.icon ?? '', dish: t(d?.zh ?? '') }), 6000);
+    if (share) return hud.toast(t('🥢 {name} 煮了一大鍋{icon} {dish}，分你一份！點「🎒 背包」就能吃', { name: from, icon: d?.icon ?? '', dish: dishName(d, t) }), 6000);
+    hud.toast(t('🎁 {name} 送你一份{icon} {dish}！點「🎒 背包」就能吃', { name: from, icon: d?.icon ?? '', dish: dishName(d, t) }), 6000);
   });
 
   // ---------- 🥕 帳篷前的小菜園 ----------
@@ -2095,9 +2373,9 @@ async function init() {
     });
   }
   function putPicnic() {
-    const mine = DISHES.filter((d) => dishes[d.id] > 0);
+    const mine = ownedDishes(dishes);
     if (!mine.length) return hud.toast(t('還沒有料理，先去煮一道吧'));
-    modal.open(t('🧺 把料理放上野餐桌'), `<div class="dex-note">${t('放上桌的料理，路過的人每天可以拿一份（同一種最多 5 份）')}</div>${mine.map((d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${t(d.zh)} ×${dishes[d.id]}</b></div><button type="button" class="mini-btn" data-put="${d.id}">${t('放一份')}</button></div>`).join('')}`, (body) => {
+    modal.open(t('🧺 把料理放上野餐桌'), `<div class="dex-note">${t('放上桌的料理，路過的人每天可以拿一份（同一種最多 5 份）')}</div>${mine.map((d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${dishName(d, t)} ×${dishes[d.id]}</b></div><button type="button" class="mini-btn" data-put="${d.id}">${t('放一份')}</button></div>`).join('')}`, (body) => {
       for (const b of body.querySelectorAll('[data-put]')) {
         b.addEventListener('click', async () => {
           const r = await net.request('picnicPut', { id: b.dataset.put });
@@ -2147,17 +2425,17 @@ async function init() {
           else if (pic.took) opts.push({ label: t('今天已經拿過一份了'), off: true });
           else
             opts.push({
-              label: t('😋 拿一份{icon} {name}（還有 {n} 份）', { icon: DISH_BY_ID[pic.dish]?.icon ?? '', name: t(DISH_BY_ID[pic.dish]?.zh ?? ''), n: pic.n }),
+              label: t('😋 拿一份{icon} {name}（還有 {n} 份）', { icon: DISH_BY_ID[pic.dish]?.icon ?? '', name: dishName(DISH_BY_ID[pic.dish], t), n: pic.n }),
               fn: async () => {
                 const r = await net.request('picnicTake', { hid });
                 if (r?.ok) {
                   dishes = r.dishes;
                   audio.sfx('bell');
-                  hud.toast(t('😋 拿到一份{icon} {name}！到「📖 圖鑑 → 🍲 料理」可以吃', { icon: DISH_BY_ID[r.dish]?.icon ?? '', name: t(DISH_BY_ID[r.dish]?.zh ?? '') }), 5000);
+                  hud.toast(t('😋 拿到一份{icon} {name}！到「📖 圖鑑 → 🍲 料理」可以吃', { icon: DISH_BY_ID[r.dish]?.icon ?? '', name: dishName(DISH_BY_ID[r.dish], t) }), 5000);
                 } else hud.toast(r?.reason === 'took' ? t('今天已經拿過一份了') : t('桌上的料理被拿完了'));
               },
             });
-        } else if (pic) opts.push({ label: t('桌上現在有 {n} 份{name}', { n: pic.n, name: t(DISH_BY_ID[pic.dish]?.zh ?? '') }), off: true });
+        } else if (pic) opts.push({ label: t('桌上現在有 {n} 份{name}', { n: pic.n, name: dishName(DISH_BY_ID[pic.dish], t) }), off: true });
       } else if (use === 'grill') {
         opts.push(
           mine
@@ -4633,9 +4911,9 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   async function openFridge(mine) {
     const info = net.online ? await net.request('fridgeInfo') : null;
     const box = info?.fridge;
-    const boxName = box ? `${DISH_BY_ID[box.dish]?.icon ?? ''} ${t(DISH_BY_ID[box.dish]?.zh ?? '')}` : '';
+    const boxName = box ? `${DISH_BY_ID[box.dish]?.icon ?? ''} ${dishName(DISH_BY_ID[box.dish], t)}` : '';
     if (!mine) {
-      const btn = !box ? `<div class="dex-note">${t('冰箱裡空空的')}</div>` : box.took ? `<div class="dex-note">${t('今天已經拿過一份了')}</div>` : `<div class="yard-opts"><button type="button" class="mini-btn" id="fr-take">${t('😋 拿一份{icon} {name}（還有 {n} 份）', { icon: DISH_BY_ID[box.dish]?.icon ?? '', name: t(DISH_BY_ID[box.dish]?.zh ?? ''), n: box.n })}</button></div>`;
+      const btn = !box ? `<div class="dex-note">${t('冰箱裡空空的')}</div>` : box.took ? `<div class="dex-note">${t('今天已經拿過一份了')}</div>` : `<div class="yard-opts"><button type="button" class="mini-btn" id="fr-take">${t('😋 拿一份{icon} {name}（還有 {n} 份）', { icon: DISH_BY_ID[box.dish]?.icon ?? '', name: dishName(DISH_BY_ID[box.dish], t), n: box.n })}</button></div>`;
       return modal.open(t('🧊 小冰箱'), `<div class="dex-note">${t('主人放進冰箱的料理，來玩的客人每天可以拿一份')}</div>${btn}`, (body) => {
         body.querySelector('#fr-take')?.addEventListener('click', async () => {
           const r = await net.request('picnicTake', { where: 'fridge' });
@@ -4643,18 +4921,18 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
           if (r?.ok) {
             dishes = r.dishes;
             audio.sfx('bell');
-            hud.toast(t('😋 拿到一份{icon} {name}！到「📖 圖鑑 → 🍲 料理」可以吃', { icon: DISH_BY_ID[r.dish]?.icon ?? '', name: t(DISH_BY_ID[r.dish]?.zh ?? '') }), 5000);
+            hud.toast(t('😋 拿到一份{icon} {name}！到「📖 圖鑑 → 🍲 料理」可以吃', { icon: DISH_BY_ID[r.dish]?.icon ?? '', name: dishName(DISH_BY_ID[r.dish], t) }), 5000);
           } else hud.toast(r?.reason === 'took' ? t('今天已經拿過一份了') : t('冰箱裡的料理被拿完了'));
         });
       });
     }
-    const mineDishes = DISHES.filter((d) => dishes[d.id] > 0);
+    const mineDishes = ownedDishes(dishes);
     modal.open(
       t('🧊 我的小冰箱'),
       `<div class="dex-note">${t('放進冰箱的料理，來玩的客人每天可以拿一份（同一種最多 5 份）')}</div>
       <div class="dex-note">${box ? t('冰箱裡有 {n} 份{name}', { n: box.n, name: boxName }) : t('冰箱裡空空的')}</div>
       <div class="yard-opts"><button type="button" class="mini-btn" id="fr-cook">${t('🍲 看我的料理（可以吃）')}</button>${box ? `<button type="button" class="mini-btn" id="fr-back">${t('↩️ 把冰箱裡的拿回來')}</button>` : ''}</div>
-      ${mineDishes.map((d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${t(d.zh)} ×${dishes[d.id]}</b></div><button type="button" class="mini-btn" data-put="${d.id}">${t('放一份')}</button></div>`).join('')}`,
+      ${mineDishes.map((d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${dishName(d, t)} ×${dishes[d.id]}</b></div><button type="button" class="mini-btn" data-put="${d.id}">${t('放一份')}</button></div>`).join('')}`,
       (body) => {
         body.querySelector('#fr-cook').addEventListener('click', () => {
           modal.close();
@@ -4696,20 +4974,20 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const list = h?.dine?.[`${cell.x},${cell.z}`] ?? [];
     const tb = stackAt(h?.items, cell.x, cell.z).map((it) => CATALOG_BY_ID[it.i]).find((f) => f?.dine);
     if (!tb) return;
-    const plates = list.map((d) => `<span class="dine-plate">${DISH_BY_ID[d]?.icon ?? '🍲'}<small>${t(DISH_BY_ID[d]?.zh ?? '')}</small></span>`).join('') + '<span class="dine-plate empty">🍽️</span>'.repeat(Math.max(0, tb.dine - list.length));
+    const plates = list.map((d) => `<span class="dine-plate">${DISH_BY_ID[d]?.icon ?? '🍲'}<small>${dishName(DISH_BY_ID[d], t)}</small></span>`).join('') + '<span class="dine-plate empty">🍽️</span>'.repeat(Math.max(0, tb.dine - list.length));
     if (!mine) {
       if (!list.length) return hud.toast(t('餐桌上還沒有料理，下次再來看看 🍽️'));
       if (!seated) return hud.toast(t('🪑 坐到椅子上，按 E 就能吃'));
       return dineEat(cell);
     }
-    const mineDishes = DISHES.filter((d) => dishes[d.id] > 0);
+    const mineDishes = ownedDishes(dishes);
     const full = list.length >= tb.dine;
     modal.open(
       t('🍽️ {name}', { name: t(tb.zh) }),
       `<div class="dine-row">${plates}</div>
       <div class="dex-note">${t('擺上去的料理，來玩的朋友坐下就能吃一份（每人每天一份）；朋友吃了你會拿到 1 顆松果')}</div>
       ${list.length ? `<div class="yard-opts"><button type="button" class="mini-btn ghost" id="dine-back">${t('↩️ 全部拿回來')}</button></div>` : ''}
-      ${full ? `<div class="dex-note">${t('桌上擺滿了')}</div>` : mineDishes.length ? mineDishes.map((d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${t(d.zh)} ×${dishes[d.id]}</b></div><button type="button" class="mini-btn" data-dput="${d.id}">${t('擺上桌')}</button></div>`).join('') : `<div class="dex-note">${t('還沒有料理：在家裡的瓦斯爐、灶台或營火旁的料理鍋煮一道吧')}</div>`}`,
+      ${full ? `<div class="dex-note">${t('桌上擺滿了')}</div>` : mineDishes.length ? mineDishes.map((d) => `<div class="craft-row"><i class="dex-emoji">${d.icon}</i><div class="craft-info"><b>${dishName(d, t)} ×${dishes[d.id]}</b></div><button type="button" class="mini-btn" data-dput="${d.id}">${t('擺上桌')}</button></div>`).join('') : `<div class="dex-note">${t('還沒有料理：在家裡的瓦斯爐、灶台或營火旁的料理鍋煮一道吧')}</div>`}`,
       (body) => {
         body.querySelector('#dine-back')?.addEventListener('click', async () => {
           const r = await net.request('dineBack', cell);
@@ -4742,13 +5020,13 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       actions.eatDish(d?.color ?? 0xe8a050);
       audio.sfx('bell');
       if (r.buff) setBuff(r.buff);
-      return hud.toast(t('😋 吃了一份{icon} {name}，好好吃！', { icon: d?.icon ?? '', name: t(d?.zh ?? '') }), 4000);
+      return hud.toast(t('😋 吃了一份{icon} {name}，好好吃！', { icon: d?.icon ?? '', name: dishName(d, t) }), 4000);
     }
     hud.toast(r?.reason === 'took' ? t('今天已經在這裡吃過一份了，明天再來 😊') : t('餐桌上沒有料理了'));
   }
   net.on('dineAte', ({ name, dish, gain }) => {
     const d = DISH_BY_ID[dish];
-    hud.toast(t('🍽️ {name} 吃了你的{icon} {dish}！', { name, icon: d?.icon ?? '', dish: t(d?.zh ?? '') }) + (gain ? ' +1 🌰' : ''), 5000);
+    hud.toast(t('🍽️ {name} 吃了你的{icon} {dish}！', { name, icon: d?.icon ?? '', dish: dishName(d, t) }) + (gain ? ' +1 🌰' : ''), 5000);
   });
   actions.onGadget = async (id, mine, g) => {
     if (id === 'cook') return mine ? fishingUI.openCreel('cook') : hud.toast(t('這是主人的廚房，香香的 🍳'));
@@ -5515,6 +5793,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const room = roomMgr.current;
 
     stepAutoWalk(dt);
+    legendShow.update(dt, roomMgr.current.id);
     placeFurnPop();
     const action = actions.update(dt, input.hasMoveInput);
     player.update(dt, input, cameraRig.yaw, room, elapsed, action);
@@ -5735,7 +6014,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
 
   // 方便在瀏覽器 console 除錯（開發模式或網址加 ?debug）
   if (import.meta.env.DEV || params.has('debug')) {
-    window.__cozy = { boardUI, renderer, forest, scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world, shopPanel, buildPanel, homeRoom: rooms.home, goHome, openBag, mySpirit, spiritGames, showDailyCard, sharePop, openMoveMap, openFriends, inviteUrl, _setBag: (d, bk) => ((dishes = d), (basket = bk)) };
+    window.__cozy = { legendShow, boardUI, renderer, forest, scene, camera, player, campfire, world, cameraRig, actions, input, hud, net, remotes, rooms, roomMgr, audio, pomodoro, fishing, fishingUI, social, bubbles, shrinePanel, noticePanel, channelPanel, cairnPanel, ritual, treePanel, shareCard, world, shopPanel, buildPanel, homeRoom: rooms.home, goHome, openBag, mySpirit, spiritGames, showDailyCard, sharePop, openMoveMap, openFriends, inviteUrl, _setBag: (d, bk) => ((dishes = d), (basket = bk)) };
   }
 }
 

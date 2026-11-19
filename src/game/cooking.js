@@ -4,6 +4,7 @@
  * ⚠️ id 存檔用，不能改。
  */
 import { RESERVED, materialOf } from './materials.js';
+import { potDish, potName } from './potCooking.js';
 
 export const DISHES = [
   { id: 'roast_corn', icon: '🌽', zh: '烤玉米', need: [{ id: 'corn', n: 1 }] },
@@ -42,7 +43,16 @@ export const DISHES = [
   { id: 'popcorn', icon: '🍿', zh: '爆米花', need: [{ id: 'corn', n: 2 }], month: 11 }, // 11 月：露營電影夜
   { id: 'gingerbread', icon: '🍪', zh: '薑餅人', need: [{ type: 'fruit', n: 2 }, { id: 'sweetpotato', n: 1 }], month: 12 }, // 🎄 12 月（作者 11/16）
 ];
-export const DISH_BY_ID = Object.fromEntries(DISHES.map((d) => [d.id, d]));
+const BASE_BY_ID = Object.fromEntries(DISHES.map((d) => [d.id, d]));
+/** 🍳 自由料理鍋煮出來的料理（id 是 p. 開頭）也查得到 */
+export const DISH_BY_ID = new Proxy(BASE_BY_ID, { get: (o, k) => (typeof k === 'string' ? o[k] ?? potDish(k) ?? undefined : o[k]) });
+/** 料理的名字（tr 是翻譯函式）：一般料理就是 tr(zh)；料理鍋的會帶魚名、口味 */
+export const dishName = (d, tr) => (!d ? '' : d.pot ? (tr ? potName(d, tr) : potName(d)) : tr ? tr(d.zh) : d.zh);
+/** 背包裡有的料理（原本的排前面，料理鍋的照 id 排） */
+export const myDishes = (dishes = {}) => [
+  ...DISHES.filter((d) => dishes[d.id] > 0),
+  ...Object.keys(dishes).filter((id) => id.startsWith('p.') && dishes[id] > 0).sort().map(potDish).filter(Boolean),
+];
 /** 🥧 11/14：帳篷裡的「小烤箱」只能做這些（甜點、烤的）；瓦斯爐、灶台做烤肉爐限定以外的全部 */
 export const BAKE_DISHES = new Set(['roast_sweetpotato', 'roast_corn', 'berry_pie', 'carrot_cake', 'berry_daifuku', 'roast_chestnut', 'honey_cookie', 'petal_jelly', 'star_pudding', 'gold_tart', 'popcorn', 'gingerbread']);
 /** 在家的哪種爐子能不能做這道（at：stove／oven） */
@@ -65,9 +75,11 @@ export const BUFFS = {
   gather: { icon: '🧺', zh: '採集達人', v: [0.3, 0.5], desc: '採集時有機會多拿一個' },
   fish: { icon: '🎣', zh: '釣魚好運', v: [1.5, 2], desc: '比較容易釣到稀有魚' },
   idle: { icon: '🌰', zh: '掛機加速', v: [4, 3], desc: '掛機撿松果變快' },
+  // 💀 黑暗料理、🥾 求生料理吃了：臉焦黑、頭髮炸開、頭上冒煙（大家看得到），走路慢一點（作者 11/19）
+  burnt: { icon: '😵', zh: '黑暗料理後遺症', v: [0.85, 0.85], desc: '臉焦黑、走路慢一點' },
 };
 /** 每道料理的效果：[種類, 等級 1～2] */
-export const DISH_FX = {
+const BASE_FX = {
   roast_corn: ['speed', 1],
   roast_sweetpotato: ['speed', 1],
   veg_skewer: ['speed', 1],
@@ -101,6 +113,7 @@ export const DISH_FX = {
   popcorn: ['speed', 1],
   gingerbread: ['gather', 1],
 };
+export const DISH_FX = new Proxy(BASE_FX, { get: (o, k) => (typeof k === 'string' ? o[k] ?? potDish(k)?.fx ?? undefined : o[k]) });
 /** 現在的效果（沒有或過期回傳 null）：{ k, lv, until, v, ...BUFFS[k] } */
 export function activeBuff(b, now = Date.now()) {
   if (!b || !BUFFS[b.k] || !(b.until > now)) return null;

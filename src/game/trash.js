@@ -44,6 +44,17 @@ export const TRASH = [
   { id: 'broken_phone', icon: '📱', zh: '壞掉的手機', rarity: 3, where: ['lake'], model: 'box', color: 0x2a2a3a },
   { id: 'bike_wheel', icon: '🚲', zh: '腳踏車輪', rarity: 3, where: ['lake'], model: 'tire', color: 0x3a3a3a },
   { id: 'broken_chair', icon: '🪑', zh: '斷腿露營椅', rarity: 3, where: ['camp'], model: 'box', color: 0x3a6a4a },
+  // ---- 11/19 🍳 自由料理鍋的怪東西（釣魚會釣到，可以拿去煮「求生料理」）----
+  { id: 'old_boot', icon: '🥾', zh: '舊皮鞋', rarity: 2, where: ['lake'], model: 'flat', color: 0x5a4030 },
+  { id: 'old_sock', icon: '🧦', zh: '破襪子', rarity: 2, where: ['lake', 'shore'], model: 'flat', color: 0xe8e0cc },
+  { id: 'telescope', icon: '🔭', zh: '壞掉的望遠鏡', rarity: 3, where: ['lake'], model: 'can', color: 0x8a6a3a },
+  // 11/19 作者：怪東西再多 6 樣（都採用）
+  { id: 'old_sponge', icon: '🧽', zh: '舊海綿', rarity: 1, where: ['shore', 'camp'], model: 'box', color: 0xf2d24a },
+  { id: 'yarn_ball', icon: '🧶', zh: '毛線球', rarity: 2, where: ['camp', 'lake'], model: 'ball', color: 0xd2453c },
+  { id: 'old_newspaper', icon: '📰', zh: '舊報紙', rarity: 1, where: ['camp', 'fire', 'lake'], model: 'flat', color: 0xe8e2d4 },
+  { id: 'banana_peel', icon: '🍌', zh: '香蕉皮', rarity: 1, where: ['camp', 'fire'], model: 'flat', color: 0xf2d24a },
+  { id: 'expired_can', icon: '🥫', zh: '過期罐頭', rarity: 2, where: ['lake', 'camp'], model: 'can', color: 0x8a9a6a },
+  { id: 'charcoal', icon: '🪵', zh: '營火燒剩的木炭', rarity: 1, where: ['fire'], model: 'stick', color: 0x2a2420 },
 ];
 export const TRASH_BY_ID = Object.fromEntries(TRASH.map((x) => [x.id, x]));
 /** 每種地方同時最多幾件垃圾（同一分流） */

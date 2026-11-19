@@ -423,6 +423,7 @@ export class ActionStateMachine {
     r.state = this.state;
     // 👟 吃了「腳步輕快」的料理：走路變快（騎腳踏車時取比較快的那個，不疊加）
     if (this.buffSpeed > 1) r.speedMul = Math.max(r.speedMul ?? 1, this.buffSpeed);
+    else if (this.buffSpeed < 1) r.speedMul = (r.speedMul ?? 1) * this.buffSpeed; // 😵 黑暗料理後遺症：走路慢一點
     return r;
   }
 

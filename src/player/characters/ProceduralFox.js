@@ -4,7 +4,7 @@ import { createRoastStick, createLogProp, createBlanket, createFishingRod, donen
 import { FUR_PALETTES } from './furPalettes.js';
 import { SPECIES } from './species.js';
 import { buildAccessory } from '../accessories.js';
-import { buildOutfit, animateOutfit } from '../outfit3d.js';
+import { buildOutfit, animateOutfit, addSoot } from '../outfit3d.js';
 import { OUTFIT_BY_ID } from '../../game/outfits.js';
 import { HAIR_VOLUME } from '../hair3d.js';
 import { createFishMesh, fishScale } from '../../fishing/fishModel.js';
@@ -701,8 +701,39 @@ export class ProceduralFox {
     this.head.rotation.y = on && kind === 3 && r > 0 && r < 1.0 ? Math.sin(r * 16) * 0.35 * (1 - r) : 0;
   }
 
+  /** 💀 吃了黑暗料理：臉焦黑、頭髮炸開、頭上冒綠煙（作者 11/19）；on＝false 恢復 */
+  setBurnt(on) {
+    if (!on) {
+      if (this.burnt) this.head.remove(this.burnt.g);
+      this.burnt = null;
+      return;
+    }
+    if (this.burnt) return;
+    const g = new THREE.Group();
+    addSoot(g, new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 1 }), new THREE.MeshStandardMaterial({ color: 0x120e0c, roughness: 1 }));
+    // 綠煙：幾顆小球一直往上飄
+    const smokeMat = new THREE.MeshStandardMaterial({ color: 0x8fd07a, transparent: true, opacity: 0.6, roughness: 1, depthWrite: false });
+    const puffs = [];
+    for (let i = 0; i < 5; i++) {
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), smokeMat.clone());
+      p.userData.ph = i / 5;
+      g.add(p);
+      puffs.push(p);
+    }
+    this.head.add(g);
+    this.burnt = { g, puffs };
+  }
+
   update(dt, t, speed) {
     this.poseTime += dt;
+    if (this.burnt) {
+      for (const p of this.burnt.puffs) {
+        const f = (t * 0.45 + p.userData.ph) % 1;
+        p.position.set(Math.sin(f * 9 + p.userData.ph * 6) * 0.06, 0.44 + f * 0.55, Math.cos(f * 7) * 0.04);
+        p.scale.setScalar(0.6 + f * 1.4);
+        p.material.opacity = 0.6 * (1 - f);
+      }
+    }
     if (this.outfit?.back) animateOutfit(this.outfit.back, t);
     const k = 1 - Math.exp(-12 * dt);
     const P = this.pose;

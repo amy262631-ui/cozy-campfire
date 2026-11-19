@@ -92,6 +92,8 @@ export const OUTFITS = [
   { id: 'dt_star_cape', slot: 'back', kind: 'cape', c1: 0x2a3266, c2: 0xffe28a, deco: 'stars', icon: '🌌', zh: '星夜斗篷', src: 'date', from: '2026-11-20' },
   { id: 'dt_ember_beanie', slot: 'head', kind: 'beanie', c1: 0xf08a3c, c2: 0xfff3e2, deco: 'flame', icon: '🧡', zh: '營火毛線帽', src: 'date', from: '2026-11-20' },
   { id: 'dt_firefly_wings', slot: 'back', kind: 'wings', c1: 0xe8ffb0, c2: 0x9ad070, glow: true, deco: 'firefly', icon: '✨', zh: '螢火蟲翅膀', src: 'date', from: '2026-11-20' },
+  // ---- 🍳 自由料理鍋：煮失敗（黑暗料理）10 次（作者 11/19）----
+  { id: 'sooty', slot: 'hair', kind: 'sooty', c1: 0x2a2018, c2: 0x1a1410, icon: '😵', zh: '灰頭土臉', src: 'cook', from: '2026-11-20' },
 ];
 
 export const OUTFIT_BY_ID = Object.fromEntries(OUTFITS.map((o) => [o.id, o]));

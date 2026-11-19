@@ -34,6 +34,8 @@ import { CROP_BY_ID, GARDEN_MAX, GARDEN_EXPAND, gardenSlotsOf, WATER_MAX, CROP_F
 import { canMake, takeMaterials } from '../src/game/materials.js';
 import { RECIPE_BY_ID } from '../src/game/crafting.js';
 import { DISH_BY_ID, dishFirstGain, BUFF_MS, DISH_FX, activeBuff, homeCanCook } from '../src/game/cooking.js';
+import { LEGENDS, LEGEND_GAIN, legendHour } from '../src/game/legendRules.js';
+import { SOOTY_AT, potResult, parseToken, SEASON_BY_ID, SEASON_PRICE, SEASON_USES, SEASON_CAP, SEASON_MAX, POT_MAX, FISH_KEEP_CAP, POT_BY_ID } from '../src/game/potCooking.js';
 import { MUSEUM_BY_ID, DONATE_PER_DAY } from '../src/game/museum.js';
 import { TRASH, TRASH_BY_ID, TRASH_MAX, TRASH_ROOM, RECYCLE_GAIN, RECYCLE_DAILY_CAP, TRASH_FIRST_GAIN, TRASH_DEX_OUTFIT, pickTrash } from '../src/game/trash.js';
 import { LAYOUT as CAMP_LAYOUT } from '../src/rooms/campLayout.js';
@@ -546,6 +548,35 @@ function tickTrash() {
   }
 }
 setInterval(tickTrash, 10000);
+
+// ---------- 🌟 森林傳說（11/19）：很少很少才會經過的大大守護神；同一區的人一起看到 ----------
+/** 正在經過的：「分流:房間」→ { id, t0, dur, dir } */
+const legendNow = new Map();
+const legendMsg = (lg) => ({ id: lg.id, el: Date.now() - lg.t0, dur: lg.dur, dir: lg.dir });
+function tickLegends() {
+  const now = Date.now();
+  const test = Number(process.env.LEGEND_TEST) || 0; // 本機測試：LEGEND_TEST=1 每次都出現、不看時間（Render 不要設）
+  if (!test && !isOpen({ from: '2026-11-20' })) return; // 🗓️ 11/20 才開
+  for (const c of channels.values()) {
+    for (const [rid, r] of c.rooms) {
+      const k = key(c.ch, rid);
+      const cur = legendNow.get(k);
+      if (cur && now > cur.t0 + cur.dur) legendNow.delete(k);
+      if (legendNow.has(k) || !r.players.size) continue;
+      for (const L of LEGENDS) {
+        if (!L.rooms.includes(baseRoom(rid))) continue;
+        if (!test && (!legendHour(L) || (L.xmas && !isXmasDay(dayKey())))) continue;
+        if (Math.random() >= (test || L.chance / 2)) continue; // 每 30 秒擲一次＝每分鐘 chance
+        const lg = { id: L.id, t0: now, dur: L.dur, dir: Math.random() < 0.5 ? 1 : -1 };
+        legendNow.set(k, lg);
+        io.to(k).emit('legend', legendMsg(lg));
+        console.log(`[傳說] ${L.zh} 出現在 ${c.ch} 分流 ${ROOM_DEFS[baseRoom(rid)]?.label ?? rid}（${r.players.size} 人）`);
+        break;
+      }
+    }
+  }
+}
+setInterval(tickLegends, 30000);
 /** 撿到一件垃圾：放進垃圾袋、記進垃圾圖鑑（第一次撿到送松果；全部收集完送淨灘小隊造型） */
 function gotTrash(w, vid, id) {
   w.tbag ??= {};
@@ -613,8 +644,12 @@ const MINI_SLOTS = (() => {
     if (at >= EVENT_START && at < EVENT_START + EVENT_LEN) continue; // 營火時間
     list.push({ at, kind: process.env.MINI_KIND || MINI_ORDER[list.length % MINI_ORDER.length] });
   }
+  // 🕛 11/19 作者：中午 12:30 加一場 10 分鐘釣魚大賽（11/20 起）
+  list.unshift({ at: 12 * 3600 + 30 * 60, kind: 'fish', noon: true });
   return list;
 })();
+/** 今天有哪些場次（中午那場 11/20 才開） */
+const miniSlots = () => (isOpen({ from: '2026-11-20' }) ? MINI_SLOTS : MINI_SLOTS.filter((x) => !x.noon));
 function taipeiClock(now = new Date()) {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-GB', { timeZone: process.env.STATS_TZ || 'Asia/Taipei', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
@@ -626,15 +661,16 @@ function taipeiClock(now = new Date()) {
 function miniInfo(now = new Date()) {
   const { h, sec: s } = taipeiClock(now);
   const sec = h * 3600 + s;
-  const cur = MINI_SLOTS.findIndex((x) => sec >= x.at && sec < x.at + MINI_LEN);
+  const slots = miniSlots();
+  const cur = slots.findIndex((x) => sec >= x.at && sec < x.at + MINI_LEN);
   if (cur >= 0) {
-    const x = MINI_SLOTS[cur];
-    return { kind: x.kind, active: true, endsIn: x.at + MINI_LEN - sec, id: `${dayKey(now)}-${cur}` };
+    const x = slots[cur];
+    return { kind: x.kind, active: true, endsIn: x.at + MINI_LEN - sec, id: `${dayKey(now)}-${x.at}` };
   }
-  let next = MINI_SLOTS.find((x) => x.at > sec);
+  let next = slots.find((x) => x.at > sec);
   let startsIn = next ? next.at - sec : 0;
   if (!next) {
-    next = MINI_SLOTS[0]; // 今晚都辦完了：明晚第一場
+    next = slots[0]; // 今晚都辦完了：明天第一場
     startsIn = 86400 - sec + next.at;
   }
   return { kind: next.kind, active: false, startsIn, hour: Math.floor(next.at / 3600), minute: Math.floor((next.at % 3600) / 60) };
@@ -2627,6 +2663,9 @@ io.on('connection', (socket) => {
     room.players.set(socket.id, player);
     socket.join(rkey);
     homeOwner = null;
+    // 🌟 森林傳說正在經過：剛進來的人也看得到
+    const lg = legendNow.get(rkey);
+    if (lg) setTimeout(() => legendNow.get(rkey) === lg && socket.emit('legend', legendMsg(lg)), 1500);
   };
   /** 進到某個人的帳篷（帳篷不分分流） */
   let homeOwner = null;
@@ -4110,6 +4149,116 @@ io.on('connection', (socket) => {
     io.to(rkey).emit('ate', { id: socket.id, dish: d.id });
     ack?.({ ok: true, buff: wal.buff ?? null, ...dishView() });
   });
+  // ---------- 🍳 自由料理鍋（11/19）----------
+  const potView = () => ({ fk: wal?.fk ?? {}, sea: wal?.sea ?? {}, basket: wal?.bk ?? {}, tbag: wal?.tbag ?? {}, fc: wal?.fc ?? {}, crops: wal?.crops ?? {}, cnt: wal?.cnt ?? {}, pc: wal?.pc ?? 0, ...dishView() });
+  socket.on('potInfo', (data, ack) => ack?.(wal ? { ok: true, ...potView() } : { ok: false }));
+  // 🍡 烤棉花糖幾次、烤焦幾次（解鎖隱藏食譜用；前端吃掉一顆就回報，最快 5 秒一次）
+  let lastRoastAt = 0;
+  socket.on('roasted', (data = {}) => {
+    if (!wal || roomId !== 'forest_main') return;
+    const now = Date.now();
+    if (now - lastRoastAt < 5000) return;
+    lastRoastAt = now;
+    wal.cnt ??= {};
+    wal.cnt.roast = (wal.cnt.roast ?? 0) + 1;
+    if (data.burnt) wal.cnt.burnt = (wal.cnt.burnt ?? 0) + 1;
+    saveJson('players.json', players);
+  });
+  // 🧂 買調味料：5 顆松果一包，一包用 5 次
+  socket.on('buySeason', (data = {}, ack) => {
+    if (!wal || !isOpen({ from: '2026-11-20' })) return ack?.({ ok: false, reason: 'later' }); // 🗓️ 11/20 跟小精靈更新一起開
+    const s = SEASON_BY_ID[String(data.id ?? '')];
+    if (!s) return ack?.({ ok: false });
+    wal.sea ??= {};
+    if ((wal.sea[s.id] ?? 0) + SEASON_USES > SEASON_CAP) return ack?.({ ok: false, reason: 'full' });
+    if (wal.pc < SEASON_PRICE) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
+    wal.pc -= SEASON_PRICE;
+    wal.sea[s.id] = (wal.sea[s.id] ?? 0) + SEASON_USES;
+    saveJson('players.json', players);
+    bump('buys');
+    socket.emit('wallet', { pc: wal.pc, delta: -SEASON_PRICE, reason: 'buy' });
+    ack?.({ ok: true, ...potView() });
+  });
+  socket.on('potCook', (data = {}, ack) => {
+    if (!wal || !player || !isOpen({ from: '2026-11-20' })) return ack?.({ ok: false, reason: 'later' }); // 🗓️ 11/20 才開
+    const atGrill = roomId === 'campground' && hasYard(homes[player.vid], 'bbq');
+    const atHome = roomId === 'home' && homeOwner === player.vid && (homes[player.vid]?.items ?? []).some((it) => CATALOG_BY_ID[it.i]?.cook);
+    if (roomId !== 'forest_main' && !atGrill && !atHome) return ack?.({ ok: false, reason: 'notHere' });
+    const items = (Array.isArray(data.items) ? data.items : []).slice(0, POT_MAX + 1).map(String);
+    if (!items.length || items.length > POT_MAX || items.some((x) => !parseToken(x))) return ack?.({ ok: false, reason: 'bad' });
+    const sea = {};
+    let seaN = 0;
+    for (const [k, v] of Object.entries(data.sea ?? {})) {
+      const n = Math.floor(num(v, 0, SEASON_MAX, 0));
+      if (!SEASON_BY_ID[k] || !n) continue;
+      sea[k] = n;
+      seaN += n;
+    }
+    if (seaN > SEASON_MAX) return ack?.({ ok: false, reason: 'bad' });
+    // 夠不夠
+    const want = {};
+    for (const x of items) want[x] = (want[x] ?? 0) + 1;
+    const bagOf = (tok) => {
+      const [k, id] = tok.split(':');
+      return k === 'f' ? [(wal.fk ??= {}), id] : k === 't' ? [(wal.tbag ??= {}), id] : [(wal.bk ??= {}), id];
+    };
+    for (const [tok, n] of Object.entries(want)) {
+      const [bag, id] = bagOf(tok);
+      if ((bag[id] ?? 0) < n) return ack?.({ ok: false, reason: 'need' });
+    }
+    for (const [k, n] of Object.entries(sea)) if ((wal.sea?.[k] ?? 0) < n) return ack?.({ ok: false, reason: 'sea' });
+    const r = potResult(items, sea, wal);
+    if (!r) return ack?.({ ok: false, reason: 'bad' });
+    // 扣掉材料、魚、調味料
+    for (const [tok, n] of Object.entries(want)) {
+      const [bag, id] = bagOf(tok);
+      bag[id] -= n;
+      if (bag[id] <= 0) delete bag[id];
+    }
+    for (const [k, n] of Object.entries(sea)) {
+      wal.sea[k] -= n;
+      if (wal.sea[k] <= 0) delete wal.sea[k];
+    }
+    wal.dish ??= {};
+    wal.dish[r.id] = (wal.dish[r.id] ?? 0) + 1;
+    wal.cooked ??= {};
+    const firstDish = !wal.cooked[r.id];
+    // 第一次做出這道（不管口味、哪種魚）送松果：隱藏 10、一般／求生 3、家常／黑暗 1
+    const key = r.dark ? `p.d_${r.dark}` : `p.${r.recipe.id}`;
+    const firstKind = !Object.keys(wal.cooked).some((k) => k === key || k.startsWith(key + '.') || k.startsWith(key + '~'));
+    wal.cooked[r.id] = (wal.cooked[r.id] ?? 0) + 1;
+    const kind = r.recipe?.kind ?? '';
+    const gain = firstKind ? (r.dark ? 1 : kind === 'hidden' || kind === 'unlock' ? 10 : r.recipe.basic ? 1 : 3) : 0;
+    if (gain) award(gain, 'cook');
+    // 😵 煮失敗（黑暗料理）10 次：送「灰頭土臉」造型（作者 11/19）
+    if (r.dark) {
+      wal.cnt ??= {};
+      wal.cnt.dark = (wal.cnt.dark ?? 0) + 1;
+      if (wal.cnt.dark >= SOOTY_AT) grantOutfit(player.vid, 'sooty', 'cook');
+    }
+    saveJson('players.json', players);
+    bump('cooks');
+    if (items.length >= 3) chal('cook3');
+    spiritGain('cook');
+    io.to(rkey).emit('cooked', { id: socket.id, name: player.name, dish: r.id });
+    if (r.recipe && POT_BY_ID[r.recipe.id] && (kind === 'hidden' || kind === 'unlock') && firstKind) console.log(`[料理] ${player.name} 第一次煮出隱藏食譜 ${r.recipe.zh}`);
+    ack?.({ ok: true, dish: r.id, first: firstDish, firstKind, gain, locked: r.locked?.id ?? null, ...potView() });
+  });
+  // 🌟 看到森林傳說：記次數，第一次送松果（同一次經過只算一次）
+  let lastLegend = null;
+  socket.on('legendSeen', (data = {}, ack) => {
+    const lg = rkey && legendNow.get(rkey);
+    if (!wal || !lg || lg.id !== data.id || lastLegend === lg) return ack?.({ ok: false });
+    lastLegend = lg;
+    wal.lg ??= {};
+    const first = !wal.lg[lg.id];
+    wal.lg[lg.id] = (wal.lg[lg.id] ?? 0) + 1;
+    if (first) award(LEGEND_GAIN, 'legend');
+    saveJson('players.json', players);
+    bump('legends');
+    ack?.({ ok: true, first, gain: first ? LEGEND_GAIN : 0, lg: wal.lg });
+  });
+  socket.on('legendInfo', (data, ack) => ack?.({ ok: !!wal, lg: wal?.lg ?? {} }));
   // 送料理給同一區的人
   socket.on('giftDish', (data = {}, ack) => {
     if (!wal || !player) return ack?.({ ok: false });
@@ -4735,10 +4884,17 @@ io.on('connection', (socket) => {
     }
     // ♻️ 釣到垃圾：順手放進垃圾袋（湖裡會釣到的種類很多，不只漂流瓶和罐頭）
     if (JUNK.has(fish) && wal) {
-      const id = pickTrash('lake').id;
+      const id = FISH[fish].junk === 'boot' ? 'old_boot' : pickTrash('lake').id; // 🥾 舊靴子 → 垃圾袋裡的「舊皮鞋」（可以煮求生料理）
       const r = gotTrash(wal, player.vid, id);
       if (r.gain) award(r.gain, 'trash');
       socket.emit('trashGot', { id, ...r, ...trashView(wal) });
+    }
+    // 🧊 11/19 料理鍋：釣到的魚放進保冷箱（可以拿去煮），也記下每種魚釣到幾次（解鎖隱藏食譜）
+    if (wal && !JUNK.has(fish)) {
+      wal.fk ??= {};
+      wal.fk[fish] = Math.min(FISH_KEEP_CAP, (wal.fk[fish] ?? 0) + 1);
+      wal.fc ??= {};
+      wal.fc[fish] = (wal.fc[fish] ?? 0) + 1;
     }
     // 📖 魚類圖鑑：第一次釣到這種魚就收錄、送松果；全部收集完再送一份大禮
     if (wal) {

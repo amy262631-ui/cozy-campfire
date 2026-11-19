@@ -9,7 +9,7 @@
 import { GATHER_BY_ID } from './gathering.js';
 import { CROP_BY_ID } from './garden.js';
 import { TRASH_BY_ID } from './trash.js';
-import { DISH_BY_ID } from './cooking.js';
+import { DISH_BY_ID, dishName } from './cooking.js';
 import { CATALOG_BY_ID } from './furnitureCatalog.js';
 
 export const GIFT_DAILY_CAP = 50; // 每人每天收禮總價值上限（松果）
@@ -41,7 +41,7 @@ export function giftInfo(cat, id) {
   }
   if (cat === 'dish') {
     const x = DISH_BY_ID[id];
-    return x ? { icon: x.icon, zh: x.zh, value: x.big ? 10 : 5 } : null;
+    return x ? { icon: x.icon, zh: x.pot ? dishName(x) : x.zh, value: x.big ? 10 : 5 } : null;
   }
   if (cat === 'furn') {
     const x = CATALOG_BY_ID[id];
