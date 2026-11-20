@@ -1708,7 +1708,7 @@ async function init() {
       );
     }, 3000);
   });
-  const LEGEND_HINT = { tortoise: '迷霧森林・深夜', whale: '湖畔碼頭・深夜', sleigh: '聖誕期間的晚上・抬頭看天空' };
+  const LEGEND_HINT = { tortoise: '迷霧森林・晚上 7～12 點', whale: '湖畔碼頭・晚上 7～12 點', sleigh: '聖誕期間的晚上・抬頭看天空' };
   if (isOpen({ from: '2026-11-19' })) fishingUI.extraTabs.push({
     id: 'legend',
     label: t('🌟 傳說'),
