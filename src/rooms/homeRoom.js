@@ -543,7 +543,9 @@ export function createHomeRoom() {
           let seat = null;
           m.traverse((o) => o.userData.spSwing && (seat = o));
           const sp = m.userData.spSpot;
-          spSpots.push({ kind: CATALOG_BY_ID[it.i]?.spot ?? 'nest', m, seat, local: seat ? new THREE.Vector3(0, -0.4, 0) : new THREE.Vector3(sp.x, sp.y, sp.z), res: null, busy: false, loft: isLoftCell(z), ph: Math.random() * 6 });
+          let key = `${x},${z},${it.i}`; // 給別人的畫面找同一件家具（作者 11/20：小精靈去玩大家都看得到）
+          while (spSpots.some((q) => q.key === key)) key += '+';
+          spSpots.push({ key, kind: CATALOG_BY_ID[it.i]?.spot ?? 'nest', m, seat, local: seat ? new THREE.Vector3(0, -0.4, 0) : new THREE.Vector3(sp.x, sp.y, sp.z), res: null, busy: false, loft: isLoftCell(z), ph: Math.random() * 6 });
         }
       });
       // 門口那條走道（最前排中間）的家具不擋路，免得把門堵住出不去
@@ -639,6 +641,18 @@ export function createHomeRoom() {
     }
     placeHomeSpirits();
     hideUpper(); // 布置一樓時，二樓家具重畫後也要藏
+  }
+
+  /** 小精靈占用一件精靈家具（鞦韆會盪）；done() 讓出來、alive() 家具還在不在 */
+  function useSpot(s) {
+    s.busy = true;
+    return {
+      key: s.key,
+      kind: s.kind,
+      pos: (v) => (s.seat ?? s.m).localToWorld(v.copy(s.local)),
+      done: () => (s.busy = false),
+      alive: () => spSpots.includes(s),
+    };
   }
 
   /** ✨ 住在家裡的小精靈：小窩先住，再來鞦韆、玩具，一件家具一隻（作者 11/16） */
@@ -1025,15 +1039,12 @@ export function createHomeRoom() {
         const d = Math.hypot(s.m.position.x - x, s.m.position.z - z);
         if (d < bd) (bd = d), (best = s);
       }
-      if (!best) return null;
-      best.busy = true;
-      const s = best;
-      return {
-        kind: s.kind,
-        pos: (v) => (s.seat ?? s.m).localToWorld(v.copy(s.local)),
-        done: () => (s.busy = false),
-        alive: () => spSpots.includes(s),
-      };
+      return best ? useSpot(best) : null;
+    },
+    /** 別人（主人）的小精靈正在玩哪一件：用 key 找同一件家具 */
+    spotByKey(key) {
+      const s = spSpots.find((q) => q.key === key);
+      return s && !s.res && !s.busy ? useSpot(s) : null;
     },
     update(dt, time, camera) {
       shellUpdate?.(dt, time);

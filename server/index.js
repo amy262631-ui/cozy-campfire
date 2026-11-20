@@ -2359,7 +2359,7 @@ const packState = (p) => [
   p.zz | 0, // 😴 打瞌睡（舊版前端只讀前 6 格，不受影響）
 ];
 
-const publicInfo = (p) => ({ id: p.id, name: p.name, fur: p.fur, sp: p.sp, tl: p.tl || undefined, er: p.er || undefined, rw: p.rw, ot: p.ot, pb: p.pb, sr: p.sr || undefined, sn: (p.sr && p.sn) || undefined, dk: p.dk > Date.now() ? p.dk : undefined, s: packState(p) }); // dk：🦆 小鴨跟到幾點
+const publicInfo = (p) => ({ id: p.id, name: p.name, fur: p.fur, sp: p.sp, tl: p.tl || undefined, er: p.er || undefined, rw: p.rw, ot: p.ot, pb: p.pb, sr: p.sr || undefined, sn: (p.sr && p.sn) || undefined, spk: p.spk || undefined, dk: p.dk > Date.now() ? p.dk : undefined, s: packState(p) }); // dk：🦆 小鴨跟到幾點
 
 /** 某個分流的某個房間，給新進玩家的完整資料 */
 function roomSnapshot(c, rid, selfId) {
@@ -2724,7 +2724,7 @@ io.on('connection', (socket) => {
     // 🍄 去迷霧森林（10 分鐘算一次）
     if (id === 'mist_forest' && Date.now() - lastSpiritForest > 600000) (lastSpiritForest = Date.now()), setTimeout(() => spiritGain('forest'), 0);
     chan = c;
-    if (player) player.ch = c.ch;
+    if (player) (player.ch = c.ch), (player.spk = undefined); // 換地方：小精靈不在精靈家具上了
     roomId = id;
     const rid = id === 'campground' ? campRid(campZone) : id; // 帳篷營地：照現在在哪一區
     room = ensureRoom(c, rid);
@@ -2741,6 +2741,7 @@ io.on('connection', (socket) => {
   /** 進到某個人的帳篷（帳篷不分分流） */
   let homeOwner = null;
   const enterHome = (owner) => {
+    if (player) player.spk = undefined;
     roomId = 'home';
     homeOwner = owner;
     room = homeRoom(owner);
@@ -3121,6 +3122,14 @@ io.on('connection', (socket) => {
   });
 
   // 換房間（走進帳篷、樹屋、碼頭）：離開舊房、加入新房
+  // ✨ 主人的小精靈去玩精靈家具（作者 11/20：來玩的朋友也看得到）；k＝家具的 key，null＝飛回來
+  socket.on('spSpot', (data = {}) => {
+    if (!player) return;
+    const k = typeof data.k === 'string' && data.k.length <= 60 && roomId === 'home' && homeOwner === player.vid ? data.k : undefined;
+    if (k === player.spk) return;
+    player.spk = k;
+    if (rkey) socket.to(rkey).emit('spSpot', { id: socket.id, k: k ?? null });
+  });
   socket.on('switchRoom', (data = {}, ack) => {
     if (!player) return ack?.({ ok: false, reason: 'notJoined' });
     const next = data.room;
@@ -4264,6 +4273,38 @@ io.on('connection', (socket) => {
     ack?.({ ok: true, first, gain, shared, basket: wal.bk, ...dishView() });
   });
   let lastEat = 0;
+  // 🗑️ 背包丟掉（作者 11/20：黑暗料理太多了）：料理、採集籃選數量丟；kind 'dark'＝黑暗料理一次丟 n 份（數量多的先丟）。不給松果
+  socket.on('discard', (data = {}, ack) => {
+    if (!wal || !player) return ack?.({ ok: false });
+    const kind = String(data.kind ?? '');
+    let n = Math.floor(Number(data.n) || 0);
+    if (n <= 0) return ack?.({ ok: false });
+    let gone = 0;
+    if (kind === 'dark') {
+      const list = Object.keys(wal.dish ?? {})
+        .filter((id) => DISH_BY_ID[id]?.dark && wal.dish[id] > 0)
+        .sort((a, b) => wal.dish[b] - wal.dish[a]);
+      for (const id of list) {
+        if (n <= 0) break;
+        const k = Math.min(n, wal.dish[id]);
+        wal.dish[id] -= k;
+        if (!wal.dish[id]) delete wal.dish[id];
+        n -= k;
+        gone += k;
+      }
+    } else {
+      const bag = kind === 'dish' ? wal.dish : kind === 'bk' ? wal.bk : null;
+      const id = String(data.id ?? '');
+      if (!bag || !Object.hasOwn(bag, id) || !(bag[id] > 0)) return ack?.({ ok: false });
+      gone = Math.min(n, bag[id]);
+      bag[id] -= gone;
+      if (!bag[id]) delete bag[id];
+    }
+    if (!gone) return ack?.({ ok: false });
+    saveJson('players.json', players);
+    console.log(`[丟掉] ${player.name} 丟了 ${kind} ${data.id ?? ''} ×${gone}`);
+    ack?.({ ok: true, gone, basket: wal.bk ?? {}, ...dishView() });
+  });
   socket.on('eat', (data = {}, ack) => {
     if (!wal || !player) return ack?.({ ok: false });
     const d = DISH_BY_ID[String(data.id ?? '')];

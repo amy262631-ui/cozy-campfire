@@ -290,6 +290,7 @@ export class RemotePlayers {
       p.spirit = new SpiritFollower(this.scene);
       p.spirit.setCode(info.sr);
       p.spirit.setName(info.sn);
+      p.spk = info.spk; // ✨ 主人的小精靈正在玩哪件精靈家具（main.js 每幀對上）
     }
     this.players.set(info.id, p);
     this.scene.add(p.group);
@@ -298,6 +299,7 @@ export class RemotePlayers {
 
   remove(id) {
     const p = this.players.get(id);
+    p?.spirit?.playAt?.done?.();
     if (!p) return null;
     this.scene.remove(p.group);
     p.spirit?.dispose();

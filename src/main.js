@@ -1767,8 +1767,10 @@ async function init() {
     const info = {}; // 點格子後下面顯示的說明
     if (tab === 'dish') {
       const mine = ownedDishes(dishes);
-      for (const d of mine) info[d.id] = `<b>${d.icon} ${dishName(d, t)} ×${dishes[d.id]}</b>${fxTag(d.id)}<button type="button" class="mini-btn" data-eat="${d.id}">${t('😋 吃')}</button>${giftInfo('dish', d.id) ? `<button type="button" class="mini-btn" data-giftfr="dish|${d.id}">${t('🎁 送朋友')}</button>` : ''}`;
-      html = mine.length
+      for (const d of mine) info[d.id] = `<b>${d.icon} ${dishName(d, t)} ×${dishes[d.id]}</b>${fxTag(d.id)}<button type="button" class="mini-btn" data-eat="${d.id}">${t('😋 吃')}</button>${giftInfo('dish', d.id) ? `<button type="button" class="mini-btn" data-giftfr="dish|${d.id}">${t('🎁 送朋友')}</button>` : ''}<button type="button" class="mini-btn bin-btn" data-bin="dish|${d.id}|${dishes[d.id]}">${t('🗑️ 丟掉')}</button>`;
+      const darkN = mine.filter((d) => d.dark).reduce((a, d) => a + dishes[d.id], 0);
+      if (darkN) html += `<div class="bin-dark"><span>${t('😵 黑暗料理 {n} 份', { n: darkN })}</span><button type="button" class="mini-btn bin-btn" data-bin="dark||${darkN}">${t('🗑️ 丟掉')}</button></div><div class="bin-ask" data-binfor="dark" hidden></div>`;
+      html += mine.length
         ? `<div class="inv-grid">${mine.map((d) => cell(d.icon, dishName(d, t), dishes[d.id], d.id)).join('')}</div>`
         : `<div class="dex-note">${t('還沒有料理。到營火旁的「🍲 營火料理」鍋子煮一道吧！')}</div>`;
     } else if (tab === 'basket') {
@@ -1781,14 +1783,51 @@ async function init() {
       for (const [, list] of groups)
         for (const x of list) {
           const gc = basketCat(x.id);
-          info[x.id] = `<b>${x.icon} ${t(x.zh)} ×${basket[x.id]}</b>${x.hint ? `<small class="fx-tag">${t(x.hint)}</small>` : ''}${gc && giftInfo(gc, x.id) ? `<button type="button" class="mini-btn" data-giftfr="${gc}|${x.id}">${t('🎁 送朋友')}</button>` : ''}`;
+          info[x.id] = `<b>${x.icon} ${t(x.zh)} ×${basket[x.id]}</b>${x.hint ? `<small class="fx-tag">${t(x.hint)}</small>` : ''}${gc && giftInfo(gc, x.id) ? `<button type="button" class="mini-btn" data-giftfr="${gc}|${x.id}">${t('🎁 送朋友')}</button>` : ''}<button type="button" class="mini-btn bin-btn" data-bin="bk|${x.id}|${basket[x.id]}">${t('🗑️ 丟掉')}</button>`;
         }
       html = groups.length
         ? groups.map(([title, list]) => `<div class="dex-note">${title}</div><div class="inv-grid">${list.map((x) => cell(x.icon, t(x.zh), basket[x.id], x.id)).join('')}</div>`).join('')
         : `<div class="dex-note">${t('採集籃是空的。去迷霧森林、湖邊採採看吧 🍄')}</div>`;
       html += `<div class="dex-note">${t('採集籃的東西可以煮料理（「🍲 營火料理」鍋子）、做家具（「📖 圖鑑 → 🔨 手作」）')}</div>`;
     }
-    if (Object.keys(info).length) html += `<div class="inv-info" hidden></div>`;
+    if (Object.keys(info).length) html += `<div class="inv-info" hidden></div><div class="bin-ask" data-binfor="item" hidden></div>`;
+    // 🗑️ 丟掉：選數量（－／＋、可以直接打數字、全部），丟之前寫清楚丟幾個（作者 11/20）
+    const bindBin = (btns, root) => {
+      for (const b of btns) {
+        b.addEventListener('click', () => {
+          const [kind, id, maxS] = b.dataset.bin.split('|');
+          const max = Number(maxS) || 1;
+          const ask = root.querySelector(`.bin-ask[data-binfor="${kind === 'dark' ? 'dark' : 'item'}"]`);
+          for (const o of root.querySelectorAll('.bin-ask')) if (o !== ask) o.hidden = true;
+          let n = kind === 'dark' ? max : 1;
+          ask.innerHTML = `<span>${t('要丟幾個？')}</span><div class="bin-step"><button type="button" data-d="-1">－</button><input type="number" inputmode="numeric" min="1" max="${max}" value="${n}"><button type="button" data-d="1">＋</button><button type="button" class="bin-all">${t('全部 {n}', { n: max })}</button></div><div class="bin-go"><button type="button" class="mini-btn bin-yes"></button><button type="button" class="mini-btn bin-no">${t('算了')}</button></div><small>${t('丟掉就拿不回來了，也不會拿到松果')}</small>`;
+          ask.hidden = false;
+          const inp = ask.querySelector('input');
+          const yes = ask.querySelector('.bin-yes');
+          const set = (v) => {
+            n = Math.max(1, Math.min(max, Math.floor(Number(v) || 1)));
+            inp.value = n;
+            yes.textContent = t('🗑️ 丟掉 {n} 個', { n });
+          };
+          set(n);
+          for (const d of ask.querySelectorAll('[data-d]')) d.addEventListener('click', () => set(n + Number(d.dataset.d)));
+          inp.addEventListener('input', () => inp.value !== '' && set(inp.value));
+          inp.addEventListener('blur', () => set(inp.value));
+          ask.querySelector('.bin-all').addEventListener('click', () => set(max));
+          ask.querySelector('.bin-no').addEventListener('click', () => (ask.hidden = true));
+          yes.addEventListener('click', async () => {
+            yes.disabled = true;
+            const r = await net.request('discard', { kind, id, n });
+            if (!r?.ok) return (yes.disabled = false), hud.toast(t('沒丟成，再試一次吧'));
+            dishes = r.dishes ?? dishes;
+            basket = r.basket ?? basket;
+            hud.toast(t('🗑️ 丟掉 {n} 個了', { n: r.gone }));
+            openBag(tab);
+          });
+          ask.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        });
+      }
+    };
     modal.open(
       t('🎒 背包'),
       `<div class="shop-cats bag-tabs">${tabs.map(([id, label]) => `<button type="button" data-bag="${id}" class="${id === tab ? 'on' : ''}">${label}</button>`).join('')}</div>${html}`,
@@ -1802,12 +1841,15 @@ async function init() {
             box.innerHTML = info[c.dataset.inv] ?? '';
             box.hidden = false;
             bindEat(box);
+            bindBin(box.querySelectorAll('[data-bin]'), body);
+            body.querySelector('.bin-ask[data-binfor="item"]').hidden = true;
             box.querySelector('[data-giftfr]')?.addEventListener('click', (e) => {
               const [cat, id] = e.currentTarget.dataset.giftfr.split('|');
               pickFriendToGift(cat, id, tab);
             });
           });
         }
+        bindBin(body.querySelectorAll('.bin-dark [data-bin]'), body);
         // 料理：一打開就先選第一格，吃東西不用多點一下
         if (tab === 'dish') body.querySelector('[data-inv]')?.click();
       },
@@ -1963,6 +2005,12 @@ async function init() {
   let spiritStarT = 0;
   let spiritIdleT = 0;
   const SPIRIT_REST = new Set(['sofa', 'sit', 'sleep', 'blanket', 'swing']);
+  let spotSent = null;
+  const sendSpot = (k) => {
+    if (k === spotSent || !net.online) return;
+    spotSent = k;
+    net.socket?.emit?.('spSpot', { k });
+  };
   const updateSpirits = (dt) => {
     camera.getWorldPosition(spiritCam);
     const a = player.actionState;
@@ -1976,10 +2024,19 @@ async function init() {
     // ✨ 精靈家具（作者 11/16）：在自己帳篷裡站著不動一下子，身邊那隻自己跑去小窩、鞦韆、玩具玩；一動就飛回來
     const still = roomMgr.current === rooms.home && rooms.home.mine && a === 'idle' && Math.hypot(player.velocity.x, player.velocity.z) < 0.05 && !spiritGames.playing;
     spiritIdleT = still ? spiritIdleT + dt : 0;
-    if (mySpirit.playAt && (!still || !mySpirit.playAt.alive())) (mySpirit.playAt.done(), (mySpirit.playAt = null));
+    if (mySpirit.playAt && (!still || !mySpirit.playAt.alive())) (mySpirit.playAt.done(), (mySpirit.playAt = null), sendSpot(null));
     if (!mySpirit.playAt && spiritIdleT > 4 && mySpirit.obj) {
       mySpirit.playAt = rooms.home.spiritSpot(m.x, m.z, m.y > 1.2);
-      if (!mySpirit.playAt) spiritIdleT = -20; // 沒有空的精靈家具：過一陣子再找
+      if (!mySpirit.playAt) spiritIdleT = 2; // 沒有空的精靈家具：2 秒後再找（作者 11/20：以前等 20 幾秒，剛擺好家具它不會馬上過去）
+      else sendSpot(mySpirit.playAt.key);
+    }
+    // 👀 別人（主人）的小精靈去玩精靈家具：我的畫面也讓它過去（作者 11/20：大家都看得到）
+    for (const p of remotes.players.values()) {
+      const sp = p.spirit;
+      if (!sp) continue;
+      const want = roomMgr.current === rooms.home && p.spk ? p.spk : null;
+      if (sp.playAt && (sp.playAt.key !== want || !sp.playAt.alive())) (sp.playAt.done(), (sp.playAt = null));
+      if (want && !sp.playAt) sp.playAt = rooms.home.spotByKey(want);
     }
     mySpirit.update(dt, { x: m.x, y: m.y, z: m.z, ry: player.rotationY, scale: player.mesh.scale.x, speed: Math.hypot(player.velocity.x, player.velocity.z), state: a === 'sleep' || a === 'blanket' ? 'sleep' : SPIRIT_SIT.has(a) ? 'sit' : 'idle', cam: spiritCam, night: spiritNightNow, party: spiritParty(m.x, m.z) });
     return { cam: spiritCam, night: spiritNightNow, party: spiritParty, me: m };
@@ -1999,6 +2056,10 @@ async function init() {
     void was;
   });
   net.on('spirit', ({ id, sr, sn }) => id !== net.id && remotes.setSpirit(id, sr, sn));
+  net.on('spSpot', ({ id, k }) => {
+    const p = id !== net.id && remotes.players.get(id);
+    if (p) p.spk = k || undefined;
+  });
   // 🤲 直接點小精靈＝摸摸（作者 11/11）：自己的、別人的都可以摸（別人的只有自己看得到反應）；點了名字會出現幾秒
   {
     let down = null;
