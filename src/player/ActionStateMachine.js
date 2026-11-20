@@ -421,6 +421,31 @@ export class ActionStateMachine {
     }
 
     r.state = this.state;
+    // ⛵ 坐在船上（main.js 設 this.boat = { owner, seat() → {x,y,z,ry} }）：坐著划；乘客、釣魚時固定在座位上
+    if (this.boat) {
+      // 釣完魚（收竿）：人轉回船頭的方向，船才不會突然轉過去
+      if (this.boat.owner && this.state === 'free' && this._boatPrev && this._boatPrev !== 'free') {
+        const h = this.boat.heading?.();
+        if (h != null) this.player.rotationY = h;
+      }
+      this._boatPrev = this.state;
+      const s = this.boat.seat();
+      if (this.state === 'free') {
+        r.pose = 'sit';
+        r.state = 'boat';
+        r.speedMul = 1.15;
+        if (!this.boat.owner) r.locked = true;
+      }
+      if (s) {
+        p.y = s.y;
+        if (!this.boat.owner || this.state !== 'free') {
+          p.x = s.x;
+          p.z = s.z;
+          if (this.state === 'free') r.faceAngle = s.ry;
+          else if (this.state === 'fish') r.faceAngle = this.room?.fishSpot?.face ?? s.ry; // 🎣 面向船邊甩竿的那一側
+        }
+      }
+    }
     // 👟 吃了「腳步輕快」的料理：走路變快（騎腳踏車時取比較快的那個，不疊加）
     if (this.buffSpeed > 1) r.speedMul = Math.max(r.speedMul ?? 1, this.buffSpeed);
     else if (this.buffSpeed < 1) r.speedMul = (r.speedMul ?? 1) * this.buffSpeed; // 😵 黑暗料理後遺症：走路慢一點

@@ -230,6 +230,7 @@ export class FishingGame {
   }
 
   stop() {
+    if (this.coop) (this.coop = false), this.onCoop?.('fail');
     // 舉著魚起身：魚不收，交給 main.js 繼續舉著到處走
     const keep = this.phase === 'show' && this.fish ? { ...this.fish } : null;
     // 收竿小結：釣了一陣子或有釣到才說
@@ -303,7 +304,7 @@ export class FishingGame {
     }
     if (phase === 'wait') {
       this.#requestRoll(); // 浮標落水：跟伺服器要這一竿的魚
-      this.biteAt = 4 + Math.random() * 9;
+      this.biteAt = this.fast?.() ? 2.2 + Math.random() * 4.3 : 4 + Math.random() * 9; // 🐟 撒了魚飼料：等魚上鉤的時間減半
       // 試探：浮標輕輕點一下（1～3 次），這時拉竿會把魚嚇跑
       const n = 1 + Math.floor(Math.random() * 3);
       this.nibbles = Array.from({ length: n }, () => 1 + Math.random() * (this.biteAt - 1.6)).sort((a, b) => a - b);
@@ -384,6 +385,12 @@ export class FishingGame {
     this.need = f.pull;
     this.fight = f.fight;
     this.limit = 8 + f.pull * 0.25;
+    // 🤝 河神大鯉魚：一個人拉不動，跟附近的人求救（大家按「幫忙拉」會加進度，見 coopPush）
+    this.coop = !!f.coop;
+    if (this.coop) {
+      this.limit = 30;
+      this.onCoop?.('start');
+    }
     this.progress = 0.12;
     this.pulled = false;
     this.#go('reel');
@@ -395,7 +402,7 @@ export class FishingGame {
   }
 
   #reelTap() {
-    this.progress += 1 / this.need;
+    this.progress += (this.coop ? 0.5 : 1) / this.need; // 🤝 河神大鯉魚：自己拉只算一半，要別人幫忙才拉得上來
     this.pulled = true;
     haptic(12);
     this.#shake(0.025);
@@ -412,7 +419,16 @@ export class FishingGame {
     this.#go('scared');
   }
 
+  /** 🤝 別人幫忙拉了 n 下 */
+  coopPush(n = 1) {
+    if (this.phase !== 'reel' || !this.coop) return;
+    this.progress += n / this.need;
+    this.#shake(0.02);
+    if (this.progress >= 1) this.#landed();
+  }
+
   #escape(msg) {
+    if (this.coop) (this.coop = false), this.onCoop?.('fail');
     this.bang.visible = false;
     this.ui.showAlert(false);
     this.ui.showReel(false);
@@ -422,6 +438,7 @@ export class FishingGame {
   }
 
   #landed() {
+    if (this.coop) (this.coop = false), this.onCoop?.('ok');
     this.ui.showReel(false);
     this.#go('caught');
     // 魚從浮標的位置跳出水面，飛到手上

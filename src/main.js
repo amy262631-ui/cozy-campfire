@@ -16,7 +16,10 @@ import { MixerPanel } from './ui/MixerPanel.js';
 import { PomodoroPanel } from './ui/PomodoroPanel.js';
 import { JukeboxPanel } from './ui/JukeboxPanel.js';
 import { NetworkClient } from './network/NetworkClient.js';
-import { RemotePlayers, setRemoteHeight, setRemoteSpot, setCharScale, setRemoteFireSeats } from './network/RemotePlayers.js';
+import { RemotePlayers, setRemoteHeight, setRemoteSpot, setCharScale, setRemoteFireSeats, setRemoteBoat } from './network/RemotePlayers.js';
+import { BOAT_LIST, BOAT_FROM, BOAT_MS, FEED_PRICE, FEED_MS } from './game/boats.js';
+import { FIRE_HOT } from './game/river.js';
+import { POND } from './game/pondShape.js';
 import { SpiritFollower } from './player/spiritFollower.js';
 import { buildSpirit, SPIRIT_TYPES, SPIRIT_BY_ID } from './player/spirit.js';
 import { parseSpirit } from './game/spiritRules.js';
@@ -81,7 +84,7 @@ import { todaySpecial, isOpen } from './game/dailySpecial.js';
 import { FishingUI } from './ui/FishingUI.js';
 import { createMistForestRoom } from './rooms/mistForestRoom.js';
 import { OUTFITS, OUTFIT_BY_ID, OUTFIT_SLOTS } from './game/outfits.js';
-import { GATHER_ITEMS, GATHER_BY_ID, GATHER_TYPES, GATHER_DEX_BONUS, NET_PRICE, isNight, taipeiMonth } from './game/gathering.js';
+import { GATHER_ITEMS, GATHER_BY_ID, GATHER_TYPES, GATHER_DEX_BONUS, NET_PRICE, isNight, taipeiMonth, isLimited, gatherOpen, inSeason, gatherDexItems } from './game/gathering.js';
 import { CROPS, CROP_BY_ID, WATER_MAX } from './game/garden.js';
 import { haveOf, canMake, specLabel, materialOf, EGGS } from './game/materials.js';
 import { RECIPES } from './game/crafting.js';
@@ -895,11 +898,13 @@ async function init() {
     date: [t('營火之約限定：朋友在早上或晚上 9:30 營火時間透過你的連結進來，兩個人都拿到'), t('9:30 營火時間約朋友')],
     eco: [t('垃圾圖鑑全部收集完就拿到'), t('垃圾圖鑑收集完')],
     sponsor: [t('贊助限定：那個月贊助就送一頂（上方「💝 支持營地」→ 🎁）'), t('贊助限定')],
+    pass: [t('🎫 月票限定：有月票的人在「🏪 小舖 → 🎫 月票」用松果買（只賣那個月，隔年同月再回來）'), t('月票用松果買')],
     xmas: [t('聖誕限定：11/27～1/6 連續上線每滿 3 天送一款'), t('聖誕期間連續上線 3 天')],
     cook: [t('自由料理鍋煮失敗（黑暗料理）10 次就拿到'), t('煮失敗 10 次')],
   };
+  const howOf = (o) => (o.src === 'sponsor' && o.month >= '2026-12' ? 'pass' : o.src); // 12 月起的假髮：月票用松果買
   // 🎄 聖誕造型：聖誕期間、或已經拿到的才顯示（11 月先不出現，也不算在總數裡）
-  const showOutfit = (o) => (payOn || o.src !== 'sponsor') && (o.src !== 'xmas' || isXmas() || look.outfits.includes(o.id)) && (isOpen(o) || look.outfits.includes(o.id));
+  const showOutfit = (o) => (payOn || (o.src !== 'sponsor' && o.src !== 'pass')) && (o.src !== 'xmas' || isXmas() || look.outfits.includes(o.id)) && (isOpen(o) || look.outfits.includes(o.id));
   fishingUI.extraTabs.push({
     id: 'outfit',
     label: t('👒 造型'),
@@ -913,10 +918,10 @@ async function init() {
         .map((o) => {
           const has = owned.has(o.id);
           const worn = look.wear?.[o.slot] === o.id;
-          const tag = o.src === 'weekly' ? t('每週限定') : o.src === 'date' ? t('營火之約') : o.src === 'eco' ? t('淨灘小隊') : o.src === 'sponsor' ? t('{m} 贊助限定', { m: o.month }) : o.src === 'xmas' ? t('聖誕限定') : o.src === 'cook' ? t('煮失敗紀念') : o.id === look.daily ? t('今天的') : t('每日');
+          const tag = o.src === 'weekly' ? t('每週限定') : o.src === 'date' ? t('營火之約') : o.src === 'eco' ? t('淨灘小隊') : o.src === 'sponsor' && o.month < '2026-12' ? t('{m} 贊助限定', { m: o.month }) : o.src === 'sponsor' || o.src === 'pass' ? t('{m} 月票限定', { m: o.month }) : o.src === 'xmas' ? t('聖誕限定') : o.src === 'cook' ? t('煮失敗紀念') : o.id === look.daily ? t('今天的') : t('每日');
           return has
             ? `<div class="dex-card outfit${worn ? ' worn' : ''}" data-id="${o.id}"><i class="dex-emoji">${o.icon}</i><b>${t(o.zh)}</b><small>${tag}</small><em>${worn ? t('穿著中・點一下脫掉') : t('點一下穿上')}</em></div>`
-            : `<div class="dex-card unknown" title="${HOW[o.src][0]}"><i class="dex-emoji">${o.icon}</i><b>${t('？？？')}</b><small>${tag}</small><em>${HOW[o.src][1]}</em></div>`;
+            : `<div class="dex-card unknown" title="${HOW[howOf(o)][0]}"><i class="dex-emoji">${o.icon}</i><b>${t('？？？')}</b><small>${tag}</small><em>${HOW[howOf(o)][1]}</em></div>`;
         })
         .join('');
       return `
@@ -949,7 +954,7 @@ async function init() {
   // ---------- 🐾 動物外型：特殊毛色、尾巴、耳朵（用松果買，買過的隨時換） ----------
   let myLooks = {};
   const slotTabs = () =>
-    `<div class="outfit-slot-tabs">${OUTFIT_SLOTS.filter((sl) => sl.id !== 'hair' || payOn || look.outfits.some((id) => OUTFIT_BY_ID[id]?.slot === 'hair')).map((sl) => `<button type="button" data-slot="${sl.id}" class="${sl.id === lookSlot ? 'on' : ''}">${sl.icon} ${t(sl.zh)}</button>`).join('')}<button type="button" data-slot="body" class="${lookSlot === 'body' ? 'on' : ''}">${t('🐾 外型')}</button></div>`;
+    `<div class="outfit-slot-tabs">${OUTFIT_SLOTS.filter((sl) => (sl.id !== 'hair' && sl.id !== 'clip') || (payOn && (sl.id !== 'clip' || isOpen({ from: '2026-11-27' }))) || look.outfits.some((id) => OUTFIT_BY_ID[id]?.slot === sl.id)).map((sl) => `<button type="button" data-slot="${sl.id}" class="${sl.id === lookSlot ? 'on' : ''}">${sl.icon} ${t(sl.zh)}</button>`).join('')}<button type="button" data-slot="body" class="${lookSlot === 'body' ? 'on' : ''}">${t('🐾 外型')}</button></div>`;
   const renderBody = () => {
     const sp = profile?.species ?? 0;
     const card = (kind, v, icon, name, price, has, on, swatch = '') =>
@@ -1129,8 +1134,8 @@ async function init() {
     const it = GATHER_BY_ID[res.id];
     audio.sfx(res.first ? 'bell' : 'tap');
     if (res.first) {
-      const n = GATHER_ITEMS.filter((x) => !x.month && found(x.id)).length;
-      hud.toast(t('📖 圖鑑新收錄：{icon} {name}！+{n} 🌰（{c}／{t}）', { icon: it.icon, name: t(it.zh), n: res.gain, c: n, t: GATHER_ITEMS.filter((x) => !x.month).length }), 4500);
+      const n = gatherDexItems().filter((x) => found(x.id)).length;
+      hud.toast(t('📖 圖鑑新收錄：{icon} {name}！+{n} 🌰（{c}／{t}）', { icon: it.icon, name: t(it.zh), n: res.gain, c: n, t: gatherDexItems().length }), 4500);
       if (res.bonus) setTimeout(() => hud.toast(t('🏆 採集圖鑑全部收集完成！再送你 {n} 顆松果', { n: res.bonus }), 6000), 2500);
       if (res.bonus) setTimeout(() => dexPop(t('採集圖鑑'), '🍄'), 9000);
     } else {
@@ -1174,19 +1179,19 @@ async function init() {
   fishingUI.extraTabs.push({
     id: 'gather',
     label: t('🍄 採集'),
-    title: () => t('🍄 採集圖鑑 {n}／{total}', { n: GATHER_ITEMS.filter((x) => !x.month && found(x.id)).length, total: GATHER_ITEMS.filter((x) => !x.month).length }),
+    title: () => t('🍄 採集圖鑑 {n}／{total}', { n: gatherDexItems().filter((x) => found(x.id)).length, total: gatherDexItems().length }),
     render: () => {
       const card = (x) =>
         found(x.id)
           ? `<div class="dex-card rarity-${x.rarity}"><i class="dex-emoji">${x.icon}</i><b>${t(x.zh)}</b><small>${rarityStars(x.rarity)}${museum[x.id] ? ' 🏛️' : ''}</small><em>${t('採集籃裡 ×{n}', { n: basket[x.id] ?? 0 })}</em></div>`
           : `<div class="dex-card unknown"><i class="dex-emoji">${x.icon}</i><b>${t('？？？')}</b><small>${rarityStars(x.rarity)}${x.night ? ' 🌙' : x.day ? ' ☀️' : ''}</small><em>${t(x.hint)}</em></div>`;
       const groups = GATHER_TYPES.map((ty) => {
-        const cards = GATHER_ITEMS.filter((x) => x.type === ty.id && !x.month).map(card).join('');
+        const cards = GATHER_ITEMS.filter((x) => x.type === ty.id && !isLimited(x) && (gatherOpen(x) || found(x.id))).map(card).join('');
         return `<div class="dex-note">${ty.icon} ${t(ty.zh)}</div><div class="dex-grid">${cards}</div>`;
       }).join('');
       // 🗓️ 每月限定：這個月的、或撿過的才顯示（不算進全收集）
-      const lim = GATHER_ITEMS.filter((x) => x.month && (x.month === taipeiMonth() || found(x.id)));
-      const limited = lim.length ? `<div class="dex-note">${t('🗓️ 每月限定（不算進全收集，隔年同一個月會再出現）')}</div><div class="dex-grid">${lim.map(card).join('')}</div>` : '';
+      const lim = GATHER_ITEMS.filter((x) => isLimited(x) && (inSeason(x) || found(x.id)));
+      const limited = lim.length ? `<div class="dex-note">${t('🗓️ 限定（每月限定、❄️ 冬天限定；不算進全收集，每年會再出現）')}</div><div class="dex-grid">${lim.map(card).join('')}</div>` : '';
       const veg = CROPS.filter((c) => basket[c.id] > 0).map((c) => `${c.icon} ${t(c.zh)} ×${basket[c.id]}`).join('　');
       const total = Object.values(basket).reduce((a, b) => a + b, 0);
       return `<div class="dex-note">${t('🍄 迷霧森林：地上有發光圈圈的蘑菇、果實、野花，走過去按 E 採摘；空中飛的蟲蟲要用捕蟲網（{p} 🌰）按 E 捕。🐚 湖畔碼頭的岸邊可以撿石頭和貝殼。✨ 晚上 8～10 點營火附近偶爾會有寶藏。第一次找到新的種類送松果，全部收集完再送 {b} 顆 🌰', { p: NET_PRICE, b: GATHER_DEX_BONUS })}</div>
@@ -1682,6 +1687,7 @@ async function init() {
 
   // ---------- 🌟 森林傳說（11/19）：伺服器說「出現了」→ 在背景經過；看到 3 秒算遇見 ----------
   const legendShow = new LegendShow(scene, camera);
+  legendShow.boatAt = () => (actions.boat ? rooms.lake_dock.boats.center(actions.boat.id) : null); // ⛵ 雲鯨從船旁邊游過
   let legendLg = null; // { id: 看過幾次 }
   net.on('legend', (d) => {
     if (!LEGEND_BY_ID[d.id] || roomMgr.busy) return;
@@ -2264,23 +2270,29 @@ async function init() {
       const m = Math.max(1, Math.ceil(ms / 60000));
       return m >= 60 ? t('{h} 小時 {m} 分', { h: Math.floor(m / 60), m: m % 60 }) : t('{m} 分鐘', { m });
     };
-    const slots = res.slots
-      .map((sl, i) => {
-        if (!sl) {
-          if (!mine) return `<div class="garden-slot empty"><b>${t('空著')}</b></div>`;
-          return `<div class="garden-slot empty"><b>${t('第 {n} 格：空著', { n: i + 1 })}</b><div class="crop-pick">${CROPS.filter((c) => isOpen(c)).map((c) => `<button type="button" class="mini-btn" data-plant="${i}" data-c="${c.id}" ${(pinecones ?? 0) < c.seed ? 'disabled' : ''}>${c.icon} ${t(c.zh)}<small>🌰 ${c.seed}・${t('{h} 小時', { h: c.hours })}</small></button>`).join('')}</div></div>`;
-        }
-        const c = CROP_BY_ID[sl.c];
-        const remain = sl.ready - (Date.now() + skew);
-        const water = sl.w ? t('💧 朋友澆了 {n} 次水（收成多 1 個）', { n: sl.w }) : '';
-        if (remain <= 0) {
-          // 🌙 只能晚上收的作物（月光白蘿蔔）：白天先顯示「晚上才能收」
-          if (c.night && !isNight()) return `<div class="garden-slot ready"><b>${c.icon} ${t(c.zh)}・${t('長好了，晚上才能收成 🌙')}</b>${water ? `<small>${water}</small>` : ''}</div>`;
-          return `<div class="garden-slot ready"><b>${c.icon} ${t(c.zh)}・${t('可以收成了！')}</b>${water ? `<small>${water}</small>` : ''}${mine ? `<button type="button" class="mini-btn" data-harvest="${i}">${t('🧺 收成')}</button>` : ''}</div>`;
-        }
-        return `<div class="garden-slot"><b>${c.icon} ${t(c.zh)}・${t('還要 {t}', { t: left(remain) })}</b>${water ? `<small>${water}</small>` : ''}${!mine ? (sl.iw ? `<small>${t('你已經幫忙澆過水了 💧')}</small>` : sl.w >= WATER_MAX ? `<small>${t('今天已經有很多人澆過了')}</small>` : `<button type="button" class="mini-btn" data-water="${i}">${t('💧 幫忙澆水（少等 30 分鐘）')}</button>`) : ''}</div>`;
-      })
-      .join('');
+    // 🥕 作者 11/20：格子一覽（3 排），點空格才跳出要種什麼；可以一次種滿全部空格
+    const emptyIdx = res.slots.map((sl, i) => (sl ? -1 : i)).filter((i) => i >= 0);
+    const cell = (sl, i) => {
+      if (!sl) {
+        if (!mine) return `<div class="gcell empty"><i>🟫</i><b>${t('空著')}</b></div>`;
+        return `<button type="button" class="gcell empty" data-pick="${i}"><i>🌱</i><b>${t('空著')}</b><small>${t('點我種菜')}</small></button>`;
+      }
+      const c = CROP_BY_ID[sl.c];
+      const remain = sl.ready - (Date.now() + skew);
+      const wtag = sl.w ? `<small>💧×${sl.w}</small>` : '';
+      if (remain <= 0) {
+        // 🌙 只能晚上收的作物（月光白蘿蔔）：白天先顯示「晚上才能收」
+        if (c.night && !isNight()) return `<div class="gcell ready"><i>${c.icon}</i><b>${t(c.zh)}</b><small>${t('晚上才能收 🌙')}</small>${wtag}</div>`;
+        return `<div class="gcell ready"><i>${c.icon}</i><b>${t(c.zh)}</b>${wtag}${mine ? `<button type="button" class="mini-btn" data-harvest="${i}">${t('🧺 收成')}</button>` : `<small>${t('可以收成了')}</small>`}</div>`;
+      }
+      const wbtn = mine ? '' : sl.iw ? `<small>${t('澆過了 💧')}</small>` : sl.w >= WATER_MAX ? `<small>${t('澆滿了')}</small>` : `<button type="button" class="mini-btn" data-water="${i}">${t('💧 澆水')}</button>`;
+      return `<div class="gcell"><i>${c.icon}</i><b>${t(c.zh)}</b><small>${t('還要 {t}', { t: left(remain) })}</small>${wtag}${wbtn}</div>`;
+    };
+    const slots = `<div class="garden-grid">${res.slots.map(cell).join('')}</div>${
+      mine && emptyIdx.length
+        ? `<div class="garden-pick" id="garden-pick" hidden><b id="garden-pick-t"></b>${emptyIdx.length > 1 ? `<button type="button" class="gp-all" id="garden-all">☐ ${t('全部 {n} 個空格都種', { n: emptyIdx.length })}</button>` : ''}<div class="crop-pick">${CROPS.filter((c) => isOpen(c)).map((c) => `<button type="button" class="mini-btn" data-c="${c.id}">${c.icon} ${t(c.zh)}<small>🌰 ${c.seed}・${t('{h} 小時', { h: c.hours })}</small></button>`).join('')}</div></div>`
+        : ''
+    }${!mine && !res.slots.some(Boolean) ? `<div class="dex-note">${t('菜園現在空空的')}</div>` : ''}`;
     const expand =
       mine && res.next
         ? `<div class="garden-slot empty"><b>${t('🌱 還可以再開墾（最多 {max} 格）', { max: res.max })}</b><button type="button" class="mini-btn" id="garden-expand" ${(pinecones ?? 0) < res.next ? 'disabled' : ''}>${t('➕ 開墾第 {n} 格 🌰 {p}', { n: res.slots.length + 1, p: res.next })}</button></div>`
@@ -2311,18 +2323,48 @@ async function init() {
           return actions.perform(pose, dur, face);
         };
         const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-        for (const b of body.querySelectorAll('[data-plant]')) {
+        // 點空格 → 下面跳出作物；可以切換「全部空格都種」
+        let pickI = null;
+        let pickAll = false;
+        const pickEl = body.querySelector('#garden-pick');
+        const allBtn = body.querySelector('#garden-all');
+        const drawPick = () => {
+          body.querySelector('#garden-pick-t').textContent = pickAll ? t('全部 {n} 個空格要種什麼？', { n: emptyIdx.length }) : t('第 {n} 格要種什麼？', { n: pickI + 1 });
+          if (allBtn) allBtn.textContent = (pickAll ? '☑ ' : '☐ ') + t('全部 {n} 個空格都種', { n: emptyIdx.length });
+          allBtn?.classList.toggle('on', pickAll);
+          for (const e of body.querySelectorAll('[data-pick]')) e.classList.toggle('sel', pickAll || Number(e.dataset.pick) === pickI);
+          for (const e of body.querySelectorAll('.crop-pick [data-c]')) e.disabled = (pinecones ?? 0) < CROP_BY_ID[e.dataset.c].seed * (pickAll ? emptyIdx.length : 1);
+        };
+        for (const e of body.querySelectorAll('[data-pick]')) {
+          e.addEventListener('click', () => {
+            pickI = Number(e.dataset.pick);
+            pickAll = false;
+            pickEl.hidden = false;
+            drawPick();
+            pickEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          });
+        }
+        allBtn?.addEventListener('click', () => {
+          pickAll = !pickAll;
+          if (pickI == null) pickI = emptyIdx[0];
+          drawPick();
+        });
+        for (const b of body.querySelectorAll('.crop-pick [data-c]')) {
           b.addEventListener('click', async () => {
-            const i = Number(b.dataset.plant);
+            if (pickI == null) return;
             const c = CROP_BY_ID[b.dataset.c];
-            if ((pinecones ?? 0) < c.seed) return hud.toast(t('松果不夠，還差 {n} 顆 🌰', { n: c.seed - (pinecones ?? 0) }));
+            const n = pickAll ? emptyIdx.length : 1;
+            const cost = c.seed * n;
+            if ((pinecones ?? 0) < cost) return hud.toast(t('松果不夠，還差 {n} 顆 🌰', { n: cost - (pinecones ?? 0) }));
+            if (pickAll && !(await confirmBuy.ask({ icon: c.icon, name: t('{crop}種子 ×{n}（全部空格）', { crop: t(c.zh), n }), price: cost, coins: pinecones }))) return;
+            const i = pickAll ? emptyIdx[0] : pickI;
             if (!act(i, 'plant', 1.6)) return;
-            camp.gardenFx(hid, i, 'dirt');
+            for (const k of pickAll ? emptyIdx : [i]) camp.gardenFx(hid, k, 'dirt');
             audio.sfx('tap');
             await wait(1100); // 挖好土再種下去
-            const r = await net.request('gardenPlant', { slot: i, c: c.id });
+            const r = pickAll ? await net.request('gardenPlantAll', { c: c.id }) : await net.request('gardenPlant', { slot: i, c: c.id });
             if (r?.ok) {
-              hud.toast(t('🌱 種下{icon} {name}了！大約 {h} 小時後收成', { icon: c.icon, name: t(c.zh), h: c.hours }), 4000);
+              hud.toast(pickAll ? t('🌱 {n} 格都種下{icon} {name}了！大約 {h} 小時後收成', { n: r.n ?? n, icon: c.icon, name: t(c.zh), h: c.hours }) : t('🌱 種下{icon} {name}了！大約 {h} 小時後收成', { icon: c.icon, name: t(c.zh), h: c.hours }), 4000);
               refreshCamp();
             } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : t('沒種成，再試一次吧'));
           });
@@ -2628,6 +2670,281 @@ async function init() {
     setTrash(r);
     setTimeout(() => trashToast(r), 2800); // 等釣魚卡片先秀完
   });
+  // ---------- ⛵ 租船（作者 11/19，11/27 開） ----------
+  const lake = rooms.lake_dock;
+  /** 跟伺服器的船名單對一下：我在不在船上 */
+  const syncMyBoat = () => {
+    lake.boats.setSelf(net.id);
+    const m = roomMgr?.current?.id === 'lake_dock' ? lake.boats.mine() : null;
+    if (m && !actions.boat) {
+      if (actions.state !== 'free') actions.stop();
+      setTrophy?.(null);
+      actions.boat = { id: m.id, owner: m.owner, seat: () => lake.boats.seatOf(net.id), heading: () => lake.boats.center(m.id)?.ry };
+      lake.boat = { owner: m.owner, ry: () => (actions.state === 'free' ? player.rotationY : (lake.boats.center(m.id)?.ry ?? player.rotationY)) }; // 釣魚時人轉向船邊，船不跟著轉
+      const s = lake.boats.seatOf(net.id);
+      if (s) {
+        player.position.set(s.x, s.y, s.z);
+        player.rotationY = s.ry;
+      }
+      const left = Math.max(1, Math.round((m.d.until - Date.now()) / 60000));
+      hud.toast(m.owner ? t('⛵ 出發！WASD／搖桿划船，F 甩竿釣魚，E 下船（還有 {n} 分鐘）', { n: left }) : t('⛵ 坐上 {name} 的船了！F 甩竿釣魚，E 下船', { name: m.d.on }), 5000);
+    } else if (!m && actions.boat) leaveBoatLocal();
+    else if (m && actions.boat) actions.boat.owner = lake.boat.owner = m.owner;
+  };
+  const leaveBoatLocal = (at) => {
+    if (actions.state === 'fish') actions.stop();
+    actions.boat = null;
+    lake.boat = null;
+    player.position.y = 0;
+    if (at) player.position.set(at.x, 0, at.z);
+    player.velocity?.set(0, 0, 0);
+  };
+  net.on('boats', ({ list }) => {
+    if (roomMgr?.current?.id !== 'lake_dock') return;
+    lake.boats.setSelf(net.id);
+    lake.boats.set(list);
+    syncMyBoat();
+  });
+  net.on('boatPos', ([id, x, z, ry]) => lake.boats.move(id, x, z, ry));
+  net.on('boatOff', ({ why, x, z }) => {
+    if (!actions.boat) return;
+    leaveBoatLocal({ x, z });
+    player.rotationY = Math.PI;
+    hud.toast(why === 'time' ? t('⏰ 10 分鐘到了，船划回碼頭囉') : why === 'owner' ? t('⛵ 船主下船了，大家回到碼頭上') : t('⛵ 回到碼頭上了'), 4000);
+  });
+  net.on('whaleTent', ({ tent }) => {
+    audio.sfx('bell');
+    hud.toast(tent ? t('🐳 釣到藍鯨寶寶！送你「藍鯨帳篷」，到小舖 → ⛵ 帳篷外觀換上') : t('🐳 釣到藍鯨寶寶！送你「藍鯨帳篷」，有了帳篷就能換上'), 7000);
+  });
+  actions.onBoatLeave = async () => {
+    if (actions.boat?.owner) {
+      const now = Date.now();
+      if (!(lake._leaveAsk > now - 3000)) {
+        lake._leaveAsk = now;
+        return hud.toast(t('再按一次 E 下船（船會還回去，大家回到碼頭）'));
+      }
+    }
+    lake._leaveAsk = 0;
+    await net.request('boatLeave', {});
+  };
+  actions.onBoatJoin = async (b) => {
+    const r = await net.request('boatJoin', { id: b.id });
+    if (!r?.ok) hud.toast(r?.reason === 'full' ? t('這艘船坐滿了') : r?.reason === 'far' ? t('再靠近船一點') : t('船已經開走了'));
+  };
+  /** 🐟 魚飼料到幾點（撒了魚上鉤比較快） */
+  let baitUntil = 0;
+  fishing.fast = () => Date.now() < baitUntil;
+  // 重新整理、換裝置進來：問一下魚飼料還剩多久
+  net.on('joined', () => setTimeout(async () => {
+    const r = await net.request('boatInfo', {});
+    if (r?.feedLeft) baitUntil = Date.now() + r.feedLeft;
+  }, 3000));
+  const fmtLeft = (ms) => t('{m} 分 {s} 秒', { m: Math.floor(ms / 60000), s: Math.floor((ms % 60000) / 1000) });
+  actions.onBoatSign = async () => {
+    if (!net.online) return hud.toast(t('還沒連上伺服器，等一下再試'));
+    const info = await net.request('boatInfo', {});
+    if (!info?.ok) return;
+    if (!info.open) return hud.toast(t('⛵ 11/27 開放租船喔'));
+    modal.open(
+      t('⛵ 租船'),
+      `<div class="dex-note">${t('租 10 分鐘：自己划、在湖上哪裡都能釣魚，還有 ⛵ 船釣限定魚！朋友走到船旁邊按 E 就能免費坐上來。')}</div>
+      <div class="boat-pick">${BOAT_LIST.map((k) => `<button type="button" class="boat-card" data-boat="${k.id}" ${info.full ? 'disabled' : ''}><span class="bc-icon">${k.icon}</span><b>${t(k.zh)}</b><small>${t('{n} 人座', { n: k.people })}</small><em>🌰 ${k.price}</em></button>`).join('')}</div>
+      ${info.full ? `<div class="shop-hint">${t('船都租出去了，等一下再來')}</div>` : ''}
+      <div class="dex-note"><b>${t('🐟 特殊魚飼料')}</b>・${t('{n} 🌰：10 分鐘內魚上鉤比較快（等待時間減半），在哪裡釣都有用', { n: FEED_PRICE })}</div>
+      <button type="button" class="mini-btn" data-feed>${info.feedLeft > 0 ? t('🐟 再撒一包（還剩 {left}）', { left: fmtLeft(info.feedLeft) }) : t('🐟 買一包魚飼料 🌰 {n}', { n: FEED_PRICE })}</button>
+      <div class="dex-note">${t('⏰ 時間到船會自己划回碼頭。🐳 傳說中，湖裡住著一隻藍鯨寶寶⋯')}</div>`,
+      (body) => {
+        for (const b of body.querySelectorAll('[data-boat]'))
+          b.addEventListener('click', async () => {
+            const k = BOAT_LIST.find((x) => x.id === b.dataset.boat);
+            if (!(await confirmBuy.ask({ icon: k.icon, name: t('{name}（10 分鐘）', { name: t(k.zh) }), price: k.price, coins: pinecones }))) return;
+            const r = await net.request('boatRent', { k: k.id });
+            if (r?.ok) {
+              modal.close?.();
+              audio.splash?.();
+            } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : r?.reason === 'full' ? t('船都租出去了，等一下再來') : r?.reason === 'already' ? t('你已經在船上了') : r?.reason === 'far' ? t('走到租船看板旁邊再租') : r?.reason === 'later' ? t('⛵ 11/27 開放租船喔') : t('現在租不了，等一下再試'));
+          });
+        body.querySelector('[data-feed]')?.addEventListener('click', async () => {
+          if (!(await confirmBuy.ask({ icon: '🐟', name: t('特殊魚飼料（10 分鐘）'), price: FEED_PRICE, coins: pinecones }))) return;
+          const r = await net.request('buyFeed', {});
+          if (r?.ok) {
+            modal.close?.();
+            hud.toast(t('🐟 撒下魚飼料！{left} 內魚會比較快上鉤', { left: fmtLeft(r.feedLeft) }), 4000);
+            baitUntil = Date.now() + r.feedLeft;
+          } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : r?.reason === 'tooMany' ? t('飼料已經夠多了，等一下再撒') : t('現在買不了，等一下再試'));
+        });
+      },
+    );
+  };
+  let boatSendT = 0;
+  /** 每幀：船主把船的位置送出去（一秒 10 次） */
+  const boatTick = (dt) => {
+    if (!actions.boat) return;
+    if (roomMgr.current?.id !== 'lake_dock') return leaveBoatLocal();
+
+    if (!actions.boat.owner) return;
+    boatSendT -= dt;
+    if (boatSendT > 0) return;
+    boatSendT = 0.1;
+    const c = lake.boats.center(actions.boat.id);
+    if (c && net.online) net.socket.emit('boatMove', [+c.x.toFixed(2), +c.z.toFixed(2), +c.ry.toFixed(3)]);
+  };
+
+  // ---------- 🔥 營火河畔新玩法（作者 11/20，11/27 開）：🪨 打水漂、🦆 迷你小鴨、🤝 河神大鯉魚、🔥 火越旺魚越多 ----------
+  const river = forest.river;
+  let myDuckUntil = 0;
+  /** 別人的小鴨（加入、換地方時伺服器給的 dk） */
+  function riverDucksOf(list = []) {
+    if (roomMgr?.current?.id !== 'forest_main') return;
+    for (const p of list) if (p.dk) river.setDuck(p.id, p.dk, null);
+  }
+  forest.riverPos = (id) => {
+    if (id === net.id) return { x: player.position.x, z: player.position.z, ry: player.rotationY };
+    const r = remotes.get(id);
+    return r ? { x: r.group.position.x, z: r.group.position.z, ry: r.ry } : null;
+  };
+  net.on('duck', ({ id, until }) => {
+    if (roomMgr?.current?.id !== 'forest_main') return;
+    const r = id === net.id ? player.position : remotes.get(id)?.group.position;
+    river.setDuck(id, until, r ? { x: r.x, z: r.z } : null);
+  });
+  actions.onDuckFeed = async () => {
+    if (!net.online) return hud.toast(t('還沒連上伺服器，等一下再試'));
+    const r = await net.request('duckFeed', {});
+    if (r?.ok) {
+      myDuckUntil = r.until;
+      river.setDuck(net.id, r.until, player.position);
+      if (r.basket) basket = r.basket;
+      const m = materialOf(r.item);
+      audio.sfx('ding');
+      hud.toast(t('🦆 小鴨吃了 {icon}{name}，跟著你走 3 分鐘！（今天還能餵 {n} 次）', { icon: m?.icon ?? '', name: m ? t(m.zh) : '', n: r.left }) + (r.gain ? ` +${r.gain} 🌰` : ''), 4500);
+    } else hud.toast(r?.reason === 'noFood' ? t('🦆 採集籃裡沒有蔬菜或果實，去菜園或迷霧森林找一些吧') : r?.reason === 'full' ? t('🦆 今天餵 3 次了，小鴨吃飽了，明天再來') : r?.reason === 'already' ? t('🦆 小鴨已經跟著你囉') : r?.reason === 'later' ? t('11/27 才開放喔') : t('現在餵不了，等一下再試'));
+  };
+  // 🪨 打水漂
+  actions.onSkipPick = async () => {
+    if (!net.online) return hud.toast(t('還沒連上伺服器，等一下再試'));
+    const r = await net.request('skipInfo', {});
+    if (!r?.ok || !r.open) return hud.toast(t('11/27 才開放喔'));
+    if (r.top) river.setBoard(r.top);
+    if (r.left <= 0) return hud.toast(t('🪨 今天的 10 顆扁石頭都丟完了，明天再來'));
+    river.startAim();
+    hud.toast(t('🪨 撿起一顆扁石頭（今天還有 {n} 顆）', { n: r.left }));
+  };
+  actions.onSkipThrow = async (p) => {
+    if (p == null) return;
+    // 面向池子丟
+    const pos = player.position;
+    player.rotationY = Math.atan2(POND.x - pos.x, POND.z - pos.z);
+    actions.emote?.('bye');
+    const r = await net.request('skipThrow', { p });
+    if (!r?.ok) return hud.toast(r?.reason === 'none' ? t('🪨 今天的 10 顆扁石頭都丟完了，明天再來') : t('現在丟不了，等一下再試'));
+    if (r.top) river.setBoard(r.top);
+    river.throwStone(pos.x, pos.z, r.b, (i) => audio.sfx?.(i === r.b ? 'splash' : 'plop'));
+    setTimeout(() => hud.toast(`${t('🪨 跳了 {n} 下！', { n: r.b })}${r.pb ? t('（今天最好）') : ''}${r.gain ? ' +1 🌰' : ''}${r.left ? t('・還有 {n} 顆', { n: r.left }) : ''}`, 3500), 600 + r.b * 220);
+  };
+  net.on('skip', ({ id, b, x, z }) => roomMgr?.current?.id === 'forest_main' && id !== net.id && river.throwStone(x, z, b));
+  net.on('skipBoard', ({ top }) => river.setBoard(top));
+  // 🤝 河神大鯉魚：釣的人
+  let coopId = null;
+  let coopProgT = 0;
+  fishing.onCoop = async (phase) => {
+    if (phase === 'start') {
+      hud.toast(t('🐉 河神大鯉魚上鉤了！一個人拉不動，叫旁邊的人一起按「🤝 幫忙拉」！'), 6000);
+      const r = await net.request('coopStart', {});
+      coopId = r?.ok ? r.id : null;
+    } else {
+      if (phase === 'fail' && coopId) net.online && net.socket.emit('coopStop');
+      coopId = null;
+    }
+  };
+  net.on('coopPush', ({ id }) => id === coopId && fishing.coopPush(1));
+  // 🤝 旁邊的人看到的「幫忙拉」視窗
+  const coopEl = document.createElement('div');
+  coopEl.className = 'coop-panel';
+  coopEl.hidden = true;
+  document.getElementById('ui').appendChild(coopEl);
+  let coopHelp = null; // { id, name, until, p, helpers }
+  /** 上方按鈕列、活動提示最下面在哪裡（手機、平板、電腦排數不一樣） */
+  const belowHud = () => {
+    let y = 8;
+    for (const hid of ['online', 'today', 'event-line', 'mini-line']) {
+      const e = document.getElementById(hid);
+      if (e && !e.hidden && e.offsetParent) y = Math.max(y, e.getBoundingClientRect().bottom);
+    }
+    return Math.round(y + 6);
+  };
+  let coopBuilt = null;
+  const drawCoop = () => {
+    if (!coopHelp) return (coopEl.hidden = true), (coopBuilt = null);
+    const left = Math.max(0, Math.ceil((coopHelp.until - Date.now()) / 1000));
+    coopEl.hidden = false;
+    // 📱 觸控：放在上方按鈕列下面，不蓋住搖桿、右下動作鈕（作者 11/20 巡查）
+    coopEl.style.top = document.body.classList.contains('touch') ? `${belowHud()}px` : '';
+    const helpTxt = coopHelp.helpers?.length ? t('🤝 一起拉的人：{list}', { list: coopHelp.helpers.join('、') }) : '';
+    // 只在換一場的時候重畫，之後只改文字（一直重畫按鈕，連按時會漏按）
+    if (coopBuilt !== coopHelp.id) {
+      coopBuilt = coopHelp.id;
+      coopEl.innerHTML = `<b>${t('🐉 {name} 釣到河神大鯉魚了！', { name: coopHelp.name })}</b><small class="coop-left"></small><div class="coop-bar"><i></i></div><small class="coop-who"></small><button type="button" class="coop-btn">${t('🤝 幫忙拉！（一直按）')}</button>`;
+      coopEl.querySelector('.coop-btn').addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (coopHelp && net.online) net.socket.emit('coopPull', { id: coopHelp.id });
+        e.currentTarget.classList.remove('pop');
+        void e.currentTarget.offsetWidth;
+        e.currentTarget.classList.add('pop');
+      });
+    }
+    coopEl.querySelector('.coop-left').textContent = t('一個人拉不動，快來幫忙！（還有 {n} 秒）', { n: left });
+    coopEl.querySelector('.coop-bar i').style.width = `${Math.round((coopHelp.p ?? 0.1) * 100)}%`;
+    const who = coopEl.querySelector('.coop-who');
+    who.textContent = helpTxt;
+    who.hidden = !helpTxt;
+  };
+  net.on('coop', ({ id, by, name, left }) => {
+    if (by === net.id || roomMgr?.current?.id !== 'forest_main') return;
+    coopHelp = { id, name, until: Date.now() + left, p: 0.12, helpers: [] };
+    drawCoop();
+    audio.sfx('bell');
+  });
+  net.on('coopProg', ({ id, p, helpers }) => {
+    if (!coopHelp || coopHelp.id !== id) return;
+    coopHelp.p = p;
+    coopHelp.helpers = helpers;
+    drawCoop();
+  });
+  net.on('coopEnd', ({ id, ok, name, helpers }) => {
+    if (coopHelp?.id === id) coopHelp = null;
+    drawCoop();
+    if (ok && roomMgr?.current?.id === 'forest_main') hud.toast(helpers?.length ? t('🎉 {name} 和 {list} 一起拉上了河神大鯉魚！', { name, list: helpers.join('、') }) : t('🎉 河神大鯉魚拉上來了！'), 6000);
+    else if (!ok && id !== coopId && roomMgr?.current?.id === 'forest_main' && name) hud.toast(t('🌊 河神大鯉魚游走了⋯'), 3000);
+  });
+  /** 每幀：釣的人送進度、幫忙視窗倒數、🔥 營火多旺的提示 */
+  const fireChip = document.createElement('div');
+  fireChip.className = 'river-fire'; // ⚠️ 不能叫 fire-chip：HUD 的「🔥 回營火」按鈕已經用了
+  let fireChipT = 0;
+  fireChip.hidden = true;
+  document.getElementById('ui').appendChild(fireChip);
+  const riverTick = (dt) => {
+    if (coopId && fishing.phase === 'reel') {
+      coopProgT -= dt;
+      if (coopProgT <= 0 && net.online) {
+        coopProgT = 0.25;
+        net.socket.emit('coopProg', { p: Math.max(0, Math.min(1, fishing.progress ?? 0)) });
+      }
+    }
+    if (coopHelp && Date.now() > coopHelp.until + 1500) (coopHelp = null), drawCoop();
+    else if (coopHelp && (coopHelp._t = (coopHelp._t ?? 0) + dt) > 1) (coopHelp._t = 0), drawCoop();
+    // 🔥 在營火河畔坐下釣魚：顯示現在火多旺
+    const show = roomMgr.current?.id === 'forest_main' && actions.state === 'fish' && river.riverOpen();
+    if (show) {
+      const fr = campfire.fuelRatio;
+      const txt = fr >= FIRE_HOT ? t('🔥🔥🔥 營火超旺！河畔稀有魚 ×1.6・火光魚出沒中') : fr >= 0.4 ? t('🔥🔥 營火很旺：河畔稀有魚 ×1.3') : t('🔥 火小小的：去添柴，河裡會更熱鬧');
+      if (fireChip.textContent !== txt) fireChip.textContent = txt;
+      // 放在上方按鈕列、活動提示的下面（手機、平板、電腦按鈕排數不一樣，不能寫死高度）
+      if ((fireChipT -= dt) <= 0) (fireChipT = 0.5), (fireChip.style.top = `${belowHud()}px`);
+    }
+    fireChip.hidden = !show;
+  };
+
   actions.onTrash = async (tb) => {
     const face = Math.atan2(tb.x - player.position.x, tb.z - player.position.z);
     // 🚲 騎車中：不用停下來彎腰，直接撿進垃圾袋
@@ -2829,7 +3146,10 @@ async function init() {
     const tpDay = (ms) => Date.parse(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date(ms)));
     const left = passState.active ? Math.max(1, Math.round((tpDay(passState.until) - tpDay(Date.now())) / 86400000)) : 0;
     const cur = passState.active ? PASS_TIERS[passState.tier] ?? PASS : null;
-    const tabs = `<div class="pay-tabs"><button type="button" data-ptab="pass" class="${payTab === 'pass' ? 'on' : ''}">${t('🎫 月票')}</button><button type="button" data-ptab="gift" class="${payTab === 'gift' ? 'on' : ''}">${t('🎁 {m} 月支持營地', { m: month })}</button></div>`;
+    // 🎫 作者 11/20：12/1 起贊助禮盒拿掉、全部併進月票（月票的人用松果買當月造型、家具）
+    const sponsorEnded = !!sp?.ended;
+    if (sponsorEnded) payTab = 'pass';
+    const tabs = `<div class="pay-tabs"><button type="button" data-ptab="pass" class="${payTab === 'pass' ? 'on' : ''}">${t('🎫 月票')}</button>${sponsorEnded ? '' : `<button type="button" data-ptab="gift" class="${payTab === 'gift' ? 'on' : ''}">${t('🎁 {m} 月支持營地', { m: month })}</button>`}</div>`;
     let html = '';
     if (payTab === 'pass') {
       const status = cur ? t('✅ {icon} {name}月票使用中：到 {date}（還有 {n} 天）', { icon: cur.icon, name: t(cur.zh), date: fmtDate(passState.until), n: left }) : t('目前沒有月票');
@@ -2849,6 +3169,7 @@ async function init() {
             <li>${t('🎣 釣魚照價算 每天 {n} 條', { n: T.fish })}</li>
             <li>${t('💤 掛機每天上限 {n} 顆', { n: T.sit })}</li>
             <li>${t('🎫 可以買月票家具、跳色')}</li>
+            ${sponsorEnded ? `<li>${t('💇 可以買每個月的限定假髮、髮夾、家具')}</li>` : ''}
             ${T.id === 'star' ? `<li>${t('🌌 星空門牌、每月搬家免費 2 次')}</li>` : ''}
             <li>${t('{icon} 名字前面的徽章', { icon: T.icon })}</li>
           </ul>
@@ -2863,6 +3184,7 @@ async function init() {
         ${info && !info.account ? `<div class="dex-note">${t('購買前要先建立帳號（👤 存檔），換手機登入月票才不會不見')}</div>` : ''}
         ${info?.test && !off ? `<div class="dex-note">${t('⚠️ 目前是綠界測試模式，不會真的扣款')}</div>` : ''}
         ${off ? `<div class="outfit-today">${t('🎫 月票即將推出，敬請期待！')}</div>` : ''}
+        ${sponsorEnded ? `<div class="dex-note">${t('🎁 有月票的人，可以用松果買每個月的限定假髮、髮夾、限定家具（在「🏪 小舖 → 🎫 月票」）')}</div>` : ''}
       </div>`;
     } else {
       const wigs = sp?.wigs ?? [];
@@ -3361,6 +3683,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   /** 套用伺服器給的房間資料（加入、換分流時） */
   function applySnapshot(res) {
     remotes.reset(res.players);
+    riverDucksOf(res.players);
     for (const p of res.players) names.set(p.id, p.name);
     campfire.fuel = res.fuel;
     if (res.room === 'treehouse_music') audio.setSong(res.song);
@@ -3519,6 +3842,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   const leaveTimers = new Map();
   net.on('playerJoined', (info) => {
     remotes.add(info);
+    riverDucksOf([info]);
     names.set(info.id, info.name);
     // 營地居民走來走去不用提示
     if (!info.npc) {
@@ -3712,6 +4036,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       setRemoteFireSeats(room.id === 'forest_main');
       setRemoteHeight(room.id === 'home' ? rooms.home.heightAt : room.id === 'campground' ? rooms.campground.heightAt : null); // 坐在門口擺設上的人高度
       setRemoteSpot(room.id === 'campground' ? rooms.campground.remoteSpot : null); // 🪢 別人坐在樹屋鞦韆上也跟著盪
+      setRemoteBoat(room.id === 'lake_dock' ? (id) => rooms.lake_dock.boats.seatOf(id) : null); // ⛵ 別人坐在船上
+      if (room.id !== 'lake_dock') rooms.lake_dock.boats.clear();
+      // 🦆 離開營火廣場：別人的小鴨收起來；自己的小鴨在河邊等（回來時從河邊跑過來）
+      rooms.forest_main.river.clearDucks();
+      rooms.forest_main.river.cancelAim();
+      if (room.id === 'forest_main' && myDuckUntil > Date.now()) rooms.forest_main.river.setDuck(net.id, myDuckUntil, player.position);
       // 🛋️ 帳篷裡角色縮小一點，跟家具（沙發、床）的比例才對
       const cs = room.id === 'home' ? 0.78 : 1;
       player.mesh.scale.setScalar(cs);
@@ -3768,6 +4098,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     refreshHomeChip();
     if (res?.ok) {
       remotes.reset(res.players);
+      riverDucksOf(res.players);
       for (const p of res.players) names.set(p.id, p.name);
       campfire.fuel = res.fuel;
       if (room.id === 'treehouse_music') audio.setSong(res.song);
@@ -4725,6 +5056,63 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     if (res.pass) setPass(res.pass);
     audio.sfx('bell');
     hud.toast(t('🎁 拿到「{icon} {name}」了！回帳篷按「🛠️ 布置」擺出來', { icon: f?.icon ?? '', name: f?.name ?? '' }), 5000);
+  };
+  // 🎫 月票本月造型、限定家具（作者 11/20：12/1 起贊助禮盒併進月票）
+  shopPanel.outfitOf = (id) => OUTFIT_BY_ID[id];
+  shopPanel.onPassTab = async () => {
+    const preview = new URLSearchParams(location.search).get('xmas') === '1' ? '2026-12' : undefined;
+    const r = await net.request('passMonthInfo', { preview });
+    shopPanel.passMonth = r;
+    if (shopPanel.tab === 'pass') shopPanel.refresh();
+  };
+  shopPanel.onPassMonth = async (id, kind) => {
+    const o = kind === 'look' ? OUTFIT_BY_ID[id] : FURNITURE_BY_ID[id];
+    const x = [...(shopPanel.passMonth?.looks ?? []), ...(shopPanel.passMonth?.furn ?? [])].find((y) => y.id === id);
+    if (!o || !x) return;
+    let img = '';
+    try {
+      if (kind === 'look') {
+        const sp = profile?.species ?? 0;
+        const lk = { fur: profile?.fur ?? 0, species: sp, tail: profile?.tail || SPECIES_TAIL[sp], ears: profile?.ear || SPECIES_EARS[sp] };
+        img = snapshot(`wear:${id}:${sp}:${lk.fur}:${lk.tail}:${lk.ears}`, () => {
+          const ch = new ProceduralFox(lk);
+          ch.setOutfit({ [o.slot]: id });
+          ch.root.rotation.y = o.slot === 'clip' ? -0.6 : 0.45; // 📎 髮夾在右邊：轉過來看得到
+          const g = new THREE.Group();
+          g.add(ch.root);
+          return g;
+        });
+      } else img = snapshot(`${id}|0`, () => buildFurniture(id, {}));
+    } catch {
+      /* 畫不出來就只顯示圖示 */
+    }
+    if (!(await confirmBuy.ask({ icon: o.icon, name: kind === 'look' ? t(o.zh) : o.name, price: x.price, img, desc: t('🎫 月票限定・只賣這個月'), coins: pinecones }))) return;
+    const r = await net.request('passMonthBuy', { id });
+    if (r?.ok) {
+      audio.sfx('bell');
+      if (r.outfits) look.outfits = r.outfits;
+      if (r.home) setMyHome(r.home);
+      hud.toast(kind === 'look' ? t('💇 買到「{icon} {name}」了！到「📖 圖鑑 → 👒 造型」戴上', { icon: o.icon, name: t(o.zh) }) : t('🎁 買到「{icon} {name}」了！回帳篷按「🛠️ 布置」擺出來', { icon: o.icon, name: o.name }), 5000);
+    } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : r?.reason === 'needPass' ? t('🎫 這是月票限定，有月票才能買') : r?.reason === 'noTent' ? t('⛺ 先有帳篷，才能買家具') : r?.reason === 'notNow' ? t('這個月沒有賣這個喔') : t('現在買不了，等一下再試'));
+    await shopPanel.onPassTab();
+  };
+  // 🎣 小舖「釣具」：特殊魚飼料（作者 11/20：在小舖買，不另外放攤子；11/27 開）
+  shopPanel.fishOn = () => isOpen({ from: BOAT_FROM });
+  shopPanel.baitPrice = FEED_PRICE;
+  shopPanel.onFishTab = async () => {
+    const r = await net.request('boatInfo', {});
+    shopPanel.baitLeft = r?.feedLeft ?? 0;
+    baitUntil = Date.now() + shopPanel.baitLeft;
+    if (shopPanel.tab === 'fish') shopPanel.refresh();
+  };
+  shopPanel.onBait = async () => {
+    if (!(await confirmBuy.ask({ icon: '🐟', name: t('特殊魚飼料（10 分鐘）'), price: FEED_PRICE, coins: pinecones }))) return;
+    const r = await net.request('buyFeed', {});
+    if (r?.ok) {
+      shopPanel.baitLeft = r.feedLeft;
+      baitUntil = Date.now() + r.feedLeft;
+      hud.toast(t('🐟 撒下魚飼料！{left} 內魚會比較快上鉤', { left: fmtLeft(r.feedLeft) }), 4000);
+    } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : r?.reason === 'tooMany' ? t('飼料已經夠多了，等一下再撒') : t('現在買不了，等一下再試'));
   };
   shopPanel.onNeedPass = () => {
     hud.toast(t('🎫 這是月票限定，有月票才能買'));
@@ -5904,6 +6292,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const room = roomMgr.current;
 
     stepAutoWalk(dt);
+    boatTick(dt);
+    riverTick(dt);
     legendShow.update(dt, roomMgr.current.id);
     placeFurnPop();
     const action = actions.update(dt, input.hasMoveInput);
@@ -5915,7 +6305,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     }
     spiritGames.update(dt);
     boardUI.update(dt, elapsed);
-    if (!actions.seat) remotes.pushOut(player.position, player.radius); // 坐在圓木上不要被旁邊的人推走
+    if (!actions.seat && !actions.boat) remotes.pushOut(player.position, player.radius); // 坐在圓木上不要被旁邊的人推走
     remotes.update(dt, elapsed, updateSpirits(dt));
     net.update(dt, netState());
     cameraRig.showOff = fishing.showingOff;

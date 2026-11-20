@@ -45,7 +45,7 @@ const FISH_POOL = FISH.map((f, i) => i).filter((i) => {
   return !f.where && !f.when && !f.month && !f.junk && !f.legend && f.rarity >= 2 && f.rarity <= 4;
 });
 /** 可以當「今天特別多」的採集物：蘑菇、果子、野花裡 ★2～★3、白天晚上都有的 */
-const GATHER_POOL = GATHER_ITEMS.filter((x) => ['mush', 'fruit', 'flower'].includes(x.type) && x.rarity >= 2 && !x.night && !x.day && !x.month);
+const GATHER_POOL = GATHER_ITEMS.filter((x) => ['mush', 'fruit', 'flower'].includes(x.type) && x.rarity >= 2 && !x.night && !x.day && !x.month && !x.months && !x.from);
 
 /** 今天的限定：{ day, fish（魚的編號）, gather（採集物 id）, shiny（今天是不是異色魚日） } */
 export function todaySpecial(now = new Date()) {

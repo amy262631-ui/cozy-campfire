@@ -7,6 +7,8 @@ import { buildAccessory } from '../accessories.js';
 import { buildOutfit, animateOutfit, addSoot } from '../outfit3d.js';
 import { OUTFIT_BY_ID } from '../../game/outfits.js';
 import { HAIR_VOLUME } from '../hair3d.js';
+import { buildClip, clipFit } from '../clip3d.js';
+import { mergeStatic } from '../../scene/mergeStatic.js';
 import { createFishMesh, fishScale } from '../../fishing/fishModel.js';
 import { buildYard } from '../../rooms/yardModels.js';
 
@@ -587,7 +589,7 @@ export class ProceduralFox {
 
   /** 造型：{ head, back, neck }（造型代號，沒穿是 null） */
   setOutfit(wear = {}) {
-    const key = `${wear.head ?? ''}|${wear.back ?? ''}|${wear.neck ?? ''}|${wear.hair ?? ''}`;
+    const key = `${wear.head ?? ''}|${wear.back ?? ''}|${wear.neck ?? ''}|${wear.hair ?? ''}|${wear.clip ?? ''}`;
     if (this._outfitKey === key) return;
     this._outfitKey = key;
     this.outfit ??= {};
@@ -627,6 +629,17 @@ export class ProceduralFox {
     this.headStone.position.y = hatTop ? hat.position.y + hatTop * hat.scale.y + 0.07 : 0.4 + vol;
     // 🐟 舉魚炫耀：戴帽子（尤其大大的蘑菇帽）時魚舉高一點，不會卡在帽子裡（作者 11/12 回報）
     this.fishY = Math.max(1.42, 0.82 + (hatTop ? hat.position.y + hatTop * hat.scale.y + 0.3 : 0.4 + vol + 0.2));
+    // 📎 髮夾（月票本月造型，作者 11/20：每種頭髮都適用）：照頭髮蓬度、有沒有戴帽子放在頭的右前側
+    if (this.outfit.clip) this.outfit.clip.parent?.remove(this.outfit.clip);
+    this.outfit.clip = null;
+    const co = OUTFIT_BY_ID[wear.clip];
+    if (co?.kind === 'clip') {
+      const g = mergeStatic(buildClip(co.clip)); // ⚡ 雪花有 20 多個小零件，合成幾塊
+      clipFit(g, OUTFIT_BY_ID[wear.hair]?.hair ?? (wear.hair ? 'x' : ''), !!wear.head);
+      g.traverse((o) => o.isMesh && (o.castShadow = true));
+      this.head.add(g);
+      this.outfit.clip = g;
+    }
     // 😵 吃了黑暗料理的時候換了頭髮：重新套一次（假髮要變焦黑、捲捲頭要拿掉或加回來）
     if (this.burnt) {
       this.setBurnt(false);

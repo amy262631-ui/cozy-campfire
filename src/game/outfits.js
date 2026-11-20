@@ -16,6 +16,7 @@ export const OUTFIT_SLOTS = [
   { id: 'back', icon: '🎒', zh: '背' },
   { id: 'neck', icon: '🧣', zh: '脖子' },
   { id: 'hair', icon: '💇', zh: '頭髮' }, // 💇 贊助限定假髮（可以跟帽子一起戴）
+  { id: 'clip', icon: '📎', zh: '髮夾' }, // 📎 月票本月髮夾（12 月起；每種頭髮、帽子都能一起戴）
 ];
 
 export const OUTFITS = [
@@ -94,6 +95,10 @@ export const OUTFITS = [
   { id: 'dt_firefly_wings', slot: 'back', kind: 'wings', c1: 0xe8ffb0, c2: 0x9ad070, glow: true, deco: 'firefly', icon: '✨', zh: '螢火蟲翅膀', src: 'date', from: '2026-11-19' },
   // ---- 🍳 自由料理鍋：煮失敗（黑暗料理）10 次（作者 11/19）----
   { id: 'sooty', slot: 'hair', kind: 'sooty', c1: 0x2a2018, c2: 0x1a1410, icon: '😵', zh: '灰頭土臉', src: 'cook', from: '2026-11-19' },
+  // ---- 📎 月票本月髮夾（作者 11/20）：有月票的人在小舖「🎫 月票」用松果買（50），當月才賣；模型在 src/player/clip3d.js ----
+  { id: 'clip_snow', slot: 'clip', kind: 'clip', clip: 'snow', icon: '❄️', zh: '雪花髮夾', src: 'pass', month: '2026-12' },
+  { id: 'clip_deer', slot: 'clip', kind: 'clip', clip: 'deer', icon: '🦌', zh: '羊毛氈小麋鹿夾', src: 'pass', month: '2026-12' },
+  { id: 'clip_flower', slot: 'clip', kind: 'clip', clip: 'flower', icon: '🌸', zh: '花朵髮夾', src: 'pass', month: '2026-12' },
 ];
 
 export const OUTFIT_BY_ID = Object.fromEntries(OUTFITS.map((o) => [o.id, o]));

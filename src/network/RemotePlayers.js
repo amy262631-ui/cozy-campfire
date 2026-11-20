@@ -28,6 +28,7 @@ const POSE_OF = {
   wave: 'wave', salute: 'salute', bye: 'bye', pray: 'pray', // 表情動作
   pick: 'pick', catch: 'catch', plant: 'plant', water: 'water', // 採摘、揮網、種菜、澆水
   sofa: 'sit', sleep: 'sleep', // 🛋️ 坐沙發、躺床
+  boat: 'sit', // ⛵ 坐在船上
 };
 
 function makeNameTag(name, npc = false) {
@@ -160,7 +161,8 @@ class RemotePlayer {
 
     const c = this.character;
     const locomotion = this.speed < 0.3 ? 'idle' : t.a === 'run' ? 'run' : 'walk';
-    c.setPose(POSE_OF[t.a] ?? locomotion);
+    const onBoat = boatFn?.(this.id) ?? null; // ⛵ 在船上：坐在船的座位上（位置跟著船，不跟著他自己送的）
+    c.setPose(onBoat && (t.a === 'idle' || t.a === 'walk' || t.a === 'run') ? 'sit' : (POSE_OF[t.a] ?? locomotion));
     c.setProp('stick', t.a === 'roast');
     c.setProp('blanket', t.a === 'blanket');
     c.setProp('rod', t.a === 'fish' || t.a === 'reel');
@@ -214,6 +216,10 @@ class RemotePlayer {
       const s = spotFn(this.pos.x, this.pos.z, this.target.d ?? 0);
       if (s) this.group.position.copy(s);
     }
+    if (onBoat) {
+      this.group.position.set(onBoat.x, onBoat.y, onBoat.z);
+      if (t.a === 'boat' || t.a === 'idle' || t.a === 'walk' || t.a === 'run') this.ry = onBoat.ry;
+    }
     this.group.rotation.y = this.ry;
   }
 
@@ -231,6 +237,11 @@ const SIT_STATES = new Set(['sofa', 'eat', 'sit', 'fish', 'reel', 'roast', 'show
 /** 目前房間的地面高度（小木屋才有）；null＝平地 */
 let heightFn = null;
 let spotFn = null;
+let boatFn = null;
+/** ⛵ 湖上的船：回傳某個人在船上該坐的位置（不在船上 null） */
+export const setRemoteBoat = (fn) => {
+  boatFn = fn;
+};
 /** 房間給的「會動的座位」：回傳那個人現在該在的位置（沒有就 null） */
 export const setRemoteSpot = (fn) => {
   spotFn = fn;

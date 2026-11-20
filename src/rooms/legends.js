@@ -227,9 +227,7 @@ export function buildMossTortoise(v = 'cloud') {
   const tailM = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), skinM);
   tailM.position.set(0, 0.3, -1.0);
   g.add(tailM);
-  const light = new THREE.PointLight(0xffd98a, 1.0, 5);
-  light.position.set(0, top + 0.4, 0.6);
-  g.add(light);
+  // ⚡ 11/20：不加真的燈光（傳說出現時手機會頓一下），靠會發亮的顏色就好
   g.userData.tick = (t) => {
     legs.forEach((l, i) => (l.position.y = 0.18 + Math.max(0, Math.sin(t * 1.4 + (i % 2) * Math.PI)) * 0.07));
     head.rotation.x = Math.sin(t * 0.7) * 0.06;
@@ -313,8 +311,7 @@ export function buildCloudWhale() {
   }
   spout.position.set(0, 0.6, 0.45);
   g.add(spout);
-  const light = new THREE.PointLight(0x9fd0ff, 1.5, 6);
-  g.add(light);
+  // ⚡ 11/20：不加真的燈光（出現時手機會頓一下）
   g.userData.tick = (t) => {
     tail.rotation.x = Math.sin(t * 1.3) * 0.25;
     fins.forEach((f, i) => (f.rotation.x = Math.sin(t * 1.3 + i) * 0.3));
@@ -444,9 +441,6 @@ export function buildSantaSleigh() {
     deers.push(d);
   }
   if (deers[1]) {
-    const nl = new THREE.PointLight(0xff4a4a, 1.2, 3);
-    nl.position.set(0, 0.65, 2.1);
-    g.add(nl);
   }
   // 韁繩
   const rein = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.5, 4), gold);

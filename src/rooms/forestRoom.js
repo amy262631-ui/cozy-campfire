@@ -7,8 +7,9 @@ import { buildShrine } from './shrine.js';
 import { buildCairnGarden, CAIRN_GARDEN_CLEARING } from './cairns.js';
 import { buildMiniLayer } from './miniLayer.js';
 import { buildPond } from './pond.js';
+import { createRiverFun } from './riverFun.js';
 import { ENTRANCE_GEO } from '../game/entrances.js';
-import { POND_CLEARINGS } from '../game/pondShape.js';
+import { POND_CLEARINGS, POND } from '../game/pondShape.js';
 import { buildWishTree, WISH_TREE_CLEARING } from './wishTree.js';
 import { buildXmasDecor } from './xmasDecor.js';
 import { isXmas } from '../game/season.js';
@@ -575,6 +576,7 @@ export function createForestRoom() {
   // ---------- 營火河畔：在營火旁就能釣魚 ----------
   const pond = buildPond(world, group);
   group.add(pond.group);
+  const river = createRiverFun(group); // 🔥 作者 11/20：🦆 迷你小鴨、🪨 打水漂（11/27 開）
 
   // ---------- 🏛️ 營地標本櫃、🍲 營火料理鍋、✨ 營火寶藏 ----------
   const extras = buildCampExtras(group, world);
@@ -651,6 +653,7 @@ export function createForestRoom() {
     wishTree,
     mini,
     pond,
+    river,
     fishSpot: null, // 坐下釣魚時記錄（ActionStateMachine 用來固定位置與面向）
     fishing: null, // 由 main.js 放入 FishingGame（和湖畔共用）
     setAreas: () => {}, // 人數小木牌拿掉了（各區人數在「🧭 去哪裡」選單）
@@ -660,6 +663,7 @@ export function createForestRoom() {
     trash,
     /** 手機的 F 按鈕：在水邊變成「釣魚」、釣魚中變成「拉竿」 */
     roastHint(actions) {
+      if (river.aiming) return ['🪨', t('丟')];
       if (actions.state === 'fish') return this.fishing?.phase === 'show' ? ['🎣', t('繼續')] : ['🎣', t('拉竿')];
       return actions.state === 'free' && pond.spotAt(actions.player.position) ? ['🎣', t('釣魚')] : null;
     },
@@ -673,6 +677,18 @@ export function createForestRoom() {
 
     onAction(name, actions) {
       lastActions = actions;
+      // 🪨 打水漂：拿著扁石頭時 F＝丟、E＝不丟了
+      if (river.aiming) {
+        if (name === 'roast') {
+          actions.onSkipThrow?.(river.stopAim());
+          return true;
+        }
+        if (name === 'interact') {
+          river.cancelAim();
+          actions.hud.toast(t('石頭放回去了'));
+          return true;
+        }
+      }
       // 🪵 坐在圓木上：E＝坐著添柴火、F＝直接在座位上烤棉花糖、Z＝坐著裹毯子；移動＝起身
       if (seatedOn()) {
         if (name === 'interact') {
@@ -730,6 +746,16 @@ export function createForestRoom() {
         }
         if (extras.nearPot(pos)) {
           actions.onCook?.();
+          return true;
+        }
+        // 🪨 扁石頭堆：撿一顆來打水漂
+        if (river.nearPile(pos)) {
+          actions.onSkipPick?.();
+          return true;
+        }
+        // 🦆 河邊：餵迷你小鴨
+        if (river.nearBank(pos)) {
+          actions.onDuckFeed?.();
           return true;
         }
       }
@@ -796,6 +822,9 @@ export function createForestRoom() {
       if (extras.nearBin(p0)) return ['♻️', t('回收')];
       if (extras.nearMuseum(p0)) return ['🏛️', t('標本櫃')];
       if (extras.nearPot(p0)) return ['🍲', t('料理')];
+      if (river.aiming) return ['🪨', t('不丟了')];
+      if (!carrying && river.nearPile(p0)) return ['🪨', t('撿扁石頭')];
+      if (!carrying && river.nearBank(p0)) return ['🦆', t('餵小鴨')];
       if (nearShrine(actions)) return ['⛩️', t('祈福')];
       if (nearBoard(actions)) return ['📌', t('告示牌')];
       const pos = actions.player.position;
@@ -814,6 +843,9 @@ export function createForestRoom() {
 
     prompt(actions) {
       const p0 = actions.player.position;
+      if (river.aiming) return t('<kbd>F</kbd> 🪨 丟！（看準綠色）　<kbd>E</kbd> 不丟了');
+      if (!carrying && river.nearPile(p0)) return t('<kbd>E</kbd> 🪨 撿扁石頭打水漂');
+      if (!carrying && river.nearBank(p0) && pond.spotAt(p0)) return actions.compact ? t('<kbd>F</kbd> 釣魚　<kbd>E</kbd> 🦆 餵小鴨') : t('<kbd>F</kbd> 坐下釣魚　<kbd>E</kbd> 🦆 餵小鴨');
       if (!carrying && treasures.near(p0)) return t('<kbd>E</kbd> ✨ 撿起閃閃發光的東西');
       if (!carrying && trash.near(p0)) return t('<kbd>E</kbd> ♻️ 撿起垃圾');
       if (extras.nearBin(p0)) return t('<kbd>E</kbd> ♻️ 把垃圾丟進回收桶');
@@ -847,6 +879,9 @@ export function createForestRoom() {
       if (xmas.group.visible) xmas.update(dt, t, camera?.position);
       mini.update(dt, t);
       pond.update(dt, t);
+      river.update(dt, t, (id) => this.riverPos?.(id) ?? null);
+      // 走開石頭堆、去做別的事：不丟了
+      if (river.aiming && actions && (actions.state !== 'free' || Math.hypot(actions.player.position.x - POND.x, actions.player.position.z - POND.z) > 9)) river.cancelAim();
       // 營火河畔的釣魚：離開釣魚狀態（移動、換房間）就收竿
       if (this.fishing?.group === pond.group) {
         if (actions?.state !== 'fish' && this.fishing.active) this.fishing.stop();

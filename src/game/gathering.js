@@ -123,10 +123,49 @@ export const GATHER_ITEMS = [
   { id: 'snow_globe', type: 'treasure', icon: '❄️', zh: '雪花水晶球', rarity: 3, color: 0xe0f4ff, hint: '晚上 8～10 點，營火附近閃閃發光' },
   // ---- 🎄 12 月限定（作者 11/16）----
   { id: 'poinsettia', type: 'flower', icon: '🌺', zh: '聖誕紅', rarity: 2, color: 0xd8283a, month: 12, hint: '12 月限定：森林裡紅紅的一小叢' },
-  { id: 'reindeer_beetle', type: 'bug', icon: '🦌', zh: '馴鹿角甲蟲', rarity: 3, color: 0x8a5a3a, month: 12, hint: '12 月限定：頭上的角像小馴鹿，很少見' },
+  { id: 'reindeer_beetle', type: 'bug', icon: '🦌', zh: '馴鹿角甲蟲', rarity: 3, color: 0x8a5a3a, month: 12, hint: '12 月限定：頭上的角像小馴鹿，很少見' },  // ---- 🌱 11/27 每一類 +3（作者 11/20：照建議；from＝開放日，之前採不到、圖鑑不顯示）----
+  { id: 'marsh_mush', type: 'mush', icon: '🍄', zh: '棉花糖菇', rarity: 1, color: 0xfbe4ec, from: '2026-11-27', hint: '粉粉白白，看起來好軟' },
+  { id: 'bubble_mush', type: 'mush', icon: '🫧', zh: '泡泡菇', rarity: 2, color: 0x9fd8f0, from: '2026-11-27', hint: '傘蓋像一顆顆小泡泡' },
+  { id: 'rainbow_mush', type: 'mush', icon: '🌈', zh: '彩虹傘菇', rarity: 3, color: 0xff9ad8, from: '2026-11-27', hint: '雨後偶爾會冒出來，非常少見' },
+  { id: 'hawthorn', type: 'fruit', icon: '🔴', zh: '山楂', rarity: 1, color: 0xc8302a, from: '2026-11-27', hint: '酸酸的小紅果' },
+  { id: 'jujube', type: 'fruit', icon: '🟤', zh: '紅棗', rarity: 2, color: 0x9a3a22, from: '2026-11-27', hint: '曬乾了會變甜' },
+  { id: 'star_berry', type: 'fruit', icon: '⭐', zh: '星星莓', rarity: 3, color: 0xffd84a, from: '2026-11-27', hint: '切開裡面是一顆小星星' },
+  { id: 'mini_sunflower', type: 'flower', icon: '🌻', zh: '小向日葵', rarity: 1, color: 0xffc83a, from: '2026-11-27', day: true, hint: '白天總是看著太陽' },
+  { id: 'wild_lily', type: 'flower', icon: '🌷', zh: '野百合', rarity: 2, color: 0xfff2f0, from: '2026-11-27', hint: '香香的白色小喇叭' },
+  { id: 'galaxy_flower', type: 'flower', icon: '🌌', zh: '銀河花', rarity: 3, color: 0x6a5ac9, night: true, from: '2026-11-27', hint: '晚上花瓣裡有星星在閃' },
+  { id: 'grasshopper', type: 'bug', icon: '🦗', zh: '綠蚱蜢', rarity: 1, color: 0x8ac84a, day: true, from: '2026-11-27', hint: '草叢裡跳來跳去' },
+  { id: 'honeybee', type: 'bug', icon: '🐝', zh: '小蜜蜂', rarity: 1, color: 0xffc83a, day: true, from: '2026-11-27', hint: '嗡嗡嗡，在花旁邊忙' },
+  { id: 'blue_morpho', type: 'bug', icon: '🦋', zh: '藍閃蝶', rarity: 3, color: 0x3a8aff, day: true, from: '2026-11-27', hint: '翅膀藍得會發亮，很少見' },
+  { id: 'dot_stone', type: 'stone', icon: '🪨', zh: '斑點石', rarity: 1, color: 0xb8aa98, from: '2026-11-27', hint: '身上有好多小點點' },
+  { id: 'star_stone', type: 'stone', icon: '⭐', zh: '星星石', rarity: 2, color: 0xe8d8a0, from: '2026-11-27', hint: '剛好是一顆星星的形狀' },
+  { id: 'purple_quartz', type: 'stone', icon: '💎', zh: '紫水晶', rarity: 3, color: 0xa87ae8, from: '2026-11-27', hint: '對著光看是淡淡的紫色' },
+  { id: 'hermit_shell', type: 'shell', icon: '🐚', zh: '寄居蟹殼', rarity: 1, color: 0xe8b88a, from: '2026-11-27', hint: '寄居蟹換新家留下的' },
+  { id: 'boat_drift', type: 'shell', icon: '⛵', zh: '小船漂流木', rarity: 2, color: 0x9a7a5a, from: '2026-11-27', hint: '剛好像一艘小船' },
+  { id: 'gold_conch', type: 'shell', icon: '🐚', zh: '金色螺貝', rarity: 3, color: 0xf2c84a, from: '2026-11-27', hint: '閃閃發亮，傳說會帶來好運' },
+  // ---- ❄️ 冬天限定（作者 11/20：12～2 月才採得到；不算進全收集，收在圖鑑「限定」區；每年冬天再出現）----
+  { id: 'snowcap_mush', type: 'mush', icon: '❄️', zh: '雪帽菇', rarity: 2, color: 0xf4f8ff, months: [12, 1, 2], hint: '冬天限定：頭上頂著一小團雪' },
+  { id: 'holly_berry', type: 'fruit', icon: '🍒', zh: '冬青果', rarity: 2, color: 0xd8283a, months: [12, 1, 2], hint: '冬天限定：紅紅一串，聖誕節的味道' },
+  { id: 'frost_flower', type: 'flower', icon: '🌨️', zh: '雪花草', rarity: 2, color: 0xbfe8ff, months: [12, 1, 2], hint: '冬天限定：冰藍色，會微微發亮' },
+  { id: 'winter_firefly', type: 'bug', icon: '✨', zh: '冬螢', rarity: 2, color: 0x9fd8ff, night: true, months: [12, 1, 2], hint: '冬天限定：只有晚上，冷冷的藍光' },
+  { id: 'ice_crystal', type: 'stone', icon: '🧊', zh: '冰晶石', rarity: 2, color: 0xd8f4ff, months: [12, 1, 2], hint: '冬天限定：透明得像一塊冰' },
 ];
 /** 🗓️ 每月限定的東西（不算進全收集） */
-export const isLimited = (x) => !!x?.month;
+export const isLimited = (x) => !!(x?.month || x?.months);
+/** 🌱 這個東西開放了沒（from：台北日期；本機測試 ?open1120=1、OPEN_1120=1） */
+export function gatherOpen(x, now = new Date()) {
+  if (!x?.from) return true;
+  try {
+    if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('open1120') === '1') return true;
+  } catch {
+    /* 伺服器 */
+  }
+  if (globalThis.process?.env?.OPEN_1120 === '1') return true;
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(now) >= x.from;
+}
+/** 這個月採得到嗎（每月限定、冬天限定） */
+export const inSeason = (x, month = taipeiMonth()) => (!x.month || x.month === month) && (!x.months || x.months.includes(month));
+/** 算進全收集的（不含限定、還沒開放的） */
+export const gatherDexItems = () => GATHER_ITEMS.filter((x) => !isLimited(x) && gatherOpen(x));
 /** 台北時間現在是幾月（1～12） */
 export function taipeiMonth(now = new Date()) {
   return Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', month: 'numeric' }).format(now));
@@ -206,7 +245,7 @@ export function isNight(now = new Date()) {
 /** 在某一型的採集點採到什麼（依稀有度抽：★★★ 很難遇到；白天、晚上的種類不一樣） */
 /** boost：📅 今天特別多的採集物 id（dailySpecial.js），比較容易採到 */
 export function gatherItemAt(type, night, rand = Math.random, month = taipeiMonth(), boost = null) {
-  const pool = GATHER_ITEMS.filter((x) => x.type === type && (night ? !x.day : !x.night) && (!x.month || x.month === month));
+  const pool = GATHER_ITEMS.filter((x) => x.type === type && (night ? !x.day : !x.night) && inSeason(x, month) && gatherOpen(x));
   const weight = (x) => (x.id === boost ? Math.max([0, 14, 3, 0.5][x.rarity] * 4, 8) : [0, 14, 3, 0.5][x.rarity]);
   const total = pool.reduce((a, x) => a + weight(x), 0);
   let r = rand() * total;

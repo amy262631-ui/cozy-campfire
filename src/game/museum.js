@@ -21,14 +21,14 @@ export const MUSEUM_MORE = '2026-11-19'; // 作者 11/19：改成跟 11/20 更�
 
 const fishIcon = (f) => (f.legend ? '🐉' : f.rarity >= 5 ? '🐠' : f.rarity >= 4 ? '🐡' : '🐟');
 export const MUSEUM_FISH = FISH.map((f, i) => ({ f, i }))
-  .filter(({ f }) => !f.junk)
+  .filter(({ f }) => !f.junk && !f.boat && !f.fire && !f.coop) // ⛵ 船釣、🔥 營火河畔限定的不放
   .map(({ f, i }) => ({ id: `fish_${i}`, fish: i, type: 'fish', icon: fishIcon(f), name: f.name, rarity: Math.min(3, Math.max(1, Math.ceil((f.rarity || 1) / 2))) }));
 const MORE = { from: MUSEUM_MORE };
 /** 🥕 菜園蔬菜（id 就是蔬菜的 id，捐了從採集籃拿走一個） */
 const MUSEUM_VEG = CROPS.map((c) => ({ id: c.id, type: 'veg', icon: c.icon, zh: c.zh, rarity: c.seed <= 1 ? 1 : c.seed <= 2 ? 2 : 3, ...MORE, ...(c.from ? { from: c.from } : {}) }));
 /** ✨ 異色魚拓（每月限定的魚沒有算） */
 const MUSEUM_SHINY = FISH.map((f, i) => ({ f, i }))
-  .filter(({ f }) => !f.junk && !f.month)
+  .filter(({ f }) => !f.junk && !f.month && !f.boat && !f.fire && !f.coop)
   .map(({ f, i }) => ({ id: `shiny_${i}`, fish: i, type: 'shiny', icon: '✨', name: f.name, rarity: 3, ...MORE }));
 /** ♻️ 怪東西展（捐了從垃圾袋拿走一件） */
 const MUSEUM_TRASH = TRASH.map((x) => ({ id: `trash_${x.id}`, trash: x.id, type: 'trash', icon: x.icon, zh: x.zh, rarity: x.rarity, ...MORE }));

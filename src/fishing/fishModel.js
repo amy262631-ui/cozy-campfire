@@ -60,6 +60,80 @@ export function createFishMesh(index, shiny = false) {
     return g;
   }
 
+  // ⛵ 船釣限定：🦭 小海豹、🐳 藍鯨寶寶（不是魚的樣子，另外做）
+  if (f.shape === 'seal' || f.shape === 'whale') {
+    const whale = f.shape === 'whale';
+    const skin = mat(f.color, glow);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 22, 16), skin);
+    body.scale.set(1.05, whale ? 0.6 : 0.5, whale ? 0.55 : 0.45);
+    g.add(body);
+    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 12), mat(whale ? 0xf2f4fa : 0xe8e2d8));
+    belly.scale.set(0.95, 0.38, 0.42);
+    belly.position.set(0.05, -0.12, 0);
+    g.add(belly);
+    // 尾巴：兩片圓圓的
+    const tail = new THREE.Group();
+    for (const sd of [-1, 1]) {
+      const fl = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), skin);
+      fl.scale.set(0.9, 0.25, 0.7);
+      fl.position.set(-0.08, whale ? 0.06 : 0, sd * 0.12);
+      fl.rotation.y = sd * 0.5;
+      tail.add(fl);
+    }
+    tail.position.x = -0.55;
+    g.add(tail);
+    // 小手（前鰭）
+    for (const sd of [-1, 1]) {
+      const fin = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), skin);
+      fin.scale.set(1, 0.3, 0.6);
+      fin.position.set(0.1, -0.16, sd * 0.25);
+      fin.rotation.x = sd * 0.6;
+      g.add(fin);
+    }
+    // 臉：大眼睛、亮點、腮紅；海豹多鼻子、鬍鬚
+    for (const sd of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8), mat(0x1c1410, { roughness: 0.2 }));
+      eye.position.set(0.4, 0.08, 0.13 * sd);
+      g.add(eye);
+      const shine = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      shine.position.set(0.44, 0.1, 0.15 * sd);
+      g.add(shine);
+      const blush = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff9fb8 }));
+      blush.scale.set(0.5, 0.6, 1);
+      blush.position.set(0.38, -0.02, 0.2 * sd);
+      g.add(blush);
+    }
+    if (whale) {
+      // 頭頂小噴水
+      const wm = new THREE.MeshBasicMaterial({ color: 0xbfeaff, transparent: true, opacity: 0.85 });
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.04, 0.22, 8), wm);
+      col.position.set(0.15, 0.4, 0);
+      g.add(col);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        const d = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), wm);
+        d.position.set(0.15 + Math.cos(a) * 0.08, 0.52, Math.sin(a) * 0.08);
+        g.add(d);
+      }
+      body.material.emissiveIntensity = 0.35;
+    } else {
+      const nose = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), mat(0x3a2a24));
+      nose.position.set(0.52, 0.0, 0);
+      g.add(nose);
+      const wh = mat(0x6a5a50);
+      for (const sd of [-1, 1])
+        for (const k of [-1, 1]) {
+          const w = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.18, 4), wh);
+          w.rotation.z = Math.PI / 2;
+          w.rotation.y = sd * (0.4 + k * 0.15);
+          w.position.set(0.52, -0.03 + k * 0.02, sd * 0.08);
+          g.add(w);
+        }
+    }
+    g.userData.tail = tail;
+    return g;
+  }
+
   // 身體（圓圓的橢球）
   const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 20, 14), mat(f.color, glow));
   body.scale.set(1, 0.48, 0.3);
@@ -101,6 +175,48 @@ export function createFishMesh(index, shiny = false) {
     const shine = new THREE.Mesh(new THREE.SphereGeometry(0.015, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffffff }));
     shine.position.set(0.35, 0.07, 0.17 * side);
     g.add(shine);
+  }
+  // ⛵ 船釣限定的魚：換一下比例和鰭
+  if (f.shape === 'shark') {
+    fin.scale.set(2.2, 2.6, 0.3); // 高高的背鰭
+    fin.position.y = 0.42;
+    tail.scale.set(1.6, 1.8, 0.22);
+    body.scale.set(1.15, 0.42, 0.3);
+  } else if (f.shape === 'mola') {
+    body.scale.set(0.8, 0.85, 0.22); // 圓圓扁扁、尾巴很短
+    belly.scale.set(0.7, 0.55, 0.2);
+    fin.scale.set(1.6, 2.6, 0.2);
+    fin.position.set(-0.15, 0.55, 0);
+    const anal = fin.clone();
+    anal.rotation.z = Math.PI;
+    anal.position.set(-0.15, -0.55, 0);
+    g.add(anal);
+    tail.scale.set(0.5, 1.6, 0.2);
+    tail.position.x = -0.42;
+  } else if (f.shape === 'ribbon') {
+    body.scale.set(2.4, 0.22, 0.12); // 長長的帶子，背上一整排紅鰭
+    belly.scale.set(2.2, 0.12, 0.1);
+    fin.visible = false;
+    const red = mat(finColor, glow);
+    for (let k = 0; k < 14; k++) {
+      const r = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.16, 3), red);
+      r.scale.z = 0.3;
+      r.position.set(1.05 - k * 0.16, 0.15, 0);
+      g.add(r);
+    }
+    const crest = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.4, 3), red);
+    crest.position.set(1.0, 0.32, 0);
+    crest.rotation.z = -0.4;
+    g.add(crest);
+    tail.position.x = -1.25;
+    tail.scale.set(0.5, 0.5, 0.2);
+    g.children.forEach((c) => {
+      if (c.geometry?.type === 'SphereGeometry' && c !== body && c !== belly) c.position.x += 0.7; // 眼睛移到頭
+    });
+  } else if (f.shape === 'mahi') {
+    body.scale.set(1.15, 0.5, 0.26); // 額頭方方的
+    fin.scale.set(4.5, 0.8, 0.2);
+    fin.position.set(-0.05, 0.25, 0);
   }
   // 🐉 傳說之魚：長鬍鬚＋頭上一對小角，發光更強
   if (f.legend) {

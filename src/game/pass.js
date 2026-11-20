@@ -60,3 +60,28 @@ export function sponsorTier(month, amt) {
   if (amt >= 100) return { small: 1, wig: true, big: false, pick: false };
   return { small: 0, wig: amt >= SPONSOR.amounts[0], big: false, pick: false };
 }
+
+/**
+ * 🎫 12/1 起（作者 11/20）：💝 支持營地只剩月票，🎁 贊助禮盒拿掉（只有幾位玩家買，不要讓他們兩邊都付錢）
+ *   → 有月票的人在小舖「🎫 月票」用松果買每個月的限定造型、限定家具（當月才賣，下個月下架，隔年同月再回來；買了永久）
+ *   SPONSOR_END：這個月起不能再贊助（11 月贊助照舊到 11/30）
+ */
+export const SPONSOR_END = '2026-12';
+/** 作者 11/20：支持營地只剩月票、月票限定聖誕家具也跟 11/27 聖誕更新一起（11 月贊助到 11/26） */
+export const SPONSOR_END_DAY = '2026-11-27';
+/** 月票本月造型的價格：💇 假髮、📎 髮夾 */
+export const PASS_LOOK_PRICE = { hair: 150, clip: 50 };
+/** 月票本月限定家具（原本禮盒的家具）：{ 'YYYY-MM': { 家具 id: 松果 } } */
+export const PASS_MONTH_FURN = {
+  '2026-12': { box12_lux: 120, box12_globe: 50, box12_train: 50, box12_fire: 50 }, // 作者 11/20：豪華聖誕樹 120（兩種月票都能買）、其他 50
+};
+/** 💇 作者 11/20：12 月的髮型（假髮、髮夾）、限定家具都跟 11/27 聖誕更新一起提早開賣（11 月贊助的假髮該有的都有了） */
+export const PASS_LOOK_EARLY = { '2026-12': '2026-11-27' };
+/** 今天（'YYYY-MM-DD'）月票造型賣哪個月的 */
+export function passLookMonth(day) {
+  for (const [ym, from] of Object.entries(PASS_LOOK_EARLY)) if (day >= from && day.slice(0, 7) < ym) return ym;
+  return day.slice(0, 7);
+}
+/** 這個月（'YYYY-MM'）月票能買的造型（outfits.js 的 OUTFITS 傳進來）：當月的假髮（女生款、男生款）＋當月的髮夾 */
+export const passMonthLooks = (outfits, ym) =>
+  ym < SPONSOR_END ? [] : outfits.filter((o) => (o.src === 'sponsor' || o.src === 'pass') && o.month === ym).map((o) => ({ ...o, price: PASS_LOOK_PRICE[o.slot] ?? 50 }));

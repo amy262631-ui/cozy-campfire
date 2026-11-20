@@ -32,6 +32,12 @@ export class LegendShow {
       // 湖在碼頭前面（z 是負的）：從湖的一邊浮起來游到另一邊，最後游上天
       a = new THREE.Vector3(-30 * dir, 0, -30);
       b = new THREE.Vector3(30 * dir, 0, -26);
+      // ⛵ 坐在船上：從船的旁邊（湖心那一側）游過去（作者 11/19：雲鯨游到船邊）
+      const bc = this.boatAt?.();
+      if (bc) {
+        a = new THREE.Vector3(bc.x - 30 * dir, 0, bc.z - 8);
+        b = new THREE.Vector3(bc.x + 30 * dir, 0, bc.z - 6.5);
+      }
       scale = 4;
     } else if (id === 'sleigh') {
       // 天空：從鏡頭看出去畫面上半部那一帶飛過（不然鏡頭往下看會看不到）

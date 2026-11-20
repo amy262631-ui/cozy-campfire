@@ -4126,6 +4126,27 @@ body.building .demo-badge {
   line-height: 1.7;
 }
 
+.welcome-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.welcome-grid div {
+  padding: 7px 2px;
+  border-radius: 10px;
+  background: rgba(255, 245, 230, 0.08);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.welcome-grid b {
+  display: block;
+  font-size: 20px;
+  font-weight: 400;
+}
+
 .welcome .welcome-sub {
   font-size: 12.5px;
   opacity: 0.75;
@@ -5445,6 +5466,96 @@ body.touch .m-stack .fire-meter {
 .garden-slot.ready {
   background: rgba(120, 200, 120, 0.2);
   outline: 1px solid rgba(160, 230, 160, 0.4);
+}
+
+/* 🥕 菜園格子一覽（作者 11/20） */
+.garden-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.gcell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 88px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  background: rgba(120, 90, 60, 0.25);
+  border: 1px solid transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+}
+
+.gcell i {
+  font-style: normal;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.gcell b {
+  font-size: 13px;
+}
+
+.gcell small {
+  font-size: 11.5px;
+  opacity: 0.8;
+}
+
+.gcell .mini-btn {
+  margin-top: 2px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+button.gcell.empty {
+  border: 1px dashed rgba(255, 220, 170, 0.45);
+  background: rgba(120, 90, 60, 0.12);
+  cursor: pointer;
+}
+
+button.gcell.empty.sel {
+  border: 2px solid #ffc56a;
+  background: rgba(255, 190, 110, 0.18);
+}
+
+.gcell.ready {
+  background: rgba(120, 200, 120, 0.2);
+  border-color: rgba(160, 230, 160, 0.45);
+}
+
+.garden-pick {
+  margin: 6px 0 10px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 245, 230, 0.06);
+  border: 1px solid rgba(255, 210, 150, 0.3);
+}
+
+.garden-pick > b {
+  display: block;
+  font-size: 14px;
+}
+
+.gp-all {
+  margin-top: 6px;
+  padding: 5px 12px;
+  border: 1px solid rgba(255, 210, 150, 0.45);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.gp-all.on {
+  background: rgba(240, 138, 60, 0.35);
+  border-color: #ffb46b;
 }
 
 .crop-pick {
@@ -7523,3 +7634,32 @@ body.touch .bg-panel { bottom: 250px; }
 .pot-result.dark .mini-btn { background: #8a6ab0; color: #fff; }
 .hen-name { display: flex; gap: 6px; margin-top: 4px; }
 .hen-name input { flex: 1; min-width: 0; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(0, 0, 0, 0.2); color: inherit; padding: 4px 8px; font: inherit; font-size: 13px; }
+
+/* ⛵ 租船（11/27） */
+.boat-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 10px; }
+.boat-card { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border-radius: 14px; border: 1px solid rgba(255, 220, 170, 0.35); background: rgba(255, 255, 255, 0.06); color: inherit; font: inherit; cursor: pointer; }
+.boat-card:hover:not(:disabled) { background: rgba(255, 220, 170, 0.14); }
+.boat-card:disabled { opacity: 0.45; cursor: default; }
+.boat-card .bc-icon { font-size: 30px; line-height: 1.1; }
+.boat-card small { opacity: 0.8; font-size: 12px; }
+.boat-card em { font-style: normal; color: #ffc56a; }
+
+/* 🔥 營火河畔（11/27）：打水漂力道條、河神大鯉魚「幫忙拉」、營火多旺 */
+.skip-meter { position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); width: min(320px, 80vw); background: rgba(20, 16, 12, 0.85); border: 1px solid rgba(255, 210, 150, 0.5); border-radius: 14px; padding: 8px 12px 12px; color: #fff3e0; text-align: center; z-index: 30; pointer-events: none; }
+.skip-meter .sm-title { font-size: 14px; margin-bottom: 6px; }
+.skip-meter .sm-bar { position: relative; height: 16px; border-radius: 8px; background: #3a2e27; overflow: hidden; }
+.skip-meter .sm-good { position: absolute; top: 0; bottom: 0; background: #6ac46a; }
+.skip-meter .sm-mark { position: absolute; top: -2px; bottom: -2px; width: 4px; margin-left: -2px; background: #fff; border-radius: 2px; box-shadow: 0 0 6px #fff; }
+.coop-panel { position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%); width: min(360px, 86vw); background: rgba(20, 16, 12, 0.92); border: 2px solid #ffc56a; border-radius: 18px; padding: 12px 14px; color: #fff3e0; text-align: center; z-index: 40; display: flex; flex-direction: column; gap: 4px; }
+.coop-panel small { color: #e8d7c0; font-size: 12.5px; }
+.coop-panel .coop-bar { height: 18px; border-radius: 9px; background: #2a2018; overflow: hidden; border: 1px solid #6b5444; margin: 4px 0; }
+.coop-panel .coop-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ffb030, #ff6a1a); transition: width 0.2s; }
+.coop-panel .coop-btn { margin-top: 4px; background: #f08a3c; color: #2a1608; font: inherit; font-weight: 700; font-size: 18px; border: none; border-radius: 999px; padding: 10px 18px; cursor: pointer; touch-action: manipulation; }
+.coop-panel .coop-btn.pop { animation: coop-pop 0.15s; }
+@keyframes coop-pop { 50% { transform: scale(0.94); } }
+.river-fire { position: fixed; left: 50%; top: 86px; transform: translateX(-50%); background: rgba(20, 16, 12, 0.8); border: 1px solid rgba(255, 180, 100, 0.55); color: #ffd9a0; border-radius: 12px; padding: 5px 12px; font-size: 13.5px; z-index: 20; pointer-events: none; white-space: nowrap; }
+.coop-panel[hidden], .skip-meter[hidden], .river-fire[hidden] { display: none; }
+/* 📱 觸控：幫忙拉放上面（top 由程式算），打水漂力道條放在搖桿、動作鈕上面（作者 11/20 巡查） */
+body.touch .coop-panel { bottom: auto; }
+body.touch .skip-meter { bottom: 236px; }
+@media (max-height: 500px) { body.touch .skip-meter { bottom: auto; top: 38%; } }

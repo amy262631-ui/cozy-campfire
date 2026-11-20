@@ -69,6 +69,18 @@ export const FISH = [
   { name: t('楓葉魚'), rarity: 3, min: 18, max: 40, color: 0xe8642c, patch: 0xffb347, fin: 0xb8401c, weight: 5, pull: 13, fight: 0.08, window: 1.25, month: 11, note: t('11 月限定：秋天的楓葉落進湖裡變成的') },
   { name: t('雪花魚'), rarity: 3, min: 15, max: 35, color: 0xeaf6ff, glow: 0x9fd8ff, patch: 0xbfe4ff, weight: 5, pull: 13, fight: 0.08, window: 1.25, month: 12, note: t('12 月限定：冷冷的水裡才游出來') },
   { name: t('聖誕紅鰭魚'), rarity: 3, min: 20, max: 42, color: 0x3f8f4f, patch: 0xffffff, fin: 0xe23a3a, weight: 5, pull: 13, fight: 0.08, window: 1.25, month: 12, note: t('12 月限定：紅紅的鰭像聖誕裝飾') },
+  // ---- ⛵ 船釣限定（作者 11/19，11/27 開）：只有坐在租來的船上才釣得到；不算進全收集，圖鑑「🗓️ 限定」 ----
+  //   time：day 白天（6～18 點）、night 晚上；keep: false＝放回湖裡（不進保冷箱、不能煮）
+  { name: t('大白鯊'), rarity: 5, min: 150, max: 260, color: 0x8a96a6, fin: 0x6a7686, weight: 2, pull: 30, fight: 0.16, window: 0.95, where: 'boat', boat: true, shape: 'shark', from: '2026-11-27', keep: false, note: t('⛵ 船釣限定：湖裡怎麼會有鯊魚？！') },
+  { name: t('翻車魚'), rarity: 4, min: 80, max: 180, color: 0xb8c4cc, patch: 0x9aa8b2, weight: 4, pull: 20, fight: 0.12, window: 1.1, where: 'boat', boat: true, shape: 'mola', time: 'day', from: '2026-11-27', keep: false, note: t('⛵ 船釣限定：白天浮在水面曬太陽') },
+  { name: t('皇帶魚'), rarity: 5, min: 200, max: 320, color: 0xdfe6ee, fin: 0xe2483c, weight: 2, pull: 30, fight: 0.16, window: 0.95, where: 'boat', boat: true, shape: 'ribbon', time: 'night', from: '2026-11-27', keep: false, note: t('⛵ 船釣限定：晚上才從深水游上來') },
+  { name: t('鬼頭刀'), rarity: 3, min: 50, max: 110, color: 0x3fb87a, patch: 0xf2d23a, fin: 0x2a8ad0, weight: 11, pull: 15, fight: 0.1, window: 1.2, where: 'boat', boat: true, shape: 'mahi', from: '2026-11-27', note: t('⛵ 船釣限定：顏色超鮮豔') },
+  { name: t('湖裡的小海豹'), rarity: 4, min: 60, max: 95, color: 0xb8b2aa, weight: 4, pull: 18, fight: 0.11, window: 1.15, where: 'boat', boat: true, shape: 'seal', from: '2026-11-27', keep: false, note: t('⛵ 船釣限定：拍拍手就游走了') },
+  { name: t('藍鯨寶寶'), rarity: 5, legend: true, min: 300, max: 399, color: 0x4a7fc8, glow: 0x9fd0ff, weight: 0.55, pull: 40, fight: 0.18, window: 0.9, where: 'boat', boat: true, shape: 'whale', from: '2026-11-27', keep: false, note: t('⛵ 船釣傳說：釣到送 🐳 藍鯨帳篷') },
+  // ---- 🔥 營火河畔限定（作者 11/20，11/27 開）：不算進全收集，圖鑑「🗓️ 限定」 ----
+  //   fire：營火超旺（75% 以上）才游出來；coop：河神大鯉魚，一個人拉不動，要附近的人按「🤝 幫忙拉」
+  { name: t('火光魚'), rarity: 4, min: 25, max: 50, color: 0xff7a2a, glow: 0xffb030, fin: 0xffd060, weight: 3, pull: 18, fight: 0.11, window: 1.15, where: 'pond', fire: true, from: '2026-11-27', note: t('🔥 營火超旺的時候才游出來') },
+  { name: t('河神大鯉魚'), rarity: 5, legend: true, min: 150, max: 220, color: 0xd8a03a, glow: 0xffe08a, patch: 0xc8402a, weight: 1.4, pull: 60, fight: 0.06, window: 1.1, where: 'pond', coop: true, from: '2026-11-27', keep: false, note: t('🤝 一個人拉不動，要大家一起拉') },
 ];
 /** 第一次釣到某種魚（收進圖鑑）送的松果，依星等（伺服器 server/index.js 的 DEX_GAIN 相同） */
 export const DEX_GAIN = [1, 2, 3, 5, 10, 20];
@@ -77,8 +89,10 @@ export const LEGEND_DEX_GAIN = 50; // 第一次釣到傳說之魚
 /** 第一次釣到這種魚送幾顆松果 */
 /** 🗓️ 每月限定的魚（不算進全收集） */
 export const isMonthFish = (f) => !!f?.month;
+/** 🗓️ 限定魚（每月限定、⛵ 船釣限定）：不算進全收集、異色全收集、標本櫃 */
+export const isLimitedFish = (f) => !!(f?.month || f?.boat || f?.fire || f?.coop);
 /** 算進魚類圖鑑全收集的魚 */
-export const DEX_TOTAL = FISH.filter((f) => !f.month).length;
+export const DEX_TOTAL = FISH.filter((f) => !isLimitedFish(f)).length;
 /** 台北時間現在是幾月（1～12） */
 export const fishMonth = (now = new Date()) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', month: 'numeric' }).format(now));
 
@@ -88,7 +102,7 @@ export const SHINY_DEX_GAIN = 10;
 export const SHINY_BONUS = 500;
 export const canShiny = (f) => !!f && !f.junk;
 /** 算進異色全收集的魚（每月限定的不算） */
-export const SHINY_TOTAL = FISH.filter((f) => !f.junk && !f.month).length;
+export const SHINY_TOTAL = FISH.filter((f) => !f.junk && !isLimitedFish(f)).length;
 
 export const dexGain = (f) => (f.legend ? LEGEND_DEX_GAIN : DEX_GAIN[f.rarity] ?? 1);
 /** 每釣一次送的松果（傳說之魚特別多） */
@@ -97,8 +111,14 @@ export const catchGain = (f) => (f.legend ? 30 : [0, 1, 2, 3, 6, 15][f.rarity] ?
 export const FISH_MAX_CM = Math.max(...FISH.map((f) => f.max));
 
 /** 這個水域、這個時段釣得到嗎 */
+// ⛵ 船上（ctx.boat）：湖畔的魚＋船釣限定；time：day／night（ctx.night）；from：開放日（ctx.open 判斷，沒給就當還沒開）
 export const fishAvailable = (f, ctx = {}) =>
-  (!f.where || f.where === ctx.place) && (!f.month || f.month === (ctx.month ?? fishMonth())) && (!f.when || (f.when === 'event' && ctx.event) || (f.when === 'contest' && ctx.contest));
+  (!f.where || f.where === ctx.place || (f.where === 'boat' && !!ctx.boat)) &&
+  (!f.month || f.month === (ctx.month ?? fishMonth())) &&
+  (!f.when || (f.when === 'event' && ctx.event) || (f.when === 'contest' && ctx.contest)) &&
+  (!f.time || (f.time === 'night') === !!ctx.night) &&
+  (!f.fire || !!ctx.fire) &&
+  (!f.from || !!ctx.open?.(f));
 
 /**
  * 依權重隨機挑一種

@@ -15,6 +15,7 @@ export function buildMidShape(sh, add, outside) {
   if (sh.id === 'greenhouse') return buildGreenhouse(sh, add, outside), true;
   if (sh.id === 'wafu') return buildWafu(sh, add, outside), true;
   if (sh.id === 'pumpkin') return buildPumpkin(sh, add, outside), true;
+  if (sh.id === 'whale') return buildWhaleHouse(sh, add, outside), true;
   return false;
 }
 
@@ -482,5 +483,64 @@ function buildPumpkin(sh, add, outside) {
     const pk = add(new THREE.SphereGeometry(sz, 14, 10), mat('pumpSmall', 0xf39a48), x, sz * 0.8, dz + 0.5);
     pk.scale.y = 0.8;
     add(new THREE.CylinderGeometry(0.04, 0.05, 0.12, 6), stem, x, sz * 1.45, dz + 0.5);
+  }
+}
+
+// ───────────── 🐳 藍鯨帳篷（⛵ 船釣到藍鯨寶寶才拿得到，作者 11/19） ─────────────
+// 圓滾滾的藍色圓頂＝鯨魚身體：白肚子、大眼睛＋腮紅、兩片胸鰭、後面翹起來的尾巴、頭頂噴水
+function buildWhaleHouse(sh, add, outside) {
+  const R = sh.R;
+  const H = 0.82;
+  const blue = 0x4a7fc8;
+  if (!outside) {
+    // 屋裡：淡藍色的圓頂，天花板飄著一顆顆小泡泡燈
+    const shell = mat('whaleIn', 0x9cc4ec, { side: THREE.BackSide });
+    domeWithDoor(R, H, add, false, shell, mat('whaleDoor', 0xf2f4fa), null);
+    const bub = glow('whaleBub', 0xe8f6ff);
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2 + 0.2;
+      const y = 1.6 + (i % 3) * 0.35;
+      const { p } = onDome(R, H, a, y, -0.25);
+      add(new THREE.SphereGeometry(0.07 + (i % 3) * 0.03, 10, 8), bub, p.x, p.y, p.z);
+    }
+    return;
+  }
+  const skin = mat('whaleSkin', blue);
+  domeWithDoor(R, H, add, true, skin, mat('whaleDoor', 0xf2f4fa), mat('whaleFrame', 0xf2f4fa));
+  // 白肚子：前面下半部一圈白
+  const belly = add(new THREE.SphereGeometry(R * 1.005, 40, 10, Math.PI / 2 - 1.25, 2.5, Math.PI / 2 - 0.5, 0.5), mat('whaleBelly', 0xf2f4fa));
+  belly.scale.y = H;
+  // 大眼睛、亮點、腮紅（門的兩邊上面）
+  for (const sx of [-1, 1]) {
+    const e = onDome(R, H, sx * 0.62, 2.0, 0.02);
+    const eye = add(new THREE.SphereGeometry(0.26, 16, 12), mat('whaleEye', 0x1a1a2a), e.p.x, e.p.y, e.p.z);
+    eye.scale.set(0.75, 1, 0.4);
+    eye.lookAt(e.p.clone().add(e.n));
+    const hi = onDome(R, H, sx * 0.6, 2.12, 0.12);
+    add(new THREE.SphereGeometry(0.07, 8, 6), glow('whaleHi', 0xffffff), hi.p.x, hi.p.y, hi.p.z);
+    const b = onDome(R, H, sx * 0.82, 1.55, 0.03);
+    const bl = add(new THREE.CircleGeometry(0.28, 16), mat('whaleBlush', 0xff9fb8), b.p.x, b.p.y, b.p.z);
+    bl.lookAt(b.p.clone().add(b.n));
+    // 胸鰭
+    const f = onDome(R, H, sx * 1.45, 0.7, 0.1);
+    const fin = add(new THREE.SphereGeometry(1, 16, 10), skin, f.p.x + sx * 0.4, f.p.y, f.p.z);
+    fin.scale.set(1.0, 0.16, 0.55);
+    fin.rotation.z = sx * -0.45;
+  }
+  // 尾巴：從後面翹起來
+  const stem = add(new THREE.CylinderGeometry(0.4, 0.9, 2.2, 16), skin, 0, 1.4, -R - 0.4);
+  stem.rotation.x = -0.75;
+  for (const sx of [-1, 1]) {
+    const fl = add(new THREE.SphereGeometry(1, 16, 10), skin, sx * 0.85, 2.4, -R - 1.35);
+    fl.scale.set(1.1, 0.16, 0.6);
+    fl.rotation.set(-0.5, sx * 0.35, sx * 0.3);
+  }
+  // 頭頂噴水
+  const wm = (mm.whaleWater ??= new THREE.MeshBasicMaterial({ color: 0xbfeaff, transparent: true, opacity: 0.85 }));
+  const top = R * H;
+  add(new THREE.CylinderGeometry(0.1, 0.18, 0.9, 10), wm, 0, top + 0.4, 0.4);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    add(new THREE.SphereGeometry(0.17, 10, 8), wm, Math.cos(a) * 0.42, top + 0.9 - Math.abs(Math.sin(a)) * 0.08, 0.4 + Math.sin(a) * 0.42);
   }
 }

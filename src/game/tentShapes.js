@@ -28,6 +28,8 @@ export const TENT_SHAPES = [
   // 🏔️ 高級小屋（12 月，作者 11/10：1,000～1,500 松果，先做 2 間）
   // 作者 11/12：雪屋要更可愛 → 北極熊雪屋（胖胖雪球、粉嫩色、冰柱、門口小雪人雪橇）；湖畔木屋太像現有木屋 → 改成船屋
   { id: 'igloo', icon: '🐻‍❄️', name: t('北極熊雪屋'), price: 800, kind: 'round', R: 3.8, light: 2.4, style: 'classic', from: '2026-11-15' },
+  // 🐳 藍鯨帳篷（作者 11/19）：小舖買不到，⛵ 坐船釣到藍鯨寶寶才送（fish: true）
+  { id: 'whale', icon: '🐳', name: t('藍鯨帳篷'), price: 0, kind: 'round', R: 3.8, light: 2.6, style: 'classic', from: '2026-11-27', fish: true },
   { id: 'houseboat', icon: '⛵', name: t('船屋'), price: 1500, kind: 'rect', W: 3.4, D: 3.4, light: 3.6, style: 'log', loft: true, from: '2026-11-15', pass: 1 }, // 作者 11/12：兩層（跟雙層小木屋一樣有樓梯、閣樓）
 ];
 
