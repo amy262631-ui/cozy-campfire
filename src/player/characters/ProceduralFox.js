@@ -378,14 +378,30 @@ export class ProceduralFox {
         add(ear, 0.105, earMat, [0, 0.04, 0], [1, 1, 0.55]);
         add(ear, 0.06, furDark, [0, 0.04, 0.04], [1, 1, 0.3], false);
       } else if (type === 'fold') {
-        // 折耳：小小的耳朵往前折下來
-        ear.position.set(0.17 * side, 0.27, 0.02);
-        ear.rotation.set(0.9, 0, -0.5 * side);
-        const outer = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.13, 16), earMat);
-        outer.scale.z = 0.55;
-        outer.position.y = 0.04;
-        outer.castShadow = true;
-        ear.add(outer);
+        // 折耳（作者 11/21 給的折耳貓參考圖）：頭頂兩側各一片圓圓的小三角，往前往下折、平平地貼在頭上，
+        // 上緣是折起來的那條線（微微鼓起）。耳朵本身不立起來。
+        const a = 0.37 * 1.1, b = 0.37 * 0.95, c = 0.37; // 頭的橢圓半徑
+        // 先算右邊那隻，左邊用鏡射（兩邊才會一模一樣）
+        const dir = new THREE.Vector3(0.66, 0.7, 0.26).normalize();
+        const k = 1 / Math.hypot(dir.x / a, dir.y / b, dir.z / c);
+        const p = dir.multiplyScalar(k);
+        const n = new THREE.Vector3(p.x / (a * a), p.y / (b * b), p.z / (c * c)).normalize();
+        const down = new THREE.Vector3(0.2, -1, 0.55);
+        down.addScaledVector(n, -down.dot(n)).normalize(); // 貼著頭往下、往前
+        const up = down.clone().negate();
+        const xAxis = new THREE.Vector3().crossVectors(up, n).normalize();
+        ear.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, up, n));
+        ear.position.copy(p).addScaledVector(n, -0.01);
+        if (side < 0) {
+          ear.position.x *= -1;
+          ear.quaternion.set(ear.quaternion.x, -ear.quaternion.y, -ear.quaternion.z, ear.quaternion.w);
+        }
+        const lobe = new THREE.Group();
+        lobe.rotation.x = -0.22;
+        ear.add(lobe);
+        // 作者 11/21：耳朵跟頭接的地方要滑順，不要凸一塊 → 用壓扁的圓球，一半埋進頭裡，邊緣自然融進去
+        const flap = add(lobe, 0.14, earMat, [0, -0.07, 0.014], [1.08, 1.0, 0.4]); // 作者 11/21：再大一點、不要白色彎弧
+        flap.castShadow = true;
       } else if (type === 'droopy') {
         // 垂耳：長長軟軟地垂在臉頰兩邊
         ear.position.set(0.25 * side, 0.12, -0.01);
