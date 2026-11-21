@@ -1,9 +1,9 @@
 import { t } from '../i18n/i18n.js';
 import { FURNITURE, FURNITURE_BY_ID, TENT_PRICE, CATS } from '../game/furniture.js';
-import { gridOf, expandPrice, EXPAND_PRICES, GRID_MAX, ALL_COLORS, hasColors, inCat } from '../game/furnitureCatalog.js';
+import { gridOf, expandPrice, EXPAND_PRICES, GRID_MAX, hasColors, inCat } from '../game/furnitureCatalog.js';
 import { canTint } from '../game/furniture.js';
 /** 🎨 作者 11/19：選了顏色看得出變化的才算能換色（全身木頭色、灰白的家具是固定顏色） */
-const tintable = (f) => hasColors(f) && canTint(f.id);
+export const tintable = (f) => hasColors(f) && canTint(f.id);
 import { TENT_SHAPES, TENT_SHAPE_BY_ID, PASS_SHAPES, FRAME_COLORS, shapeOnSale } from '../game/tentShapes.js';
 import { TENT_STYLES } from '../game/tentStyles.js';
 import { TentPreview } from './TentPreview.js';
@@ -159,13 +159,8 @@ export class ShopPanel {
       if (fb && !this.busy) {
         // 🎁 星空月票每月免費挑 1 件月票家具
         this.busy = true;
-        await this.onFree?.(fb.dataset.free, this.color ?? 0);
+        await this.onFree?.(fb.dataset.free, 0);
         this.busy = false;
-        return this.render();
-      }
-      const col = e.target.closest('[data-color]');
-      if (col) {
-        this.color = Number(col.dataset.color);
         return this.render();
       }
       const btn = e.target.closest('[data-buy]');
@@ -173,9 +168,10 @@ export class ShopPanel {
       // 🛒 先看預覽、按「確定購買」才買
       if (this.onConfirm) {
         this.busy = true;
-        const ok = await this.onConfirm(btn.dataset.buy, btn.dataset.c ? Number(btn.dataset.c) : 0);
+        const ok = await this.onConfirm(btn.dataset.buy, 0);
         this.busy = false;
-        if (!ok) return;
+        if (ok === false || ok == null) return;
+        btn.dataset.c = typeof ok === 'number' ? ok : 0; // 🎨 確認視窗裡選的顏色（作者 11/22）
       }
       this.busy = true;
       this.body.classList.add('busy');
@@ -506,15 +502,8 @@ export class ShopPanel {
     const rank = this.passRank?.() ?? 0;
     // 🐟 魚缸：卡片上直接標能放幾星的魚（不用點開就看得到）
     const tag = (f) => (f.fish ? (f.fish >= 6 ? t('👑 魚王也行') : t('⭐{n} 以下', { n: f.fish })) : f.kind === 'small' ? t('可放桌上') : f.kind === 'mat' ? t('可墊底') : f.top ? t('上面可放') : '');
-    const color = this.color ?? 0;
-    // 🎫 月票跳色：月票開通後才列出來；沒有月票的人看得到、按了跳說明
-    // 這一類全部都是固定顏色（隔間、魚缸…）：顏色按鈕變灰、不能按
-    const anyTint = list.some(tintable);
-    const colors = `<div class="shop-colors${anyTint ? '' : ' off'}"><span>${t('🎨 顏色')}</span>${ALL_COLORS.filter((c) => !c.pass || this.passOn?.()).map(
-      (c) => c.pass && rank < c.pass
-        ? `<button type="button" data-needpass="1" class="pass-lock" ${anyTint ? '' : 'disabled'}>🔒 ${c.icon} ${t(c.zh)}</button>`
-        : `<button type="button" data-color="${c.id}" class="${anyTint && c.id === color ? 'on' : ''}${c.pass ? ' pass-c' : ''}" ${anyTint ? '' : 'disabled'}>${c.icon} ${t(c.zh)}</button>`,
-    ).join('')}${anyTint ? '' : `<small class="shop-colors-note">${t('這一類都是固定顏色')}</small>`}</div>`;
+    // 🎨 作者 11/22：上面那排顏色按鈕拿掉，改成點家具後在「要買這個嗎？」視窗裡選（固定顏色的家具就沒有顏色按鈕）
+    const colors = '';
     // 🎁 星空月票：每月免費挑 1 件月票家具（free＝現在可以拿；freeNext＝下次可以拿的時間）
     const fr = isPass ? this.passFree?.() : null;
     const freeNow = !!fr?.ok;
@@ -546,7 +535,7 @@ export class ShopPanel {
       : '';
     const freeNote = isPass && fr?.star ? `<div class="shop-free${freeNow ? ' on' : ''}">${freeNow ? t('🎁 星空月票：這個月可以免費挑 1 件月票家具！按家具下面的「🎁 免費拿」') : t('🎁 這個月的免費家具已經拿了，{date} 可以再挑一件', { date: fr.next })}</div>` : '';
     this.body.innerHTML = `${tabs}
-      <div class="shop-sub">${isPass ? t('🎫 月票限定：有月票的人用松果買，買了永久是你的（月票到期也不會收回）') : t('買了會放進背包，回帳篷按「🛠️ 布置」擺出來；買之前可以先選顏色')}</div>
+      <div class="shop-sub">${isPass ? t('🎫 月票限定：有月票的人用松果買，買了永久是你的（月票到期也不會收回）') : t('買了會放進背包，回帳篷按「🛠️ 布置」擺出來；有「🎨 可換色」的，點了可以先選顏色')}</div>
       ${houses}${freeNote}
       ${isPass ? '' : cats}
       ${this.cat === 'fish' && !isPass ? `<div class="shop-hint">${t('🐟 每個魚缸放 1 條你釣過的魚；星星越多，放得下越稀有的魚')}</div>` : colors}
@@ -554,17 +543,15 @@ export class ShopPanel {
         ${list.map((f) => {
           const owned = home.inv?.[f.id] ?? 0;
           const tg = tag(f);
-          const fixed = !tintable(f);
-          const c = fixed ? 0 : color;
+          const canColor = tintable(f);
           const locked = f.pass && rank < f.pass;
           return `
-          <button type="button" class="shop-item${f.pass ? ' pass-item' : ''}" ${locked ? 'data-needpass="1"' : `data-buy="${f.id}"`} ${c ? `data-c="${c}"` : ''} ${!locked && !(freeNow && f.pass) && (coins == null || coins < f.price || owned >= (f.kind === 'wall' ? 80 : 20)) ? 'disabled' : ''}>
-            ${c ? `<span class="si-color">${ALL_COLORS[c].icon}</span>` : ''}
+          <button type="button" class="shop-item${f.pass ? ' pass-item' : ''}" ${locked ? 'data-needpass="1"' : `data-buy="${f.id}"`} ${!locked && !(freeNow && f.pass) && (coins == null || coins < f.price || owned >= (f.kind === 'wall' ? 80 : 20)) ? 'disabled' : ''}>
             <span class="si-icon">${f.icon}</span>
             <span class="si-name">${f.name}</span>
             <span class="si-price">🌰 ${f.price}</span>
             ${tg ? `<span class="si-tag${f.fish ? ' fish' : ''}">${tg}</span>` : ''}
-            ${fixed && color && anyTint ? `<span class="si-fixed">${t('固定顏色')}</span>` : ''}
+            ${canColor ? `<span class="si-tint">${t('🎨 可換色')}</span>` : ''}
             ${owned ? `<span class="si-owned">${t('有 {n} 個', { n: owned })}</span>` : ''}
             ${f.pass ? `<span class="si-pass">${f.pass >= 2 ? t('✨ 星空月票才可買') : t('🔥✨ 月票才可買')}</span>` : ''}
             ${freeNow && f.pass ? `<span class="shop-free-btn" data-free="${f.id}" role="button">${t('🎁 免費拿')}</span>` : ''}

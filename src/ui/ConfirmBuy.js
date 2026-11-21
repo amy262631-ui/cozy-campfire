@@ -3,6 +3,8 @@ import { t } from '../i18n/i18n.js';
 /**
  * 🛒 買東西前的確認視窗：點商品先看預覽（圖片、名字、價格），按「確定購買」才真的買。
  *   ask({ icon, name, price, img?, desc?, coins?, money? }) → Promise<boolean>（money：真錢的金額文字，例如「NT$ 60」）
+ *   colors：[{ id, label, locked? }]＋look(c) → { name, img }：在視窗裡選顏色（作者 11/22：顏色改到這裡選，固定顏色的家具就沒有按鈕）；
+ *   選好的顏色放在 this.color
  */
 export class ConfirmBuy {
   constructor(root = document.getElementById('ui')) {
@@ -14,6 +16,16 @@ export class ConfirmBuy {
       if (e.target === this.el) this.#done(false);
       const b = e.target.closest('[data-cb]');
       if (b) this.#done(b.dataset.cb === 'yes');
+      const cc = e.target.closest('[data-cbc]');
+      if (cc && !cc.disabled && this.look) {
+        this.color = Number(cc.dataset.cbc);
+        const v = this.look(this.color);
+        const img = this.card.querySelector('.cbuy-img');
+        if (img && v.img) img.src = v.img;
+        const nm = this.card.querySelector('.cbuy-name');
+        if (nm && v.name) nm.textContent = v.name;
+        for (const x of this.card.querySelectorAll('[data-cbc]')) x.classList.toggle('on', x === cc);
+      }
     });
     window.addEventListener('keydown', (e) => {
       if (this.el.hidden) return;
@@ -28,13 +40,19 @@ export class ConfirmBuy {
     return !this.el.hidden;
   }
 
-  ask({ icon = '', name = '', price = 0, img = '', desc = '', coins = null, money = '', title = '', yes = '' }) {
+  ask({ icon = '', name = '', price = 0, img = '', desc = '', coins = null, money = '', title = '', yes = '', colors = null, look = null, fixed = false }) {
     this.#done(false); // 前一個還開著就當取消
     const poor = coins != null && coins < price;
+    this.color = 0;
+    this.look = colors?.length ? look : null;
+    const colorRow = colors?.length
+      ? `<div class="cbuy-colors"><span>${t('🎨 選顏色')}</span>${colors.map((c) => `<button type="button" data-cbc="${c.id}" class="${c.id === 0 ? 'on' : ''}" ${c.locked ? 'disabled' : ''}>${c.label}</button>`).join('')}</div>`
+      : fixed ? `<div class="cbuy-fixed">${t('固定顏色')}</div>` : '';
     this.card.innerHTML = `
       <div class="cbuy-title">${title || t('🛒 要買這個嗎？')}</div>
       ${img ? `<img class="cbuy-img" src="${img}" alt="">` : `<div class="cbuy-icon">${icon}</div>`}
       <div class="cbuy-name">${icon && img ? `${icon} ` : ''}${name}</div>
+      ${colorRow}
       ${desc ? `<div class="cbuy-desc">${desc}</div>` : ''}
       ${yes ? '' : `<div class="cbuy-price">${money ? `💳 ${money}` : `🌰 ${price}`}`}${yes ? '' : `${!money && coins != null ? `<small>${t('（你有 {n} 顆）', { n: coins })}</small>` : ''}</div>`}
       ${poor ? `<div class="cbuy-poor">${t('松果還差 {n} 顆', { n: price - coins })}</div>` : ''}

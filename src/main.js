@@ -34,7 +34,7 @@ import { createTreehouseRoom } from './rooms/treehouseRoom.js';
 import { createLakeRoom, LAKE_WATER_Y } from './rooms/lakeRoom.js';
 import { createSocialTentRoom } from './rooms/socialTentRoom.js';
 import { createHomeRoom } from './rooms/homeRoom.js';
-import { ShopPanel } from './ui/ShopPanel.js';
+import { ShopPanel, tintable } from './ui/ShopPanel.js';
 import { BuildPanel } from './ui/BuildPanel.js';
 import { createDemoHome } from './game/demoHome.js';
 import { WelcomeCard } from './ui/WelcomeCard.js';
@@ -5093,7 +5093,18 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     },
     onBuy: (id, c) => buyItem(id, c),
   });
-  shopPanel.onConfirm = (id, c) => confirmBuy.ask({ ...shopItemInfo(id, c), coins: net.online || demo ? pinecones : null });
+  // 🎨 作者 11/22：顏色在確認視窗裡選；固定顏色的家具不出現顏色按鈕。回傳 false＝不買、數字＝選的顏色
+  const colorChoices = (id) => {
+    const f = FURNITURE_BY_ID[id];
+    if (!f || !tintable(f)) return null;
+    const rank = passState?.active ? (PASS_TIERS[passState.tier] ?? PASS).rank : 0;
+    return ALL_COLORS.filter((c) => !c.pass || payOn).map((c) => ({ id: c.id, label: `${c.pass && rank < c.pass ? '🔒 ' : ''}${c.icon} ${t(c.zh)}`, locked: !!(c.pass && rank < c.pass) }));
+  };
+  shopPanel.onConfirm = async (id) => {
+    const colors = colorChoices(id);
+    const ok = await confirmBuy.ask({ ...shopItemInfo(id, 0), coins: net.online || demo ? pinecones : null, colors, look: (c) => shopItemInfo(id, c), fixed: !!FURNITURE_BY_ID[id] && !colors });
+    return ok ? (colors ? confirmBuy.color : 0) : false;
+  };
   actions.onShop = () => shopPanel.open();
   { // 🌱 新手小任務「去小舖看帳篷」：不管從哪裡打開小舖都算
     const open = shopPanel.open.bind(shopPanel);
@@ -5128,9 +5139,11 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   shopPanel.passRank = () => (passState?.active ? (PASS_TIERS[passState.tier] ?? PASS).rank : 0);
   // 🎁 星空月票每月免費挑 1 件月票家具
   shopPanel.passFree = () => (passState?.active && passState.tier === 'star' ? { star: true, ok: !!passState.freeOk, next: passState.freeNext ? fmtDate(passState.freeNext) : '' } : null);
-  shopPanel.onFree = async (id, c) => {
+  shopPanel.onFree = async (id) => {
     const f = FURNITURE_BY_ID[id];
-    if (!confirm(t('用這個月的免費名額拿「{name}」嗎？（30 天後可以再挑一件）', { name: f?.name ?? '' }))) return;
+    const colors = colorChoices(id);
+    if (!(await confirmBuy.ask({ ...shopItemInfo(id, 0), price: 0, title: t('🎁 用這個月的免費名額拿這件嗎？'), desc: t('30 天後可以再挑一件'), yes: t('🎁 免費拿'), colors, look: (cc) => shopItemInfo(id, cc), fixed: !colors }))) return;
+    const c = colors ? confirmBuy.color : 0;
     const res = await net.request('passFree', { id, c });
     if (!res?.ok) return hud.toast(res?.reason === 'used' ? t('這個月的免費家具已經拿過了') : res?.reason === 'noTent' ? t('先買帳篷，才能放家具 ⛺') : t('現在不能拿，等一下再試'));
     if (res.home) setMyHome(res.home);
