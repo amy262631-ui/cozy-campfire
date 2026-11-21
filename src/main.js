@@ -2038,6 +2038,7 @@ async function init() {
       if (sp.playAt && (sp.playAt.key !== want || !sp.playAt.alive())) (sp.playAt.done(), (sp.playAt = null));
       if (want && !sp.playAt) sp.playAt = rooms.home.spotByKey(want);
     }
+    mySpirit.near = true; // 作者 11/21：主人自己一直看得到自己小精靈的名字（原本只有點它才出現 3 秒）
     mySpirit.update(dt, { x: m.x, y: m.y, z: m.z, ry: player.rotationY, scale: player.mesh.scale.x, speed: Math.hypot(player.velocity.x, player.velocity.z), state: a === 'sleep' || a === 'blanket' ? 'sleep' : SPIRIT_SIT.has(a) ? 'sit' : 'idle', cam: spiritCam, night: spiritNightNow, party: spiritParty(m.x, m.z) });
     return { cam: spiritCam, night: spiritNightNow, party: spiritParty, me: m };
   };
@@ -2349,7 +2350,9 @@ async function init() {
       const wbtn = mine ? '' : sl.iw ? `<small>${t('澆過了 💧')}</small>` : sl.w >= WATER_MAX ? `<small>${t('澆滿了')}</small>` : `<button type="button" class="mini-btn" data-water="${i}">${t('💧 澆水')}</button>`;
       return `<div class="gcell"><i>${c.icon}</i><b>${t(c.zh)}</b><small>${t('還要 {t}', { t: left(remain) })}</small>${wtag}${wbtn}</div>`;
     };
-    const slots = `<div class="garden-grid">${res.slots.map(cell).join('')}</div>${
+    const readyN = mine ? res.slots.filter((sl) => sl && sl.ready - (Date.now() + skew) <= 0 && !(CROP_BY_ID[sl.c]?.night && !isNight())).length : 0;
+    const allBtn = readyN >= 2 ? `<button type="button" class="garden-harvest-all" id="garden-harvest-all">${t('🧺 全部收成（{n} 格）', { n: readyN })}</button>` : '';
+    const slots = `${allBtn}<div class="garden-grid">${res.slots.map(cell).join('')}</div>${
       mine && emptyIdx.length
         ? `<div class="garden-pick" id="garden-pick" hidden><b id="garden-pick-t"></b>${emptyIdx.length > 1 ? `<button type="button" class="gp-all" id="garden-all">☐ ${t('全部 {n} 個空格都種', { n: emptyIdx.length })}</button>` : ''}<div class="crop-pick">${CROPS.filter((c) => isOpen(c)).map((c) => `<button type="button" class="mini-btn" data-c="${c.id}">${c.icon} ${t(c.zh)}<small>🌰 ${c.seed}・${t('{h} 小時', { h: c.hours })}</small></button>`).join('')}</div></div>`
         : ''
@@ -2430,6 +2433,23 @@ async function init() {
             } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : t('沒種成，再試一次吧'));
           });
         }
+        // 🧺 全部收成（作者 11/21）
+        body.querySelector('#garden-harvest-all')?.addEventListener('click', async (e) => {
+          const ready = res.slots.map((sl, i) => (sl && sl.ready - (Date.now() + skew) <= 0 ? i : -1)).filter((i) => i >= 0);
+          if (!ready.length || !act(ready[0], 'pick', 1.25)) return;
+          e.currentTarget.disabled = true;
+          for (const i of ready) camp.gardenFx(hid, i, 'pull', player.position);
+          const r = await net.request('gardenHarvestAll', {});
+          if (r?.ok) {
+            basket = r.basket;
+            await wait(500);
+            audio.sfx('bell');
+            const list = Object.entries(r.got).map(([id, n]) => `${CROP_BY_ID[id].icon}×${n}`).join(' ');
+            hud.toast(t('🧺 收成了 {n} 格：{list}', { n: r.slots.length, list }) + (r.gain ? t('（第一次收成 +{g} 🌰）', { g: r.gain }) : '') + (r.skipNight ? t('・🌙 月光白蘿蔔晚上再收') : ''), 5000);
+            await wait(800);
+            refreshCamp();
+          } else if (r?.reason === 'night') hud.toast(t('🌙 月光白蘿蔔要晚上才能收成喔'));
+        });
         for (const b of body.querySelectorAll('[data-harvest]')) {
           b.addEventListener('click', async () => {
             const i = Number(b.dataset.harvest);

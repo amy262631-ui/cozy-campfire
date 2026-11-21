@@ -99,6 +99,10 @@ export const OUTFITS = [
   { id: 'clip_snow', slot: 'clip', kind: 'clip', clip: 'snow', icon: '❄️', zh: '雪花髮夾', src: 'pass', month: '2026-12' },
   { id: 'clip_deer', slot: 'clip', kind: 'clip', clip: 'deer', icon: '🦌', zh: '羊毛氈小麋鹿夾', src: 'pass', month: '2026-12' },
   { id: 'clip_flower', slot: 'clip', kind: 'clip', clip: 'flower', icon: '🌸', zh: '花朵髮夾', src: 'pass', month: '2026-12' },
+  // 🖤 5 月男生假髮（作者 11/21 參考圖：韓系中分）
+  { id: 'wig_curtain', slot: 'hair', kind: 'hair', hair: 'curtain', sex: 'm', c1: 0x23202a, c2: 0x23202a, icon: '🖤', zh: '韓系中分瀏海', src: 'sponsor', month: '2027-05' },
+  // 🔥 營火翅膀（作者 11/21：營火之約第 7 款）
+  { id: 'dt_ember_wings', slot: 'back', kind: 'wings', c1: 0xf08a3c, c2: 0xffb04a, glow: true, deco: 'ember', icon: '🔥', zh: '營火翅膀', src: 'date' },
 ];
 
 export const OUTFIT_BY_ID = Object.fromEntries(OUTFITS.map((o) => [o.id, o]));

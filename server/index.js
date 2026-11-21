@@ -4714,6 +4714,39 @@ io.on('connection', (socket) => {
     spiritGain('harvest');
     ack?.({ ...gardenInfo(player.vid), got: { id: c.id, n }, first, gain: first ? CROP_FIRST_GAIN : 0, basket: wal.bk });
   });
+  // 🧺 一次收成全部長好的（作者 11/21）：跟一格一格收一樣的規則（澆過水多 1 個、月光白蘿蔔白天不收、第一次收成送松果）
+  socket.on('gardenHarvestAll', (data = {}, ack) => {
+    if (!player?.vid || !wal) return ack?.({ ok: false });
+    const h = homes[player.vid];
+    if (!h?.garden) return ack?.({ ok: false, reason: 'empty' });
+    const now = Date.now();
+    const got = {};
+    let gain = 0;
+    let skipNight = 0;
+    const slots = [];
+    h.garden.forEach((sl, i) => {
+      if (i >= gardenSlotsOf(h) || !sl?.c || now < readyAtOf(sl)) return;
+      const c = CROP_BY_ID[sl.c];
+      if (!c) return;
+      if (c.night && !isNight()) return void skipNight++;
+      const n = c.yield[0] + Math.floor(Math.random() * (c.yield[1] - c.yield[0] + 1)) + (sl.w?.length ? 1 : 0);
+      h.garden[i] = null;
+      slots.push(i);
+      wal.bk ??= {};
+      wal.bk[c.id] = (wal.bk[c.id] ?? 0) + n;
+      wal.crops ??= {};
+      if (!wal.crops[c.id]) (gain += CROP_FIRST_GAIN), award(CROP_FIRST_GAIN, 'harvest');
+      wal.crops[c.id] = (wal.crops[c.id] ?? 0) + n;
+      got[c.id] = (got[c.id] ?? 0) + n;
+      bump('harvests');
+      chal('harvest');
+      spiritGain('harvest');
+    });
+    if (!slots.length) return ack?.({ ok: false, reason: skipNight ? 'night' : 'notYet' });
+    saveJson('homes.json', homes);
+    saveJson('players.json', players);
+    ack?.({ ...gardenInfo(player.vid), got, slots, gain, skipNight, basket: wal.bk });
+  });
   let lastWater = 0;
   socket.on('gardenWater', (data = {}, ack) => {
     if (!player?.vid) return ack?.({ ok: false });

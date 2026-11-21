@@ -1404,7 +1404,14 @@ body.touch .fish-alert .only-desktop {
 }
 
 .chat-line.old {
-  opacity: 0.35;
+  opacity: 0.7; /* 作者 11/21：原本 0.35，手機在帳篷裡聊天，15 秒後字變很淡看不清楚 */
+}
+
+/* 打字的時候、往上滑看舊訊息的時候，全部清楚顯示 */
+body.chatting .chat-line.old,
+.chat-log:hover .chat-line.old,
+.chat-log:active .chat-line.old {
+  opacity: 1;
 }
 
 .emote-menu {
@@ -5467,6 +5474,24 @@ body.touch .m-stack .fire-meter {
   background: rgba(120, 200, 120, 0.2);
   outline: 1px solid rgba(160, 230, 160, 0.4);
 }
+
+/* 🧺 全部收成（作者 11/21） */
+.garden-harvest-all {
+  display: block;
+  width: 100%;
+  margin: 6px 0 2px;
+  padding: 10px;
+  border: 1px solid rgba(160, 230, 160, 0.6);
+  border-radius: 12px;
+  background: rgba(90, 180, 90, 0.35);
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.garden-harvest-all:disabled { opacity: 0.6; }
 
 /* 🥕 菜園格子一覽（作者 11/20） */
 .garden-grid {

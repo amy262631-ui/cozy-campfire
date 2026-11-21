@@ -43,7 +43,7 @@ const angDist = (p1, t1, p2, t2) => {
 };
 
 /** 每種髮型大概多蓬（帽子要放大、抬高多少才戴得上去） */
-export const HAIR_VOLUME = { cloudcurl: 0.1, cloudshort: 0.08, bob: 0.06, spiky: 0.05, fluffy: 0.05, bowl: 0.05 };
+export const HAIR_VOLUME = { cloudcurl: 0.1, cloudshort: 0.08, bob: 0.06, spiky: 0.05, fluffy: 0.05, bowl: 0.05, curtain: 0.05 };
 
 export function buildHair(kind, c1, c2, fit = {}) {
   const g = new THREE.Group();
@@ -173,28 +173,35 @@ export function buildHair(kind, c1, c2, fit = {}) {
       bow(sx * 0.37, 0.21, -0.1, 0.95, sx * 1.2);
     }
   } else if (kind === 'bun') {
-    // 包包頭：頭髮往上梳到頭頂的丸子，丸子有一圈一圈的紋路
+    // 新年包包頭（作者 11/21：要像綁馬尾的位置，後腦勺上面一顆圓圓的丸子）：頭髮往後梳、綁成一顆大丸子＋紅色髮圈和小蝴蝶結
     cap({ bottom: back(PI * 0.22, PI * 0.46), lift: 0.028, groove: 0.01, grooveN: 30 });
     fringe({ n: 6, len: PI * 0.14, seed: 21, thick: 0.033 });
     for (const sx of [-1, 1]) lock({ phi: FRONT - sx * 1.02, th0: PI * 0.27, len: PI * 0.22, w: 0.18, thick: 0.025, curl: 0.02 });
-    if (fit.hat) return g; // 戴帽子：丸子收進帽子裡
+    const lowY = fit.hat ? -0.1 : 0; // 戴帽子：丸子往下一點，不撞帽子
     const bun = new THREE.Group();
-    for (let k = 0; k < 3; k++) {
-      const t = new THREE.Mesh(new THREE.TorusGeometry(0.085 - k * 0.025, 0.045, 14, 28), k % 2 ? hm2 : hm);
-      t.rotation.x = PI / 2;
-      t.position.y = k * 0.04;
-      bun.add(t);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.15, 26, 20), hm);
+    ball.scale.set(1, 0.92, 0.95);
+    bun.add(ball);
+    // 一圈一圈繞起來的髮絲紋路（斜斜的幾條）
+    for (let k = 0; k < 4; k++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.146 - Math.abs(k - 1.5) * 0.012, 0.012, 8, 40, PI * 1.25), hm2);
+      ring.rotation.set(0.5 + k * 0.42, 0.3 + k * 0.9, k * 0.7);
+      bun.add(ring);
     }
-    const top = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 12), hm);
-    top.position.y = 0.09;
-    bun.add(top);
-    bun.position.set(0, 0.38, -0.12);
-    bun.rotation.x = -0.45;
+    bun.position.set(0, 0.33 + lowY, -0.37);
     g.add(bun);
-    const band = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.018, 10, 28), acc);
-    band.rotation.x = PI / 2 - 0.45;
-    band.position.set(0, 0.36, -0.11);
+    // 從後腦勺梳過去的一小段頭髮，接住丸子
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.14, 16), hm);
+    neck.position.set(0, 0.28 + lowY, -0.28);
+    neck.rotation.x = PI / 2 + 0.55;
+    g.add(neck);
+    // 紅色髮圈＋小蝴蝶結（新年）
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.02, 10, 28), acc);
+    band.scale.setScalar(1.25);
+    band.position.set(0, 0.29 + lowY, -0.3);
+    band.rotation.x = PI / 2 + 0.55;
     g.add(band);
+    bow(0.12, 0.33 + lowY, -0.3, 0.85, 0.7);
   } else if (kind === 'wavy') {
     // 波浪長髮：中分，兩側一撮一撮波浪垂下來，後面是一大片有份量的捲髮
     cap({ bottom: back(PI * 0.22, PI * 0.62), lift: 0.035, groove: 0.014, grooveN: 20 });
@@ -245,8 +252,8 @@ export function buildHair(kind, c1, c2, fit = {}) {
     for (const sx of [-1, 1]) lock({ phi: FRONT - sx * 1.0, th0: PI * 0.26, len: PI * 0.28, w: 0.16, thick: 0.022, curl: 0.03 });
     tail(
       [
-        [0, 0.3, -0.33],
-        [0, 0.36, -0.48],
+        [0, 0.27, -0.33],
+        [0, 0.36, -0.46],
         [0, 0.2, -0.58],
         // 背背包時馬尾短一點、往外翹，不會插進背包
         ...(fit.back
@@ -262,10 +269,18 @@ export function buildHair(kind, c1, c2, fit = {}) {
       0.11,
       3,
     );
-    const band = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.02, 10, 24), acc);
-    band.position.set(0, 0.32, -0.36);
-    band.rotation.x = 0.6;
+    // 馬尾根部（作者 11/21：要自然銜接、不要有斷層）：頭髮從後腦勺一大片往髮圈收攏成錐形，底部埋進頭髮裡
+    const gather = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.2, 0.22, 24, 1, true), hm);
+    const dir = new THREE.Vector3(0, 0.3, -0.36).normalize();
+    gather.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    gather.position.copy(dir).multiplyScalar(0.36);
+    g.add(gather);
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.062, 0.022, 10, 24), acc);
+    band.position.copy(dir).multiplyScalar(0.47);
+    band.quaternion.copy(gather.quaternion).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), PI / 2));
     g.add(band);
+    // 髮圈上的小蝴蝶結（鵝黃）
+    bow(0.08, 0.31, -0.37, 0.85, PI / 2);
   }
   // ---------------- v3：雲朵頭、麻花辮、男生短髮 ----------------
   /**
@@ -378,6 +393,19 @@ export function buildHair(kind, c1, c2, fit = {}) {
     // 西瓜頭（男）：圓圓的鍋蓋，齊齊的短瀏海、耳朵上面剪平
     cap({ bottom: back(PI * 0.3, PI * 0.44), lift: 0.045, groove: 0.008, grooveN: 40 });
     fringe({ n: 10, len: PI * 0.06, w: 0.25, seed: 91, thick: 0.04 });
+  } else if (kind === 'curtain') {
+    // 韓系中分瀏海（男，作者 11/21 參考圖）：黑髮、頭頂蓬一點，中間分開，兩邊瀏海往外彎到眉毛，鬢角蓋住一點耳朵，後面短短的
+    cap({ bottom: back(PI * 0.23, PI * 0.5), lift: 0.055, groove: 0.013, grooveN: 26 });
+    // 中分：左右各兩大片瀏海，從中線往兩邊撥、往下彎到眉毛（中間露出一點額頭，像倒 V）
+    for (const sx of [-1, 1]) {
+      lock({ phi: FRONT + sx * 0.18, th0: PI * 0.14, len: PI * 0.27, w: 0.5, thick: 0.05, sweep: sx * 0.55, curl: 0.016 });
+      lock({ phi: FRONT + sx * 0.5, th0: PI * 0.16, len: PI * 0.25, w: 0.46, thick: 0.046, sweep: sx * 0.42, curl: 0.014, m: hm2 });
+      lock({ phi: FRONT + sx * 0.82, th0: PI * 0.19, len: PI * 0.22, w: 0.38, thick: 0.04, sweep: sx * 0.25, curl: 0.01 });
+      // 尾巴幾撮細髮絲，自然一點
+      lock({ phi: FRONT + sx * 0.38, th0: PI * 0.22, len: PI * 0.19, w: 0.07, thick: 0.018, sweep: sx * 0.25, m: hm2 });
+    }
+    // 鬢角：蓋住一點耳朵前面
+    for (const sx of [-1, 1]) lock({ phi: FRONT - sx * 1.1, th0: PI * 0.26, len: PI * 0.2, w: 0.26, thick: 0.03, sweep: sx * -0.05, curl: 0.01 });
   } else if (kind === 'fluffy') {
     // 蓬鬆短髮（男）：自然蓬蓬的短髮，瀏海隨意蓋在額頭
     cap({ bottom: back(PI * 0.24, PI * 0.47), lift: 0.04, groove: 0.012, grooveN: 24 });

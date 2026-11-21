@@ -243,6 +243,7 @@ export function createHomeRoom() {
     showGrid();
   }
   let loftGrid = null;
+  let underLoft = false; // 站在一樓、在二樓底下（二樓家具先藏起來）
   function showGrid() {
     gridLines.visible = building && buildFloor === 1;
     if (loftGrid) loftGrid.visible = building && buildFloor === 2;
@@ -437,6 +438,17 @@ export function createHomeRoom() {
     const want = building ? (buildFloor === 1 ? 0.15 : 1) : under ? 0.25 : 1;
     mats.loft.opacity += (want - mats.loft.opacity) * 0.2;
     mats.loft.depthWrite = mats.loft.opacity > 0.9;
+    // 二樓地板變透明時，二樓的家具也先藏起來（作者 11/21：從一樓往上看，家具像浮在半空中）
+    const hideLoftFurn = !building && under;
+    if (hideLoftFurn !== underLoft) {
+      underLoft = hideLoftFurn;
+      for (const m of furnitureGroup.children) {
+        const c = m.userData.cell;
+        if (!c || !isLoftCell(c.z)) continue;
+        if (underLoft && m.visible) (m.visible = false), (m.userData.underHidden = true);
+        else if (!underLoft && m.userData.underHidden) (m.visible = true), (m.userData.underHidden = false);
+      }
+    }
   }
   /** 遠端玩家的高度（不知道他走哪一層，用上一次的高度猜） */
   function heightAt(x, z, prevY = 0) {
@@ -490,6 +502,7 @@ export function createHomeRoom() {
     level = 0;
     applyStyle(home.style);
     furnitureGroup.clear();
+    underLoft = false; // 重畫後下一幀再判斷一次要不要藏二樓家具
     buildShape(home.shape, gridOf(home), home.frame);
     colliders.length = hasPole ? 1 : 0;
     if (hasPole) colliders[0] = { x: 0, z: 0, r: 0.12 };

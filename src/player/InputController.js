@@ -42,6 +42,9 @@ export class InputController {
     window.addEventListener('pointermove', bump);
     window.addEventListener('wheel', bump, { passive: true });
     window.addEventListener('touchstart', bump, { passive: true });
+    // 打字（手機鍵盤、輸入法）也算有在玩：不然聊天聊久了會被當成掛機（作者 11/21）
+    window.addEventListener('input', bump, true);
+    window.addEventListener('compositionupdate', bump, true);
   }
 
   #onKey(e, pressed) {

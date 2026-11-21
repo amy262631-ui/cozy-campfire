@@ -568,6 +568,15 @@ export function buildOutfit(id, opts = {}) {
           const dm = new THREE.MeshBasicMaterial({ color: 0xfff6a0 });
           for (const [dx, dy] of [[0.1, 0.12], [0.16, -0.02], [0.04, 0.2]]) parts.push(sphere(0.025, dm, s * (0.2 + dx), 0.62 + dy, -0.38));
         }
+        if (o.deco === 'ember') {
+          // 🔥 營火翅膀（作者 11/21）：螢光橘的翅膀，中間一層亮黃火心，旁邊飄著火星（尖尖的火苗作者說不用）
+          const core = mat(0xffd06a, true);
+          const inner = sphere(0.095, core, s * 0.21, 0.63, -0.375, 1, 1.25, 0.1);
+          inner.rotation.z = s * -0.5;
+          parts.push(inner);
+          const spark = new THREE.MeshBasicMaterial({ color: 0xffe9a0 });
+          for (const [dx, dy] of [[0.17, 0.24], [0.25, 0.05], [0.05, 0.32], [0.2, -0.12]]) parts.push(sphere(0.018, spark, s * (0.2 + dx), 0.62 + dy, -0.4));
+        }
         g.userData[s < 0 ? 'wingL' : 'wingR'] = parts;
       }
       g.userData.flap = true;

@@ -885,21 +885,21 @@ export class ProceduralFox {
         }
       }
     } else if (P === 'wave') {
-      // 打招呼：右手高高舉起快速揮動、開心瞇眼
-      armsT[1].set(0.34 + Math.sin(t * 14) * 0.07, 0.98, 0.1);
+      // 打招呼：右手舉到脖子旁邊，短短地快速左右擺（作者 11/21：原本手在頭上揮、看不出來；手不要變長）、開心瞇眼
+      armsT[1].set(0.34 + Math.sin(t * 14) * 0.035, 0.56, 0.24);
       headRZ = Math.sin(t * 5) * 0.12;
       torsoY = Math.abs(Math.sin(this.poseTime * 5)) * 0.03;
       eyesOpen = 0.12;
       tailWag = Math.sin(t * 12) * 0.6;
     } else if (P === 'salute') {
-      // 敬禮：站直、右手貼額頭
-      armsT[1].set(0.2, 0.98, 0.27);
+      // 敬禮：站直、右手貼在右邊額頭外側（作者 11/21：原本手埋在頭裡看不到）
+      armsT[1].set(0.3, 0.98, 0.27);
       torsoRX = -0.06;
       headRX = -0.06;
       tailWag = 0;
     } else if (P === 'bye') {
-      // 掰掰：右手舉在旁邊慢慢左右揮、頭微微歪
-      armsT[1].set(0.3 + Math.sin(t * 6) * 0.1, 0.86, 0.16);
+      // 掰掰：右手舉到脖子旁邊，慢慢短短地左右擺、頭微微歪
+      armsT[1].set(0.34 + Math.sin(t * 6) * 0.04, 0.55, 0.24);
       headRZ = -0.15;
       tailWag = Math.sin(t * 4) * 0.4;
     } else if (P === 'pray') {

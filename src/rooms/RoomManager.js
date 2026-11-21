@@ -59,6 +59,7 @@ export class RoomManager {
     this.actions.room = room;
     this.actions.campfire = room.campfire ?? null;
     this.cameraRig.occluders = room.occluders ?? [];
+    this.cameraRig.indoor = (room.cameraDistance ?? 7) < 6; // 帳篷、樹屋、交流帳篷：掛機時鏡頭不拉遠
     this.#snapCamera(room.cameraDistance ?? 7, spawn);
 
     this.audio.setRoomPreset(room.audio, { focusMode: !!room.focusMode });

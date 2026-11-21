@@ -110,7 +110,8 @@ export class ThirdPersonCamera {
       // 緩慢環繞、拉遠、稍微壓低視角，營造電影感
       this.target.yaw += dt * 0.09;
       this.target.pitch += (0.22 - this.target.pitch) * (1 - Math.exp(-0.4 * dt));
-      this.target.distance += (10 - this.target.distance) * (1 - Math.exp(-0.4 * dt));
+      // 室內（帳篷、樹屋）不拉遠：作者 11/21 在別人帳篷用手機聊天，鏡頭自己拉到牆外面，畫面變得很透明
+      if (!this.indoor) this.target.distance += (10 - this.target.distance) * (1 - Math.exp(-0.4 * dt));
     }
 
     const smooth = this.isIdle ? 1.5 : 10;
