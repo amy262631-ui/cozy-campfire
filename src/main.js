@@ -2213,7 +2213,7 @@ async function init() {
         const a = sp.acc ?? { own: [], list: [] };
         const rows = a.list.filter((x) => x.sell || a.own.includes(x.id));
         if (!rows.length) return '';
-        return `<div class="dex-note"><b>${t('🎀 小精靈造型')}</b>${t('（買了每隻小精靈都能戴）')}・${t('再按一次拿下來')}</div><div class="sp-forms">${rows.map((x) => { const own = a.own.includes(x.id); const on = (x.slot === 'wing' ? a.wing : a.wear) === x.id; return `<button type="button" data-acc="${x.id}" data-own="${own ? 1 : 0}" class="${on ? 'on' : ''}">${x.icon}<small>${t(x.zh)}</small><small>${on ? t('戴著') : own ? t('戴上') : `🌰 ${x.price}`}</small></button>`; }).join('')}</div>${sp.stage < 2 && rows.some((x) => x.slot === 'wing') ? `<div class="dex-note">${t('🦋 翅膀要長大的小精靈才看得到')}</div>` : ''}`;
+        return `<div class="dex-note"><b>${t('🎀 小精靈造型')}</b>${t('（買一次每隻都能戴，每隻可以戴不一樣的）')}・${t('再按一次拿下來')}</div><div class="sp-forms">${rows.map((x) => { const own = a.own.includes(x.id); const on = (x.slot === 'wing' ? a.wing : a.wear) === x.id; return `<button type="button" data-acc="${x.id}" data-own="${own ? 1 : 0}" class="${on ? 'on' : ''}">${x.icon}<small>${t(x.zh)}</small><small>${on ? t('戴著') : own ? t('戴上') : `🌰 ${x.price}`}</small></button>`; }).join('')}</div>${sp.stage < 2 && rows.some((x) => x.slot === 'wing') ? `<div class="dex-note">${t('🦋 翅膀要長大的小精靈才看得到')}</div>` : ''}`;
       })()}
       <div class="dex-note"><b>${t('🏡 收起來的小精靈')}</b>（${1 + sp.box.length}／${sp.max}）</div>
       ${sp.box.length ? `<div class="sp-box">${sp.box.map((b, i) => `<button type="button" data-pick="${i}"><b>${b.stage ? SPIRIT_BY_ID[b.t]?.icon : '✨'}</b><small>${b.nm || t(SPIRIT_NAME[b.t])}</small><em>${t('帶出門')}</em></button>`).join('')}</div>` : ''}

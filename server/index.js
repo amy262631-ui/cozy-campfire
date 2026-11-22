@@ -272,6 +272,9 @@ function fixDine(h, vid, from, to) {
 }
 /** ✨ 11/16 精靈家具：住在家裡的小精靈（收起來的，和「先收起來」的那隻）→ 給帳篷畫在小窩、鞦韆、玩具上 */
 const homeOwnerOf = new WeakMap();
+/** 🎀 每隻小精靈自己戴的造型（作者 11/22：每隻可以不一樣）。舊存檔沒有 acc／wg 的那隻，照以前大家共用的那套 */
+const accWear = (sp, w) => (sp?.acc ?? w?.spiritAcc?.wear) || '';
+const accWing = (sp, w) => (sp?.wg ?? w?.spiritAcc?.wing) || '';
 function homeSpirits(h) {
   let vid = homeOwnerOf.get(h);
   if (!vid || homes[vid] !== h) {
@@ -280,10 +283,8 @@ function homeSpirits(h) {
   }
   const w = vid && players[vid];
   if (!w) return [];
-  const wear = w.spiritAcc?.wear;
-  const wing = w.spiritAcc?.wing;
   const list = [...(w.spirit?.off ? [w.spirit] : []), ...(w.spiritBox ?? [])].filter((x) => x && (x.own || x.xp > 0));
-  return list.slice(0, 12).map((x) => ({ c: spiritCode({ ...x, off: false }, wear, wing), n: String(x.nm ?? '').slice(0, 8) }));
+  return list.slice(0, 12).map((x) => ({ c: spiritCode({ ...x, off: false }, accWear(x, w), accWing(x, w)), n: String(x.nm ?? '').slice(0, 8) }));
 }
 const publicHome = (h) =>
   h
@@ -2615,7 +2616,8 @@ io.on('connection', (socket) => {
   const accView = () => {
     const a = wal?.spiritAcc ?? {};
     const xmas = isXmasShopDay(dayKey()); // 小精靈聖誕配件賣到 1/15
-    return { own: a.own ?? [], wear: a.wear ?? '', wing: a.wing ?? '', list: SPIRIT_ACCS.map((x) => ({ ...x, sell: (x.season === 'xmas' ? xmas : true) && isOpen(x) })) };
+    const sp = spiritOf();
+    return { own: a.own ?? [], wear: sp ? accWear(sp, wal) : (a.wear ?? ''), wing: sp ? accWing(sp, wal) : (a.wing ?? ''), list: SPIRIT_ACCS.map((x) => ({ ...x, sell: (x.season === 'xmas' ? xmas : true) && isOpen(x) })) };
   };
   const spiritView = () => {
     if (!wal) return null;
@@ -2631,7 +2633,7 @@ io.on('connection', (socket) => {
   /** 小精靈外型變了：告訴同一區的人 */
   const spiritSync = () => {
     const sp = spiritOf();
-    const code = spiritCode(sp, wal?.spiritAcc?.wear, wal?.spiritAcc?.wing);
+    const code = spiritCode(sp, accWear(sp, wal), accWing(sp, wal));
     const nm = code ? String(sp?.nm ?? '') : '';
     if (!player || (player.sr === code && (player.sn ?? '') === nm)) return;
     player.sr = code;
@@ -2681,7 +2683,7 @@ io.on('connection', (socket) => {
     const left = wal.egg.at - Date.now();
     if (left > 0) return (eggTimer = setTimeout(checkEgg, left + 500));
     wal.spiritBox ??= [];
-    wal.spiritBox.push({ xp: 0, c: {}, own: true, born: Date.now() });
+    wal.spiritBox.push({ xp: 0, c: {}, own: true, born: Date.now(), acc: '', wg: '' }); // 新孵的什麼都沒戴
     wal.egg = null;
     saveJson('players.json', players);
     bump('spiritHatch');
@@ -2902,7 +2904,7 @@ io.on('connection', (socket) => {
         sp.away = sp.last ? Math.floor((now - sp.last) / 86400000) : 0;
         sp.last = now;
       }
-      player.sr = spiritCode(sp, wal.spiritAcc?.wear, wal.spiritAcc?.wing);
+      player.sr = spiritCode(sp, accWear(sp, wal), accWing(sp, wal));
       player.sn = player.sr ? String(sp?.nm ?? '') : '';
       setTimeout(checkEgg, 3000);
     }
@@ -4496,14 +4498,17 @@ io.on('connection', (socket) => {
       if (wal.pc < x.price) return ack?.({ ok: false, reason: 'poor' });
       wal.pc -= x.price;
       a.own.push(id);
-      if (x.slot === 'wing') a.wing = id; // 🦋 翅膀另外一格
-      else a.wear = id; // 買了直接戴上
+      // 買了直接戴在身邊這隻（其他隻不變；還沒有小精靈就記在共用的）
+      const cur = spiritOf();
+      if (x.slot === 'wing') cur ? (cur.wg = id) : (a.wing = id); // 🦋 翅膀另外一格
+      else cur ? (cur.acc = id) : (a.wear = id);
       socket.emit('wallet', { pc: wal.pc, delta: -x.price, reason: 'spiritAcc' });
       bump('spiritAcc');
     } else if (data.op === 'wear') {
       if (id && !a.own.includes(id)) return ack?.({ ok: false });
-      if (data.slot === 'wing' || SPIRIT_ACC_BY_ID[id]?.slot === 'wing') a.wing = id; // 🦋 翅膀（id 空的＝拿掉翅膀配色）
-      else a.wear = id;
+      const cur = spiritOf(); // 只換身邊這隻
+      if (data.slot === 'wing' || SPIRIT_ACC_BY_ID[id]?.slot === 'wing') cur ? (cur.wg = id) : (a.wing = id); // 🦋 翅膀（id 空的＝拿掉翅膀配色）
+      else cur ? (cur.acc = id) : (a.wear = id);
     } else return ack?.({ ok: false });
     saveJson('players.json', players);
     spiritSync();
