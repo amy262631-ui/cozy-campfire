@@ -254,6 +254,7 @@ export function createHomeRoom() {
   }
   let loftGrid = null;
   let underLoft = false; // 站在一樓、在二樓底下（二樓家具先藏起來）
+  let lastUnder = false; // 上一幀算出來的（重畫家具時用）
   function showGrid() {
     gridLines.visible = building && buildFloor === 1;
     if (loftGrid) loftGrid.visible = building && buildFloor === 2;
@@ -450,14 +451,16 @@ export function createHomeRoom() {
     mats.loft.depthWrite = mats.loft.opacity > 0.9;
     // 二樓地板變透明時，二樓的家具也先藏起來（作者 11/21：從一樓往上看，家具像浮在半空中）
     const hideLoftFurn = !building && under;
-    if (hideLoftFurn !== underLoft) {
-      underLoft = hideLoftFurn;
-      for (const m of furnitureGroup.children) {
-        const c = m.userData.cell;
-        if (!c || !isLoftCell(c.z)) continue;
-        if (underLoft && m.visible) (m.visible = false), (m.userData.underHidden = true);
-        else if (!underLoft && m.userData.underHidden) (m.visible = true), (m.userData.underHidden = false);
-      }
+    lastUnder = hideLoftFurn;
+    if (hideLoftFurn !== underLoft) setUnderLoft(hideLoftFurn);
+  }
+  function setUnderLoft(on) {
+    underLoft = on;
+    for (const m of furnitureGroup.children) {
+      const c = m.userData.cell;
+      if (!c || !isLoftCell(c.z)) continue;
+      if (underLoft && m.visible) (m.visible = false), (m.userData.underHidden = true);
+      else if (!underLoft && m.userData.underHidden) (m.visible = true), (m.userData.underHidden = false);
     }
   }
   /** 遠端玩家的高度（不知道他走哪一層，用上一次的高度猜） */
@@ -677,6 +680,8 @@ export function createHomeRoom() {
     }
     placeHomeSpirits();
     hideUpper(); // 布置一樓時，二樓家具重畫後也要藏
+    // 作者 11/22：在二樓底下擺料理（家具重畫）會一瞬間看到二樓家具 → 重畫完馬上照剛剛的狀態藏起來，不等下一幀
+    if (keep && lastUnder) setUnderLoft(true);
   }
 
   /** 小精靈占用一件精靈家具（鞦韆會盪）；done() 讓出來、alive() 家具還在不在 */

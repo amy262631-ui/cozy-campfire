@@ -164,7 +164,8 @@ export class NetworkClient {
    * @returns {Promise<{ ok: boolean, room: string, players: any[], fuel: number, song: number } | null>}
    */
   switchRoom(room, pos) {
-    this.updateJoinData({ room, ...pos }); // 斷線重連時回到這個房間
+    // 斷線重連時回到這個房間（作者 11/22：hid 要清掉，不然回自己家後重連，會被送到之前去過的朋友家）
+    this.updateJoinData({ room, hid: undefined, ...pos });
     if (!this.online) return Promise.resolve(null);
     return new Promise((resolve) => {
       const timer = setTimeout(() => resolve(null), 5000);

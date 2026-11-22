@@ -1,3 +1,4 @@
+import { taipeiDay } from './dailySpecial.js';
 /**
  * 🐔 小肥雞（作者 11/19 看過模擬圖、說可以；11/27 跟聖誕一起開）。前端、伺服器共用。
  *
@@ -30,11 +31,19 @@ export const EGG_DELAY = 3600 * 1000; // 餵完 1 小時後下蛋
 export const EGG_CAP = 6; // 最多存 6 顆（含還沒下的）
 /** 舊存檔（每 6 小時自動下蛋）轉成新的：已經下好的蛋保留 */
 export function henMigrate(hen, now = Date.now()) {
-  if (!hen || hen.v === 2) return hen;
-  const old = hen.t ? Math.min(EGG_STORE, Math.floor((now - hen.t) / LAY_MS)) * (fatOf(hen.fed) >= 3 ? 2 : 1) : 0;
-  hen.eg = Array(Math.max(0, old)).fill(0);
-  hen.v = 2;
-  delete hen.t;
+  if (!hen || hen.v === 3) return hen;
+  if (hen.v !== 2) {
+    const old = hen.t ? Math.min(EGG_STORE, Math.floor((now - hen.t) / LAY_MS)) * (fatOf(hen.fed) >= 3 ? 2 : 1) : 0;
+    hen.eg = Array(Math.max(0, old)).fill(0);
+    delete hen.t;
+  }
+  // 作者 11/22：新規則上線前今天已經餵過的（還沒照新規則下蛋）→ 今天餵幾次就補幾顆蛋，不然今天餵滿了又沒蛋
+  if (!hen.lf && hen.fd === taipeiDay(new Date(now)).key && (hen.fn ?? 0) > 0) {
+    hen.eg ??= [];
+    const k = Math.min(hen.fn * (fatOf(hen.fed) >= 3 ? 2 : 1), EGG_CAP - hen.eg.length);
+    for (let i = 0; i < k; i++) hen.eg.push(0);
+  }
+  hen.v = 3;
   return hen;
 }
 /** 現在可以撿幾顆蛋 */

@@ -81,7 +81,9 @@ export class FishingUI {
     const press = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.onPress?.();
+      // 🤝 幫別人拉河神大鯉魚時，同一顆「💪 拉！」算幫忙
+      if (this.el.reel.classList.contains('coop')) this.onCoopPress?.();
+      else this.onPress?.();
     };
     this.el.alert.addEventListener('pointerdown', press);
     $('#fish-reel-btn').addEventListener('pointerdown', press);

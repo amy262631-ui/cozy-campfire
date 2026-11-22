@@ -18,7 +18,7 @@ import { JukeboxPanel } from './ui/JukeboxPanel.js';
 import { NetworkClient } from './network/NetworkClient.js';
 import { RemotePlayers, setRemoteHeight, setRemoteSpot, setCharScale, setRemoteFireSeats, setRemoteBoat } from './network/RemotePlayers.js';
 import { BOAT_LIST, BOAT_FROM, BOAT_MS, FEED_PRICE, FEED_MS } from './game/boats.js';
-import { FIRE_HOT, COOP_GAIN, COOP_MIN_TAPS } from './game/river.js';
+import { FIRE_HOT, COOP_GAIN, COOP_MIN_TAPS, COOP_SEC } from './game/river.js';
 import { POND } from './game/pondShape.js';
 import { SpiritFollower } from './player/spiritFollower.js';
 import { buildSpirit, SPIRIT_TYPES, SPIRIT_BY_ID } from './player/spirit.js';
@@ -45,7 +45,7 @@ import { ConfirmBuy } from './ui/ConfirmBuy.js';
 import { buildYard } from './rooms/yardModels.js';
 import { buildSign } from './rooms/signModels.js';
 import { SIGN_BY_ID } from './game/signCatalog.js';
-import { ALL_COLORS, CATALOG_BY_ID, gridOf, expandPrice, fishFits, stackAt } from './game/furnitureCatalog.js';
+import { ALL_COLORS, CATALOG_BY_ID, gridOf, expandPrice, fishFits, stackAt, canAddTo } from './game/furnitureCatalog.js';
 import { YARD_BY_ID, YARD_USES } from './game/yardCatalog.js';
 import { FUR_PALETTES } from './player/characters/furPalettes.js';
 import { BASE_FUR, PREMIUM_FUR, TAILS, EARS, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from './game/looks.js';
@@ -291,6 +291,7 @@ async function init() {
 
   // ---------- 多人連線 ----------
   const net = new NetworkClient({ url: params.get('server') || import.meta.env.VITE_SERVER_URL || undefined });
+  let shownHomeOwner = null; // 畫面上這個帳篷是誰的（伺服器的 owner 代碼）
   const remotes = new RemotePlayers(scene, zzz);
   /** 小任務引導（下面建立；先宣告，讓前面的事件也能通知它） */
   let ritual = null;
@@ -2309,6 +2310,7 @@ async function init() {
   document.getElementById('spirit-chip')?.addEventListener('click', () => openSpirit());
   // ---------- 📒 任務本（作者 11/22）：🌱 新手、📅 每日、🗓️ 每週、🎉 假日 ----------
   let questTab = 'daily';
+  const CAT_ICON = { social: '💗', fish: '🎣', garden: '🥕', hen: '🐔', forest: '🍃', river: '🦆', cook: '🍳', camp: '🔥' };
   let questOpen = false;
   const qBar = (have, need) => `<div class="qb-bar"><i style="width:${Math.round((Math.min(have, need) / need) * 100)}%"></i></div>`;
   const qStamp = (ok, label) => `<span class="qb-st${ok ? ' ok' : ''}">${ok ? t('完成') : label}</span>`;
@@ -2343,7 +2345,7 @@ async function init() {
         ${v.baitOn ? `<div class="qb-rew${v.weeklyGot.bait ? ' ok' : ''}">🎁 ${t('做完 {k} 題', { k: WEEKLY_BAIT_AT })}：<b>${t('🐟 魚飼料 1 包')}</b>${v.weeklyGot.bait ? ' ✔' : ''}</div>` : ''}
         <div class="qb-rew${v.weeklyGot.all ? ' ok' : ''}">🎁 ${t('做完 5 題')}：<b>${outName(v.weeklyOutfit)}</b>＋${furnName('q_tro_silver')}＋${t('3 個章')}${v.weeklyGot.all ? ' ✔' : ''}</div>
         <div class="dex-note">${t('🏆 同一類任務做完 {n} 題，送那一類的達人獎盃（可以擺在「獎盃展示牆」）', { n: v.catAt })}</div>
-        <div class="qb-cats">${Object.entries(CAT_TROPHY).map(([c, id]) => `<span class="qb-cat${(v.cats[c] ?? 0) >= v.catAt ? ' ok' : ''}">${FURNITURE_BY_ID[id]?.icon ?? '🏆'} ${t(CAT_NAME[c])} ${Math.min(v.cats[c] ?? 0, v.catAt)}/${v.catAt}</span>`).join('')}</div>`;
+        <div class="qb-cats">${Object.entries(CAT_TROPHY).map(([c, id]) => `<span class="qb-cat${(v.cats[c] ?? 0) >= v.catAt ? ' ok' : ''}">${CAT_ICON[c] ?? '🏆'} ${t(CAT_NAME[c])} ${Math.min(v.cats[c] ?? 0, v.catAt)}/${v.catAt}</span>`).join('')}</div>`;
     } else {
       const h = v.hol ?? {};
       const def = HOLIDAYS[h.id];
@@ -2796,7 +2798,7 @@ async function init() {
       return `<div class="hcell${h.eggs ? ' has-egg' : ''}${i === coopSel ? ' sel' : ''}">
         ${h.eggs ? `<span class="hc-badge">🥚×${h.eggs}</span>` : ''}${mine && full ? `<span class="hc-full">${t('😋 吃飽了')}</span>` : ''}
         <i>🐔</i>${mine ? `<button type="button" class="hc-nm" data-hedit="${i}">${nm} <small>✏️</small></button>` : `<b class="hc-nm">${nm}</b>`}
-        <span class="hc-dots" title="${t('胖胖 {n} 級', { n: h.fat })}">${'●'.repeat(h.fat)}${'○'.repeat(3 - h.fat)}</span>
+        <span class="hc-dots">${t('胖胖')} ${'●'.repeat(h.fat)}${'○'.repeat(3 - h.fat)}</span>
         <small>${col.icon} ${t(col.zh)}・${st}</small>${egg}
         ${waitTxt ? `<small>${waitTxt}</small>` : mine && !full ? `<button type="button" class="mini-btn" data-hsel="${i}">${t('🍞 餵牠')}</button>` : ''}
       </div>`;
@@ -3185,6 +3187,8 @@ async function init() {
   let coopProgT = 0;
   fishing.onCoop = async (phase) => {
     if (phase === 'start') {
+      coopMates.clear();
+      coopMateEl.hidden = true;
       hud.toast(t('🐉 河神大鯉魚上鉤了！一個人要按很快，叫旁邊的人一起按「🤝 幫忙拉」就輕鬆了！'), 6000);
       const r = await net.request('coopStart', {});
       coopId = r?.ok ? r.id : null;
@@ -3192,10 +3196,25 @@ async function init() {
       if (phase === 'fail' && coopId) net.online && net.socket.emit('coopStop');
       // 作者 11/22：拉上來時讓幫忙的人看到進度條跑滿（原本停在快滿的地方）
       if (phase === 'ok' && coopId && net.online) net.socket.emit('coopProg', { p: 1 });
+      coopMateEl.hidden = true;
+      if (phase === 'ok' && coopMates.size) hud.toast(t('🙏 謝謝 {list} 一起合力拉上河神大鯉魚！', { list: [...coopMates.keys()].join('、') }), 7000);
       coopId = null;
     }
   };
-  net.on('coopPush', ({ id }) => id === coopId && fishing.coopPush(1));
+  // 🎣 釣的人：看得到誰在幫忙（作者 11/22：要知道是誰一起合力）
+  const coopMates = new Map(); // 名字 → 幫了幾下
+  const coopMateEl = document.createElement('div');
+  coopMateEl.className = 'coop-mates';
+  coopMateEl.hidden = true;
+  document.getElementById('ui').appendChild(coopMateEl);
+  net.on('coopPush', ({ id, name }) => {
+    if (id !== coopId) return;
+    fishing.coopPush(1);
+    if (!name) return;
+    coopMates.set(name, (coopMates.get(name) ?? 0) + 1);
+    coopMateEl.hidden = false;
+    coopMateEl.textContent = t('🤝 {list} 正在幫你拉！', { list: [...coopMates.keys()].join('、') });
+  });
   const COOP_PULL = FISH.find((f) => f.coop)?.pull ?? 60;
   // 🤝 旁邊的人看到的「幫忙拉」視窗
   const coopEl = document.createElement('div');
@@ -3214,7 +3233,70 @@ async function init() {
     return Math.round(y + 6);
   };
   let coopBuilt = null;
+  /** 🤝 幫忙拉一下（按鈕、E、F、空白鍵都可以） */
+  /** 作者 11/22：幫忙拉要跟自己釣魚一樣 → 用同一條收線進度條（畫面中間那條），點畫面任何地方、E、F、空白鍵都能拉 */
+  const coopReel = () => {
+    if (fishing.phase === 'reel') return; // 自己也在收線：不要蓋掉自己的
+    if (!coopHelp) return fishingUI.el.reel.classList.contains('coop') && (fishingUI.el.reel.classList.remove('coop'), fishingUI.showReel(false), coopEl.classList.remove('slim'));
+    fishingUI.el.reel.classList.add('coop');
+    fishingUI.onCoopPress = coopPullOnce;
+    coopEl.classList.add('slim');
+    fishingUI.showReel(true);
+    fishingUI.setReel(coopHelp.p ?? 0.12, coopHelp.done ? 1 : Math.max(0, (coopHelp.until - Date.now()) / (COOP_SEC * 1000)), (coopHelp.mine ?? 0) > 0);
+    fishingUI.el.reelTitle.textContent = coopHelp.done ? t('🎉 拉上來了！') : t('🤝 幫 {name} 一起拉！連點畫面', { name: coopHelp.name });
+  };
+  const coopPullOnce = () => {
+    if (!coopHelp || coopHelp.done) return;
+    if (net.online) net.socket.emit('coopPull', { id: coopHelp.id });
+    // 作者 11/22：幫忙拉要跟自己釣魚一樣有感覺 → 進度條馬上往前、魚被拉近、手機震、有拉線聲、跳「+1」（之後以釣的人那邊的真實進度為準）
+    coopHelp.p = Math.min(0.99, (coopHelp.p ?? 0.12) + 1 / COOP_PULL);
+    coopHelp.mine = (coopHelp.mine ?? 0) + 1;
+    coopEl.querySelector('.coop-bar i').style.width = `${Math.round(coopHelp.p * 100)}%`;
+    coopEl.querySelector('.coop-fish').style.left = `${Math.round(coopHelp.p * 100)}%`;
+    coopEl.querySelector('.coop-mine').textContent = t('你拉了 {n} 下', { n: coopHelp.mine });
+    navigator.vibrate?.(12);
+    audio.sfx('tap');
+    const btn = coopEl.querySelector('.coop-btn');
+    btn.classList.remove('pop');
+    void btn.offsetWidth;
+    btn.classList.add('pop');
+    const plus = document.createElement('span');
+    plus.className = 'coop-plus';
+    plus.textContent = '+1';
+    plus.style.left = `${30 + Math.random() * 40}%`;
+    coopEl.appendChild(plus);
+    setTimeout(() => plus.remove(), 700);
+    coopEl.classList.remove('shake');
+    void coopEl.offsetWidth;
+    coopEl.classList.add('shake');
+    // 畫面跟自己收線一樣輕輕震一下
+    const cv = renderer.domElement;
+    cv.classList.remove('coop-jolt');
+    void cv.offsetWidth;
+    cv.classList.add('coop-jolt');
+    coopReel();
+  };
+  // 📱🖱️ 幫忙中：點畫面任何地方都算拉一下（跟自己釣魚一樣）
+  renderer.domElement.addEventListener('pointerdown', (e) => {
+    if (!coopHelp || coopHelp.done || fishing.phase === 'reel' || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    coopPullOnce();
+  });
+  // ⌨️ 電腦：E、F、空白鍵也能幫忙拉（自己正在收線時不搶）
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (!coopHelp || coopHelp.done || coopEl.hidden || e.repeat) return;
+      if (!['KeyE', 'KeyF', 'Space'].includes(e.code)) return;
+      if (/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName ?? '')) return;
+      if (fishing.phase === 'reel') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      coopPullOnce();
+    },
+    { capture: true },
+  );
   const drawCoop = () => {
+    coopReel();
     if (!coopHelp) return (coopEl.hidden = true), (coopBuilt = null);
     const left = Math.max(0, Math.ceil((coopHelp.until - Date.now()) / 1000));
     coopEl.hidden = false;
@@ -3224,26 +3306,15 @@ async function init() {
     // 只在換一場的時候重畫，之後只改文字（一直重畫按鈕，連按時會漏按）
     if (coopBuilt !== coopHelp.id) {
       coopBuilt = coopHelp.id;
-      coopEl.innerHTML = `<b>${t('🐉 {name} 釣到河神大鯉魚了！', { name: coopHelp.name })}</b><small class="coop-left"></small><div class="coop-bar"><i></i></div><small class="coop-mine"></small><small class="coop-who"></small><button type="button" class="coop-btn">${t('🤝 幫忙拉！（一直按）')}</button>`;
+      coopEl.innerHTML = `<b>${t('🐉 {name} 釣到河神大鯉魚了！', { name: coopHelp.name })}</b><small class="coop-left"></small><div class="coop-bar"><i></i><span class="coop-fish">🐉</span></div><small class="coop-mine"></small><small class="coop-who"></small><button type="button" class="coop-btn">${t('🤝 幫忙拉！（一直按）')}</button><small class="coop-keys">${document.body.classList.contains('touch') ? t('👆 點畫面任何地方也可以拉') : t('🖱️ 點畫面，或一直按 E、F、空白鍵')}</small>`;
       coopEl.querySelector('.coop-btn').addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        if (coopHelp && net.online) net.socket.emit('coopPull', { id: coopHelp.id });
-        // 作者 11/22：幫忙拉要跟自己釣魚一樣有感覺 → 按下去進度條馬上往前、手機震一下、有拉線聲（之後以釣的人那邊的真實進度為準）
-        if (coopHelp) {
-          coopHelp.p = Math.min(0.99, (coopHelp.p ?? 0.12) + 1 / COOP_PULL);
-          coopHelp.mine = (coopHelp.mine ?? 0) + 1;
-          coopEl.querySelector('.coop-bar i').style.width = `${Math.round(coopHelp.p * 100)}%`;
-          coopEl.querySelector('.coop-mine').textContent = t('你拉了 {n} 下', { n: coopHelp.mine });
-        }
-        navigator.vibrate?.(12);
-        audio.sfx('tap');
-        e.currentTarget.classList.remove('pop');
-        void e.currentTarget.offsetWidth;
-        e.currentTarget.classList.add('pop');
+        coopPullOnce();
       });
     }
     coopEl.querySelector('.coop-left').textContent = coopHelp.done ? t('🎉 拉上來了！') : t('一個人很難拉，快來幫忙！（還有 {n} 秒）', { n: left });
     coopEl.querySelector('.coop-bar i').style.width = `${Math.round((coopHelp.p ?? 0.1) * 100)}%`;
+    coopEl.querySelector('.coop-fish').style.left = `${Math.round((coopHelp.p ?? 0.1) * 100)}%`;
     const who = coopEl.querySelector('.coop-who');
     who.textContent = helpTxt;
     who.hidden = !helpTxt;
@@ -3270,7 +3341,8 @@ async function init() {
     const mine = coopHelp?.id === id ? (coopHelp.mine ?? 0) : coopLast?.id === id ? coopLast.mine : 0;
     if (coopHelp?.id === id) coopHelp = null;
     drawCoop();
-    if (ok && mine >= COOP_MIN_TAPS) hud.toast(t('🎉 你幫忙拉上了河神大鯉魚！+{g} 🌰', { g: COOP_GAIN }), 6000);
+    if (ok && mine >= COOP_MIN_TAPS) hud.toast(t('🎉 你幫 {name} 拉上了河神大鯉魚！{name} 謝謝你 +{g} 🌰', { name, g: COOP_GAIN }), 6000);
+    else if (ok && !coopId && coopMates.size) return; // 釣的人自己：上面已經說過謝謝了
     else if (ok && roomMgr?.current?.id === 'forest_main') hud.toast(helpers?.length ? t('🎉 {name} 和 {list} 一起拉上了河神大鯉魚！', { name, list: helpers.join('、') }) : t('🎉 河神大鯉魚拉上來了！'), 6000);
     else if (!ok && id !== coopId && roomMgr?.current?.id === 'forest_main' && name) hud.toast(t('🌊 河神大鯉魚游走了⋯'), 3000);
   });
@@ -4080,7 +4152,17 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     }
     refreshOnline();
   }
-  net.on('homeBack', (res) => inHome() && applySnapshot(res)); // ⛺ 重連後回到帳篷：換回帳篷裡的人
+  net.on('homeBack', (res) => {
+    if (!inHome()) return;
+    // ⛺ 重連後回到帳篷：換回帳篷裡的人；萬一回到的不是畫面上這個帳篷，就照伺服器的重畫，布置也先關掉
+    if (res?.owner && shownHomeOwner && res.owner !== shownHomeOwner) {
+      stopBuild();
+      shownHomeOwner = res.owner;
+      homeRoom.setHome(res.home, !!res.mine);
+      buildPanel.showTools(homeRoom.mine, res.home?.open !== false);
+    }
+    applySnapshot(res);
+  });
   const localWishes = [];
   const applyWishes = (list) => {
     forest.shrine.setWishes(list);
@@ -4454,6 +4536,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     // 進到帳篷：換上主人的擺設
     guestPanel.set(room.id === 'home' ? (res?.home ?? myHome) : null, { mine: res ? !!res.mine : true, liked: !!res?.liked });
     if (room.id === 'home') {
+      shownHomeOwner = res?.owner ?? null;
       homeRoom.setHome(res?.home ?? myHome, res ? !!res.mine : true);
       if (player.position.z > homeRoom.doorZ - 0.95) player.position.z = homeRoom.doorZ - 1.15;
       buildPanel.showTools(homeRoom.mine, (res?.home ?? myHome)?.open !== false);
@@ -6136,13 +6219,20 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const has = cell && stackAt(homeRoom.home?.items, cell.x, cell.z).length;
     buildPanel.select(cell && !has ? { x: cell.x, z: cell.z } : null);
     furnPop.querySelector('[data-fop="fish"]').hidden = !(has && CATALOG_BY_ID[stackAt(homeRoom.home.items, cell.x, cell.z)[layer]?.i]?.fish);
+    // 作者 11/22：獎盃展示牆按了沒反應 → 上面能放東西的家具（櫃子、桌子、地墊），多一顆「⬆️ 放上去」，下面列出背包裡可以放的
+    {
+      const st = has ? stackAt(homeRoom.home.items, cell.x, cell.z) : [];
+      const inv = homeRoom.home?.inv ?? {};
+      const left = (id) => (inv[id] ?? 0) - (homeRoom.home?.items ?? []).filter((it) => it.i === id).length;
+      furnPop.querySelector('[data-fop="stack"]').hidden = !(has && Object.keys(inv).some((id) => left(id) > 0 && canAddTo(st, id)));
+    }
     furnPop.querySelector('[data-fop="buy"]').hidden = !(has && canRebuy(CATALOG_BY_ID[stackAt(homeRoom.home.items, cell.x, cell.z)[layer]?.i]));
   }
   // 🔘 選到家具：頭上浮一排小按鈕（轉向、移動、收起），跟著家具走
   const furnPop = document.createElement('div');
   furnPop.className = 'furn-pop';
   furnPop.hidden = true;
-  furnPop.innerHTML = `<button type="button" data-fop="rotate">🔄<small>${t('轉向')}</small></button><button type="button" data-fop="move">✋<small>${t('移動')}</small></button><button type="button" data-fop="remove">📦<small>${t('收起')}</small></button><button type="button" data-fop="fish" hidden>🐠<small>${t('放魚')}</small></button><button type="button" data-fop="buy" hidden>🛒<small>${t('再買')}</small></button><button type="button" data-fop="close" class="fp-x">✕</button>`;
+  furnPop.innerHTML = `<button type="button" data-fop="rotate">🔄<small>${t('轉向')}</small></button><button type="button" data-fop="move">✋<small>${t('移動')}</small></button><button type="button" data-fop="remove">📦<small>${t('收起')}</small></button><button type="button" data-fop="fish" hidden>🐠<small>${t('放魚')}</small></button><button type="button" data-fop="stack" hidden>⬆️<small>${t('放上去')}</small></button><button type="button" data-fop="buy" hidden>🛒<small>${t('再買')}</small></button><button type="button" data-fop="close" class="fp-x">✕</button>`;
   document.getElementById('ui').appendChild(furnPop);
   furnPop.addEventListener('pointerdown', (e) => e.stopPropagation());
   furnPop.addEventListener('click', async (e) => {
@@ -6152,6 +6242,11 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     if (op === 'close') return selectFurn(null);
     if (op === 'move') return hud.toast(t('✋ 按住家具直接拖到想放的地方'), 2500);
     if (op === 'buy') return rebuyFurn(stackAt(homeRoom.home?.items, furnSel.x, furnSel.z)[furnSel.layer]);
+    if (op === 'stack') {
+      buildPanel.cell = { x: furnSel.x, z: furnSel.z };
+      buildPanel.fishPick = null;
+      return buildPanel.render();
+    }
     if (op === 'fish') {
       // 🐠 魚缸：下面換成選魚
       buildPanel.cell = { x: furnSel.x, z: furnSel.z };
@@ -6297,7 +6392,9 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     setMyHome(demo.home);
     document.getElementById('ui').insertAdjacentHTML('beforeend', `<div class="demo-badge">${t('🧪 試玩版：松果和帳篷只存在這台裝置')}</div>`);
   }
-  net.on('homeUpdate', ({ home }) => {
+  net.on('homeUpdate', ({ home, owner }) => {
+    // 作者 11/22：布置到一半，畫面變成別人家（還在編輯模式）→ 不是現在這個帳篷的更新一律不理
+    if (owner && shownHomeOwner && owner !== shownHomeOwner) return;
     if (inHome()) {
       homeRoom.setHome(home, homeRoom.mine, true); // 同一個帳篷更新：留在幾樓、坐著的就繼續坐
       guestPanel.update(home);

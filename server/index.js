@@ -3898,7 +3898,8 @@ io.on('connection', (socket) => {
     const target = stack[lv] ?? null;
     if (data.op === 'place') {
       const i = String(data.i ?? '');
-      if ((!SHOP[i] && !GIFT_FURNITURE.has(i) && !CATALOG_BY_ID[i]?.craft) || i === 'tent') return ack?.({ ok: false, reason: 'unknown' });
+      // 作者 11/22：任務拿到的獎盃、小家具（小舖不賣）原本擺不出來 → 也認 quest
+      if ((!SHOP[i] && !GIFT_FURNITURE.has(i) && !CATALOG_BY_ID[i]?.craft && !CATALOG_BY_ID[i]?.quest) || i === 'tent') return ack?.({ ok: false, reason: 'unknown' });
       const chk = stackCheck(h, x, z, i);
       if (chk.reason) return ack?.({ ok: false, reason: chk.reason });
       const c = hasColors(CATALOG_BY_ID[i]) ? Math.floor(num(data.c, 0, ALL_COLORS.length - 1, 0)) : 0;
@@ -5105,7 +5106,7 @@ io.on('connection', (socket) => {
     const price = h.hens.length ? HEN_PRICE : COOP_PRICE;
     if (wal.pc < price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
     wal.pc -= price;
-    h.hens.push({ c, nm: '', fed: 0, eg: [], v: 2 });
+    h.hens.push({ c, nm: '', fed: 0, eg: [], v: 3 });
     saveJson('players.json', players);
     saveJson('homes.json', homes);
     socket.emit('wallet', { pc: wal.pc, delta: 0 });

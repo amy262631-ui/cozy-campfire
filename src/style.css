@@ -7777,3 +7777,19 @@ body.touch .bait-btn { right: 10px; bottom: 262px; }
 .qb-camp .qb-bar { height: 10px; }
 .qb-ms { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; opacity: 0.85; margin-top: 3px; flex-wrap: wrap; }
 .qb-peak { margin: 6px 0; padding: 8px 10px; border-radius: 12px; background: rgba(122, 170, 230, 0.15); font-size: 12.5px; line-height: 1.45; }
+/* 🤝 幫忙拉：跟自己收線一樣有感覺（作者 11/22） */
+.coop-panel .coop-bar { position: relative; overflow: visible; }
+.coop-panel .coop-bar i { border-radius: 9px; }
+.coop-panel .coop-fish { position: absolute; top: 50%; transform: translate(-50%, -50%); font-size: 22px; transition: left 0.2s; pointer-events: none; }
+.coop-panel .coop-plus { position: absolute; top: 46%; color: #ffd36a; font-weight: 800; font-size: 18px; pointer-events: none; animation: coop-plus 0.7s ease-out forwards; }
+@keyframes coop-plus { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-34px); opacity: 0; } }
+.coop-panel.shake { animation: coop-shake 0.12s; }
+@keyframes coop-shake { 0%, 100% { margin-left: 0; } 30% { margin-left: -3px; } 70% { margin-left: 3px; } }
+.coop-panel .coop-keys { opacity: 0.75; }
+.coop-mates { position: fixed; left: 50%; top: 120px; transform: translateX(-50%); background: rgba(20, 16, 12, 0.85); border: 1px solid #ffc56a; color: #ffe9c8; border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 700; z-index: 40; pointer-events: none; max-width: 86vw; text-align: center; }
+/* 幫忙拉時用畫面中間的收線條（跟自己釣魚一樣），上面的小視窗只留誰釣到、誰在幫忙 */
+.coop-panel.slim { top: auto; bottom: 96px; padding: 8px 12px; }
+.coop-panel.slim .coop-bar, .coop-panel.slim .coop-btn { display: none; }
+body.touch .coop-panel.slim { top: auto; }
+canvas.coop-jolt { animation: coop-jolt 0.12s; }
+@keyframes coop-jolt { 0%, 100% { transform: translate(0, 0); } 35% { transform: translate(-2px, 1px); } 70% { transform: translate(2px, -1px); } }
