@@ -89,7 +89,7 @@ export const YARD_USES = {
   picnic: { use: ['picnic'], seats: [{ x: -0.35, y: 0.45, z: 0.8, face: Math.PI }, { x: 0.35, y: 0.45, z: -0.8, face: 0 }] }, // 作者 11/22：往外坐才不會卡桌子
   bbq: { use: ['grill'] },
   bike: { use: ['bike'] },
-  hammock: { seats: [{ x: 0, y: 1.0, z: 0, face: Math.PI / 2, sleep: true }] },
+  hammock: { seats: [{ x: 0.7, y: 1.06, z: 0, face: Math.PI / 2, sleep: true }] }, // 作者 11/22：躺在吊床正中間、不穿過布
   canoe: { use: ['canoe'] },
   tarp: { seats: [{ x: -0.62, y: 0.45, z: 0.2, face: 0 }, { x: 0.62, y: 0.45, z: 0.2, face: 0 }] },
   jeep: { use: ['drive'], seats: [{ x: 0.15, y: 0.7, z: 0.32, face: Math.PI / 2, driver: true }, { x: -0.95, y: 0.75, z: -0.3, face: Math.PI / 2 }] }, // 駕駛座在前、乘客坐後座（兩個人才不會疊在一起）

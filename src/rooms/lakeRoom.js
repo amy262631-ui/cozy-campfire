@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { makeResolver, makeSign, lowpoly, shadowAll } from './shared.js';
 import { seededRandom } from '../scene/textures.js';
 import { createGatherLayer } from './gatherLayer.js';
-import { createTrashLayer } from './trashLayer.js';
+import { isHolEgg, createTrashLayer } from './trashLayer.js';
 import { FOG_COLOR } from '../scene/World.js';
 import { createFishMesh, fishScale } from '../fishing/fishModel.js';
 import { rollFish, rollSize } from '../fishing/fishData.js';
@@ -391,7 +391,7 @@ export function createLakeRoom() {
         const b = boats.boardable(actions.player.position);
         if (b) return t('<kbd>E</kbd> ⛵ 坐上 {name} 的船', { name: b.on });
       }
-      if (trash.near(actions.player.position)) return t('<kbd>E</kbd> ♻️ 撿起垃圾');
+      if (trash.near(actions.player.position)) return isHolEgg(trash.near(actions.player.position).item) ? t('<kbd>E</kbd> 🥚 撿起彩蛋') : t('<kbd>E</kbd> ♻️ 撿起垃圾');
       return gather.prompt(actions) ?? (fishingSpot(actions.player.position) ? t('<kbd>F</kbd> 坐下釣魚') : null);
     },
 
@@ -400,7 +400,7 @@ export function createLakeRoom() {
       if (this.boat) return ['⛵', t('下船')];
       if (nearBoatSign(actions.player.position)) return ['⛵', t('租船')];
       if (boatOpen() && boats.boardable(actions.player.position)) return ['⛵', t('上船')];
-      if (trash.near(actions.player.position)) return ['♻️', t('撿起來')];
+      if (trash.near(actions.player.position)) return isHolEgg(trash.near(actions.player.position).item) ? ['🥚', t('撿起來')] : ['♻️', t('撿起來')];
       return gather.spotNear(actions) ? ['🧺', t('撿起來')] : null;
     },
 

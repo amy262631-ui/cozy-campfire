@@ -7763,3 +7763,17 @@ body.touch .bait-btn { right: 10px; bottom: 262px; }
 .hc-badge { position: absolute; top: 5px; right: 5px; background: #fff3d6; color: #8a5a20; border-radius: 999px; font-size: 12px; font-weight: 800; padding: 1px 7px; }
 .hc-full { position: absolute; top: 5px; left: 5px; font-size: 11px; background: rgba(0, 0, 0, 0.3); border-radius: 999px; padding: 1px 6px; }
 .hcell .mini-btn { margin-top: 4px; }
+/* 🎉 假日活動 */
+.quest-chip.hol-on { background: rgba(242, 193, 74, 0.45); box-shadow: 0 0 0 2px rgba(255, 220, 120, 0.5); }
+.quest-chip.hol-on::after { content: ' 🎉'; }
+.qb-hero { border-radius: 14px; padding: 10px 12px; text-align: center; margin: 4px 0 8px; background: linear-gradient(135deg, #3b5a3a, #2e4a5a); }
+.qb-hero.qb-egg { background: linear-gradient(135deg, #6a4a7a, #a0647a); }
+.qb-hero.qb-fish { background: linear-gradient(135deg, #2e5a7a, #3a7a8a); }
+.qb-hero.qb-cook { background: linear-gradient(135deg, #8a5a2a, #b07a3a); }
+.qb-hero b { display: block; font-size: 19px; }
+.qb-hero small { font-size: 12px; opacity: 0.9; }
+.qb-camp { margin: 6px 0; padding: 9px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); }
+.qb-camp > b { font-size: 13.5px; }
+.qb-camp .qb-bar { height: 10px; }
+.qb-ms { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; opacity: 0.85; margin-top: 3px; flex-wrap: wrap; }
+.qb-peak { margin: 6px 0; padding: 8px 10px; border-radius: 12px; background: rgba(122, 170, 230, 0.15); font-size: 12.5px; line-height: 1.45; }

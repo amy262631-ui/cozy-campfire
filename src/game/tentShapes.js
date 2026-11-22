@@ -73,7 +73,7 @@ const GAP = 0.3; // 門口開口（弧度的一半）
  *   outside：true＝從外面看的版本（多了旗子、彩旗、窗戶、營釘這些外部裝飾）
  *   noPole：不要中柱
  */
-export function buildTentShell(shapeId, mats, { outside = false, noPole = false, frame = 'gold', noSwing = false, plus = false } = {}) {
+export function buildTentShell(shapeId, mats, { outside = false, noPole = false, frame = 'gold', noSwing = false, plus = false, veil = true } = {}) {
   const sh = shapeOf(shapeId);
   frameNow = frame;
   const g = new THREE.Group();
@@ -150,6 +150,20 @@ export function buildTentShell(shapeId, mats, { outside = false, noPole = false,
       arc.rotation.y = rot;
     }
     flaps(0.95, 1.5, R * 0.93);
+    // 作者 11/22：營地外面看，門口掛一片半透明紗簾（裡面的燈透出來，不會像破一個洞）
+    if (outside && veil) {
+      const vm = new THREE.MeshStandardMaterial({ color: 0xfff1d8, emissive: 0xffc878, emissiveIntensity: 0.3, transparent: true, opacity: 0.48, side: THREE.DoubleSide, depthWrite: false });
+      const v = add(new THREE.SphereGeometry(R - 0.02, 6, 12, Math.PI / 2 - GAP, GAP * 2, 0, Math.PI / 2), vm);
+      v.scale.y = 0.72;
+      v.renderOrder = 2;
+      // 紗簾的皺褶：幾條淡淡的直線
+      const fm = new THREE.MeshBasicMaterial({ color: 0xffe6b8, transparent: true, opacity: 0.16, depthWrite: false });
+      for (const k of [-0.6, -0.2, 0.2, 0.6]) {
+        const f = add(new THREE.SphereGeometry(R - 0.01, 1, 12, Math.PI / 2 + k * GAP - 0.012, 0.024, 0.08, Math.PI / 2 - 0.08), fm);
+        f.scale.y = 0.72;
+        f.renderOrder = 3;
+      }
+    }
   } else if (sh.id === 'aframe') {
     const { W, D } = sh;
     const K = 0.9; // 兩側矮牆高度

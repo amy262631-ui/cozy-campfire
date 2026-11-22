@@ -3251,12 +3251,21 @@ export function buildFurniture(id, opts = {}) {
     case 'q_tro_duck':
     case 'q_tro_cook':
     case 'q_tro_camp':
+    case 'q_tro_clean':
+    case 'q_tro_eggfest':
+    case 'q_tro_fishfest':
+    case 'q_tro_cookday':
+    case 'q_tro_forest':
+    case 'q_tro_river':
+    case 'q_tro_game':
+    case 'q_tro_friend':
     case 'q_trophy': {
       // 🏆 任務獎盃（作者 11/22：要多幾種）：同一個杯子，顏色和杯子上面的小圖案不一樣
       const TRO = {
         q_trophy: [0xf2c14a, 'seal'], q_tro_silver: [0xd4d8de, 'star'], q_tro_heart: [0xf2a8b4, 'heart'], q_tro_fish: [0x7cc8de, 'fish'],
         q_tro_garden: [0x9ccf72, 'carrot'], q_tro_hen: [0xf6ead2, 'egg'], q_tro_leaf: [0x7fbf6a, 'leaf'], q_tro_duck: [0xf6d84a, 'duck'],
-        q_tro_cook: [0xd8935a, 'pan'], q_tro_camp: [0xf2a050, 'flame'],
+        q_tro_cook: [0xd8935a, 'pan'], q_tro_camp: [0xf2a050, 'flame'], q_tro_clean: [0x8fd0c0, 'broom'], q_tro_eggfest: [0xf3b6d0, 'pegg'], q_tro_fishfest: [0x5a9ad8, 'rod'], q_tro_cookday: [0xf0c070, 'pot'],
+        q_tro_forest: [0xa8d088, 'mush'], q_tro_river: [0x9ab8c8, 'stone'], q_tro_game: [0xc8a0e0, 'dice'], q_tro_friend: [0xf8b8a8, 'letter'],
       };
       const [cc, top] = TRO[id] ?? TRO.q_trophy;
       const cup = mat(cc, { metalness: 0.25, roughness: 0.35 });
@@ -3291,10 +3300,132 @@ export function buildFurniture(id, opts = {}) {
       } else if (top === 'pan') {
         cyl(0.045, 0.045, 0.012, mat(0x3a3a3a), 0, y - 0.03, 0, 14);
         ball(0.02, mat(0xffd23f), 0, y - 0.02, 0, 1, 0.5, 1);
+      } else if (top === 'broom') {
+        // 🧹 大掃除：小掃把斜斜插著
+        const st = cyl(0.007, 0.007, 0.13, mat(0x9a6a3a), 0, y + 0.02, 0, 6);
+        st.rotation.z = 0.35;
+        const br = add(new THREE.ConeGeometry(0.035, 0.06, 8), mat(0xe8c86a), 0.03, y - 0.04, 0);
+        br.rotation.z = 0.35;
+      } else if (top === 'rod') {
+        // 🎣 釣魚大會：小釣竿＋掛一條金魚
+        const rod = cyl(0.005, 0.007, 0.16, mat(0x9a6a3a), -0.02, y + 0.03, 0, 6);
+        rod.rotation.z = -0.5;
+        ball(0.022, mat(0xf2c14a, { metalness: 0.3 }), 0.05, y - 0.02, 0, 1.4, 0.8, 0.5);
+      } else if (top === 'pot') {
+        // 🍳 料理日：小湯鍋冒一點蒸氣
+        cyl(0.04, 0.035, 0.04, mat(0x8a8f96, { metalness: 0.4 }), 0, y - 0.02, 0, 12);
+        ball(0.015, mat(0xffffff, { transparent: true, opacity: 0.7 }), 0.01, y + 0.03, 0);
+        ball(0.012, mat(0xffffff, { transparent: true, opacity: 0.6 }), -0.012, y + 0.055, 0);
+      } else if (top === 'mush') {
+        cyl(0.012, 0.016, 0.04, mat(0xf6ead2), 0, y - 0.03, 0, 8);
+        ball(0.04, mat(0xe8504a), 0, y + 0.0, 0, 1, 0.6, 1);
+        for (const [dx, dz] of [[0.015, 0.02], [-0.02, 0.012], [0.0, -0.022]]) ball(0.008, mat(0xffffff), dx, y + 0.018, dz);
+      } else if (top === 'stone') {
+        ball(0.045, mat(0x8a9aa4), 0, y - 0.015, 0, 1.3, 0.45, 1);
+        ball(0.03, mat(0xb8c4cc), 0.01, y + 0.012, 0, 1.2, 0.45, 1);
+      } else if (top === 'dice') {
+        const dc = box(0.06, 0.06, 0.06, mat(0xffffff), 0, y, 0);
+        dc.rotation.set(0.4, 0.6, 0.2);
+        for (const [dx, dy] of [[0, 0]]) ball(0.009, mat(0xd8443a), dx, y + 0.035, dy);
+      } else if (top === 'letter') {
+        box(0.08, 0.055, 0.008, mat(0xfff4e0), 0, y, 0);
+        stand(heart(0.016), 0.006, mat(0xe8506a), 0, y - 0.005, 0.006);
+      } else if (top === 'pegg') {
+        // 🥚 雞蛋節：粉紅彩蛋＋兩條花紋
+        ball(0.042, mat(0xffc8dc), 0, y, 0, 0.85, 1.1, 0.85);
+        for (const dy of [-0.012, 0.016]) cyl(0.037, 0.037, 0.008, mat(dy < 0 ? 0x8fd0f0 : 0xffe07a), 0, y + dy, 0, 14);
       } else if (top === 'flame') {
         add(new THREE.ConeGeometry(0.035, 0.09, 7), mat(0xff8a3a, { emissive: 0xff6a1a, emissiveIntensity: 0.5 }), 0, y, 0);
         add(new THREE.ConeGeometry(0.018, 0.05, 6), mat(0xffe08a, { emissive: 0xffd060, emissiveIntensity: 0.6 }), 0, y - 0.01, 0.012);
       }
+      break;
+    }
+    case 'q_broom': {
+      // 🧹 小掃帚組（假日大掃除）：靠在小水桶旁的掃把＋畚箕
+      cyl(0.07, 0.06, 0.12, mat(0x7cb8d8), -0.06, 0.06, 0, 12);
+      cyl(0.072, 0.072, 0.012, mat(0x5a98bc), -0.06, 0.12, 0, 12);
+      const handle = cyl(0.009, 0.009, 0.42, mat(0xb07a46), 0.07, 0.24, -0.02, 6);
+      handle.rotation.z = 0.18;
+      const head = add(new THREE.ConeGeometry(0.06, 0.12, 10), mat(0xe8c86a), 0.11, 0.06, -0.02);
+      head.rotation.z = 0.18;
+      cyl(0.04, 0.04, 0.02, mat(0xd8443a), 0.105, 0.12, -0.02, 8).rotation.z = 0.18;
+      box(0.12, 0.01, 0.1, mat(0xf2c14a), 0.02, 0.006, 0.09);
+      box(0.12, 0.05, 0.01, mat(0xf2c14a), 0.02, 0.03, 0.04);
+      break;
+    }
+    case 'q_rodrack': {
+      // 🎣 小釣竿架（假日釣魚大會）：木架上靠兩支小釣竿＋小魚簍
+      box(0.3, 0.03, 0.08, mat(0x8f6440), 0, 0.015, 0);
+      box(0.3, 0.025, 0.03, mat(0x8f6440), 0, 0.32, -0.03);
+      for (const sx of [-1, 1]) box(0.025, 0.34, 0.025, mat(0x7a5236), sx * 0.13, 0.17, -0.03);
+      for (const [x, c] of [[-0.06, 0x5a9ad8], [0.05, 0xd8443a]]) {
+        const r = cyl(0.006, 0.009, 0.5, mat(c), x, 0.25, 0.0, 6);
+        r.rotation.x = -0.12;
+        cyl(0.016, 0.016, 0.02, mat(0xc0c4ca, { metalness: 0.5 }), x, 0.12, 0.02, 10).rotation.z = Math.PI / 2;
+      }
+      cyl(0.05, 0.045, 0.08, mat(0xc89a5a), 0.1, 0.07, 0.06, 10);
+      break;
+    }
+    case 'q_minipot': {
+      // 🍲 迷你湯鍋（假日料理日）：小火爐上一鍋湯、冒蒸氣
+      cyl(0.09, 0.1, 0.06, mat(0x5a5048), 0, 0.03, 0, 12);
+      ball(0.04, mat(0xff8a3a, { emissive: 0xff6a1a, emissiveIntensity: 0.6 }), 0, 0.06, 0, 1.4, 0.5, 1.4);
+      cyl(0.085, 0.075, 0.1, mat(0xd8443a), 0, 0.12, 0, 16);
+      cyl(0.078, 0.078, 0.01, mat(0xf2c870), 0, 0.17, 0, 16);
+      for (const sx of [-1, 1]) box(0.03, 0.015, 0.02, mat(0x3a3a3a), sx * 0.1, 0.15, 0);
+      for (const [x, y] of [[0.01, 0.22], [-0.02, 0.26], [0.015, 0.3]]) ball(0.02, mat(0xffffff, { transparent: true, opacity: 0.55 }), x, y, 0);
+      break;
+    }
+    case 'q_mushlamp': {
+      // 🍄 蘑菇小夜燈（森林尋寶日）：會發光的大小兩朵蘑菇
+      for (const [x, s, c] of [[-0.04, 1, 0xf28a6a], [0.06, 0.65, 0xf6c86a]]) {
+        cyl(0.025 * s, 0.035 * s, 0.14 * s, mat(0xfff4e0, { emissive: 0xffe0a0, emissiveIntensity: 0.3 }), x, 0.07 * s, 0, 10);
+        ball(0.09 * s, mat(c, { emissive: c, emissiveIntensity: 0.45 }), x, 0.15 * s, 0, 1, 0.6, 1);
+        for (const a of [0.3, 2.2, 4.1]) ball(0.015 * s, mat(0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.4 }), x + Math.cos(a) * 0.05 * s, 0.185 * s, Math.sin(a) * 0.05 * s);
+      }
+      cyl(0.14, 0.15, 0.02, mat(0x7a5236), 0.01, 0.01, 0, 14);
+      break;
+    }
+    case 'q_stonejar': {
+      // 🪨 打水漂石頭罐（河畔同樂日）：玻璃罐裝滿扁石頭
+      cyl(0.08, 0.08, 0.2, mat(0xd8eef4, { transparent: true, opacity: 0.4 }), 0, 0.1, 0, 16);
+      cyl(0.085, 0.085, 0.03, mat(0xb08446), 0, 0.215, 0, 16);
+      const sc = [0x9aa8b0, 0xc8ccc8, 0x7a8890, 0xb8a898, 0xa0b0b8];
+      for (let i = 0; i < 9; i++) ball(0.032, mat(sc[i % sc.length]), Math.cos(i * 2.4) * 0.035, 0.03 + i * 0.018, Math.sin(i * 2.4) * 0.035, 1.3, 0.45, 1).rotation.y = i;
+      break;
+    }
+    case 'q_dice': {
+      // 🎲 迷你桌遊組（桌遊同樂會）：小棋盤＋兩顆骰子＋棋子
+      box(0.26, 0.02, 0.26, mat(0xf2e6c8), 0, 0.01, 0);
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2) box(0.06, 0.004, 0.06, mat(0x8a6a4a), -0.09 + i * 0.06, 0.022, -0.09 + j * 0.06);
+      for (const [x, z, r] of [[0.06, 0.05, 0.3], [-0.03, 0.08, 1.1]]) {
+        const d = box(0.05, 0.05, 0.05, mat(0xffffff), x, 0.05, z);
+        d.rotation.y = r;
+        ball(0.008, mat(0xd8443a), x, 0.077, z);
+      }
+      for (const [x, z, c] of [[-0.07, -0.06, 0xd8443a], [0.03, -0.07, 0x4a8ad0]]) {
+        cyl(0.015, 0.02, 0.04, mat(c), x, 0.045, z, 10);
+        ball(0.014, mat(c), x, 0.075, z);
+      }
+      break;
+    }
+    case 'q_letterbox': {
+      // 💌 小信箱（交朋友日）：紅色小信箱插著一封愛心信
+      cyl(0.015, 0.015, 0.2, mat(0x8f6440), 0, 0.1, 0, 8);
+      box(0.16, 0.12, 0.1, mat(0xe8605a), 0, 0.26, 0);
+      add(new THREE.CylinderGeometry(0.05, 0.05, 0.16, 14, 1, false, 0, Math.PI), mat(0xe8605a), 0, 0.32, 0).rotation.z = Math.PI / 2;
+      box(0.012, 0.06, 0.012, mat(0xf2c14a), 0.085, 0.31, 0.02);
+      box(0.08, 0.06, 0.006, mat(0xfff4e0), 0, 0.36, 0.0).rotation.x = -0.2;
+      stand(heart(0.014), 0.006, mat(0xe8506a), 0, 0.36, 0.012);
+      break;
+    }
+    case 'q_eggbasket': {
+      // 🧺 彩蛋小籃子（假日雞蛋節）：藤籃＋草＋三顆彩蛋
+      add(new THREE.LatheGeometry([[0.0, 0], [0.09, 0], [0.12, 0.05], [0.13, 0.1], [0.12, 0.1], [0.0, 0.02]].map(([x, y]) => new THREE.Vector2(x, y)), 18), mat(0xc89a5a, { side: THREE.DoubleSide }), 0, 0, 0);
+      const hd = add(new THREE.TorusGeometry(0.12, 0.01, 6, 20, Math.PI), mat(0xb08446), 0, 0.1, 0);
+      hd.scale.y = 1.2;
+      cyl(0.115, 0.115, 0.015, mat(0x8fcf6a), 0, 0.09, 0, 14);
+      for (const [x, z, c, r] of [[-0.04, 0.02, 0xffc8dc, 0.3], [0.04, -0.01, 0x9ad8f0, -0.2], [0.0, 0.05, 0xffe07a, 0.1]]) ball(0.035, mat(c), x, 0.12, z, 0.85, 1.1, 0.85).rotation.z = r;
       break;
     }
     case 'q_plant': {

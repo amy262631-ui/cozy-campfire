@@ -290,6 +290,22 @@ export const FURNITURE_CATALOG = [
   { id: 'q_tro_duck', icon: '🦆', zh: '河畔小高手獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
   { id: 'q_tro_cook', icon: '🍳', zh: '小廚神獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
   { id: 'q_tro_camp', icon: '🔥', zh: '營地小幫手獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_clean', icon: '🧹', zh: '大掃除獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_eggfest', icon: '🥚', zh: '雞蛋節獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_broom', icon: '🧹', zh: '小掃帚組', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_eggbasket', icon: '🧺', zh: '彩蛋小籃子', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_fishfest', icon: '🎣', zh: '釣魚大會獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_cookday', icon: '🍲', zh: '料理日獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_rodrack', icon: '🎣', zh: '小釣竿架', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_minipot', icon: '🍲', zh: '迷你湯鍋', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_forest', icon: '🍄', zh: '森林尋寶獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_river', icon: '🪨', zh: '河畔同樂獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_game', icon: '🎲', zh: '桌遊同樂獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_friend', icon: '💌', zh: '交朋友獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_mushlamp', icon: '🍄', zh: '蘑菇小夜燈', cat: 'light', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_stonejar', icon: '🪨', zh: '打水漂石頭罐', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_dice', icon: '🎲', zh: '迷你桌遊組', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_letterbox', icon: '💌', zh: '愛心小信箱', cat: 'deco', kind: 'small', quest: 1, trophy: true },
   { id: 'q_cabinet', icon: '🗄️', zh: '獎盃展示牆', price: 40, cat: 'table', shelf: 9, wide: 0.8, color: false }, // 一面牆的格子櫃：3×3 九格，擺獎盃、小東西
 ];
 /** 🍽️ 餐桌上的盤子放哪（相對格子中心；大餐桌往右多一格） */

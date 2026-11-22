@@ -16,7 +16,7 @@ import { isXmas } from '../game/season.js';
 import { buildShop, nearShop, SHOP_FRONT, SHOP_CLEARING } from './shop.js';
 import { buildCampExtras, createTreasures, EXTRA_CLEARINGS } from './campExtras.js';
 import { buildFireSeats, SEAT_LIFT } from './fireSeats.js';
-import { createTrashLayer } from './trashLayer.js';
+import { isHolEgg, createTrashLayer } from './trashLayer.js';
 import { EMOTE_IDS } from '../social/emotes.js';
 import { t } from '../i18n/i18n.js';
 
@@ -823,7 +823,7 @@ export function createForestRoom() {
       if (seatedOn()) return ['🪵', t('添柴')];
       if (!carrying && fireSeats.near(p0, 0.75)) return ['🪵', t('坐下')];
       if (!carrying && treasures.near(p0)) return ['✨', t('撿寶藏')];
-      if (!carrying && trash.near(p0)) return ['♻️', t('撿起來')];
+      if (!carrying && trash.near(p0)) return isHolEgg(trash.near(p0).item) ? ['🥚', t('撿起來')] : ['♻️', t('撿起來')];
       if (extras.nearBin(p0)) return ['♻️', t('回收')];
       if (extras.nearMuseum(p0)) return ['🏛️', t('標本櫃')];
       if (extras.nearPot(p0)) return ['🍲', t('料理')];
@@ -854,7 +854,7 @@ export function createForestRoom() {
       if (!carrying && river.nearPile(p0)) return t('<kbd>E</kbd> 🪨 撿扁石頭打水漂');
       if (!carrying && river.nearBank(p0) && pond.spotAt(p0)) return actions.compact ? t('<kbd>F</kbd> 釣魚　<kbd>E</kbd> 🦆 餵小鴨') : t('<kbd>F</kbd> 坐下釣魚　<kbd>E</kbd> 🦆 餵小鴨');
       if (!carrying && treasures.near(p0)) return t('<kbd>E</kbd> ✨ 撿起閃閃發光的東西');
-      if (!carrying && trash.near(p0)) return t('<kbd>E</kbd> ♻️ 撿起垃圾');
+      if (!carrying && trash.near(p0)) return isHolEgg(trash.near(p0).item) ? t('<kbd>E</kbd> 🥚 撿起彩蛋') : t('<kbd>E</kbd> ♻️ 撿起垃圾');
       if (extras.nearBin(p0)) return t('<kbd>E</kbd> ♻️ 把垃圾丟進回收桶');
       if (extras.nearMuseum(p0)) return t('<kbd>E</kbd> 🏛️ 營地標本櫃・捐出採集到的東西');
       if (extras.nearPot(p0)) return t('<kbd>E</kbd> 🍲 營火料理');

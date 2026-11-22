@@ -12,7 +12,27 @@ const mat = (c, extra) => {
 };
 
 /** 垃圾的小模型（躺在地上） */
+/** 🥚 假日雞蛋節的彩蛋（hegg）、整點大金蛋（hgold）：混在垃圾清單裡 */
+export const isHolEgg = (id) => id === 'hegg' || id === 'hgold';
+const EGG_COLORS = [[0xffc8dc, 0x8fd0f0], [0x9ad8f0, 0xffe07a], [0xffe07a, 0xf2a8b4], [0xc8e8a0, 0xd8b4f0], [0xd8b4f0, 0x9ad8f0]];
+function buildHolEgg(gold) {
+  const g = new THREE.Group();
+  const [c1, c2] = gold ? [0xf2c14a, 0xfff0a0] : EGG_COLORS[Math.floor(Math.random() * EGG_COLORS.length)];
+  const body = new THREE.Mesh(new THREE.SphereGeometry(gold ? 0.18 : 0.14, 16, 12), new THREE.MeshStandardMaterial({ color: c1, roughness: 0.45, metalness: gold ? 0.5 : 0, emissive: gold ? 0xffb020 : 0x000000, emissiveIntensity: gold ? 0.45 : 0 }));
+  body.scale.set(0.85, 1.12, 0.85);
+  body.position.y = gold ? 0.2 : 0.16;
+  body.castShadow = true;
+  g.add(body);
+  for (const dy of [-0.025, 0.035]) {
+    const band = new THREE.Mesh(new THREE.TorusGeometry((gold ? 0.152 : 0.118) * (dy < 0 ? 1 : 0.96), 0.012, 6, 20), new THREE.MeshStandardMaterial({ color: c2, emissive: gold ? 0xffe080 : 0x000000, emissiveIntensity: gold ? 0.5 : 0 }));
+    band.rotation.x = Math.PI / 2;
+    band.position.y = body.position.y + dy;
+    g.add(band);
+  }
+  return g;
+}
 export function buildTrashModel(id) {
+  if (isHolEgg(id)) return buildHolEgg(id === 'hgold');
   const it = TRASH_BY_ID[id];
   const g = new THREE.Group();
   const c = it?.color ?? 0xcccccc;

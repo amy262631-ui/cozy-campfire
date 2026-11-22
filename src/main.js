@@ -27,6 +27,7 @@ import { SpiritGames, SPIRIT_GAMES } from './game/spiritGames.js';
 import { AudioEngine } from './audio/AudioEngine.js';
 import { SONGS } from './audio/music.js';
 import { CHALLENGE_BY_ID } from './game/dailyChallenge.js';
+import { HOLIDAYS, HOL_TASK_BY_ID, HOL_TASK_GAIN, HOL_STEP_GAIN, HOL_START } from './game/holiday.js';
 import { DAILY_BY_ID, WEEKLY_BY_ID, CAT_TROPHY, CAT_NAME, WEEKLY_PLANT_AT, WEEKLY_BAIT_AT, DAILY_GAIN } from './game/quests.js';
 import { RoomManager } from './rooms/RoomManager.js';
 import { createForestRoom } from './rooms/forestRoom.js';
@@ -2324,7 +2325,8 @@ async function init() {
     let body = '';
     if (tab === 'newbie') {
       const st = ritual?.introStatus?.() ?? { done: 0, total: 6 };
-      body = st.done >= st.total
+      // 作者 11/22：不是新來的玩家（沒在做新手小任務）一律算完成
+      body = st.done >= st.total || !ritual?.kidMode
         ? `<div class="qb-big">🌱 ${t('新手任務全部完成！')}</div><div class="dex-note">${t('接下來每天看「📅 每日」，每週看「🗓️ 每週」')}</div>`
         : `<div class="qb-q"><span class="qb-ic">🌱</span><div class="qb-t"><b>${t('新手小任務')}</b><small>${st.done}／${st.total}</small>${qBar(st.done, st.total)}</div></div><button type="button" class="shop-buy-tent" data-qintro>${t('👉 繼續新手任務')}</button>`;
     } else if (tab === 'daily') {
@@ -2343,11 +2345,26 @@ async function init() {
         <div class="dex-note">${t('🏆 同一類任務做完 {n} 題，送那一類的達人獎盃（可以擺在「獎盃展示牆」）', { n: v.catAt })}</div>
         <div class="qb-cats">${Object.entries(CAT_TROPHY).map(([c, id]) => `<span class="qb-cat${(v.cats[c] ?? 0) >= v.catAt ? ' ok' : ''}">${FURNITURE_BY_ID[id]?.icon ?? '🏆'} ${t(CAT_NAME[c])} ${Math.min(v.cats[c] ?? 0, v.catAt)}/${v.catAt}</span>`).join('')}</div>`;
     } else {
-      body = `<div class="qb-big">🎉 ${t('假日活動準備中')}</div><div class="dex-note">${t('週六、週日白天會有全營地一起完成的主題活動（營地大掃除、雞蛋節⋯），做完拿主題獎盃和小家具。敬請期待！')}</div>`;
+      const h = v.hol ?? {};
+      const def = HOLIDAYS[h.id];
+      if (!def) {
+        const nx = h.next && HOLIDAYS[h.next.id];
+        const [, mm, dd] = (h.next?.day ?? '').split('-').map(Number);
+        body = `<div class="qb-big">🎉 ${t('現在沒有假日活動')}</div><div class="dex-note">${nx ? t('下一場：{m}/{d} {h}:00 {icon} {name}', { m: mm, d: dd, h: HOL_START, icon: nx.icon, name: t(nx.zh) }) : ''}</div><div class="dex-note">${t('週六、週日 10:00～18:00 有全營地一起完成的主題活動，做完拿主題獎盃和小家具。')}</div>`;
+      } else {
+        const left = Math.max(1, Math.round(h.endIn / 60000));
+        const rows = def.tasks.map((q, i) => qRow({ icon: q.icon, zh: q.zh }, h.tasks[i], qStamp(h.tasks[i].have >= h.tasks[i].need, `+${HOL_TASK_GAIN}🌰`))).join('');
+        const steps = h.steps.map((s, i) => `${s} ${i === h.steps.length - 1 ? '🏆' : '🎁'}${h.got[i] ? '✔' : ''}`).join(' ・ ');
+        body = `<div class="qb-hero qb-${h.id}"><b>${def.icon} ${t(def.zh)}</b><small>${t('還有 {h} 小時 {m} 分', { h: Math.floor(left / 60), m: left % 60 })}${h.peak ? `・${t('⏰ 整點小高潮中！')}` : ''}</small></div>
+          <div class="qb-camp"><b>🌍 ${t(def.goal.zh, { n: h.goal })}</b>${qBar(h.n, h.goal)}<div class="qb-ms"><span>${Math.min(h.n, h.goal)}／${h.goal}</span><span>${steps}</span></div></div>
+          ${rows}
+          <div class="qb-rew${h.all ? ' ok' : ''}">🎁 ${t('3 題都做完')}：<b>${furnName(def.furn)}</b>${h.all ? ' ✔' : ''}<br>🏆 ${t('全營地達到 {n}：有參加的人都拿 {name}', { n: h.goal, name: furnName(def.trophy) })}<br><small>${t('中間每達到一段，有參加的人 +{g} 🌰', { g: HOL_STEP_GAIN })}</small></div>
+          <div class="qb-peak">${t(def.peak)}</div>`;
+      }
     }
     modal.open(
       t('📒 任務本'),
-      `<div class="shop-tabs qb-tabs">${tabs.map(([id, l]) => `<button type="button" class="${id === tab ? 'on' : ''}" data-qtab="${id}">${l}${id === 'daily' && !v.dailyDone ? ' •' : ''}</button>`).join('')}</div>${body}`,
+      `<div class="shop-tabs qb-tabs">${tabs.map(([id, l]) => `<button type="button" class="${id === tab ? 'on' : ''}" data-qtab="${id}">${l}${(id === 'daily' && !v.dailyDone) || (id === 'holiday' && v.hol?.id) ? ' •' : ''}</button>`).join('')}</div>${body}`,
       (b) => {
         for (const btn of b.querySelectorAll('[data-qtab]')) btn.addEventListener('click', () => openQuest(btn.dataset.qtab));
         b.querySelector('[data-qintro]')?.addEventListener('click', () => (modal.close(), ritual?.open()));
@@ -2360,11 +2377,39 @@ async function init() {
       },
     );
   }
-  document.getElementById('quest-chip')?.addEventListener('click', () => openQuest());
+  document.getElementById('quest-chip')?.addEventListener('click', () => openQuest(questTab));
+  // 🎉 假日活動：進來時看一下有沒有在辦，有的話任務按鈕亮起來、提示一次、任務本直接開「🎉 假日」
+  const holCheck = async () => {
+    if (!net.online) return;
+    const v = await net.request('questInfo', {});
+    const h = v?.hol;
+    const def = h && HOLIDAYS[h.id];
+    document.getElementById('quest-chip')?.classList.toggle('hol-on', !!def);
+    if (!def) return;
+    questTab = 'holiday';
+    const k = `cozy-hol-seen`;
+    try {
+      if (localStorage.getItem(k) === `${new Date().toDateString()}:${h.id}`) return;
+      localStorage.setItem(k, `${new Date().toDateString()}:${h.id}`);
+    } catch {
+      /* ignore */
+    }
+    hud.toast(t('🎉 今天是「{icon} {name}」！點上方「📒 任務 → 🎉 假日」看看大家的進度', { icon: def.icon, name: t(def.zh) }), 7000);
+  };
+  setTimeout(holCheck, 9000);
+  setInterval(holCheck, 5 * 60000);
+  net.on('holStep', ({ id, last, n }) => {
+    const def = HOLIDAYS[id];
+    if (!def) return;
+    hud.toast(last ? t('🏆 全營地一起達到 {n} 了！有參加的人都拿到「{name}」', { n, name: FURNITURE_BY_ID[def.trophy]?.name ?? '' }) : t('🎉 全營地一起達到 {n}！有參加的人 +{g} 🌰', { n, g: HOL_STEP_GAIN }), 6000);
+    audio.sfx?.('bell');
+  });
+  net.on('holGold', ({ name }) => hud.toast(t('🌟 {name} 找到大金蛋了！', { name }), 4500));
+  net.on('holGoldShow', () => hud.toast(t('🌟 這附近藏了一顆大金蛋！先找到的 +20 🌰'), 5000));
   giftPanel.onQuest = () => openQuest('daily');
   net.on('quest', ({ done }) => {
     for (const [k, id] of done ?? []) {
-      const q = k === 'd' ? DAILY_BY_ID[id] : WEEKLY_BY_ID[id];
+      const q = k === 'd' ? DAILY_BY_ID[id] : k === 'h' ? HOL_TASK_BY_ID[id] : WEEKLY_BY_ID[id];
       if (q) hud.toast(t('📒 任務完成：{icon} {name}', { icon: q.icon, name: t(q.zh) }), 3500);
     }
     if (questOpen && modal.isOpen && fishingUI.el.modalTitle.textContent === t('📒 任務本')) openQuest();
@@ -2744,28 +2789,29 @@ async function init() {
     const cell = (h, i) => {
       const col = henColorOf(h.c);
       const full = h.fn >= FEED_PER_DAY;
+      const waitTxt = mine && !full && h.wait > 0 ? t('⏳ {t} 後可以再餵', { t: hm(h.wait) }) : '';
       const st = [mine ? t('今天餵 {n}/{m}', { n: h.fn, m: FEED_PER_DAY }) : '', h.next ? t('再餵 {k} 次升級', { k: h.next }) : t('圓滾滾！')].filter(Boolean).join('・');
-      const egg = !h.eggs && h.eggIn ? `<small>${t('下一顆蛋：{t}', { t: hm(h.eggIn) })}</small>` : '';
+      const egg = h.eggIn ? `<small>${t('下一顆蛋：{t}', { t: hm(h.eggIn) })}</small>` : !h.eggs && mine && !full ? `<small>${t('餵牠就會下蛋 🥚')}</small>` : '';
       const nm = escapeHtml(h.nm || t('還沒取名'));
       return `<div class="hcell${h.eggs ? ' has-egg' : ''}${i === coopSel ? ' sel' : ''}">
         ${h.eggs ? `<span class="hc-badge">🥚×${h.eggs}</span>` : ''}${mine && full ? `<span class="hc-full">${t('😋 吃飽了')}</span>` : ''}
         <i>🐔</i>${mine ? `<button type="button" class="hc-nm" data-hedit="${i}">${nm} <small>✏️</small></button>` : `<b class="hc-nm">${nm}</b>`}
         <span class="hc-dots" title="${t('胖胖 {n} 級', { n: h.fat })}">${'●'.repeat(h.fat)}${'○'.repeat(3 - h.fat)}</span>
         <small>${col.icon} ${t(col.zh)}・${st}</small>${egg}
-        ${mine && !full ? `<button type="button" class="mini-btn" data-hsel="${i}">${t('🍞 餵牠')}</button>` : ''}
+        ${waitTxt ? `<small>${waitTxt}</small>` : mine && !full ? `<button type="button" class="mini-btn" data-hsel="${i}">${t('🍞 餵牠')}</button>` : ''}
       </div>`;
     };
     const more = mine && res.hens.length < res.max ? `<div class="hcell empty"><i>🐣</i><b>${t('再養一隻')}</b><button type="button" class="mini-btn" id="hen-more">🌰 ${res.price}</button></div>` : '';
     const sel = res.hens[coopSel];
     const pick =
-      mine && sel && coopMode === 'feed' && sel.fn < FEED_PER_DAY
+      mine && sel && coopMode === 'feed' && sel.fn < FEED_PER_DAY && !(sel.wait > 0)
         ? `<div class="garden-pick"><b>${t('🍞 餵「{name}」吃什麼？', { name: escapeHtml(sel.nm || t('還沒取名')) })}</b>${feedable.length ? `<div class="crop-pick">${feedable.map((id) => `<button type="button" class="mini-btn" data-feed="${coopSel}" data-id="${id}">${materialOf(id).icon} ${t(materialOf(id).zh)} ×${basket[id]}</button>`).join('')}</div>` : `<small>${t('採集籃裡沒有蔬菜或果實可以餵')}</small>`}</div>`
         : mine && sel && coopMode === 'name'
           ? `<div class="garden-pick"><b>${t('✏️ 幫牠取名字')}</b><div class="hen-name"><input type="text" maxlength="8" data-hnm="${coopSel}" value="${escapeHtml(sel.nm)}" placeholder="${t('幫牠取名字')}"><button type="button" class="mini-btn" data-hname="${coopSel}">${t('✏️ 取名')}</button></div></div>`
           : '';
     modal.open(
       (mine ? t('🐔 我的小肥雞') : t('🐔 {name} 的小肥雞', { name: plot.tent.name || t('旅人') })) + ` ${res.hens.length}/${res.max}`,
-      `<div class="dex-note">${mine ? t('每隻每 6 小時下 1 顆蛋（最多存 2 顆），雞蛋可以拿去自由料理鍋煮。餵蔬菜或果實會越來越圓，3 級的一次下 2 顆，偶爾還會下金蛋！') : t('朋友家的小肥雞，看起來吃得很好 🐔')}</div>
+      `<div class="dex-note">${mine ? t('餵一次蔬菜或果實，1 小時後就下一顆蛋（沒餵不會下蛋）。每隻一天 3 次、每次要隔 1 小時。越餵越圓，3 級的一次下 2 顆，偶爾還會下金蛋！') : t('朋友家的小肥雞，看起來吃得很好 🐔')}</div>
        ${mine ? `<button type="button" class="shop-buy-tent" id="hen-eggs" ${totalEggs ? '' : 'disabled'}>${totalEggs ? t('🥚 撿蛋（{n} 顆）', { n: totalEggs }) : t('🥚 還沒有蛋可以撿')}</button>` : ''}
        <div class="hen-grid">${res.hens.map(cell).join('')}${more}</div>${pick}`,
       (body) => {
@@ -2784,10 +2830,10 @@ async function init() {
           b.addEventListener('click', async () => {
             b.disabled = true;
             const r = await net.request('henFeed', { i: Number(b.dataset.feed), id: b.dataset.id });
-            if (!r?.ok) return hud.toast(r?.reason === 'full' ? t('今天吃飽了，明天再餵') : t('沒有成功，再試一次'));
+            if (!r?.ok) return hud.toast(r?.reason === 'full' ? t('今天吃飽了，明天再餵') : r?.reason === 'wait' ? t('牠還飽飽的，{t} 後再餵', { t: hm(r.wait) }) : t('沒有成功，再試一次'));
             basket = r.basket ?? basket;
             audio.sfx('tap');
-            hud.toast(r.up ? t('🐔 變圓了！胖胖 {n} 級', { n: r.up }) : t('🐔 吃得好開心 💕'), 3000);
+            hud.toast(r.up ? t('🐔 變圓了！胖胖 {n} 級', { n: r.up }) : t('🐔 吃得好開心 💕・1 小時後下蛋'), 3000);
             if (r.up) refreshCamp();
             renderCoop(r, plot);
           });
@@ -3078,6 +3124,14 @@ async function init() {
   });
   actions.onDuckFeed = async () => {
     if (!net.online) return hud.toast(t('還沒連上伺服器，等一下再試'));
+    // 作者 11/22：先問一下再餵（會用掉採集籃的東西，不小心按到才不會浪費）；跟伺服器挑的一樣：最常見、數量最多的蔬菜或果實
+    const pick = Object.entries(basket ?? {})
+      .filter(([id, n]) => n > 0 && ['veg', 'fruit'].includes(materialOf(id)?.type))
+      .sort((a, b) => (materialOf(a[0]).rarity ?? 1) - (materialOf(b[0]).rarity ?? 1) || b[1] - a[1])[0];
+    if (myDuckUntil > Date.now()) return hud.toast(t('🦆 小鴨已經跟著你囉'));
+    if (!pick) return hud.toast(t('🦆 採集籃裡沒有蔬菜或果實，去菜園或迷霧森林找一些吧'));
+    const fm = materialOf(pick[0]);
+    if (!(await confirmBuy.ask({ title: t('🦆 要餵小鴨嗎？'), icon: '🦆', name: t('餵小鴨'), desc: t('會用掉採集籃的 {icon}{name} ×1（你有 {n} 個）。一次 1 隻小鴨跟著你走 3 分鐘，一天最多餵 3 次', { icon: fm.icon, name: t(fm.zh), n: pick[1] }), yes: t('🦆 餵牠') }))) return;
     const r = await net.request('duckFeed', {});
     if (r?.ok) {
       myDuckUntil = r.until;
@@ -3242,6 +3296,10 @@ async function init() {
     if (actions.state !== 'ride' && !actions.perform('pick', 1.25, face)) return;
     const res = await net.request('pickTrash', { k: tb.k });
     if (!res?.ok) return hud.toast(res?.reason === 'gone' ? t('哎呀，被別人先撿走了') : t('再靠近一點'));
+    if (res.egg) {
+      audio.sfx('bell');
+      return hud.toast(res.gold ? t('🌟 找到大金蛋了！+{g} 🌰', { g: res.gain }) : t('🥚 找到一顆彩蛋！'), 3000);
+    }
     setTrash(res);
     audio.sfx(res.first ? 'bell' : 'tap');
     trashToast(res);

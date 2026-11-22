@@ -34,7 +34,7 @@ import { CROP_BY_ID, GARDEN_MAX, gardenMax, GARDEN_EXPAND, gardenSlotsOf, WATER_
 import { canMake, takeMaterials, materialOf } from '../src/game/materials.js';
 import { RECIPE_BY_ID } from '../src/game/crafting.js';
 import { DISH_BY_ID, dishFirstGain, BUFF_MS, DISH_FX, activeBuff, homeCanCook } from '../src/game/cooking.js';
-import { HEN_FROM, COOP_PRICE, HEN_PRICE, HEN_MAX, FEED_PER_DAY, GOLD_EGG, HEN_COLORS, fatOf, fatNext, eggsOf, eggIn, canFeed, LAY_MS, EGG_STORE } from '../src/game/hens.js';
+import { HEN_FROM, COOP_PRICE, HEN_PRICE, HEN_MAX, FEED_PER_DAY, GOLD_EGG, HEN_COLORS, fatOf, fatNext, eggsOf, eggIn, canFeed, henMigrate, feedWait, layOnFeed } from '../src/game/hens.js';
 import { LEGENDS, LEGEND_GAIN, legendHour, taipeiHour } from '../src/game/legendRules.js';
 import { RIVER_FROM, COOP_GAIN, COOP_MIN_TAPS, COOP_SEC, SKIP_PER_DAY, SKIP_GOOD, skipBounces, DUCK_PER_DAY, DUCK_MS, DUCK_FIRST_GAIN } from '../src/game/river.js';
 import { BOATS, BOAT_FROM, BOAT_MS, BOAT_MAX, BOAT_SLOTS, FEED_PRICE, FEED_MS, BOAT_LUCK, DOCK_END, keepOnLake, seatAt } from '../src/game/boats.js';
@@ -50,6 +50,7 @@ import { cleanNameText, AUTHOR_MARK } from '../src/game/nameRules.js';
 import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS, isLoftCell } from '../src/game/furnitureCatalog.js';
 import { YARD_BY_ID, hasYard, isBigYard, isDoorYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
+import { HOLIDAYS, HOL_TASK_GAIN, HOL_STEP_GAIN, HOL_GOLD_GAIN, holidayNow, nextHoliday, holGoal } from '../src/game/holiday.js';
 import { DAILY_BY_ID, WEEKLY_BY_ID, CAT_TROPHY, MAKEUP_ORDER, DAILY_GAIN, STAMP_MONTH, STAMP_DAILY, STAMP_WEEKLY, WEEKLY_PLANT_AT, WEEKLY_BAIT_AT, CAT_TROPHY_AT, dailyOf, dailySwapTo, weeklyOf, weekKey } from '../src/game/quests.js';
 import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_FIRST_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, SPIRIT_ACT_KIND, SPIRIT_NIGHT_STAR, SPIRIT_PLAY_DAY, SPIRIT_ACCS, SPIRIT_ACC_BY_ID, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
 import { isXmasDay as isXmasDay0, isXmasShopDay as isXmasShopDay0 } from '../src/game/season.js';
@@ -541,16 +542,50 @@ function trashSpot(place) {
 const publicTrash = (c, place) => (c.trash?.[place] ?? []).map((x) => ({ k: x.k, x: x.x, z: x.z, item: x.item }));
 function tickTrash() {
   const now = Date.now();
+  // 🎉 假日：大掃除垃圾冒得快、多；雞蛋節藏彩蛋；整點小高潮多冒一波／一顆大金蛋
+  const H = holNow();
+  const hourKey = H?.peak ? `${H.key}:${Math.floor(now / 3600000)}` : '';
   for (const c of channels.values()) {
     c.trash ??= {};
     c.nextTrash ??= {};
+    c.nextEgg ??= {};
+    const burst = hourKey && c.peakKey !== hourKey;
+    if (burst) c.peakKey = hourKey;
+    let goldPlace = burst && H.id === 'egg' ? TRASH_PLACES[Math.floor(Math.random() * TRASH_PLACES.length)] : '';
     for (const place of TRASH_PLACES) {
-      const list = (c.trash[place] ??= []);
-      if (!c.nextTrash[place]) c.nextTrash[place] = now + Math.random() * 60000;
-      if (list.length >= TRASH_MAX[place] || now < c.nextTrash[place]) continue;
-      list.push({ k: ++trashSeq, ...trashSpot(place), item: pickTrash(place).id });
-      c.nextTrash[place] = now + (TRASH_EVERY[0] + Math.random() * (TRASH_EVERY[1] - TRASH_EVERY[0])) * 1000;
-      io.to(trashKeys(c, TRASH_ROOM[place])).emit('trash', { room: TRASH_ROOM[place], list: publicTrash(c, place) });
+      let list = (c.trash[place] ??= []);
+      let changed = false;
+      if (H?.id !== 'egg' && list.some((x) => x.egg)) {
+        list = c.trash[place] = list.filter((x) => !x.egg); // 雞蛋節結束：彩蛋收起來
+        changed = true;
+      }
+      const junk = list.filter((x) => !x.egg).length;
+      const clean = H?.id === 'clean';
+      const max = TRASH_MAX[place] + (clean ? 3 : 0);
+      if (clean && burst) {
+        for (let i = junk; i < max + 3; i++) list.push({ k: ++trashSeq, ...trashSpot(place), item: pickTrash(place).id });
+        changed = true;
+      } else if (!c.nextTrash[place]) c.nextTrash[place] = now + Math.random() * 60000;
+      else if (junk < max && now >= c.nextTrash[place]) {
+        list.push({ k: ++trashSeq, ...trashSpot(place), item: pickTrash(place).id });
+        c.nextTrash[place] = now + (TRASH_EVERY[0] + Math.random() * (TRASH_EVERY[1] - TRASH_EVERY[0])) * 1000 * (clean ? 0.3 : 1);
+        changed = true;
+      }
+      if (H?.id === 'egg') {
+        const eggs = list.filter((x) => x.egg && x.item === 'hegg').length;
+        if (eggs < 3 && now >= (c.nextEgg[place] ?? 0)) {
+          list.push({ k: ++trashSeq, ...trashSpot(place), item: 'hegg', egg: true });
+          c.nextEgg[place] = now + (30 + Math.random() * 40) * 1000;
+          changed = true;
+        }
+        if (goldPlace === place) {
+          list.push({ k: ++trashSeq, ...trashSpot(place), item: 'hgold', egg: true });
+          goldPlace = '';
+          changed = true;
+          io.to(key(c.ch, TRASH_ROOM[place])).emit('holGoldShow', { room: TRASH_ROOM[place] });
+        }
+      }
+      if (changed) io.to(trashKeys(c, TRASH_ROOM[place])).emit('trash', { room: TRASH_ROOM[place], list: publicTrash(c, place) });
     }
   }
 }
@@ -999,7 +1034,73 @@ function questView(vid) {
     weekly, wk: wq.w, weeklyOutfit: weeklyOutfit(d).id, weeklyGot: wq.got ?? {}, baitOn: isOpen({ from: BOAT_FROM }),
     stamps: st.n, stampNeed: STAMP_MONTH, stampGot: !!st.got, makeupNext: MAKEUP_ORDER.find((m) => !(w.outfits ?? []).includes(m)) ?? null,
     cats: w.qcat ?? {}, catAt: CAT_TROPHY_AT,
+    hol: holView(vid),
   };
+}
+// ---------- 🎉 假日活動（作者 11/22）：全營地一起的目標＋自己的 3 題＋整點小高潮 ----------
+const HOL_TEST = process.env.HOLIDAY_TEST || ''; // 本機測試：clean／egg／fish／cook 強制打開（Render 不要設）
+const holNow = () => holidayNow(new Date(), HOL_TEST);
+/** 這一場的全營地進度（存在 totals.hol，伺服器重開也在） */
+function holState(H) {
+  if (totals.hol?.key !== H.key) totals.hol = { key: H.key, n: 0, got: {}, who: {} };
+  return totals.hol;
+}
+function holMine(vid, H) {
+  const w = players[vid];
+  if (w.hq?.k !== H.key) w.hq = { k: H.key, n: {}, all: false };
+  return w.hq;
+}
+function holView(vid) {
+  const H = holNow();
+  if (!H) return { next: nextHoliday() };
+  const def = HOLIDAYS[H.id];
+  const st = holState(H);
+  const me = holMine(vid, H);
+  const g = holGoal(H);
+  return { id: H.id, endIn: H.endIn, peak: H.peak, n: st.n, goal: g.n, steps: g.steps, got: st.got, joined: !!st.who[vid], all: me.all, tasks: def.tasks.map((q) => ({ id: q.id, have: Math.min(me.n[q.id] ?? 0, q.n), need: q.n })) };
+}
+/** 假日活動的事件（questEv 一開始呼叫）；回傳這次做完的題目 */
+function holEv(vid, ev, k = 1) {
+  const H = holNow();
+  if (!H || !players[vid]) return [];
+  const def = HOLIDAYS[H.id];
+  const g = holGoal(H);
+  const kk = k * (H.peak && H.id !== 'egg' ? 2 : 1); // ⏰ 整點小高潮：算 2 倍
+  const done = [];
+  let moved = false;
+  const me = holMine(vid, H);
+  const st = holState(H);
+  for (const q of def.tasks) {
+    if (q.ev !== ev || (me.n[q.id] ?? 0) >= q.n) continue;
+    me.n[q.id] = Math.min(q.n, (me.n[q.id] ?? 0) + kk);
+    moved = true;
+    if (me.n[q.id] >= q.n) {
+      done.push(['h', q.id]);
+      giveTo(vid, HOL_TASK_GAIN, 'quest');
+    }
+  }
+  if (!me.all && def.tasks.every((q) => (me.n[q.id] ?? 0) >= q.n)) {
+    me.all = true;
+    giveQuestFurn(vid, def.furn);
+    bump('holAll');
+  }
+  if (g.ev === ev) {
+    st.n += kk;
+    moved = true;
+  }
+  if (!moved) return done;
+  st.who[vid] = 1; // 有參加
+  g.steps.forEach((s, i) => {
+    if (st.n < s || st.got[i]) return;
+    st.got[i] = 1;
+    const last = i === g.steps.length - 1;
+    for (const v of Object.keys(st.who)) last ? giveQuestFurn(v, def.trophy) : giveTo(v, HOL_STEP_GAIN, 'quest');
+    io.emit('holStep', { id: H.id, step: i, last, n: s, who: Object.keys(st.who).length });
+    console.log(`[假日] ${def.zh} 全營地到 ${s}（${Object.keys(st.who).length} 人參加）`);
+  });
+  saveJson('totals.json', totals);
+  saveJson('players.json', players);
+  return done;
 }
 /** 蓋章（每月集滿 20 個：臉妝＋金獎盃） */
 function addStamp(vid, n) {
@@ -1035,7 +1136,8 @@ function questEv(vid, ev, k = 1, opt = {}) {
   if (!w || !vid) return;
   const d = dayKey();
   const ctx = questCtx(vid);
-  const done = [];
+  const done = holEv(vid, ev, k); // 🎉 假日活動
+  const holMoved = done.length > 0;
   let moved = false;
   // 📅 每日
   if (w.ch?.d !== d) w.ch = { d, n: {} };
@@ -1071,7 +1173,11 @@ function questEv(vid, ev, k = 1, opt = {}) {
       questCat(vid, q.cat);
     }
   }
-  if (!moved) return;
+  if (!moved && !holMoved && !holNow()) return;
+  if (!moved) {
+    for (const s of socketsOf(vid)) s.emit('quest', { view: questView(vid), done });
+    return;
+  }
   // 📅 每日 3 題都做完：今天的造型＋1 個章
   if (done.some(([t]) => t === 'd') && dv.every((id) => (w.ch.n[id] ?? 0) >= DAILY_BY_ID[id].n) && !w.ch.all) {
     w.ch.all = true;
@@ -4043,6 +4149,17 @@ io.on('connection', (socket) => {
     if (!tr) return ack?.({ ok: false, reason: 'gone' });
     if (Math.hypot(player.x - tr.x, player.z - tr.z) > TOUCH_R + 2.5) return ack?.({ ok: false, reason: 'far' });
     chan.trash[place] = list.filter((x) => x !== tr);
+    // 🥚 假日雞蛋節的彩蛋（混在垃圾清單裡，同一套撿的方式）
+    if (tr.egg) {
+      io.to(trashKeys(chan, roomId)).emit('trash', { room: roomId, list: publicTrash(chan, place) });
+      const gold = tr.item === 'hgold';
+      if (gold) {
+        giveTo(player.vid, HOL_GOLD_GAIN, 'quest');
+        io.emit('holGold', { name: player.name });
+      }
+      chal('hegg');
+      return ack?.({ ok: true, egg: true, gold, gain: gold ? HOL_GOLD_GAIN : 0 });
+    }
     const r = gotTrash(wal, player.vid, tr.item);
     if (r.gain) award(r.gain, 'trash');
     saveJson('players.json', players);
@@ -4070,6 +4187,7 @@ io.on('connection', (socket) => {
       d.recycled = (d.recycled ?? 0) + n;
       saveJson('stats.json', stats);
       saveJson('players.json', players);
+      chal('recycle'); // 🎉 假日大掃除
       return ack?.({ ok: true, kept: true, n, gain: 0, basket: wal.bk, todayAll: d.recycled, allTime: totals.trash ?? 0, ...trashView(wal) });
     }
     const dk = dayKey();
@@ -4085,6 +4203,7 @@ io.on('connection', (socket) => {
     d.recycled = (d.recycled ?? 0) + n;
     saveJson('stats.json', stats);
     saveJson('players.json', players);
+    chal('recycle'); // 🎉 假日大掃除
     ack?.({ ok: true, n, gain, todayAll: d.recycled, allTime: totals.trash ?? 0, ...trashView(wal) });
   });
 
@@ -4966,7 +5085,7 @@ io.on('connection', (socket) => {
       mine: owner === player.vid,
       max: HEN_MAX,
       price: h?.hens?.length ? HEN_PRICE : COOP_PRICE,
-      hens: (h?.hens ?? []).map((x) => ({ c: x.c, nm: x.nm ?? '', fed: x.fed ?? 0, fat: fatOf(x.fed), next: fatNext(x.fed), eggs: eggsOf(x, now), eggIn: eggIn(x, now), fn: x.fd === today ? (x.fn ?? 0) : 0 })),
+      hens: (h?.hens ?? []).map((x) => (henMigrate(x, now), { c: x.c, nm: x.nm ?? '', fed: x.fed ?? 0, fat: fatOf(x.fed), next: fatNext(x.fed), eggs: eggsOf(x, now), eggIn: eggIn(x, now), wait: feedWait(x, now), fn: x.fd === today ? (x.fn ?? 0) : 0 })),
     };
   };
   socket.on('henInfo', (data = {}, ack) => {
@@ -4986,7 +5105,7 @@ io.on('connection', (socket) => {
     const price = h.hens.length ? HEN_PRICE : COOP_PRICE;
     if (wal.pc < price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
     wal.pc -= price;
-    h.hens.push({ c, nm: '', fed: 0, t: Date.now() });
+    h.hens.push({ c, nm: '', fed: 0, eg: [], v: 2 });
     saveJson('players.json', players);
     saveJson('homes.json', homes);
     socket.emit('wallet', { pc: wal.pc, delta: 0 });
@@ -5014,9 +5133,16 @@ io.on('connection', (socket) => {
       hen.fn = 0;
     }
     if (hen.fn >= FEED_PER_DAY) return ack?.({ ok: false, reason: 'full' });
+    // 作者 11/22：同一隻隔 1 小時才能再餵；餵一次 1 小時後下一顆蛋（沒餵不下蛋）
+    const now = Date.now();
+    henMigrate(hen, now);
+    const wait = feedWait(hen, now);
+    if (wait > 0) return ack?.({ ok: false, reason: 'wait', wait });
     const before = fatOf(hen.fed);
     hen.fn++;
     hen.fed = (hen.fed ?? 0) + 1;
+    hen.lf = now;
+    layOnFeed(hen, now);
     wal.bk[id]--;
     if (!wal.bk[id]) delete wal.bk[id];
     saveJson('players.json', players);
@@ -5032,12 +5158,11 @@ io.on('connection', (socket) => {
     let egg = 0;
     let gold = 0;
     for (const x of hens) {
+      henMigrate(x, now);
       const n = eggsOf(x, now);
       if (!n) continue;
       for (let k = 0; k < n; k++) Math.random() < GOLD_EGG ? gold++ : egg++;
-      // 還沒存滿：保留下一顆已經孵了一半的時間（以前一撿就從頭算，6 小時多一點才來撿會少掉那段）
-      const laid = Math.floor((now - (x.t ?? now)) / LAY_MS);
-      x.t = laid >= EGG_STORE ? now : x.t + laid * LAY_MS;
+      x.eg = x.eg.filter((t) => t > now); // 還沒下的留著
     }
     if (!egg && !gold) return ack?.({ ok: false, reason: 'none' });
     wal.bk ??= {};
