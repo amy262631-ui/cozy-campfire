@@ -189,7 +189,10 @@ export class FishingGame {
     if (rig && !this.savedCam) {
       this.savedCam = { yaw: rig.target.yaw, pitch: rig.target.pitch, distance: rig.target.distance };
       // 從斜後方看（越過肩膀），浮標才不會被自己的身體擋住
-      rig.target.yaw = Math.atan2(-spot.dir[0], -spot.dir[1]) + 0.32;
+      // 作者 11/22：開始、結束時鏡頭轉很多圈會暈 → 走最短的方向轉過去
+      const want = Math.atan2(-spot.dir[0], -spot.dir[1]) + 0.32;
+      const d = Math.atan2(Math.sin(want - rig.yaw), Math.cos(want - rig.yaw));
+      rig.target.yaw = rig.yaw + d;
       rig.target.pitch = 0.42;
       rig.target.distance = 3.9;
     }
@@ -245,7 +248,10 @@ export class FishingGame {
     this.session = null;
     this.#focusTick();
     if (this.savedCam && this.cameraRig) {
-      Object.assign(this.cameraRig.target, this.savedCam);
+      // 收竿：只把距離、高度還原，方向維持現在這樣（不再整個轉回去）
+      this.cameraRig.target.pitch = this.savedCam.pitch;
+      this.cameraRig.target.distance = this.savedCam.distance;
+      this.cameraRig.target.yaw = this.cameraRig.yaw;
       this.savedCam = null;
     }
     if (this.cameraRig) this.cameraRig.focusTarget = null;

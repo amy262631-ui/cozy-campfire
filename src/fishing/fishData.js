@@ -80,7 +80,7 @@ export const FISH = [
   // ---- 🔥 營火河畔限定（作者 11/20，11/27 開）：不算進全收集，圖鑑「🗓️ 限定」 ----
   //   fire：營火超旺（75% 以上）才游出來；coop：河神大鯉魚，一個人拉不動，要附近的人按「🤝 幫忙拉」
   { name: t('火光魚'), rarity: 4, min: 25, max: 50, color: 0xff7a2a, glow: 0xffb030, fin: 0xffd060, weight: 3, pull: 18, fight: 0.11, window: 1.15, where: 'pond', fire: true, from: '2026-11-22', note: t('🔥 營火超旺的時候才游出來') },
-  { name: t('河神大鯉魚'), rarity: 5, legend: true, min: 150, max: 220, color: 0xd8a03a, glow: 0xffe08a, patch: 0xc8402a, weight: 1.4, pull: 60, fight: 0.06, window: 1.1, where: 'pond', coop: true, from: '2026-11-22', keep: false, note: t('🤝 一個人拉不動，要大家一起拉') },
+  { name: t('河神大鯉魚'), rarity: 5, legend: true, min: 150, max: 220, color: 0xd8a03a, glow: 0xffe08a, patch: 0xc8402a, weight: 1.4, pull: 60, fight: 0.06, window: 1.1, where: 'pond', coop: true, from: '2026-11-22', keep: false, note: t('🤝 一個人拉很吃力，大家一起拉就輕鬆') },
 ];
 /** 第一次釣到某種魚（收進圖鑑）送的松果，依星等（伺服器 server/index.js 的 DEX_GAIN 相同） */
 export const DEX_GAIN = [1, 2, 3, 5, 10, 20];

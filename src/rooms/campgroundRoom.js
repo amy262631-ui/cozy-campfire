@@ -709,6 +709,8 @@ export function createCampgroundRoom() {
   tentGlowDim.opacity = 0.35;
   const patchMine = lowpoly(0x4a5c33);
   const patchOther = lowpoly(0x3a5230);
+  let curTents = []; // 這次的帳篷清單（擺雞舍時看鄰居是什麼帳篷）
+  const penAt = new Map(); // 每一塊地的雞舍在哪裡（世界座標），後擺的要避開先擺的
   let plots = PLOTS.map((p, i) => ({ ...p, i, door: spots[i].door, out: spots[i].out, garden: spots[i].garden, tent: null, key: null, g: null, collider: null }));
 
   let zoneNow = 0; // 🏕️ 現在顯示哪一區（門牌寫「A 區 7 號」用）
@@ -749,6 +751,7 @@ export function createCampgroundRoom() {
     g.add(patch);
     const doorAt = (front) => plotSpots(p, front);
     if (!tent) {
+      penAt.delete(p.i);
       // 空地：小木牌
       // 空營位：小木樁門牌「A 區 5 號・空地」（有帳篷的人走過來按 E 可以搬來這裡）
       const es = buildSign('empty', plotTitle(p.i), t('空地'));
@@ -818,6 +821,31 @@ export function createCampgroundRoom() {
     const toW = (lx, lz) => ({ x: p.x + fr.fx * lz + fr.rx * lx, z: p.z + fr.fz * lz + fr.rz * lx });
     // ⛵ 船屋外面那一片水（作者 11/22：小雞跑到水裡）：圍籬整圈都要在水外面（圍籬半寬約 1 公尺，再多留一點）
     const inBoatWater = (x, lz) => sh.id === 'houseboat' && Math.hypot(x, lz - 0.6 * SCALE) < sh.W * 2.3 * SCALE + 1.35;
+    // 作者 11/22：雞舍卡到別人家的露營車 → 鄰居的大型、小型門口擺設位置也要避開（不管他有沒有擺，免得之後擺了又撞到）
+    const neighborYard = (w) =>
+      PLOTS.some((q, k) => {
+        if (q === PLOTS[p.i]) return false;
+        const f2 = frame(q.ry);
+        const s2 = q.gardenSide || 1;
+        const at = (lx, lz) => [q.x + f2.fx * lz + f2.rx * lx * s2, q.z + f2.fz * lz + f2.rz * lx * s2];
+        // 鄰居的雞舍（作者 11/22：兩家雞舍貼在一起分不出是誰的）
+        const pen = penAt.get(k);
+        if (pen && Math.hypot(pen.x - w.x, pen.z - w.z) < 2.8) return true;
+        // 鄰居的帳篷本身（大帳篷、船屋的水池）
+        const nt = curTents[k];
+        if (nt) {
+          const s3 = shapeOf(nt.shape);
+          const [cx, cz] = at(0, s3.id === 'houseboat' ? 0.6 * SCALE : 0);
+          const rad = s3.id === 'houseboat' ? s3.W * 2.3 * SCALE + 1.35 : ((s3.kind === 'rect' ? Math.hypot(s3.W, s3.D ?? s3.W) : s3.R) || 3) * SCALE + 1.3;
+          if (Math.hypot(cx - w.x, cz - w.z) < rad) return true;
+        }
+        const [bx, bz] = at(BIG_SPOT.x, BIG_SPOT.z);
+        if (Math.hypot(bx - w.x, bz - w.z) < 3.1) return true;
+        return SMALL_SPOTS.some((sp) => {
+          const [sx, sz] = at(sp.x, sp.z);
+          return Math.hypot(sx - w.x, sz - w.z) < 1.9;
+        });
+      });
     const coopSpot = () => {
       const hw = (sh.kind === 'rect' ? sh.W : sh.R) * SCALE + 0.6;
       const hd = front + 0.6;
@@ -828,6 +856,7 @@ export function createCampgroundRoom() {
         [BIG_SPOT.x * side, BIG_SPOT.z, 1.8], // 大型門口擺設
       ];
       let best = null;
+      let loose = null;
       for (const [lx, lz] of [
         [3.3, 3.5],
         [3.45, 2.2],
@@ -866,6 +895,10 @@ export function createCampgroundRoom() {
         const pd = pathDist(w.x, w.z);
         if (pd < 1.25) continue; // 小路
         if (PLOTS.some((q, k) => q !== PLOTS[p.i] && (Math.hypot(q.x - w.x, q.z - w.z) < 3.6 || Math.hypot(spots[k].garden.x - w.x, spots[k].garden.z - w.z) < 1.8))) continue; // 鄰居
+        if (neighborYard(w)) {
+          loose ??= { x, z: lz, w, pd }; // 真的都找不到時的最後備案
+          continue;
+        }
         if (!best || pd > best.pd) best = { x, z: lz, w, pd }; // 離小路越遠越好
         if (pd >= 1.6) break;
       }
@@ -880,11 +913,14 @@ export function createCampgroundRoom() {
         const w = toW(x, lz);
         if (pathDist(w.x, w.z) < 0.9) continue;
         if (PLOTS.some((q, k) => q !== PLOTS[p.i] && Math.hypot(q.x - w.x, q.z - w.z) < 3.2)) continue;
+        if (neighborYard(w)) continue;
         return { x, z: lz, w, take };
       }
-      return null;
+      return loose;
     };
     const cs = tent.hens?.length ? coopSpot() : null;
+    if (cs) penAt.set(p.i, cs.w);
+    else penAt.delete(p.i);
     // 11/07 作者：遮陽棚、門那一側不要朝自己的房子；坐著的人要面向小路（不要背對步道）
     //   拖車屋：整台轉半圈（露台、躺椅朝小路，遮陽棚朝外）；露營車：門和遮陽棚翻到外側；天幕：椅子面向小路
     if (tent.yard && cs?.take !== 'big') {
@@ -955,6 +991,13 @@ export function createCampgroundRoom() {
       pen.scale.setScalar(PS);
       pen.position.set(cx, 0, cz);
       g.add(pen);
+      // 作者 11/22：雞舍上面像帳篷一樣掛名牌（離鄰居近時才分得出是誰家的）
+      const penName = tent.mine ? t('🐔 我的小肥雞') : t('🐔 {name} 的小肥雞', { name: tent.demo || tent.name ? tent.name : t('旅人') });
+      const penSign = makeSign(penName, { height: 0.2, bg: 'rgba(30,20,14,0.5)' });
+      penSign.position.set(cx, 1.15, cz);
+      penSign.userData.own = true;
+      g.add(penSign);
+      signs.push(penSign);
       const inW = PEN_IN.w * PS;
       const inD = PEN_IN.d * PS;
       const hens = tent.hens.slice(0, 4).map(([c, fat], i) => {
@@ -1051,6 +1094,7 @@ export function createCampgroundRoom() {
   }
 
   function setTents(list = []) {
+    curTents = list;
     let changed = false;
     plots = plots.map((p, i) => {
       const tent = list[i] ?? null;

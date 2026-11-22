@@ -18,7 +18,7 @@ import { JukeboxPanel } from './ui/JukeboxPanel.js';
 import { NetworkClient } from './network/NetworkClient.js';
 import { RemotePlayers, setRemoteHeight, setRemoteSpot, setCharScale, setRemoteFireSeats, setRemoteBoat } from './network/RemotePlayers.js';
 import { BOAT_LIST, BOAT_FROM, BOAT_MS, FEED_PRICE, FEED_MS } from './game/boats.js';
-import { FIRE_HOT } from './game/river.js';
+import { FIRE_HOT, COOP_GAIN, COOP_MIN_TAPS } from './game/river.js';
 import { POND } from './game/pondShape.js';
 import { SpiritFollower } from './player/spiritFollower.js';
 import { buildSpirit, SPIRIT_TYPES, SPIRIT_BY_ID } from './player/spirit.js';
@@ -3185,21 +3185,25 @@ async function init() {
   let coopProgT = 0;
   fishing.onCoop = async (phase) => {
     if (phase === 'start') {
-      hud.toast(t('🐉 河神大鯉魚上鉤了！一個人拉不動，叫旁邊的人一起按「🤝 幫忙拉」！'), 6000);
+      hud.toast(t('🐉 河神大鯉魚上鉤了！一個人要按很快，叫旁邊的人一起按「🤝 幫忙拉」就輕鬆了！'), 6000);
       const r = await net.request('coopStart', {});
       coopId = r?.ok ? r.id : null;
     } else {
       if (phase === 'fail' && coopId) net.online && net.socket.emit('coopStop');
+      // 作者 11/22：拉上來時讓幫忙的人看到進度條跑滿（原本停在快滿的地方）
+      if (phase === 'ok' && coopId && net.online) net.socket.emit('coopProg', { p: 1 });
       coopId = null;
     }
   };
   net.on('coopPush', ({ id }) => id === coopId && fishing.coopPush(1));
+  const COOP_PULL = FISH.find((f) => f.coop)?.pull ?? 60;
   // 🤝 旁邊的人看到的「幫忙拉」視窗
   const coopEl = document.createElement('div');
   coopEl.className = 'coop-panel';
   coopEl.hidden = true;
   document.getElementById('ui').appendChild(coopEl);
   let coopHelp = null; // { id, name, until, p, helpers }
+  let coopLast = null; // 剛收起來的那一場：我拉了幾下（等 coopEnd 來時說謝謝）
   /** 上方按鈕列、活動提示最下面在哪裡（手機、平板、電腦排數不一樣） */
   const belowHud = () => {
     let y = 8;
@@ -3220,16 +3224,25 @@ async function init() {
     // 只在換一場的時候重畫，之後只改文字（一直重畫按鈕，連按時會漏按）
     if (coopBuilt !== coopHelp.id) {
       coopBuilt = coopHelp.id;
-      coopEl.innerHTML = `<b>${t('🐉 {name} 釣到河神大鯉魚了！', { name: coopHelp.name })}</b><small class="coop-left"></small><div class="coop-bar"><i></i></div><small class="coop-who"></small><button type="button" class="coop-btn">${t('🤝 幫忙拉！（一直按）')}</button>`;
+      coopEl.innerHTML = `<b>${t('🐉 {name} 釣到河神大鯉魚了！', { name: coopHelp.name })}</b><small class="coop-left"></small><div class="coop-bar"><i></i></div><small class="coop-mine"></small><small class="coop-who"></small><button type="button" class="coop-btn">${t('🤝 幫忙拉！（一直按）')}</button>`;
       coopEl.querySelector('.coop-btn').addEventListener('pointerdown', (e) => {
         e.preventDefault();
         if (coopHelp && net.online) net.socket.emit('coopPull', { id: coopHelp.id });
+        // 作者 11/22：幫忙拉要跟自己釣魚一樣有感覺 → 按下去進度條馬上往前、手機震一下、有拉線聲（之後以釣的人那邊的真實進度為準）
+        if (coopHelp) {
+          coopHelp.p = Math.min(0.99, (coopHelp.p ?? 0.12) + 1 / COOP_PULL);
+          coopHelp.mine = (coopHelp.mine ?? 0) + 1;
+          coopEl.querySelector('.coop-bar i').style.width = `${Math.round(coopHelp.p * 100)}%`;
+          coopEl.querySelector('.coop-mine').textContent = t('你拉了 {n} 下', { n: coopHelp.mine });
+        }
+        navigator.vibrate?.(12);
+        audio.sfx('tap');
         e.currentTarget.classList.remove('pop');
         void e.currentTarget.offsetWidth;
         e.currentTarget.classList.add('pop');
       });
     }
-    coopEl.querySelector('.coop-left').textContent = t('一個人拉不動，快來幫忙！（還有 {n} 秒）', { n: left });
+    coopEl.querySelector('.coop-left').textContent = coopHelp.done ? t('🎉 拉上來了！') : t('一個人很難拉，快來幫忙！（還有 {n} 秒）', { n: left });
     coopEl.querySelector('.coop-bar i').style.width = `${Math.round((coopHelp.p ?? 0.1) * 100)}%`;
     const who = coopEl.querySelector('.coop-who');
     who.textContent = helpTxt;
@@ -3243,14 +3256,22 @@ async function init() {
   });
   net.on('coopProg', ({ id, p, helpers }) => {
     if (!coopHelp || coopHelp.id !== id) return;
-    coopHelp.p = p;
+    coopHelp.p = Math.max(p, p >= 1 ? 1 : Math.min(coopHelp.p ?? 0, p + 0.04)); // 剛按的還沒算進來前先不要倒退太多
+    // 作者 11/22：魚已經拉上來，幫忙的視窗還要等秒數跑完 → 跑滿後 1 秒就收起來
+    if (p >= 1 && !coopHelp.done) {
+      coopHelp.done = true;
+      coopHelp.until = Date.now() - 500;
+      coopLast = { id, mine: coopHelp.mine ?? 0 };
+    }
     coopHelp.helpers = helpers;
     drawCoop();
   });
   net.on('coopEnd', ({ id, ok, name, helpers }) => {
+    const mine = coopHelp?.id === id ? (coopHelp.mine ?? 0) : coopLast?.id === id ? coopLast.mine : 0;
     if (coopHelp?.id === id) coopHelp = null;
     drawCoop();
-    if (ok && roomMgr?.current?.id === 'forest_main') hud.toast(helpers?.length ? t('🎉 {name} 和 {list} 一起拉上了河神大鯉魚！', { name, list: helpers.join('、') }) : t('🎉 河神大鯉魚拉上來了！'), 6000);
+    if (ok && mine >= COOP_MIN_TAPS) hud.toast(t('🎉 你幫忙拉上了河神大鯉魚！+{g} 🌰', { g: COOP_GAIN }), 6000);
+    else if (ok && roomMgr?.current?.id === 'forest_main') hud.toast(helpers?.length ? t('🎉 {name} 和 {list} 一起拉上了河神大鯉魚！', { name, list: helpers.join('、') }) : t('🎉 河神大鯉魚拉上來了！'), 6000);
     else if (!ok && id !== coopId && roomMgr?.current?.id === 'forest_main' && name) hud.toast(t('🌊 河神大鯉魚游走了⋯'), 3000);
   });
   /** 每幀：釣的人送進度、幫忙視窗倒數、🔥 營火多旺的提示 */

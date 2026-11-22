@@ -4008,7 +4008,7 @@ io.on('connection', (socket) => {
     io.to(rkey).emit('ate', { id: socket.id, dish });
     dineEmit(h);
     chal('dine'); // 📒 在朋友家吃一份
-    questEv(homeOwner, 'guest', 1, { who: player.vid, net: socket.data.netKey }); // 📒 主人：有人來吃
+    if (homeOwner !== player.vid) questEv(homeOwner, 'guest', 1, { who: player.vid, net: socketsOf(homeOwner)[0]?.data.netKey }); // 📒 主人：有人來吃（作者 11/22：原本拿吃的人自己的網路比對，永遠算「同網路」→ 一直不會加）
     ack?.({ ok: true, dish, buff: wal.buff ?? null });
   });
   // 🐾 買動物外型：kind＝fur（特殊毛色索引）／tail／ear
@@ -5724,16 +5724,17 @@ io.on('connection', (socket) => {
     let size = hooked.size;
     // 浮標一沉就拉的漂亮時機：魚大一點（和前端同一個算法）
     if (data.perfect && !FISH[fish].junk) size = Math.min(FISH[fish].max, Math.round(size * 1.15) + 1);
-    // 🤝 河神大鯉魚：要有人一起拉才算（幫忙的人每人 +5）
+    // 🤝 河神大鯉魚：幫忙的人每人 +5（作者 11/22：自己一個人也拉得上來，只是要按很快；原本沒人幫忙就不算，釣魚大賽的排行也沒更新）
     const onBoatCatch = !!hooked.boat;
     if (FISH[fish].coop) {
       const c = coopRuns.get(rkey);
       const helpers = c && c.fisher === socket.id ? [...c.taps.values()].filter((e) => e.n >= COOP_MIN_TAPS) : [];
       for (const e of helpers) if (e.vid) questEv(e.vid, 'coop'); // 📒 幫別人拉河神
-      if (!helpers.length) return;
-      coopRuns.delete(rkey);
-      for (const e of helpers) if (e.vid) giveTo(e.vid, COOP_GAIN, 'coop');
-      io.to(rkey).emit('coopEnd', { id: c.id, ok: true, name: c.name, helpers: helpers.map((e) => e.name) });
+      if (c && c.fisher === socket.id) {
+        coopRuns.delete(rkey);
+        for (const e of helpers) if (e.vid) giveTo(e.vid, COOP_GAIN, 'coop');
+        io.to(rkey).emit('coopEnd', { id: c.id, ok: true, name: c.name, helpers: helpers.map((e) => e.name) });
+      }
       bump('coop');
     }
     hooked = null; // 同一竿只能領一次
