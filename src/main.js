@@ -2432,7 +2432,8 @@ async function init() {
   });
   net.on('cooked', ({ id, name, dish }) => {
     const d = DISH_BY_ID[dish];
-    if (d && id !== net.id) hud.toast(t('🍲 {name} 煮了一道{icon} {dish}', { name, icon: d.icon, dish: dishName(d, t) }), 3500);
+    // 作者 11/22：畫面中間太多別人的消息 → 別人煮了什麼改放左下聊天紀錄（小小一行），不跳在畫面中間
+    if (d && id !== net.id) social.addLog('', t('🍲 {name} 煮了一道{icon} {dish}', { name, icon: d.icon, dish: dishName(d, t) }), { system: true });
   });
   net.on('dishGift', ({ from, dish, dishes: all, share }) => {
     dishes = all ?? dishes;
@@ -2488,10 +2489,10 @@ async function init() {
       mine && res.next
         ? `<div class="garden-slot empty"><b>${t('🌱 還可以再開墾（最多 {max} 格）', { max: res.max })}</b><button type="button" class="mini-btn" id="garden-expand" ${(pinecones ?? 0) < res.next ? 'disabled' : ''}>${t('➕ 開墾第 {n} 格 🌰 {p}', { n: res.slots.length + 1, p: res.next })}</button></div>`
         : '';
-    const henBtn = mine && plot.tent.hens?.length ? `<div class="garden-slot empty"><button type="button" class="mini-btn" id="hen-open">${t('🐔 照顧小肥雞')}</button></div>` : mine && isOpen({ from: HEN_FROM }) && !plot.tent.hens?.length ? `<div class="garden-slot empty"><b>${t('🐔 養小肥雞：菜園旁邊蓋一間雞舍，每天撿雞蛋')}</b><button type="button" class="mini-btn" id="hen-start">${t('🐔 雞舍＋一隻小肥雞 🌰 {p}', { p: COOP_PRICE })}</button></div>` : '';
+    const henBtn = mine && plot.tent.hens?.length ? `<div class="garden-slot empty"><button type="button" class="mini-btn" id="hen-open">${t('🐔 照顧小肥雞')}</button></div>` : mine && isOpen({ from: HEN_FROM }) && !plot.tent.hens?.length ? `<div class="garden-slot empty"><b>${t('🐔 想養小肥雞嗎？按下面的按鈕就可以養！')}</b><small>${t('餵牠蔬菜或果實，牠就會下蛋 🥚')}</small><button type="button" class="shop-buy-tent" id="hen-start">${t('🐔 雞舍＋一隻小肥雞 🌰 {p}', { p: COOP_PRICE })}</button></div>` : '';
     modal.open(
       (mine ? t('🥕 我的小菜園') : t('🥕 {name} 的小菜園', { name: plot.tent.name || t('旅人') })) + ` ${res.slots.length}/${res.max}`,
-      `<div class="dex-note">${mine ? t('種子用松果買（越慢長的越貴），種下去等幾小時就能收成，放著不收也不會枯掉。朋友路過可以幫忙澆水，少等 30 分鐘、收成多一個。收成的蔬菜可以拿去營火旁煮料理，或當手作家具的材料。') : t('幫朋友的菜澆水，可以少等 30 分鐘、收成多一個 💧')}</div>${slots}${expand}${henBtn}`,
+      `${henBtn}<div class="dex-note">${mine ? t('種子用松果買（越慢長的越貴），種下去等幾小時就能收成，放著不收也不會枯掉。朋友路過可以幫忙澆水，少等 30 分鐘、收成多一個。收成的蔬菜可以拿去營火旁煮料理，或當手作家具的材料。') : t('幫朋友的菜澆水，可以少等 30 分鐘、收成多一個 💧')}</div>${slots}${expand}`,
       (body) => {
         body.querySelector('#hen-start')?.addEventListener('click', () => buyHen(plot));
         body.querySelector('#hen-open')?.addEventListener('click', () => openCoop(plot));
@@ -2747,6 +2748,20 @@ async function init() {
   };
   // ---------- 🐔 小肥雞（11/27）：菜園面板可以買雞舍；走到雞舍旁按 E 打開 ----------
   const henColorOf = (c) => HEN_COLORS.find((x) => x.id === c) ?? HEN_COLORS[0];
+  /** 🐔 作者 11/22：小朋友不知道怎麼養小肥雞 →「帶我去養雞」：傳送到自己家門口，直接打開菜園（最上面就是養雞） */
+  async function goHens() {
+    if (!myHome?.tent || !myHome.plot) return shopHint();
+    modal.close();
+    await teleportToPlot(myHome.plot.z, myHome.plot.n);
+    let tries = 0;
+    const tick = setInterval(() => {
+      const plot = roomMgr.current?.id === 'campground' && camp.plots?.find((x) => x.tent?.mine);
+      if (plot) {
+        clearInterval(tick);
+        openGarden(plot);
+      } else if (++tries > 20) clearInterval(tick);
+    }, 400);
+  }
   async function buyHen(plot) {
     const pick = await new Promise((done) => {
       modal.open(
@@ -3350,6 +3365,10 @@ async function init() {
   const fireChip = document.createElement('div');
   fireChip.className = 'river-fire'; // ⚠️ 不能叫 fire-chip：HUD 的「🔥 回營火」按鈕已經用了
   let fireChipT = 0;
+  let fireChipLv = -1;
+  let fireChipLong = 0;
+  let fireChipAt = 0;
+  fireChip.addEventListener('click', () => (fireChipLong = 4)); // 點小小的那個：再看一次完整說明
   fireChip.hidden = true;
   document.getElementById('ui').appendChild(fireChip);
   const riverTick = (dt) => {
@@ -3368,8 +3387,20 @@ async function init() {
     const show = roomMgr.current?.id === 'forest_main' && actions.state === 'fish' && river.riverOpen() && !card?.classList.contains('show');
     if (show) {
       const fr = campfire.fuelRatio;
-      const txt = fr >= FIRE_HOT ? t('🔥🔥🔥 營火超旺！河畔稀有魚 ×1.6・火光魚出沒中') : fr >= 0.4 ? t('🔥🔥 營火很旺：河畔稀有魚 ×1.3') : t('🔥 火小小的：去添柴，河裡會更熱鬧');
+      const lv = fr >= FIRE_HOT ? 2 : fr >= 0.4 ? 1 : 0;
+      // 作者 11/22：畫面太擠 → 火的等級一變才把完整說明亮 4 秒，之後縮成小小的「🔥 ×1.6」
+      if (lv !== fireChipLv) {
+        // 火在兩個等級中間跳來跳去時不要一直放大：1 分鐘最多放大一次
+        if (fireChipLv < 0 || performance.now() - fireChipAt > 60000) (fireChipLong = 4), (fireChipAt = performance.now());
+        fireChipLv = lv;
+      }
+      fireChipLong -= dt;
+      const long = fireChipLong > 0;
+      const txt = long
+        ? [t('🔥 火小小的：去添柴，河裡會更熱鬧'), t('🔥🔥 營火很旺：河畔稀有魚 ×1.3'), t('🔥🔥🔥 營火超旺！河畔稀有魚 ×1.6・火光魚出沒中')][lv]
+        : ['🔥', '🔥🔥 ×1.3', '🔥🔥🔥 ×1.6'][lv];
       if (fireChip.textContent !== txt) fireChip.textContent = txt;
+      fireChip.classList.toggle('mini', !long);
       // 放在上方按鈕列、活動提示的下面（手機、平板、電腦按鈕排數不一樣，不能寫死高度）
       if ((fireChipT -= dt) <= 0) {
         fireChipT = 0.2;
@@ -4411,9 +4442,10 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       return;
     }
     if (!f) return;
-    if (f.junk) hud.toast(t('{name} 撈到了{fish}，順手帶走了 ♻️', { name, fish: f.name }));
+    // 作者 11/22：別人釣到一般的魚、垃圾改放聊天紀錄；★4 才在畫面上跳一下（★5、傳說另外有大公告）
+    if (f.junk) social.addLog('', t('{name} 撈到了{fish}，順手帶走了 ♻️', { name, fish: f.name }), { system: true });
     else if (f.rarity >= 4) hud.toast(t('🎉 哇！{name} 釣到了 {size} 公分的{fish}！', { name, size, fish: f.name }), 4500);
-    else hud.toast(t('🎣 {name} 釣到了 {size} 公分的{fish}', { name, size, fish: f.name }));
+    else social.addLog('', t('🎣 {name} 釣到了 {size} 公分的{fish}', { name, size, fish: f.name }), { system: true });
   });
   net.on('board', ({ board }) => fishingUI.setBoard(board, true));
   // 📣 五星魚、傳說之魚：全伺服器大公告
@@ -5040,6 +5072,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       look: () => hud.onLook?.(),
       friends: () => document.getElementById('friend-btn')?.click(),
       camp: () => hud.onGo(`camp:${myHome?.plot?.z ?? 0}`),
+      hen: () => goHens(),
       place: (id) => (id === roomMgr.current.id ? hud.toast(t('你已經在這裡了 👍')) : hud.onGo(id)),
     },
   });
