@@ -38,6 +38,7 @@ export class SocialPanel {
       <form class="chat-input" id="chat-input" autocomplete="off">
         <input id="chat-text" maxlength="40" placeholder="${t('說點什麼⋯（最多 40 字）')}" enterkeyhint="send" />
         <button type="button" class="chat-tr-toggle" id="chat-tr-toggle" title="${t('自動翻譯其他語言的聊天')}">🌐</button>
+        <button type="button" class="chat-tr-toggle" id="chat-feed-toggle" title="${t('顯示大家釣魚、煮料理的消息')}">🎣</button>
         <button type="button" class="chat-shout" id="chat-shout" title="${t('📣 大聲公：全營地都看得到（30 🌰）')}"><span class="cs-ic">📣</span><span class="cs-tx">${t('大聲公')}</span></button>
         <button type="submit">${t('送出')}</button>
       </form>
@@ -168,11 +169,11 @@ export class SocialPanel {
   }
 
   /** 加一則聊天紀錄（會慢慢淡掉；畫面上大約 6 則的高度，往上滑看最近 80 則） */
-  addLog(name, text, { system = false } = {}) {
+  addLog(name, text, { system = false, feed = false, big = false } = {}) {
     const log = this.el.log;
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30; // 正在往上看舊的，就不要硬拉回最新
     const line = document.createElement('div');
-    line.className = `chat-line${system ? ' system' : ''}`;
+    line.className = `chat-line${system ? ' system' : ''}${feed ? ' feed' : ''}${big ? ' big' : ''}`;
     line.innerHTML = system ? esc(text) : `<b>${esc(name)}</b>${esc(text)}`;
     this.el.log.appendChild(line);
     while (this.el.log.children.length > 80) this.el.log.firstChild.remove();

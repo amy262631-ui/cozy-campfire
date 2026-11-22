@@ -168,9 +168,27 @@ export class FishingUI {
       </div>
       <div class="fish-card-size">${f.junk ? t('順手帶走，讓湖更乾淨 ♻️') : t('{size} 公分', { size })}${f.note ? `<small>・${f.note}</small>` : ''}</div>
       ${badges.length ? `<div class="fish-card-badges">${badges.join('')}</div>` : ''}
+      <div class="fish-card-coin" hidden></div>
     `;
+    // 作者 11/22：「釣到魚撿到 1 顆松果」跟魚卡片重疊 → 寫進卡片裡
+    if (this._coin && performance.now() - this._coin.at < 6000) this.#showCoin(this._coin.n);
+    this._coin = null;
     clearTimeout(this._cardTimer);
     this._cardTimer = setTimeout(() => this.el.card.classList.remove('show'), 4200);
+  }
+
+  #showCoin(n) {
+    const el = this.el.card.querySelector('.fish-card-coin');
+    if (!el) return;
+    el.hidden = false;
+    el.textContent = t('🌰 還撿到 {n} 顆松果', { n });
+  }
+  /** 釣到魚順便撿到的松果：卡片在顯示就寫進卡片，還沒出來就等卡片出來再寫；回傳 true＝不用再跳提示 */
+  addCoin(n, fishingNow) {
+    if (this.el.card.classList.contains('show')) return this.#showCoin(n), true;
+    if (!fishingNow) return false;
+    this._coin = { n, at: performance.now() };
+    return true;
   }
 
   setBoard(board, online) {

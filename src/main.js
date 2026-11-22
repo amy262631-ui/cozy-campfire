@@ -889,7 +889,7 @@ async function init() {
     if (delta <= 0) return;
     if (reason === 'sit') hud.toast(t('🌰 在營地待了一會兒，撿到 {n} 顆松果', { n: delta }));
     else if (reason === 'quest') hud.toast(t('🌰 完成任務，拿到 {n} 顆松果！可以去心願大樹換裝飾', { n: delta }), 3500);
-    else if (reason === 'fish') hud.toast(t('🌰 釣到魚，撿到 {n} 顆松果', { n: delta }));
+    else if (reason === 'fish' && !fishingUI.addCoin(delta, !!fishing.active)) hud.toast(t('🌰 釣到魚，撿到 {n} 顆松果', { n: delta }));
     else if (reason === 'kid') hud.toast(t('🌱 新手小任務完成！送你 {n} 顆松果 🌰', { n: delta }), 5000);
     else if (reason === 'staff') hud.toast(t('🎁 營地作者送你 {n} 顆松果！', { n: delta }), 5000);
     else if (reason === 'fishCap') hud.toast(t('🎣 今天前 {n} 條魚的松果拿滿了，之後每條 +1（稀有魚照算），明天再來！', { n: passState.active ? (PASS_TIERS[passState.tier] ?? PASS).fish : FREE.fish }), 5000);
@@ -2015,7 +2015,7 @@ async function init() {
     hud,
     audio,
     remotes,
-    self: () => ({ id: net.id, pos: player.position, inForest: roomMgr.current?.id === 'forest_main', sitting: roomMgr.current?.id === 'forest_main' && !!actions.seat?.fire && ['sofa', 'roast', 'addWood', 'blanket'].includes(actions.state) }),
+    self: () => ({ id: net.id, pos: player.position, inForest: roomMgr.current?.id === 'forest_main', sitting: roomMgr.current?.id === 'forest_main' && !!actions.seat?.fire && ['sofa', 'roast', 'addWood', 'blanket'].includes(actions.state), fishing: actions.state === 'fish' || actions.state === 'reel' }),
   });
   const spiritParty = (x, z) => world.eventShower && roomMgr.current?.id === 'forest_main' && Math.hypot(x, z) < 7;
   const spiritCam = new THREE.Vector3();
@@ -2433,7 +2433,7 @@ async function init() {
   net.on('cooked', ({ id, name, dish }) => {
     const d = DISH_BY_ID[dish];
     // 作者 11/22：畫面中間太多別人的消息 → 別人煮了什麼改放左下聊天紀錄（小小一行），不跳在畫面中間
-    if (d && id !== net.id) social.addLog('', t('🍲 {name} 煮了一道{icon} {dish}', { name, icon: d.icon, dish: dishName(d, t) }), { system: true });
+    if (d && id !== net.id) social.addLog('', t('🍲 {name} 煮了一道{icon} {dish}', { name, icon: d.icon, dish: dishName(d, t) }), { system: true, feed: true });
   });
   net.on('dishGift', ({ from, dish, dishes: all, share }) => {
     dishes = all ?? dishes;
@@ -3407,7 +3407,8 @@ async function init() {
         let y = belowHud();
         const ts = document.getElementById('toasts');
         const tr = ts?.children.length ? ts.getBoundingClientRect() : null;
-        if (tr && tr.top < y + 34) y = Math.max(y, Math.round(tr.bottom + 6)); // 提示訊息會蓋到才往下挪
+        // 縮小的標籤在右邊，不會蓋到中間的提示訊息 → 不跟著提示上上下下（作者 11/22）
+        if (long && tr && tr.top < y + 34) y = Math.max(y, Math.round(tr.bottom + 6)); // 提示訊息會蓋到才往下挪
         fireChip.style.top = `${y}px`;
       }
     }
@@ -4443,9 +4444,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     }
     if (!f) return;
     // 作者 11/22：別人釣到一般的魚、垃圾改放聊天紀錄；★4 才在畫面上跳一下（★5、傳說另外有大公告）
-    if (f.junk) social.addLog('', t('{name} 撈到了{fish}，順手帶走了 ♻️', { name, fish: f.name }), { system: true });
-    else if (f.rarity >= 4) hud.toast(t('🎉 哇！{name} 釣到了 {size} 公分的{fish}！', { name, size, fish: f.name }), 4500);
-    else social.addLog('', t('🎣 {name} 釣到了 {size} 公分的{fish}', { name, size, fish: f.name }), { system: true });
+    if (f.junk) social.addLog('', t('{name} 撈到了{fish}，順手帶走了 ♻️', { name, fish: f.name }), { system: true, feed: true });
+    else if (f.rarity >= 5) return; // ★5、傳說：bigCatch 那邊會跳大公告、也會記進聊天紀錄
+    else if (f.rarity >= 4) {
+      hud.toast(t('🎉 哇！{name} 釣到了 {size} 公分的{fish}！', { name, size, fish: f.name }), 4500);
+      social.addLog('', t('🎉 {name} 釣到了 {size} 公分的{fish}！', { name, size, fish: f.name }), { system: true, feed: true, big: true });
+    } else social.addLog('', t('🎣 {name} 釣到了 {size} 公分的{fish}', { name, size, fish: f.name }), { system: true, feed: true });
   });
   net.on('board', ({ board }) => fishingUI.setBoard(board, true));
   // 📣 五星魚、傳說之魚：全伺服器大公告
@@ -4453,6 +4457,8 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const f = FISH[fish];
     if (!f) return;
     const where = place === 'lake_dock' ? t('湖畔碼頭') : t('營火河畔');
+    // 作者 11/22：五星大魚也要記在聊天紀錄（大公告一下就不見了）
+    social.addLog('', t('📣 {name} 在{where}釣到了 {size} 公分的{fish}！', { name, where, size, fish: (shiny ? '✨' : '') + f.name }), { system: true, feed: true, big: true });
     const el = document.createElement('div');
     el.className = 'big-catch' + (f.legend ? ' legend' : '') + (shiny ? ' shiny' : '');
     el.innerHTML = `<b>${shiny ? t('✨ 異色魚出現了！') : f.legend ? t('🐉 傳說之魚現身！') : t('📣 五星大魚！')}</b><span></span>`;
@@ -4480,6 +4486,29 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       bubbles.show(id, `🌐 ${tr}`);
     });
   });
+  // 聊天框的 🎣：開關「大家釣魚、煮料理」的消息（作者 11/22；記在這台裝置）
+  {
+    const btn = document.getElementById('chat-feed-toggle');
+    let off = false;
+    try {
+      off = localStorage.getItem('cozy-feed-off') === '1';
+    } catch {
+      /* ignore */
+    }
+    const paint = () => (btn?.classList.toggle('off', off), document.body.classList.toggle('feed-off', off));
+    paint();
+    btn?.addEventListener('click', () => {
+      off = !off;
+      try {
+        localStorage.setItem('cozy-feed-off', off ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      paint();
+      hud.toast(off ? t('🎣 大家釣魚、煮料理的消息：關（五星大魚的大公告照樣會跳）') : t('🎣 大家釣魚、煮料理的消息：開'));
+      document.getElementById('chat-text')?.focus();
+    });
+  }
   // 聊天框的 🌐：開關自動翻譯
   {
     const btn = document.getElementById('chat-tr-toggle');

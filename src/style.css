@@ -7795,3 +7795,7 @@ canvas.coop-jolt { animation: coop-jolt 0.12s; }
 @keyframes coop-jolt { 0%, 100% { transform: translate(0, 0); } 35% { transform: translate(-2px, 1px); } 70% { transform: translate(2px, -1px); } }
 /* 🔥 火多旺：平常縮成右上角的小標籤（作者 11/22：畫面清爽一點），點一下再看完整說明 */
 .river-fire.mini { left: auto; right: 12px; transform: none; padding: 3px 10px; font-size: 13px; pointer-events: auto; cursor: pointer; opacity: 0.9; }
+.fish-card-coin { margin-top: 6px; font-size: 13px; color: #ffd58a; }
+/* 🎣 大家釣魚、煮料理的消息：可以關（聊天框的 🎣） */
+body.feed-off .chat-line.feed { display: none; }
+.chat-line.feed.big { color: #ffd58a; font-weight: 700; }

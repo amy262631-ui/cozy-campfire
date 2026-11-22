@@ -4,6 +4,12 @@
  */
 export const DICT = {
   en: {
+    "🎉 {name} 釣到了 {size} 公分的{fish}！": "🎉 {name} caught a {size} cm {fish}!",
+    "📣 {name} 在{where}釣到了 {size} 公分的{fish}！": "📣 {name} caught a {size} cm {fish} at {where}!",
+    "🎣 大家釣魚、煮料理的消息：關（五星大魚的大公告照樣會跳）": "🎣 Others' fishing & cooking messages: off (5★ big-catch banners still show)",
+    "🎣 大家釣魚、煮料理的消息：開": "🎣 Others' fishing & cooking messages: on",
+    "顯示大家釣魚、煮料理的消息": "Show others' fishing & cooking messages",
+    "🌰 還撿到 {n} 顆松果": "🌰 Also found {n} pinecone(s)",
     "🐔 想養小肥雞嗎？按下面的按鈕就可以養！": "🐔 Want chubby chicks? Tap the button below!",
     "餵牠蔬菜或果實，牠就會下蛋 🥚": "Feed it veggies or fruit and it lays eggs 🥚",
     "🐔 怎麼養小肥雞？": "🐔 How do I get chubby chicks?",
@@ -4035,6 +4041,12 @@ export const DICT = {
     "確定購買": "Buy",
   },
   ja: {
+    "🎉 {name} 釣到了 {size} 公分的{fish}！": "🎉 {name} が {size} cm の{fish}を釣った！",
+    "📣 {name} 在{where}釣到了 {size} 公分的{fish}！": "📣 {name} が{where}で {size} cm の{fish}を釣った！",
+    "🎣 大家釣魚、煮料理的消息：關（五星大魚的大公告照樣會跳）": "🎣 みんなの釣り・料理のお知らせ：オフ（★5 の大物のお知らせは出るよ）",
+    "🎣 大家釣魚、煮料理的消息：開": "🎣 みんなの釣り・料理のお知らせ：オン",
+    "顯示大家釣魚、煮料理的消息": "みんなの釣り・料理のお知らせを表示",
+    "🌰 還撿到 {n} 顆松果": "🌰 まつぼっくりも {n} 個拾った",
     "🐔 想養小肥雞嗎？按下面的按鈕就可以養！": "🐔 ヒヨコを飼ってみる？下のボタンを押してね！",
     "餵牠蔬菜或果實，牠就會下蛋 🥚": "野菜か果物をあげると、たまごを産むよ 🥚",
     "🐔 怎麼養小肥雞？": "🐔 ヒヨコはどうやって飼うの？",
@@ -8066,6 +8078,12 @@ export const DICT = {
     "確定購買": "購入する",
   },
   ko: {
+    "🎉 {name} 釣到了 {size} 公分的{fish}！": "🎉 {name} 님이 {size}cm {fish}를 낚았어요!",
+    "📣 {name} 在{where}釣到了 {size} 公分的{fish}！": "📣 {name} 님이 {where}에서 {size}cm {fish}를 낚았어요!",
+    "🎣 大家釣魚、煮料理的消息：關（五星大魚的大公告照樣會跳）": "🎣 다른 사람 낚시·요리 소식: 끔 (★5 대어 공지는 그대로 떠요)",
+    "🎣 大家釣魚、煮料理的消息：開": "🎣 다른 사람 낚시·요리 소식: 켬",
+    "顯示大家釣魚、煮料理的消息": "다른 사람 낚시·요리 소식 보기",
+    "🌰 還撿到 {n} 顆松果": "🌰 솔방울도 {n}개 주웠어요",
     "🐔 想養小肥雞嗎？按下面的按鈕就可以養！": "🐔 병아리를 키우고 싶나요? 아래 버튼을 눌러요!",
     "餵牠蔬菜或果實，牠就會下蛋 🥚": "채소나 과일을 주면 알을 낳아요 🥚",
     "🐔 怎麼養小肥雞？": "🐔 병아리는 어떻게 키워요?",

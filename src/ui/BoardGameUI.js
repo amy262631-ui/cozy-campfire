@@ -261,6 +261,8 @@ export class BoardGameUI {
     const name = (p) => (p.id === me.id ? t('你') : p.name);
     const chips = (fmt) => `<div class="bg-chips">${g.players.map((p) => `<span class="${g.turn === p.id ? 'on' : ''}${g.winners?.includes(p.id) ? ' win' : ''}">${name(p)}${fmt ? ` ${fmt(p)}` : ''}</span>`).join('')}</div>`;
     const left = g?.endsAt ? Math.max(0, Math.ceil((g.endsAt - Date.now()) / 1000)) : 0;
+    // 🎣 作者 11/22：在營火河畔釣魚，畫面被別人的桌遊佔住 → 釣魚中、自己沒在玩，就什麼都不顯示
+    if (me.fishing && !mine) return '';
     // 沒有在玩：坐在營火旁 → 「🎲 桌遊」按鈕
     if (!g || (g.state === 'done' && this.dismissed === g.id)) {
       if (!me.sitting) return '';
@@ -404,7 +406,7 @@ export class BoardGameUI {
     }
     // 小視窗：內容變了才重畫（倒數秒數也算）
     const left = g?.endsAt && g.state !== 'done' ? Math.max(0, Math.ceil((g.endsAt - Date.now()) / 1000)) : 0; // 結束後不再倒數（不然每秒重畫，青蛙動畫一直重來）
-    const key = JSON.stringify([g?.id, g?.state, g?.turn, g?.players?.map((p) => [p.id, p.len, p.popped, p.done]), g?.holes, left, me.sitting, me.inForest, this.picking, this.dismissed, g?.winners, this.quiet, this.off]);
+    const key = JSON.stringify([g?.id, g?.state, g?.turn, g?.players?.map((p) => [p.id, p.len, p.popped, p.done]), g?.holes, left, me.sitting, me.inForest, me.fishing, this.picking, this.dismissed, g?.winners, this.quiet, this.off]);
     if (key !== this._key && !this.blowing) {
       this._key = key;
       let html = me.inForest ? this.#render(me) : '';
