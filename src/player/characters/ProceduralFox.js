@@ -900,6 +900,16 @@ export class ProceduralFox {
           }
         }
       }
+    } else if (P === 'bounce') {
+      // 🛏️ 彈簧床（作者 11/22）：整個人一直往上彈，手舉高、腳縮起來，開心瞇眼
+      const b = Math.abs(Math.sin(t * 5));
+      torsoY = b * 0.42;
+      scaleY = 1 + (b - 0.5) * 0.12;
+      feetT.forEach((f) => (f.y += b * 0.42 + b * 0.04));
+      armsT[0].set(-0.34, 0.62 + b * 0.08, 0.1);
+      armsT[1].set(0.34, 0.62 + b * 0.08, 0.1);
+      eyesOpen = 0.4;
+      tailWag = Math.sin(t * 10) * 0.6;
     } else if (P === 'wave') {
       // 打招呼：右手舉到脖子旁邊，短短地快速左右擺（作者 11/21：原本手在頭上揮、看不出來；手不要變長）、開心瞇眼
       armsT[1].set(0.34 + Math.sin(t * 14) * 0.035, 0.56, 0.24);
@@ -1050,7 +1060,7 @@ export class ProceduralFox {
 
     // 套用（插值讓姿勢切換平滑）
     const tor = this.torso;
-    tor.position.y += (torsoY - tor.position.y) * (moving ? 1 : k);
+    tor.position.y += (torsoY - tor.position.y) * (moving || P === 'bounce' ? 1 : k);
     tor.rotation.x += (torsoRX - tor.rotation.x) * k;
     tor.rotation.z += (torsoRZ - tor.rotation.z) * (moving ? 1 : k);
     const sxz = moving ? 2 - scaleY : 1;

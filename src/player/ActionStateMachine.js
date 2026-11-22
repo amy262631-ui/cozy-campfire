@@ -8,7 +8,7 @@ const ROAST_DIST = 1.9; // 烤棉花糖時自動站到的位置
 const ROAST_SECONDS = 7; // 從生到焦黑（doneness = 1）需要的秒數
 const WOOD_FUEL = 25;
 
-const SIT_STATES = new Set(['roast', 'blanket', 'stargaze', 'fish', 'sofa', 'sleep', 'eat']);
+const SIT_STATES = new Set(['roast', 'blanket', 'stargaze', 'fish', 'sofa', 'sleep', 'eat', 'bounce']); // bounce：🛏️ 彈簧床（作者 11/22）
 const EAT_SECONDS = 2.6; // 🍡 吃棉花糖的動作長度
 /** 短短的動作：採摘、揮網、種菜、澆水 */
 const PERFORMS = new Set(['pick', 'catch', 'plant', 'water']);
@@ -389,6 +389,13 @@ export class ActionStateMachine {
       case 'stargaze':
         r.locked = true;
         r.pose = 'lookUp';
+        break;
+
+      case 'bounce':
+        // 🛏️ 彈簧床：站在上面一直彈（姿勢裡上下跳，別人看到的也是同一個姿勢）
+        r.locked = true;
+        r.pose = 'bounce';
+        r.faceAngle = this.restFace;
         break;
 
       case 'sofa':

@@ -88,7 +88,7 @@ const ACTION_STATES = new Set([
   'idle', 'walk', 'run', 'addWood', 'roast', 'eat', 'ride', 'blanket', 'stargaze', 'fish', 'reel', 'showFish',
   'wave', 'salute', 'bye', 'pray', // 表情動作
   'pick', 'catch', 'plant', 'water', // 採摘、揮網捕蟲、種菜、澆水
-  'sofa', 'sleep', // 🛋️ 坐沙發、躺床
+  'sofa', 'sleep', 'bounce', // 🛋️ 坐沙發、躺床、🛏️ 彈簧床
   'boat', // ⛵ 坐在船上
 ]);
 const EMOJIS = new Set(['😊', '😂', '🥰', '👍', '❤️', '🎉', '😴', '🥺', '😮', '🔥', '✨', '🍡', '🎵', '🌠']); // 🎵 彈吉他、🌠 看到流星（家具小功能用，表情面板不顯示）
@@ -4018,6 +4018,7 @@ io.on('connection', (socket) => {
     const id = String(data.id ?? '');
     const f = CATALOG_BY_ID[id];
     if (!f?.pass || f.pass > 2) return ack?.({ ok: false, reason: 'unknown' });
+    if (!isOpen(f)) return ack?.({ ok: false, reason: 'later' }); // 🎫 11/22 新月票家具 11/27 才開
     const h = homes[player.vid];
     if (!h?.tent) return ack?.({ ok: false, reason: 'noTent' });
     if ((h.inv[id] ?? 0) >= 20) return ack?.({ ok: false, reason: 'tooMany' });

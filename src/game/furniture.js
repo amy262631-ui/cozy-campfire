@@ -2777,9 +2777,460 @@ export function buildFurniture(id, opts = {}) {
       g.userData.spSpot = { x: 0.05, y: 0.3, z: 0.02 };
       break;
     }
+    // ================= 🎫 月票新家具（作者 11/22：月票商品再多一點）=================
+    case 'pass_tv': {
+      // 📺 LED 大電視（作者 11/22：不要復古）：低矮木頭電視櫃＋超薄黑框大螢幕，螢幕輪流播營火／小魚／星空
+      const wood = mat(0xd8b48a); // 作者 11/22：電視櫃可以換色（抽屜跟櫃子同色，換色時一起變）
+      box(1.3, 0.3, 0.38, wood, 0, 0.15, 0);
+      for (const sx of [-1, 1]) box(0.6, 0.24, 0.012, wood, sx * 0.32, 0.15, 0.19);
+      for (const sx of [-1, 1]) box(0.6, 0.008, 0.016, mat(0x3a2a22), sx * 0.32, 0.275, 0.19);
+      for (const sx of [-1, 1]) box(0.08, 0.012, 0.012, mat(0x8a8a90, { metalness: 0.6 }), sx * 0.32, 0.2, 0.205);
+      box(0.3, 0.02, 0.12, mat(0x2a2a30), 0, 0.31, -0.02);
+      cyl(0.02, 0.02, 0.06, mat(0x2a2a30), 0, 0.35, -0.02);
+      box(1.2, 0.7, 0.035, mat(0x18181c), 0, 0.73, -0.02);
+      const scr = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+      let tex = null;
+      if (scr) {
+        scr.width = 192;
+        scr.height = 108;
+        tex = new THREE.CanvasTexture(scr);
+        tex.colorSpace = THREE.SRGBColorSpace;
+      }
+      const screen = add(new THREE.PlaneGeometry(1.14, 0.64), tex ? new THREE.MeshBasicMaterial({ map: tex }) : glow(0x88ccff), 0, 0.73, 0.0);
+      screen.castShadow = false;
+      ball(0.008, glow(0x7af0a0), 0.55, 0.39, 0.0);
+      g.userData.on = true;
+      let last = -1;
+      g.userData.tick = (_dt, t) => {
+        if (!tex) return;
+        const fr = Math.floor(t * 8);
+        if (fr === last) return;
+        last = fr;
+        const x = scr.getContext('2d');
+        const W = 192, H = 108;
+        if (!g.userData.on) {
+          x.fillStyle = '#101014';
+          x.fillRect(0, 0, W, H);
+          tex.needsUpdate = true;
+          return;
+        }
+        const ch = Math.floor(t / 6) % 3; // 6 秒換一台
+        if (ch === 0) {
+          const gr = x.createLinearGradient(0, 0, 0, H);
+          gr.addColorStop(0, '#1a1036');
+          gr.addColorStop(1, '#3a1a3a');
+          x.fillStyle = gr;
+          x.fillRect(0, 0, W, H);
+          x.fillStyle = '#5a3420';
+          x.fillRect(66, 90, 60, 8);
+          for (let i = 0; i < 6; i++) {
+            const h = 40 + Math.sin(t * 9 + i * 1.7) * 10;
+            x.fillStyle = ['#ff6a2a', '#ff9a3a', '#ffd06a'][i % 3];
+            x.beginPath();
+            x.ellipse(78 + i * 7, 90 - h / 2, 8, h / 2, 0, 0, Math.PI * 2);
+            x.fill();
+          }
+        } else if (ch === 1) {
+          const gr = x.createLinearGradient(0, 0, 0, H);
+          gr.addColorStop(0, '#5ac8f0');
+          gr.addColorStop(1, '#1a6aa8');
+          x.fillStyle = gr;
+          x.fillRect(0, 0, W, H);
+          for (let i = 0; i < 4; i++) {
+            const fx = ((t * (20 + i * 7) + i * 60) % 230) - 20;
+            const fy = 22 + i * 22 + Math.sin(t * 2 + i) * 5;
+            x.fillStyle = ['#ffb04a', '#ff7aa0', '#ffe06a', '#ffffff'][i];
+            x.beginPath();
+            x.ellipse(fx, fy, 12, 7, 0, 0, Math.PI * 2);
+            x.fill();
+            x.beginPath();
+            x.moveTo(fx - 11, fy);
+            x.lineTo(fx - 20, fy - 7);
+            x.lineTo(fx - 20, fy + 7);
+            x.fill();
+          }
+        } else {
+          x.fillStyle = '#0e1430';
+          x.fillRect(0, 0, W, H);
+          for (let i = 0; i < 30; i++) {
+            const a = 0.4 + 0.6 * Math.abs(Math.sin(t * 2 + i * 1.3));
+            x.fillStyle = `rgba(255,240,200,${a})`;
+            x.fillRect((i * 37) % 188, (i * 23) % 80, 2, 2);
+          }
+          x.fillStyle = '#ffe9a0';
+          x.beginPath();
+          x.arc(150, 28, 13, 0, Math.PI * 2);
+          x.fill();
+          x.fillStyle = '#0e1430';
+          x.beginPath();
+          x.arc(157, 24, 12, 0, Math.PI * 2);
+          x.fill();
+        }
+        tex.needsUpdate = true;
+      };
+      break;
+    }
+    case 'pass_speaker': {
+      // 🔊 木頭喇叭一對：圓形喇叭單體會一縮一放，上面飄音符（作者 11/22：要能換色 → 淺木色，換色看得出來）
+      const wood = mat(0xd8b48a);
+      const notes = [];
+      for (const s of [-1, 1]) {
+        box(0.24, 0.5, 0.22, wood, s * 0.22, 0.25, 0);
+        box(0.2, 0.46, 0.01, mat(0x3a2a22), s * 0.22, 0.25, 0.11);
+        const woofer = cyl(0.075, 0.075, 0.02, mat(0x1e1e22), s * 0.22, 0.17, 0.12, 18);
+        woofer.rotation.x = Math.PI / 2;
+        const cone = cyl(0.035, 0.035, 0.024, mat(0xd9a84a, { metalness: 0.5 }), s * 0.22, 0.17, 0.125, 12);
+        cone.rotation.x = Math.PI / 2;
+        const tw = cyl(0.035, 0.035, 0.02, mat(0x1e1e22), s * 0.22, 0.36, 0.12, 14);
+        tw.rotation.x = Math.PI / 2;
+        notes.push(cone);
+      }
+      const noteMat = glow(0xffd06a);
+      const ns = [0, 1, 2].map((i) => {
+        const n = new THREE.Group();
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), noteMat);
+        head.scale.set(1.2, 0.9, 0.6);
+        const st = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.09, 0.008), noteMat);
+        st.position.set(0.03, 0.045, 0);
+        n.add(head, st);
+        g.add(n);
+        return n;
+      });
+      g.userData.on = true;
+      g.userData.tick = (_dt, t) => {
+        const on = g.userData.on !== false;
+        const k = on ? 1 + Math.abs(Math.sin(t * 8)) * 0.35 : 1;
+        for (const c of notes) c.scale.set(k, 1, k);
+        ns.forEach((n, i) => {
+          const p = (t * 0.45 + i / 3) % 1;
+          n.visible = on;
+          n.position.set((i - 1) * 0.22 + Math.sin(t * 2 + i) * 0.05, 0.55 + p * 0.5, 0);
+          n.scale.setScalar(p < 0.15 ? p / 0.15 : p > 0.8 ? (1 - p) / 0.2 : 1);
+        });
+      };
+      break;
+    }
+    case 'pass_starlamp': {
+      // 🪩 星空投影燈：小圓球燈座，打開後上方一圈星星慢慢轉
+      cyl(0.14, 0.17, 0.08, mat(0x3a3a6a), 0, 0.04, 0, 20);
+      const orb = add(new THREE.SphereGeometry(0.15, 20, 14), glass(0xbfd8ff, 0.5), 0, 0.22, 0);
+      orb.material = glass(0xbfd8ff, 0.5);
+      ball(0.06, glow(0xfff0b0), 0, 0.2, 0);
+      const sky = new THREE.Group();
+      sky.position.y = 1.6;
+      g.add(sky);
+      const starM = glow(0xfff4c0);
+      for (let i = 0; i < 26; i++) {
+        const a = i * 2.399;
+        const r = 0.25 + (i % 7) * 0.12;
+        const st = new THREE.Mesh(new THREE.OctahedronGeometry(0.025 + (i % 3) * 0.01), starM);
+        st.position.set(Math.cos(a) * r, (i % 4) * 0.06, Math.sin(a) * r);
+        sky.add(st);
+      }
+      g.userData.on = true;
+      g.userData.tick = (_dt, t) => {
+        sky.visible = g.userData.on !== false;
+        sky.rotation.y = t * 0.15;
+        sky.children.forEach((s, i) => s.scale.setScalar(0.6 + 0.4 * Math.abs(Math.sin(t * 1.5 + i))));
+      };
+      break;
+    }
+    case 'pass_coffee': {
+      // ☕ 義式咖啡機（作者 11/22 參考圖）：奶油白機身、上面一片亮銀色面板＋兩顆按鈕＋三個小燈、
+      //    側邊銀色旋鈕、木頭把手的沖煮把手、玻璃杯放在滴水盤上、旁邊蒸氣管、後面透明水箱
+      const cream = mat(0xf1e8d8);
+      const chrome = mat(0xd8dce2, { metalness: 0.8, roughness: 0.25 });
+      box(0.34, 0.06, 0.3, cream, 0, 0.03, 0.02); // 底座
+      box(0.28, 0.012, 0.2, chrome, 0, 0.066, 0.06); // 滴水盤
+      box(0.32, 0.46, 0.16, cream, 0, 0.29, -0.08); // 機身
+      box(0.33, 0.1, 0.26, cream, 0, 0.47, 0.0); // 上面突出的頭
+      box(0.33, 0.012, 0.26, chrome, 0, 0.526, 0.0); // 銀色頂板
+      box(0.33, 0.07, 0.01, chrome, 0, 0.47, 0.13); // 正面銀色條
+      for (const [x, c] of [[-0.06, 0x7af0c0], [0, 0xff7a7a], [0.06, 0xb0a0ff]]) ball(0.008, glow(c), x, 0.535, 0.09);
+      for (const x of [-0.06, 0.06]) cyl(0.022, 0.022, 0.01, mat(0x4a4a50, { metalness: 0.6 }), x, 0.535, 0.03, 14);
+      const knob = cyl(0.04, 0.04, 0.035, chrome, 0.18, 0.38, -0.04, 18);
+      knob.rotation.z = Math.PI / 2;
+      cyl(0.03, 0.03, 0.03, chrome, 0, 0.41, 0.07, 14); // 沖煮頭
+      const handle = cyl(0.016, 0.02, 0.17, mat(0x5a3420), -0.1, 0.38, 0.16, 10); // 木頭把手
+      handle.rotation.set(Math.PI / 2 - 0.15, 0, 0.9);
+      cyl(0.006, 0.006, 0.14, chrome, 0.11, 0.33, 0.1); // 蒸氣管
+      add(new THREE.CylinderGeometry(0.045, 0.042, 0.09, 16, 1, true), glass(0xeef6ff, 0.45), 0, 0.12, 0.08); // 玻璃杯
+      cyl(0.042, 0.042, 0.04, mat(0x5a3420), 0, 0.095, 0.08, 16); // 咖啡
+      cyl(0.042, 0.042, 0.008, mat(0xe8c89a), 0, 0.118, 0.08, 16);
+      const tank = box(0.1, 0.36, 0.14, glass(0xe0f0ff, 0.35), 0.1, 0.24, -0.22); // 透明水箱
+      tank.castShadow = false;
+      const steam = [0, 1, 2].map(() => ball(0.02, mat(0xffffff, { transparent: true, opacity: 0.6 }), 0, 0.16, 0.08));
+      g.userData.tick = (_dt, t) => steam.forEach((sm, i) => {
+        const p = (t * 0.5 + i / 3) % 1;
+        sm.position.set(Math.sin(t * 3 + i) * 0.015, 0.16 + p * 0.18, 0.08);
+        sm.scale.setScalar(0.6 + p);
+        sm.material.opacity = 0.55 * (1 - p);
+      });
+      break;
+    }
+    case 'pass_bathtub': {
+      // 🛁 泡泡浴缸：白色貓腳浴缸，滿滿泡泡、小黃鴨（可以躺）
+      const white = mat(0xfbf6ee);
+      const tub = add(new THREE.CylinderGeometry(0.34, 0.3, 0.36, 24, 1, true), mat(0xfbf6ee, { side: THREE.DoubleSide }), 0, 0.3, 0);
+      tub.scale.x = 1.6;
+      const bottom = cyl(0.3, 0.3, 0.04, white, 0, 0.14, 0, 24);
+      bottom.scale.x = 1.6;
+      const rim = torus(0.34, 0.03, white, 0, 0.48, 0, Math.PI * 2, 28);
+      rim.rotation.x = Math.PI / 2;
+      rim.scale.x = 1.6;
+      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) ball(0.05, mat(0xd9a84a, { metalness: 0.5, roughness: 0.4 }), sx * 0.38, 0.06, sz * 0.18, 1, 1.4, 1);
+      const water = cyl(0.32, 0.32, 0.02, mat(0x9fd8f0, { transparent: true, opacity: 0.97 }), 0, 0.42, 0, 24);
+      water.scale.x = 1.6;
+      const foam = [];
+      for (let i = 0; i < 16; i++) {
+        const a = i * 2.4;
+        const r = 0.1 + (i % 4) * 0.07;
+        foam.push(ball(0.06 + (i % 3) * 0.02, mat(0xffffff), Math.cos(a) * r * 1.6, 0.46, Math.sin(a) * r));
+      }
+      const duck = new THREE.Group();
+      duck.add(new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), mat(0xffd84a)));
+      const dh = new THREE.Mesh(new THREE.SphereGeometry(0.032, 10, 8), mat(0xffd84a));
+      dh.position.set(0.035, 0.04, 0);
+      duck.add(dh);
+      const bk = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.03, 6), mat(0xff8a3a));
+      bk.rotation.z = -Math.PI / 2;
+      bk.position.set(0.07, 0.04, 0);
+      duck.add(bk);
+      duck.position.set(0.25, 0.47, 0.08);
+      g.add(duck);
+      const bubbles = [0, 1, 2, 3].map(() => ball(0.025, glass(0xdff4ff, 0.55), 0, 0.5, 0));
+      g.userData.tick = (_dt, t) => {
+        foam.forEach((f, i) => f.scale.setScalar(1 + Math.sin(t * 2 + i) * 0.08));
+        duck.position.y = 0.47 + Math.sin(t * 2) * 0.012;
+        duck.rotation.y = Math.sin(t * 0.7) * 0.6;
+        bubbles.forEach((b, i) => {
+          const p = (t * 0.35 + i / 4) % 1;
+          b.position.set(-0.3 + i * 0.2 + Math.sin(t + i) * 0.04, 0.5 + p * 0.6, Math.cos(i) * 0.1);
+          b.scale.setScalar(p > 0.85 ? (1 - p) / 0.15 : 1);
+        });
+      };
+      // 作者 11/22：人泡進去頭會穿出去 → 整個浴缸放大一點（長 ×1.2、寬 ×1.35，高度不變）
+      const big = new THREE.Group();
+      big.add(...g.children);
+      big.scale.set(1.2, 1, 1.35);
+      g.add(big);
+      break;
+    }
+    case 'pass_vanity': {
+      // 🪞 化妝台：奶油白小桌＋圓鏡子（鏡框一圈小燈泡）＋小凳子
+      const cream = mat(0xf6ecdc);
+      box(0.7, 0.05, 0.36, cream, 0, 0.5, 0);
+      for (const s of [-1, 1]) box(0.2, 0.44, 0.32, cream, s * 0.24, 0.24, 0);
+      for (const s of [-1, 1]) ball(0.018, mat(0xd9a84a, { metalness: 0.5 }), s * 0.24, 0.3, 0.165);
+      const mirror = cyl(0.2, 0.2, 0.02, mat(0xdff0f8, { metalness: 0.7, roughness: 0.1 }), 0, 0.82, -0.12, 28);
+      mirror.rotation.x = Math.PI / 2;
+      const frame = torus(0.21, 0.025, mat(0xf0c8d0), 0, 0.82, -0.11, Math.PI * 2, 28);
+      const bulbs = [];
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        bulbs.push(ball(0.018, glow(0xfff0c0), Math.cos(a) * 0.235, 0.82 + Math.sin(a) * 0.235, -0.09));
+      }
+      frame.castShadow = false;
+      ball(0.03, mat(0xff8aa8), -0.18, 0.55, 0.06);
+      cyl(0.02, 0.025, 0.08, mat(0xb08ad8), 0.16, 0.565, 0.04);
+      cyl(0.022, 0.022, 0.05, mat(0xffffff), 0.22, 0.55, 0.06);
+      // 小圓凳（作者 11/22：化妝台＋椅子一組），坐下面向鏡子
+      cyl(0.16, 0.14, 0.08, mat(0xf0c8d0), 0, 0.27, 0.38, 18);
+      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cyl(0.015, 0.015, 0.24, mat(0xd9a84a, { metalness: 0.5 }), sx * 0.09, 0.12, 0.38 + sz * 0.09);
+      g.userData.tick = (_dt, t) => bulbs.forEach((b, i) => b.scale.setScalar(0.8 + 0.25 * Math.abs(Math.sin(t * 2 + i * 0.6))));
+      break;
+    }
+    case 'pass_bunny': {
+      // 🐰 巨大兔兔抱枕（作者 11/22：泰迪熊本來就有，換不一樣的）：軟綿綿白兔，長耳朵垂一邊，抱著小胡蘿蔔，可以靠著坐
+      const fur = mat(0xfbf6ef, { flatShading: false });
+      const pink = mat(0xffc0cc, { flatShading: false });
+      ball(0.34, fur, 0, 0.34, -0.1, 1.05, 1, 0.9);
+      ball(0.27, fur, 0, 0.8, -0.14);
+      for (const s of [-1, 1]) {
+        ball(0.13, fur, s * 0.2, 0.1, 0.18, 0.9, 0.6, 1.3);
+        ball(0.06, pink, s * 0.2, 0.1, 0.34, 1, 1, 0.35);
+        ball(0.1, fur, s * 0.24, 0.42, 0.14, 0.9, 1.3, 0.9);
+        ball(0.04, mat(0x2a1a14), s * 0.1, 0.84, 0.1);
+        ball(0.04, mat(0xffa3ad), s * 0.16, 0.76, 0.08, 1, 0.6, 0.4);
+      }
+      ball(0.025, pink, 0, 0.78, 0.13);
+      // 耳朵：一隻立著、一隻垂下來
+      const e1 = ball(0.08, fur, -0.1, 1.17, -0.16, 0.75, 2.2, 0.55);
+      e1.rotation.z = 0.12;
+      ball(0.045, pink, -0.1, 1.17, -0.12, 0.6, 1.9, 0.3).rotation.z = 0.12;
+      const e2 = ball(0.08, fur, 0.2, 1.06, -0.12, 0.75, 2.0, 0.55);
+      e2.rotation.z = -1.1;
+      // 抱著的胡蘿蔔抱枕
+      const car = cone(0.07, 0.3, mat(0xff9a3a), 0, 0.4, 0.22, 10);
+      car.rotation.z = Math.PI / 2 + 0.3;
+      cone(0.04, 0.08, mat(0x6ac25a), 0.17, 0.45, 0.22, 6).rotation.z = -Math.PI / 2 + 0.3;
+      break;
+    }
+    case 'pass_moonhammock': {
+      // 🌙 月亮吊床：彎彎的月亮掛在木架上，裡面鋪軟墊、掛小星星，會輕輕晃
+      const wood = mat(0x8a5a36);
+      for (const s of [-1, 1]) {
+        const leg = cyl(0.03, 0.035, 1.5, wood, s * 0.55, 0.72, 0);
+        leg.rotation.z = s * 0.12;
+        box(0.08, 0.04, 0.5, wood, s * 0.64, 0.02, 0);
+      }
+      cyl(0.03, 0.03, 1.26, wood, 0, 1.45, 0).rotation.z = Math.PI / 2;
+      const swing = new THREE.Group();
+      swing.position.y = 1.45;
+      g.add(swing);
+      // 尖尖的彎月（作者 11/22）：外弧＋內弧在兩端交在一起，兩頭是尖的
+      const moonShape = new THREE.Shape();
+      const R1 = 0.55, R2 = 0.5, off = 0.2;
+      const ang = Math.acos((R1 * R1 - R2 * R2 + off * off) / (2 * R1 * off)); // 兩個圓的交點
+      moonShape.absarc(0, 0, R1, -Math.PI / 2 - (Math.PI - ang), -Math.PI / 2 + (Math.PI - ang), false);
+      const a2 = Math.atan2(R1 * Math.sin(-Math.PI / 2 + (Math.PI - ang)) - off, R1 * Math.cos(-Math.PI / 2 + (Math.PI - ang)));
+      moonShape.absarc(0, off, R2, a2, Math.PI - a2, true);
+      const moon = new THREE.Mesh(new THREE.ExtrudeGeometry(moonShape, { depth: 0.34, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.02, curveSegments: 28 }), mat(0xffe39a, { flatShading: false }));
+      moon.position.set(0, -0.5, -0.17);
+      swing.add(moon);
+      // 月亮裡鋪軟墊和兩顆小枕頭
+      const cushion = mat(0xc8b8f0, { flatShading: false });
+      for (const [x, y, sx] of [[0, -0.74, 2.4], [-0.25, -0.66, 0.9], [0.27, -0.64, 0.9]]) {
+        const c = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 10), cushion);
+        c.position.set(x, y, 0);
+        c.scale.set(sx, 0.45, 1.4);
+        swing.add(c);
+      }
+      for (const s of [-1, 1]) {
+        const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.6, 6), mat(0xf3ead8));
+        rope.position.set(s * 0.42, -0.25, 0);
+        swing.add(rope);
+      }
+      for (const [x, y] of [[-0.25, -0.12], [0.2, -0.05], [0.05, -0.2]]) {
+        const st = new THREE.Mesh(new THREE.OctahedronGeometry(0.035), glow(0xfff0b0));
+        st.position.set(x, y, 0.18);
+        swing.add(st);
+      }
+      swing.userData.sway = true; // 🌙 跟吊籃椅一樣：平常輕輕晃，有人躺著晃大一點（homeRoom 用 occupied 算，大家都看得到）
+      break;
+    }
+    case 'pass_jelly': {
+      // 🪼 水母燈：玻璃圓柱裡兩隻發光水母慢慢上下飄、會換顏色
+      // 作者 11/22：蓋子、底座不要黑色，用能換色的顏色（預設粉色，小舖選顏色會跟著變）
+      const capM = mat(0xf2b4c4);
+      cyl(0.16, 0.18, 0.08, capM, 0, 0.04, 0, 20);
+      cyl(0.17, 0.16, 0.04, capM, 0, 0.74, 0, 20);
+      torus(0.165, 0.012, mat(0xd9a84a, { metalness: 0.5, roughness: 0.4 }), 0, 0.08, 0, Math.PI * 2, 24).rotation.x = Math.PI / 2;
+      torus(0.165, 0.012, mat(0xd9a84a, { metalness: 0.5, roughness: 0.4 }), 0, 0.72, 0, Math.PI * 2, 24).rotation.x = Math.PI / 2;
+      add(new THREE.CylinderGeometry(0.15, 0.15, 0.62, 24, 1, true), glass(0xd8f0ff, 0.18), 0, 0.39, 0);
+      const jm = [new THREE.MeshBasicMaterial({ color: 0xff9ad8, transparent: true, opacity: 0.85 }), new THREE.MeshBasicMaterial({ color: 0x9ad8ff, transparent: true, opacity: 0.85 })];
+      const jellies = jm.map((m, i) => {
+        const j = new THREE.Group();
+        const bell = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), m);
+        j.add(bell);
+        for (let k = 0; k < 4; k++) {
+          const tn = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.1, 4), m);
+          tn.position.set(Math.cos(k * 1.57) * 0.03, -0.05, Math.sin(k * 1.57) * 0.03);
+          j.add(tn);
+        }
+        j.position.set(i ? 0.05 : -0.05, 0.3, i ? -0.03 : 0.03);
+        g.add(j);
+        return j;
+      });
+      g.userData.tick = (_dt, t) => jellies.forEach((j, i) => {
+        j.position.y = 0.35 + Math.sin(t * 0.8 + i * 2) * 0.15;
+        const s = 1 + Math.sin(t * 3 + i) * 0.12;
+        j.scale.set(s, 2 - s, s);
+        jm[i].color.setHSL((t * 0.05 + i * 0.4) % 1, 0.75, 0.75);
+      });
+      break;
+    }
+    case 'pass_photowall': {
+      // 📷 照片網牆（作者 11/22 參考圖）：灰色石牆上掛一大片漁網，小夾子夾著很多相框照片，上面一串小燈
+      box(1.06, 1.36, 0.04, mat(0x9a9590), 0, 0.68, -0.44);
+      let tex = null;
+      if (typeof document !== 'undefined') {
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = 256;
+        const x = cv.getContext('2d');
+        x.strokeStyle = '#efe4c8';
+        x.lineWidth = 3;
+        for (let i = -256; i <= 512; i += 32) {
+          x.beginPath();
+          x.moveTo(i, 0);
+          x.lineTo(i + 256, 256);
+          x.stroke();
+          x.beginPath();
+          x.moveTo(i, 256);
+          x.lineTo(i + 256, 0);
+          x.stroke();
+        }
+        tex = new THREE.CanvasTexture(cv);
+        tex.colorSpace = THREE.SRGBColorSpace;
+      }
+      const netGeo = new THREE.PlaneGeometry(1.0, 1.2, 10, 10);
+      const pos = netGeo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const px = pos.getX(i);
+        const py = pos.getY(i);
+        pos.setZ(i, Math.sin((px + 0.5) * Math.PI) * 0.02); // 中間微微鼓起
+        pos.setY(i, py - Math.sin((px + 0.5) * Math.PI) * 0.05 * (0.6 - py)); // 下面垂一點
+      }
+      netGeo.computeVertexNormals();
+      const netM = new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 1 });
+      if (tex) {
+        // 線以外透明：用亮度當 alpha
+        netM.alphaMap = tex;
+      }
+      const netMesh = add(netGeo, netM, 0, 0.72, -0.41);
+      netMesh.castShadow = false;
+      const frameC = [0xc8a070, 0x3a2a22, 0xf3ead8];
+      const photoC = [0x8ac8e8, 0xffc890, 0x9ad08a, 0xf0a0b8, 0xc8b0f0, 0xffe08a];
+      const spots = [[-0.36, 1.12], [-0.12, 1.16], [0.14, 1.1], [0.36, 1.15], [-0.26, 0.88], [0.0, 0.9], [0.26, 0.85], [-0.38, 0.62], [-0.12, 0.64], [0.12, 0.6], [0.36, 0.63], [-0.24, 0.38], [0.04, 0.36], [0.28, 0.4]];
+      spots.forEach(([x, y], i) => {
+        const tilt = (((i * 37) % 7) - 3) * 0.04;
+        const fr = box(0.15, 0.18, 0.012, mat(frameC[i % 3]), x, y, -0.39);
+        fr.rotation.z = tilt;
+        const ph = box(0.11, 0.12, 0.004, mat(photoC[i % 6]), x, y + 0.01, -0.382);
+        ph.rotation.z = tilt;
+        box(0.02, 0.03, 0.012, mat(0xb08a5a), x, y + 0.1, -0.385);
+      });
+      const lights = [];
+      for (let i = 0; i < 12; i++) {
+        const x = -0.48 + (i / 11) * 0.96;
+        lights.push(ball(0.018, glow(0xfff0b0), x, 1.3 - Math.sin((i / 11) * Math.PI) * 0.08, -0.38));
+      }
+      g.userData.tick = (_dt, t) => lights.forEach((l, i) => l.scale.setScalar(0.7 + 0.4 * Math.abs(Math.sin(t * 2.5 + i))));
+      break;
+    }
+    case 'pass_bouncebed': {
+      // 🛏️ 彈簧床：圓圓的彈跳床，粉藍網面、彩色護墊，彈簧看得到；有人站上去會一直彈
+      const pad = mat(0xffb0c8);
+      const net = mat(0x7fc8e8);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        cyl(0.025, 0.025, 0.26, mat(0x9a9aa8, { metalness: 0.5 }), Math.cos(a) * 0.5, 0.13, Math.sin(a) * 0.5);
+      }
+      const surf = cyl(0.46, 0.46, 0.03, net, 0, 0.27, 0, 28);
+      const ring = torus(0.5, 0.05, pad, 0, 0.28, 0, Math.PI * 2, 32);
+      ring.rotation.x = Math.PI / 2;
+      for (let i = 0; i < 8; i++) {
+        const a = ((i + 0.5) / 8) * Math.PI * 2;
+        const sp = torus(0.02, 0.006, mat(0xc0c0c8, { metalness: 0.6 }), Math.cos(a) * 0.47, 0.27, Math.sin(a) * 0.47, Math.PI * 2, 8);
+        sp.rotation.y = -a;
+        sp.scale.y = 2.2;
+      }
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        ball(0.02, mat([0xffd84a, 0x8ad07a, 0xff8a6a][i % 3]), Math.cos(a) * 0.5, 0.33, Math.sin(a) * 0.5);
+      }
+      g.userData.tick = (_dt, t) => {
+        const b = g.userData.bounce ? Math.max(0, Math.sin(t * 6)) : 0;
+        surf.position.y = 0.27 - b * 0.05;
+        surf.scale.set(1, 1 + b, 1);
+      };
+      break;
+    }
     default:
       box(0.3, 0.3, 0.3, mat(0xffffff));
   }
+  // 兩格寬的月票新家具：模型是以中心畫的，往右挪半格（跟雙人沙發一樣從第一格往右佔一格）
+  if (['pass_tv', 'pass_bathtub', 'pass_moonhammock', 'pass_photowall'].includes(id)) for (const ch of g.children) ch.position.x += 0.4;
   g.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true;

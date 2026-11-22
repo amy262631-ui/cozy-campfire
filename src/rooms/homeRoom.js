@@ -45,13 +45,23 @@ const GADGET_HINT = {
   snowglobe: ['❄️', '搖一搖', '搖一搖水晶球'],
   feed: ['🐟', '餵魚', '餵魚'],
   water: ['💧', '澆水', '澆澆水'],
+  // 🎫 月票新家具（11/22）
+  tv: ['📺', '開關電視', '開電視／關電視'],
+  starlamp: ['🪩', '開關星空', '打開／關掉星空'],
+  coffee: ['☕', '煮咖啡', '煮一杯咖啡'],
+  photo: ['📸', '拍照', '在照片牆前拍一張'],
 };
 /** 家具 id → 小互動種類（沒有就是不能互動） */
 export function gadgetKind(id) {
   if (['radio', 'guitar', 'telescope', 'fridge'].includes(id)) return id;
   if (CATALOG_BY_ID[id]?.cook) return 'cook'; // 🍳 瓦斯爐、灶台、小烤箱：在家煮料理
   if (CATALOG_BY_ID[id]?.dine) return 'dine'; // 🍽️ 餐桌：擺料理請客
-  if (id === 'pass_gramophone') return 'radio'; // 📀 唱片機：跟收音機一樣換歌
+  if (id === 'pass_gramophone' || id === 'pass_speaker') return 'radio'; // 📀 唱片機、🔊 喇叭：跟收音機一樣換歌
+  if (id === 'pass_tv') return 'tv';
+  if (id === 'pass_starlamp') return 'starlamp';
+  if (id === 'pass_coffee') return 'coffee';
+  if (id === 'pass_photowall') return 'photo';
+  if (id === 'pass_jelly') return null; // 🪼 水母燈一直亮著
   if (id === 'pass_glowtree') return 'glowtree';
   if (id === 'box12_lux') return 'xmtree'; // 🌟 豪華聖誕樹：換燈色
   if (id === 'box12_globe') return 'snowglobe'; // ❄️ 搖一搖水晶球
@@ -586,9 +596,22 @@ export function createHomeRoom() {
         }
         if (f?.seat == null) return;
         const a = (it.r ?? 0) * (Math.PI / 2);
-        seats.push({ x: c.x, z: c.z, y: c.y + stackY(stack, lv) + f.seat, a, sleep: !!f.sleep, loft: isLoftCell(z) });
+        // 🎫 月票新家具（11/22）：座位可以離格子中心一點（seatX 往右、seatZ 往前）、轉個方向（seatRot）
+        const sx0 = f.seatX ?? 0;
+        const sz0 = f.seatZ ?? 0;
+        seats.push({
+          x: c.x + sx0 * Math.cos(a) + sz0 * Math.sin(a),
+          z: c.z - sx0 * Math.sin(a) + sz0 * Math.cos(a),
+          y: c.y + stackY(stack, lv) + f.seat,
+          a: a + (f.seatRot ?? 0),
+          sleep: !!f.sleep,
+          bounce: !!f.bounce,
+          vanity: !!f.vanity,
+          bath: !!f.bath,
+          loft: isLoftCell(z),
+        });
         // 🛋️ 兩格寬的家具（雙人小沙發）：右邊那一格再一個座位
-        if (f.wide) seats.push({ x: c.x + f.wide * Math.cos(a), z: c.z - f.wide * Math.sin(a), y: c.y + stackY(stack, lv) + f.seat, a, sleep: false, loft: isLoftCell(z) });
+        if (f.wide && f.seat2 !== false) seats.push({ x: c.x + f.wide * Math.cos(a), z: c.z - f.wide * Math.sin(a), y: c.y + stackY(stack, lv) + f.seat, a, sleep: false, loft: isLoftCell(z) });
       });
       const list = isLoftCell(z) ? colliders2 : colliders;
       const doorLane = !isLoftCell(z) && z === grid - 1 && Math.abs(c.x) < 0.85;
@@ -647,7 +670,7 @@ export function createHomeRoom() {
       const r = prev.rest;
       if (r && r.actions.state === r.kind) {
         // 找回同一個座位重新接上；那件家具被收掉了才起身
-        const s = seats.find((q) => Math.abs(q.x - r.sx) < 0.02 && Math.abs(q.z - r.sz) < 0.02 && Math.abs(q.y - r.y) < 0.02 && (q.sleep ? 'sleep' : 'sofa') === r.kind);
+        const s = seats.find((q) => Math.abs(q.x - r.sx) < 0.02 && Math.abs(q.z - r.sz) < 0.02 && Math.abs(q.y - r.y) < 0.02 && (q.bounce ? 'bounce' : q.sleep ? 'sleep' : 'sofa') === r.kind);
         if (s) rest = r;
         else r.actions.stop();
       }
@@ -919,6 +942,13 @@ export function createHomeRoom() {
     },
     /** 有小功能的家具、可以坐的位置（測試用） */
     /** 💡 開關燈：把燈的光暈、點光源、發光材質關掉／打開；回傳開著沒 */
+    /** 📺🪩 開關（電視、星空投影燈）：tick 看 userData.on；回傳開了沒 */
+    toggleOn(g) {
+      const m = g?.mesh;
+      if (!m) return true;
+      m.userData.on = m.userData.on === false;
+      return m.userData.on;
+    },
     toggleLamp(g) {
       const m = g?.mesh;
       if (!m) return true;
@@ -1010,11 +1040,13 @@ export function createHomeRoom() {
         }
         if (s) {
           // 坐下：坐在家具中間；躺下：腳在床尾、頭朝床頭（家具的後面）
-          const kind = s.sleep ? 'sleep' : 'sofa';
-          const off = s.sleep ? 0.3 : s.dine ? 0 : 0.06; // 餐桌椅子：坐正中間，不要往桌子擠
+          const kind = s.bounce ? 'bounce' : s.sleep ? 'sleep' : 'sofa';
+          const off = s.sleep ? 0.3 : s.dine || s.bounce || s.bath ? 0 : 0.06; // 餐桌椅子、彈簧床、浴缸：在正中間
           rest = { x: s.x + Math.sin(s.a) * off, y: s.y, z: s.z + Math.cos(s.a) * off, sx: s.x, sz: s.z, kind, actions };
           actions.rest(kind, s.a);
           actions.dineSeat = s.dine ?? null; // 🍽️ 坐在餐桌的椅子上：按 E 吃桌上的料理
+          if (s.vanity) actions.onVanity?.(); // 🪞 坐到化妝台前：打開換造型
+          if (s.bath) actions.onBath?.(); // 🛁 泡澡
           // 🔥 小暖爐在旁邊：坐著暖呼呼
           if (stoves.some((q) => q.loft === s.loft && Math.hypot(q.x - s.x, q.z - s.z) < 1.8)) actions.onWarm?.();
           return true;
@@ -1033,14 +1065,14 @@ export function createHomeRoom() {
       const u = nearUse();
       if (u?.gadget) return [GADGET_HINT[u.gadget.id][0], t(GADGET_HINT[u.gadget.id][1])];
       const s = u?.seat;
-      if (s) return s.sleep ? ['🛏️', t('躺下')] : ['🛋️', t('坐下')];
+      if (s) return s.bounce ? ['🤸', t('跳上去')] : s.bath ? ['🛁', t('泡澡')] : s.vanity ? ['🪞', t('化妝')] : s.sleep ? ['🛏️', t('躺下')] : ['🛋️', t('坐下')];
       return mine ? ['🛠️', t('布置')] : null;
     },
     prompt() {
       const u = nearUse();
       if (u?.gadget) return t('<kbd>E</kbd> {icon} {name}', { icon: GADGET_HINT[u.gadget.id][0], name: t(GADGET_HINT[u.gadget.id][2]) });
       const s = u?.seat;
-      if (s) return s.sleep ? t('<kbd>E</kbd> 躺下睡一下') : t('<kbd>E</kbd> 坐下');
+      if (s) return s.bounce ? t('<kbd>E</kbd> 🤸 跳上彈簧床') : s.bath ? t('<kbd>E</kbd> 🛁 泡個澡') : s.vanity ? t('<kbd>E</kbd> 🪞 坐下來換造型') : s.sleep ? t('<kbd>E</kbd> 躺下睡一下') : t('<kbd>E</kbd> 坐下');
       return mine ? t('<kbd>E</kbd> 布置帳篷') : null;
     },
     /** ✨ 主人身邊的小精靈要去玩：離 (x,z) 最近、沒有小精靈住的精靈家具（同一層樓）；回傳 { kind, pos(), done() } */
@@ -1093,6 +1125,8 @@ export function createHomeRoom() {
         m.userData.wiggle = Math.max(0, m.userData.wiggle - dt * 0.8);
         m.rotation.z = Math.sin(time * 14) * 0.08 * m.userData.wiggle;
       }
+      // 🛏️ 彈簧床：有人在上面跳，網面跟著彈（大家都看得到：occupied 也算別人）
+      for (const m of tickers) if (m.userData.item === 'pass_bouncebed') m.userData.bounce = !!this.occupied?.(m.position.x, m.position.z, 0.3);
       // 🪑 小搖椅：有人坐著就前後搖
       for (const m of rockingChairs) {
         const want = this.occupied?.(m.position.x, m.position.z, 0.35) ? 0.12 : 0;
@@ -1101,7 +1135,8 @@ export function createHomeRoom() {
       }
       // 🪺 吊籃椅：籃子繞著鉤子輕輕晃
       for (const { o, m } of swingers) {
-        const want = this.occupied?.(m.position.x, m.position.z, 0.35) ? 0.07 : 0.025;
+        const big = m.userData.item === 'pass_moonhammock'; // 🌙 月亮吊床比較大、躺的人在中間
+        const want = this.occupied?.(m.position.x + (big ? 0.4 * Math.cos(m.rotation.y) : 0), m.position.z - (big ? 0.4 * Math.sin(m.rotation.y) : 0), big ? 0.75 : 0.35) ? (big ? 0.1 : 0.07) : 0.025;
         o.userData.amp = (o.userData.amp ?? want) + (want - (o.userData.amp ?? want)) * Math.min(1, dt * 1.5);
         o.rotation.z = Math.sin(time * 1.4 + m.position.x) * o.userData.amp;
         o.rotation.x = Math.sin(time * 1.1 + m.position.z) * o.userData.amp * 0.5;

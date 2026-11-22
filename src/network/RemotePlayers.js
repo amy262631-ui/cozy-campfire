@@ -28,6 +28,7 @@ const POSE_OF = {
   wave: 'wave', salute: 'salute', bye: 'bye', pray: 'pray', // 表情動作
   pick: 'pick', catch: 'catch', plant: 'plant', water: 'water', // 採摘、揮網、種菜、澆水
   sofa: 'sit', sleep: 'sleep', // 🛋️ 坐沙發、躺床
+  bounce: 'bounce', // 🛏️ 彈簧床
   boat: 'sit', // ⛵ 坐在船上
 };
 
@@ -370,7 +371,7 @@ export class RemotePlayers {
   /** 某個位置附近有沒有其他玩家（營火圓木有沒有人坐） */
   /** 附近有沒有人坐著（鞦韆、搖椅會不會搖） */
   anySeatedNear(x, z, r) {
-    for (const p of this.players.values()) if (['sofa', 'eat', 'sleep'].includes(p.state) && Math.hypot(p.pos.x - x, p.pos.z - z) < r) return true;
+    for (const p of this.players.values()) if (['sofa', 'eat', 'sleep', 'bounce'].includes(p.state) && Math.hypot(p.pos.x - x, p.pos.z - z) < r) return true;
     return false;
   }
 

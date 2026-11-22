@@ -405,7 +405,7 @@ async function init() {
   // 🛋️ 帳篷裡的沙發、坐墊、床：有人坐了就不能再坐（11/07：以前兩個人會疊在同一個位置）
   if (rooms.home) rooms.home.seatTaken = (seat) => remotes.anyNear(seat.x, seat.z, 0.3);
   // 🪢 鞦韆、🪑 小搖椅：有人坐著才搖（自己坐、或附近有別人坐著）
-  const seatedNear = (x, z, r) => (['sofa', 'eat'].includes(actions.state) && Math.hypot(player.position.x - x, player.position.z - z) < r) || remotes.anySeatedNear?.(x, z, r);
+  const seatedNear = (x, z, r) => (['sofa', 'eat', 'sleep', 'bounce'].includes(actions.state) && Math.hypot(player.position.x - x, player.position.z - z) < r) || remotes.anySeatedNear?.(x, z, r);
   rooms.campground.occupied = seatedNear;
   if (rooms.home) rooms.home.occupied = seatedNear;
   // 特殊魚的出現條件：營火時間、整點釣魚大賽
@@ -5655,6 +5655,24 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       audio.sfx('bell');
       return popEmoji('🎐');
     }
+    // 🎫 月票新家具（作者 11/22）
+    if (id === 'tv' || id === 'starlamp') {
+      const on = rooms.home.toggleOn?.(g);
+      audio.sfx('tap');
+      if (id === 'tv') return hud.toast(on ? t('📺 打開電視了，每 6 秒換一台') : t('📺 關掉電視了'));
+      return hud.toast(on ? t('🪩 星空打開了，抬頭看看 ✨') : t('🪩 關掉星空了'));
+    }
+    if (id === 'coffee') {
+      audio.sfx('tap');
+      popEmoji('☕');
+      return hud.toast(t('☕ 煮了一杯香香的咖啡，暖呼呼的'));
+    }
+    if (id === 'photo') {
+      audio.sfx('tap');
+      popEmoji('📸');
+      net.emoji?.('📸');
+      return hud.toast(t('📸 喀嚓！拍了一張可愛的照片'));
+    }
     if (id === 'lamp') {
       const on = rooms.home.toggleLamp?.(g);
       audio.sfx('tap');
@@ -5709,6 +5727,11 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     } else if (id === 'fridge') openFridge(mine);
   };
   actions.onWarm = () => hud.toast(t('🔥 小暖爐暖呼呼的'));
+  actions.onVanity = () => hud.onLook?.(); // 🪞 坐到化妝台前：打開換造型（作者 11/22）
+  actions.onBath = () => {
+    popEmoji('🫧');
+    hud.toast(t('🛁 泡個熱水澡，好舒服～ 移動就起來'));
+  };
 
   /** 布置時選到的格子＋第幾層 */
   let furnSel = null;

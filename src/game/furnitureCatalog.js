@@ -265,6 +265,19 @@ export const FURNITURE_CATALOG = [
   { id: 'cn_screen', icon: '🏞️', zh: '山水屏風', price: 18, cat: 'cn', cat2: 'wall', style: 'cn', from: '2026-11-27', kind: 'wall', color: false },
   { id: 'cn_beads', icon: '📿', zh: '珠簾', price: 14, cat: 'cn', cat2: 'wall', style: 'cn', from: '2026-11-27', kind: 'wall', walk: true, color: false },
   { id: 'cn_moongate', icon: '🌕', zh: '月洞門', price: 60, cat: 'cn', cat2: 'wall', style: 'cn', from: '2026-11-27', kind: 'wall', walk: true, pass: 1, color: false },
+  // ---- 🎫 月票新家具（作者 11/22：月票商品再多一點；都能換色、會動、有互動）----
+  // seatX／seatZ：座位離格子中心多遠（沿家具自己的方向）；seatRot：坐／躺的方向再轉多少；seat2: false＝兩格寬也只有一個座位
+  { id: 'pass_tv', icon: '📺', zh: 'LED 大電視', price: 80, cat: 'deco', wide: 0.8, pass: 1, from: '2026-11-27' }, // 按 E 開關
+  { id: 'pass_speaker', icon: '🔊', zh: '木頭喇叭', price: 60, cat: 'deco', pass: 1, from: '2026-11-27' }, // 按 E 換歌
+  { id: 'pass_starlamp', icon: '🪩', zh: '星空投影燈', price: 70, cat: 'light', pass: 1, from: '2026-11-27' }, // 按 E 開關星空
+  { id: 'pass_coffee', icon: '☕', zh: '義式咖啡機', price: 50, cat: 'kitchen', kind: 'small', pass: 1, from: '2026-11-27' }, // 按 E 煮一杯
+  { id: 'pass_bathtub', icon: '🛁', zh: '泡泡浴缸', price: 90, cat: 'sit', seat: -0.03, wide: 0.8, seatX: 0.12, seatRot: Math.PI / 2, seat2: false, bath: true, pass: 1, from: '2026-11-27' }, // 坐進去泡澡，只露出頭
+  { id: 'pass_vanity', icon: '🪞', zh: '化妝台', price: 60, cat: 'deco', seat: 0.3, seatZ: 0.38, seatRot: Math.PI, vanity: true, pass: 1, from: '2026-11-27' }, // 附小椅子，坐下就打開換造型
+  { id: 'pass_bunny', icon: '🐰', zh: '巨大兔兔抱枕', price: 70, cat: 'sit', cat2: 'toy', seat: 0.3, seatZ: 0.12, pass: 1, from: '2026-11-27' }, // 坐在兔兔懷裡
+  { id: 'pass_moonhammock', icon: '🌙', zh: '月亮吊床', price: 90, cat: 'sit', seat: 0.72, sleep: true, wide: 0.8, seatX: 0.4, seatRot: Math.PI / 2, seat2: false, pass: 1, from: '2026-11-27' }, // 躺上去會搖，大家都看得到
+  { id: 'pass_jelly', icon: '🪼', zh: '水母燈', price: 50, cat: 'light', pass: 1, from: '2026-11-27' },
+  { id: 'pass_photowall', icon: '📷', zh: '照片網牆', price: 40, cat: 'deco', wide: 0.8, pass: 1, from: '2026-11-27' },
+  { id: 'pass_bouncebed', icon: '🛏️', zh: '彈簧床', price: 80, cat: 'toy', seat: 0.3, bounce: true, pass: 1, from: '2026-11-27' }, // 站上去一直彈，大家都看得到
 ];
 /** 🍽️ 餐桌上的盤子放哪（相對格子中心；大餐桌往右多一格） */
 export const DINE_SLOTS = {
