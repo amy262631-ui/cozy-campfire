@@ -3,6 +3,7 @@ import { BASE_FUR } from '../game/looks.js';
 import { SPECIES } from '../player/characters/species.js';
 import { languageRowHtml, bindLanguageRow } from './LanguagePicker.js';
 import { randomName } from '../social/names.js';
+import { cleanNameText } from '../game/nameRules.js';
 import { t } from '../i18n/i18n.js';
 import { channelButtonHtml, fetchChannels } from './ChannelPanel.js';
 
@@ -109,6 +110,7 @@ export class JoinScreen {
           <input id="join-name" class="join-input" maxlength="12" />
           <button type="button" class="join-dice" id="join-dice" title="${t('換一個名字')}">🎲</button>
         </div>
+        <div class="join-name-hint">${t('名字只能用文字和數字，不能放符號、表情')}</div>
 
         ${
           this.allowSpecies
@@ -255,7 +257,7 @@ export class JoinScreen {
       });
       el.querySelector('form').addEventListener('submit', (e) => {
         e.preventDefault();
-        const name = input.value.replace(/🔥|✨|🌌|\uFE0F/gu, '').trim().slice(0, 12) || autoName || randomName(); // 月票標誌不能放名字裡（伺服器也會拿掉）
+        const name = cleanNameText(input.value) || autoName || randomName(); // 名字不能放符號、表情（作者 11/22；伺服器也會拿掉）
         const code = saved.code || '';
         // 在「我的樣子」裡換了動物或毛色，才記住外型；沒動就維持每次隨機
         const customLook = this.edit ? !!saved.customLook || fur !== startFur || species !== startSpecies : true;

@@ -12,6 +12,9 @@ import { SIGNS } from '../game/signCatalog.js';
 import { addCloseX } from './CloseX.js';
 import { isXmasShop as isXmas } from '../game/season.js'; // 🛒 聖誕商品 12/1～1/15
 import { isOpen } from '../game/dailySpecial.js';
+import { PASS_LOOK_EARLY } from '../game/pass.js';
+/** 月票當月商品開賣那天（作者 11/22：12 月的 11/27 就開） */
+const openDay = (ym) => { const d = PASS_LOOK_EARLY[ym] ?? `${ym}-01`; return `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`; };
 
 /**
  * 營地小舖：用松果買帳篷、家具。
@@ -272,8 +275,8 @@ export class ShopPanel {
         const on = (x.slot === 'wing' ? a.wing : a.wear) === x.id;
         return `<button type="button" class="shop-item${on ? ' on' : ''}" data-sacc="${x.id}" data-own="${own ? 1 : 0}" ${!own && (coins == null || coins < x.price) ? 'disabled' : ''}>
           <span class="si-icon">${x.icon}</span><span class="si-name">${t(x.zh)}</span><span class="si-price">${on ? t('戴著') : own ? t('戴上') : `🌰 ${x.price}`}</span></button>`;
-      }).join('')}</div><div class="shop-hint">${t('（買了每隻小精靈都能戴）')}・${t('再按一次拿下來')}</div><div class="shop-hint">${t('🎀 頭上一次戴一個（蝴蝶結、帽子、圍巾）；🦋 翅膀要長大的小精靈才看得到')}</div>` : ''}
-      ${later.length ? `<div class="shop-hint">${t('🎄 11/27 起開賣：{list}', { list: later.map((x) => x.icon).join(' ') })}</div>` : ''}`;
+      }).join('')}</div><div class="shop-hint">${t('（買一次每隻都能戴，每隻可以戴不一樣的）')}・${t('再按一次拿下來')}</div><div class="shop-hint">${t('🎀 頭上一次戴一個（蝴蝶結、帽子、圍巾）；🦋 翅膀要長大的小精靈才看得到')}</div>` : ''}
+      ${later.length ? `<div class="shop-sub">${t('🎄 聖誕配件（11/27 開賣）')}</div><div class="shop-grid">${later.map((x) => `<button type="button" class="shop-item" disabled><span class="si-icon">${x.icon}</span><span class="si-name">${t(x.zh)}</span><span class="si-price">🌰 ${x.price}・${t('11/27 開賣')}</span></button>`).join('')}</div>` : ''}`;
   }
 
   /** 🎣 釣具（作者 11/20：魚飼料在小舖買，不另外放攤子）：🐟 特殊魚飼料 */
@@ -288,9 +291,10 @@ export class ShopPanel {
       <div class="shop-egg">
         <div class="egg-pic">🐟</div>
         <div class="shop-pv-name">${t('🐟 特殊魚飼料')}</div>
-        <div class="shop-hint">${t('{n} 🌰：10 分鐘內魚上鉤比較快（等待時間減半），在哪裡釣都有用', { n: this.baitPrice ?? 15 })}</div>
+        <div class="shop-hint">${t('{n} 🌰：買了放進背包，釣魚時按「🐟 撒」，10 分鐘內魚上鉤比較快（等待時間減半）', { n: this.baitPrice ?? 15 })}</div>
+        ${this.baitBag ? `<div class="shop-hint"><b>${t('🎒 背包裡有 {n} 包', { n: this.baitBag })}</b>${left > 0 ? `・${t('現在還有 {left}', { left: fmt(left) })}` : ''}</div>` : left > 0 ? `<div class="shop-hint">${t('現在還有 {left}', { left: fmt(left) })}</div>` : ''}
         <div class="shop-hint">${t('想釣到稀有魚：讓營火燒旺、坐船釣，或吃「釣魚好運」料理')}</div>
-        <button type="button" class="shop-buy-tent" data-bait ${coins == null || coins < (this.baitPrice ?? 15) ? 'disabled' : ''}>${left > 0 ? t('🐟 再撒一包（還剩 {left}）', { left: fmt(left) }) : t('🐟 買一包魚飼料 🌰 {n}', { n: this.baitPrice ?? 15 })}</button>
+        <button type="button" class="shop-buy-tent" data-bait ${coins == null || coins < (this.baitPrice ?? 15) ? 'disabled' : ''}>${t('🐟 買一包魚飼料 🌰 {n}', { n: this.baitPrice ?? 15 })}</button>
       </div>`;
   }
 
@@ -525,7 +529,7 @@ export class ShopPanel {
     };
     const monthly = pmOn
       ? `${pmi.looks.length ? `<div class="shop-sub">${t('💇 {m} 月造型', { m: Number((pmi.lookYm ?? pmi.ym).slice(5)) })}</div>
-        <div class="shop-hint">${t('有月票的人才能買・只賣這個月，明年同一個月再回來・買了永久是你的')}${pmi.preview ? `<br>${t('👀 這是 {m} 月的預覽，{m} 月 1 日才能買', { m: Number(pmi.ym.slice(5)) })}` : ''}</div>
+        <div class="shop-hint">${t('有月票的人才能買・只賣這個月，明年同一個月再回來・買了永久是你的')}${pmi.preview ? `<br>${t('👀 這是預覽，{d} 起才能買', { d: openDay(pmi.ym) })}` : ''}</div>
         <div class="shop-grid">${pmi.looks.map((x) => pmCard('look', x)).join('')}</div>` : ''}
         ${pmi.looks.some((x) => this.outfitOf?.(x.id)?.slot === 'clip') ? `<div class="shop-hint">${t('📎 髮夾每種頭髮都能戴，也能跟帽子、假髮一起戴（造型 → 📎 髮夾）')}</div>` : ''}
         ${pmi.furn.length ? `<div class="shop-sub">${t('🎄 {m} 月限定家具', { m: Number((pmi.lookYm ?? pmi.ym).slice(5)) })}</div><div class="shop-grid">${pmi.furn.map((x) => pmCard('furn', x)).join('')}</div>${pmi.tent ? '' : `<div class="shop-hint">${t('⛺ 先有帳篷，才能買家具')}</div>`}` : ''}`

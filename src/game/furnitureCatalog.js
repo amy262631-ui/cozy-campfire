@@ -88,8 +88,8 @@ export const FURNITURE_CATALOG = [
   { id: 'desk', icon: '✏️', zh: '小書桌', price: 20, cat: 'table', top: 0.56 },
   { id: 'bookshelf', icon: '📚', zh: '書架', price: 20, cat: 'table', top: 0.915 },
   { id: 'fridge', icon: '🧊', zh: '小冰箱', price: 25, cat: 'kitchen', top: 0.66 },
-  // 🗄️ 展示櫃：三層架子，一格就能放 6 件小東西（不用全部攤在地上）
-  { id: 'showcase', icon: '🗄️', zh: '展示收納櫃', price: 35, cat: 'table', shelf: 6 },
+  // 🗄️ 展示櫃：三層架子＋最上面，一格就能放 8 件小東西（不用全部攤在地上）
+  { id: 'showcase', icon: '🗄️', zh: '展示收納櫃', price: 35, cat: 'table', shelf: 8 },
   // ---- 燈光 ----
   { id: 'candles', icon: '🕯️', zh: '蠟燭組', price: 6, cat: 'light', kind: 'small' },
   { id: 'oillamp', icon: '🪔', zh: '煤油燈', price: 10, cat: 'light', kind: 'small' },
@@ -313,6 +313,7 @@ export const SHELF_SLOTS = [
   [-0.18, 0.1], [0.18, 0.1],
   [-0.18, 0.55], [0.18, 0.55],
   [-0.18, 1.0], [0.18, 1.0],
+  [-0.18, 1.455], [0.18, 1.455], // 作者 11/22：最上面也能擺
 ];
 /** 這一疊還能不能再放 id（有展示櫃的話放在櫃子的格子裡） */
 export function canAddTo(stack, id) {

@@ -8,7 +8,7 @@
  * - 不會餓死、不會跑走
  * 存檔：homes[vid].hens = [{ c: 毛色, nm: 名字, fed: 總共餵幾次, fd: 今天日期, fn: 今天餵幾次, t: 上次撿蛋的時間 }]
  */
-export const HEN_FROM = '2026-11-27';
+export const HEN_FROM = '2026-11-22'; // 作者 11/22：提早開
 export const COOP_PRICE = 200;
 export const HEN_PRICE = 80;
 export const HEN_MAX = 4;

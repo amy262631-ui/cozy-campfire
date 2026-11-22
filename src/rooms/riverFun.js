@@ -167,6 +167,8 @@ export function createRiverFun(group) {
     riverOpen,
     /** 在扁石頭堆旁邊嗎 */
     nearPile: (p) => riverOpen() && Math.hypot(p.x - px, p.z - pz) < 1.5,
+    /** 🏆 打水漂木牌（作者 11/22：按 E 看打水漂、釣魚排行） */
+    nearSign: (p) => riverOpen() && Math.hypot(p.x - bx, p.z - bz) < 1.4,
     /** 在河邊（餵鴨子的距離）嗎 */
     nearBank: (p) => {
       if (!riverOpen()) return false;

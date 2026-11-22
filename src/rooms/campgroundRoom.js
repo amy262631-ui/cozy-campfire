@@ -35,6 +35,8 @@ const yardScale = (id) => YARD_SCALE_OF[id] ?? 0.8;
  *   小型 ①②③：門口前院；門口到小路的走道保持空的
  */
 const BIG_SPOT = { x: -3.6, z: -0.5 };
+/** 🪑 兩邊各坐一個人的小擺設（小圓桌、火盆木樁）：放在第 1 格時轉 90 度（人坐前後），旁邊第 2 格也有人坐時才不會背靠背撞在一起（作者 11/22） */
+const SIDE_SEATS = new Set(['bistro', 'firestool']);
 const SMALL_SPOTS = [
   { x: -1.45, z: 4.45, ry: 0 },
   { x: -3.3, z: 4.25, ry: 0.2 },
@@ -907,7 +909,7 @@ export function createCampgroundRoom() {
     }
     g.userData.ticks = ticks;
     // 小型擺設：郵筒的門要朝小路（11/08 作者），模型的門在 +x，所以多轉 -90 度
-    (tent.sm ?? []).slice(0, SMALL_SPOTS.length).forEach((id, i) => !(i === 2 && cs?.take === 'sm2') && place.push([id, SMALL_SPOTS[i].x * side, SMALL_SPOTS[i].z, SMALL_SPOTS[i].ry * side + (id === 'mailbox' ? -Math.PI / 2 : 0), false]));
+    (tent.sm ?? []).slice(0, SMALL_SPOTS.length).forEach((id, i) => !(i === 2 && cs?.take === 'sm2') && place.push([id, SMALL_SPOTS[i].x * side, SMALL_SPOTS[i].z, SMALL_SPOTS[i].ry * side + (id === 'mailbox' ? -Math.PI / 2 : 0) + (i === 0 && SIDE_SEATS.has(id) ? Math.PI / 2 : 0), false]));
     for (const [id, lx, lz, ry, mirror] of place) {
       if (!id) continue;
       const y = buildYard(id);

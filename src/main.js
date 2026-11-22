@@ -415,14 +415,24 @@ async function init() {
   // ---------- 表情、聊天 ----------
   let myName = '';
   const bubbles = new SpeechBubbles(scene);
+  // 🐟 舉著大魚講話：泡泡往上移到魚的上面（作者 11/22：字被魚蓋住）
+  const fishBox = new THREE.Box3();
+  const aboveFish = (ch, out) => {
+    const f = ch?.heldFish;
+    if (!f?.visible || !f.children.length) return;
+    fishBox.setFromObject(f);
+    if (!fishBox.isEmpty()) out.y = Math.max(out.y, fishBox.max.y - 0.8);
+  };
   const headOf = (id, out) => {
     if (id === 'self') {
       player.character.getHeadWorldPosition(out);
+      aboveFish(player.character, out);
       return true;
     }
     const r = remotes.get(id);
     if (!r) return false;
     r.character.getHeadWorldPosition(out);
+    aboveFish(r.character, out);
     return true;
   };
   const social = new SocialPanel({
@@ -1425,7 +1435,7 @@ async function init() {
     ['fruit', t('🍓 果實')],
     ['mush', t('🍄 蘑菇')],
     ['flower', t('🌼 花')],
-    ...(isOpen({ from: '2026-11-27' }) ? [['egg', t('🥚 雞蛋')]] : []),
+    ...(isOpen({ from: HEN_FROM }) ? [['egg', t('🥚 雞蛋')]] : []),
     ['fish', t('🐟 魚')],
     ['weird', t('🥾 怪東西')],
     ['sea', t('🧂 調味料')],
@@ -1959,7 +1969,7 @@ async function init() {
     if (!x) return;
     if (!own) {
       if ((pinecones ?? 0) < x.price) return hud.toast(t('松果不夠，需要 {n} 🌰', { n: x.price }));
-      if (!confirm(t('花 {n} 🌰 買{icon} {name}？買了每隻小精靈都能戴', { n: x.price, icon: x.icon, name: t(x.zh) }))) return;
+      if (!confirm(t('花 {n} 🌰 買{icon} {name}？買一次每隻都能戴', { n: x.price, icon: x.icon, name: t(x.zh) }))) return;
     }
     const slot = x.slot === 'wing' ? 'wing' : 'head';
     const on = (slot === 'wing' ? spiritSt.acc.wing : spiritSt.acc.wear) === id;
@@ -2814,12 +2824,103 @@ async function init() {
   };
   /** 🐟 魚飼料到幾點（撒了魚上鉤比較快） */
   let baitUntil = 0;
+  let baitBag = 0; // 背包裡還有幾包（作者 11/22：買了先收著，釣魚時按「🐟 撒」）
   fishing.fast = () => Date.now() < baitUntil;
-  // 重新整理、換裝置進來：問一下魚飼料還剩多久
+  // 重新整理、換裝置進來：問一下魚飼料還剩多久、背包幾包
   net.on('joined', () => setTimeout(async () => {
     const r = await net.request('boatInfo', {});
     if (r?.feedLeft) baitUntil = Date.now() + r.feedLeft;
+    baitBag = r?.bait ?? 0;
   }, 3000));
+  /** 買一包魚飼料 → 放進背包 */
+  const buyBait = async () => {
+    if (!(await confirmBuy.ask({ icon: '🐟', name: t('特殊魚飼料（10 分鐘）'), price: FEED_PRICE, coins: pinecones }))) return false;
+    const r = await net.request('buyFeed', {});
+    if (r?.ok) {
+      baitBag = r.bait ?? baitBag + 1;
+      shopPanel.baitBag = baitBag;
+      hud.toast(t('🐟 魚飼料放進背包了（{n} 包）！釣魚時按「🐟 撒」撒下去', { n: baitBag }), 4500);
+      return true;
+    }
+    hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : r?.reason === 'bagFull' ? t('背包裡的魚飼料已經很多了，先用掉一些') : r?.reason === 'later' ? t('🐟 魚飼料 11/27 開賣喔') : t('現在買不了，等一下再試'));
+    return false;
+  };
+  /** 🐟 撒魚飼料（釣魚時右邊的圓按鈕） */
+  const useBait = async () => {
+    if (!baitBag) return hud.toast(t('背包裡沒有魚飼料，到小舖「🎣 釣具」買'));
+    if (!['fish', 'boat'].includes(actions.state)) return hud.toast(t('去水邊釣魚時再撒'));
+    const r = await net.request('useFeed', {});
+    if (!r?.ok) return hud.toast(r?.reason === 'tooMany' ? t('飼料已經夠多了，等一下再撒') : r?.reason === 'place' ? t('去水邊釣魚時再撒') : t('現在撒不了，等一下再試'));
+    baitBag = r.bait;
+    shopPanel.baitBag = baitBag;
+    baitUntil = Date.now() + r.feedLeft;
+    fishing.bait?.();
+    bubbles.show('self', '🐟✨', { emoji: true });
+    audio.sfx?.('splash');
+    hud.toast(t('🐟 撒下魚飼料！{left} 內魚會比較快上鉤', { left: fmtLeft(r.feedLeft) }), 3000);
+  };
+  net.on('feedThrow', ({ id }) => bubbles.show(id, '🐟✨', { emoji: true }));
+  const baitBtn = document.createElement('button');
+  baitBtn.type = 'button';
+  baitBtn.className = 'bait-btn';
+  baitBtn.hidden = true;
+  baitBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    useBait();
+  });
+  document.getElementById('ui').appendChild(baitBtn);
+  const baitChip = document.createElement('div');
+  baitChip.className = 'bait-chip';
+  baitChip.hidden = true;
+  document.getElementById('ui').appendChild(baitChip);
+  /** 😋 手機：料理倒數放在上方按鈕最後一排的右邊空位（作者 11/22：原本固定位置會壓到「❓ 問題」）；放不下就放按鈕列下面 */
+  const placeBuff = () => {
+    const el = document.getElementById('buff-chip');
+    if (!el || el.hidden || window.innerWidth >= 600) return el && (el.style.top = el.style.right = '');
+    const bar = document.getElementById('online');
+    const btns = [...(bar?.querySelectorAll('button, .chip, [class*="-chip"]') ?? [])].filter((b) => b !== el && b.offsetParent && b.getBoundingClientRect().width > 0);
+    if (!btns.length) return;
+    const rects = btns.map((b) => b.getBoundingClientRect());
+    const lastTop = Math.max(...rects.map((r) => r.top));
+    const row = rects.filter((r) => Math.abs(r.top - lastTop) < 8);
+    const right = Math.max(...row.map((r) => r.right));
+    const h = row[0].height;
+    const w = el.getBoundingClientRect().width || 80;
+    if (window.innerWidth - right > w + 26) el.style.top = `${Math.round(lastTop + (h - el.offsetHeight) / 2)}px`;
+    else el.style.top = `${Math.round(Math.max(...rects.map((r) => r.bottom)) + 6)}px`;
+    el.style.right = '14px';
+  };
+  /** 每 0.25 秒：釣魚時顯示「🐟 撒」按鈕、飼料還剩多久 */
+  let baitUiT = 0;
+  const baitTick = (dt) => {
+    if ((baitUiT -= dt) > 0) return;
+    baitUiT = 0.25;
+    // 🏆 11/27 起上方的「湖畔排行」按鈕拿掉（改在租船看板、河畔木牌裡）
+    const rb = document.getElementById('fish-board-btn');
+    if (rb) rb.hidden = isOpen({ from: BOAT_FROM });
+    placeBuff();
+    const fishingNow = ['fish', 'boat'].includes(actions.state);
+    const btnOn = fishingNow && baitBag > 0 && isOpen({ from: BOAT_FROM });
+    baitBtn.hidden = !btnOn;
+    if (btnOn) {
+      const txt = `🐟<small>${t('撒')} ×${baitBag}</small>`;
+      if (baitBtn._t !== txt) (baitBtn._t = txt), (baitBtn.innerHTML = txt);
+    }
+    const left = baitUntil - Date.now();
+    const chipOn = fishingNow && left > 0 && !document.getElementById('fish-card')?.classList.contains('show');
+    baitChip.hidden = !chipOn;
+    if (chipOn) {
+      baitChip.textContent = t('🐟 飼料 {t}・魚上鉤比較快', { t: `${Math.floor(left / 60000)}:${String(Math.floor((left % 60000) / 1000)).padStart(2, '0')}` });
+      // 營火河畔的「火多旺」小條在的話排在它下面
+      const fc = document.querySelector('.river-fire');
+      let y = belowHud();
+      if (fc && !fc.hidden) y = Math.round(fc.getBoundingClientRect().bottom + 6);
+      const ts = document.getElementById('toasts');
+      const tr = ts?.children.length ? ts.getBoundingClientRect() : null;
+      if (tr && tr.top < y + 30) y = Math.max(y, Math.round(tr.bottom + 6));
+      baitChip.style.top = `${y}px`;
+    }
+  };
   const fmtLeft = (ms) => t('{m} 分 {s} 秒', { m: Math.floor(ms / 60000), s: Math.floor((ms % 60000) / 1000) });
   actions.onBoatSign = async () => {
     if (!net.online) return hud.toast(t('還沒連上伺服器，等一下再試'));
@@ -2828,13 +2929,14 @@ async function init() {
     if (!info.open) return hud.toast(t('⛵ 11/27 開放租船喔'));
     modal.open(
       t('⛵ 租船'),
-      `<div class="dex-note">${t('租 10 分鐘：自己划、在湖上哪裡都能釣魚，還有 ⛵ 船釣限定魚！朋友走到船旁邊按 E 就能免費坐上來。')}</div>
+      `${rankTab(t('⛵ 租船'))}<div class="dex-note">${t('租 10 分鐘：自己划、在湖上哪裡都能釣魚，還有 ⛵ 船釣限定魚！朋友走到船旁邊按 E 就能免費坐上來。')}</div>
       <div class="boat-pick">${BOAT_LIST.map((k) => `<button type="button" class="boat-card" data-boat="${k.id}" ${info.full ? 'disabled' : ''}><span class="bc-icon">${k.icon}</span><b>${t(k.zh)}</b><small>${t('{n} 人座', { n: k.people })}</small><em>🌰 ${k.price}</em></button>`).join('')}</div>
       ${info.full ? `<div class="shop-hint">${t('船都租出去了，等一下再來')}</div>` : ''}
-      <div class="dex-note"><b>${t('🐟 特殊魚飼料')}</b>・${t('{n} 🌰：10 分鐘內魚上鉤比較快（等待時間減半），在哪裡釣都有用', { n: FEED_PRICE })}</div>
-      <button type="button" class="mini-btn" data-feed>${info.feedLeft > 0 ? t('🐟 再撒一包（還剩 {left}）', { left: fmtLeft(info.feedLeft) }) : t('🐟 買一包魚飼料 🌰 {n}', { n: FEED_PRICE })}</button>
+      <div class="dex-note"><b>${t('🐟 特殊魚飼料')}</b>・${t('{n} 🌰：買了放進背包，釣魚時按「🐟 撒」，10 分鐘內魚上鉤比較快（等待時間減半）', { n: FEED_PRICE })}</div>
+      <button type="button" class="mini-btn" data-feed>${t('🐟 買一包魚飼料 🌰 {n}', { n: FEED_PRICE })}${info.bait ? `（${t('背包裡 {n} 包', { n: info.bait })}）` : ''}</button>
       <div class="dex-note">${t('⏰ 時間到船會自己划回碼頭。🐳 傳說中，湖裡住著一隻藍鯨寶寶⋯')}</div>`,
       (body) => {
+        bindRankTab(body);
         for (const b of body.querySelectorAll('[data-boat]'))
           b.addEventListener('click', async () => {
             const k = BOAT_LIST.find((x) => x.id === b.dataset.boat);
@@ -2846,13 +2948,7 @@ async function init() {
             } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : r?.reason === 'full' ? t('船都租出去了，等一下再來') : r?.reason === 'already' ? t('你已經在船上了') : r?.reason === 'far' ? t('走到租船看板旁邊再租') : r?.reason === 'later' ? t('⛵ 11/27 開放租船喔') : t('現在租不了，等一下再試'));
           });
         body.querySelector('[data-feed]')?.addEventListener('click', async () => {
-          if (!(await confirmBuy.ask({ icon: '🐟', name: t('特殊魚飼料（10 分鐘）'), price: FEED_PRICE, coins: pinecones }))) return;
-          const r = await net.request('buyFeed', {});
-          if (r?.ok) {
-            modal.close?.();
-            hud.toast(t('🐟 撒下魚飼料！{left} 內魚會比較快上鉤', { left: fmtLeft(r.feedLeft) }), 4000);
-            baitUntil = Date.now() + r.feedLeft;
-          } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : r?.reason === 'tooMany' ? t('飼料已經夠多了，等一下再撒') : t('現在買不了，等一下再試'));
+          if (await buyBait()) modal.close?.();
         });
       },
     );
@@ -2924,7 +3020,19 @@ async function init() {
     setTimeout(() => hud.toast(`${t('🪨 跳了 {n} 下！', { n: r.b })}${r.pb ? t('（今天最好）') : ''}${r.gain ? ' +1 🌰' : ''}${r.left ? t('・還有 {n} 顆', { n: r.left }) : ''}`, 3500), 600 + r.b * 220);
   };
   net.on('skip', ({ id, b, x, z }) => roomMgr?.current?.id === 'forest_main' && id !== net.id && river.throwStone(x, z, b));
-  net.on('skipBoard', ({ top }) => river.setBoard(top));
+  let skipTop = [];
+  net.on('skipBoard', ({ top }) => ((skipTop = top ?? []), river.setBoard(top)));
+  /** 🏆 釣魚排行（作者 11/22：上方按鈕拿掉，11/27 起改在湖畔租船看板、營火河畔木牌裡看；排行資料、視窗原封不動） */
+  const rankTab = (here) => `<div class="shop-tabs rank-tabs"><button type="button" class="on">${here}</button><button type="button" data-rank>${t('🏆 釣魚排行')}</button></div>`;
+  const bindRankTab = (body) =>
+    body.querySelector('[data-rank]')?.addEventListener('click', () => {
+      modal.close?.();
+      fishingUI.openBoard('all');
+    });
+  actions.onRiverBoard = () => {
+    const rows = skipTop.slice(0, 5).map((e, i) => `<div class="craft-row"><div class="craft-info"><b>${['🥇', '🥈', '🥉', '4.', '5.'][i]} ${escapeHtml(String(e.name).slice(0, 10))}</b></div><span>${t('{n} 下', { n: e.b })}</span></div>`).join('');
+    modal.open(t('🏆 營火河畔排行'), `${rankTab(t('🪨 打水漂'))}<div class="dex-note">${t('🪨 今天打水漂排行')}</div>${rows || `<div class="dex-note">${t('還沒有人丟，快來當第一名！')}</div>`}`, bindRankTab);
+  };
   // 🤝 河神大鯉魚：釣的人
   let coopId = null;
   let coopProgT = 0;
@@ -2948,7 +3056,7 @@ async function init() {
   /** 上方按鈕列、活動提示最下面在哪裡（手機、平板、電腦排數不一樣） */
   const belowHud = () => {
     let y = 8;
-    for (const hid of ['online', 'today', 'event-line', 'mini-line']) {
+    for (const hid of ['online', 'today', 'event-line', 'mini-line', 'buff-chip']) {
       const e = document.getElementById(hid);
       if (e && !e.hidden && e.offsetParent) y = Math.max(y, e.getBoundingClientRect().bottom);
     }
@@ -3015,13 +3123,22 @@ async function init() {
     if (coopHelp && Date.now() > coopHelp.until + 1500) (coopHelp = null), drawCoop();
     else if (coopHelp && (coopHelp._t = (coopHelp._t ?? 0) + dt) > 1) (coopHelp._t = 0), drawCoop();
     // 🔥 在營火河畔坐下釣魚：顯示現在火多旺
-    const show = roomMgr.current?.id === 'forest_main' && actions.state === 'fish' && river.riverOpen();
+    // 作者 11/22：跟「釣到什麼魚」的卡片重疊 → 卡片出現時先藏起來；有提示訊息時排在提示下面
+    const card = document.getElementById('fish-card');
+    const show = roomMgr.current?.id === 'forest_main' && actions.state === 'fish' && river.riverOpen() && !card?.classList.contains('show');
     if (show) {
       const fr = campfire.fuelRatio;
       const txt = fr >= FIRE_HOT ? t('🔥🔥🔥 營火超旺！河畔稀有魚 ×1.6・火光魚出沒中') : fr >= 0.4 ? t('🔥🔥 營火很旺：河畔稀有魚 ×1.3') : t('🔥 火小小的：去添柴，河裡會更熱鬧');
       if (fireChip.textContent !== txt) fireChip.textContent = txt;
       // 放在上方按鈕列、活動提示的下面（手機、平板、電腦按鈕排數不一樣，不能寫死高度）
-      if ((fireChipT -= dt) <= 0) (fireChipT = 0.5), (fireChip.style.top = `${belowHud()}px`);
+      if ((fireChipT -= dt) <= 0) {
+        fireChipT = 0.2;
+        let y = belowHud();
+        const ts = document.getElementById('toasts');
+        const tr = ts?.children.length ? ts.getBoundingClientRect() : null;
+        if (tr && tr.top < y + 34) y = Math.max(y, Math.round(tr.bottom + 6)); // 提示訊息會蓋到才往下挪
+        fireChip.style.top = `${y}px`;
+      }
     }
     fireChip.hidden = !show;
   };
@@ -4661,6 +4778,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       move: () => openMoveMap(myHome?.plot?.z ?? 0),
       install: () => openInstall(),
       pine: () => openPineHelp(),
+      bag: () => openBag('dish'),
       look: () => hud.onLook?.(),
       friends: () => document.getElementById('friend-btn')?.click(),
       camp: () => hud.onGo(`camp:${myHome?.plot?.z ?? 0}`),
@@ -4794,7 +4912,13 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   setInterval(() => {
     if (!snapAnim.size) return;
     for (const img of document.querySelectorAll('img[src^="data:image"]')) {
-      if (img._fr === undefined) img._fr = snapAnim.get(img.getAttribute('src')) ?? null;
+      // 圖換掉了（例如確認視窗換了顏色）就重新找這張圖的那組，不然會跑回原本的顏色（作者 11/22）
+      const src = img.getAttribute('src');
+      if (img._fr === undefined || (img._fr ? !img._fr.includes(src) : img._src0 !== src)) {
+        img._fr = snapAnim.get(src) ?? null;
+        img._src0 = src;
+        img._fi = 0;
+      }
       if (!img._fr || !img.offsetParent) continue;
       img._fi = ((img._fi ?? 0) + 1) % img._fr.length;
       img.src = img._fr[img._fi];
@@ -5197,16 +5321,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     const r = await net.request('boatInfo', {});
     shopPanel.baitLeft = r?.feedLeft ?? 0;
     baitUntil = Date.now() + shopPanel.baitLeft;
+    baitBag = r?.bait ?? baitBag;
+    shopPanel.baitBag = baitBag;
     if (shopPanel.tab === 'fish') shopPanel.refresh();
   };
   shopPanel.onBait = async () => {
-    if (!(await confirmBuy.ask({ icon: '🐟', name: t('特殊魚飼料（10 分鐘）'), price: FEED_PRICE, coins: pinecones }))) return;
-    const r = await net.request('buyFeed', {});
-    if (r?.ok) {
-      shopPanel.baitLeft = r.feedLeft;
-      baitUntil = Date.now() + r.feedLeft;
-      hud.toast(t('🐟 撒下魚飼料！{left} 內魚會比較快上鉤', { left: fmtLeft(r.feedLeft) }), 4000);
-    } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : r?.reason === 'tooMany' ? t('飼料已經夠多了，等一下再撒') : t('現在買不了，等一下再試'));
+    if (await buyBait()) shopPanel.refresh?.();
   };
   shopPanel.onNeedPass = () => {
     hud.toast(t('🎫 這是月票限定，有月票才能買'));
@@ -6411,6 +6531,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     stepAutoWalk(dt);
     boatTick(dt);
     riverTick(dt);
+    baitTick(dt);
     legendShow.update(dt, roomMgr.current.id);
     placeFurnPop();
     const action = actions.update(dt, input.hasMoveInput);

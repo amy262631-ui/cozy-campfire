@@ -1,3 +1,4 @@
+import { AUTHOR_MARK } from '../game/nameRules.js';
 import { fireSeatY } from '../rooms/fireSeats.js';
 import * as THREE from 'three';
 import { t } from '../i18n/i18n.js';
@@ -88,7 +89,7 @@ class RemotePlayer {
     this.group.add(this.character.root);
 
     // 🔥 營火月票的支持者：名字前面一個小營火
-    this.tag = makeNameTag(npc ? npcName(name) : pb === 2 ? `✨ ${name}` : pb ? `🔥 ${name}` : name, npc); // 月票徽章：🔥 小營火、✨ 星空
+    this.tag = makeNameTag(npc ? npcName(name) : pb === 9 ? `${AUTHOR_MARK} ${name}` : pb === 2 ? `✨ ${name}` : pb ? `🔥 ${name}` : name, npc); // 月票徽章：🔥 小營火、✨ 星空
     this.tagBase = this.#headTop();
     this.tag.position.y = this.tagBase;
     this.group.add(this.tag);

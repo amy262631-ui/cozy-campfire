@@ -86,7 +86,7 @@ export const hasYard = (h, id) => {
  */
 export const YARD_USES = {
   mailbox: { use: ['mail'] },
-  picnic: { use: ['picnic'], seats: [{ x: -0.35, y: 0.45, z: 0.65, face: Math.PI }, { x: 0.35, y: 0.45, z: -0.65, face: 0 }] },
+  picnic: { use: ['picnic'], seats: [{ x: -0.35, y: 0.45, z: 0.8, face: Math.PI }, { x: 0.35, y: 0.45, z: -0.8, face: 0 }] }, // 作者 11/22：往外坐才不會卡桌子
   bbq: { use: ['grill'] },
   bike: { use: ['bike'] },
   hammock: { seats: [{ x: 0, y: 1.0, z: 0, face: Math.PI / 2, sleep: true }] },
@@ -96,8 +96,8 @@ export const YARD_USES = {
   camper: { seats: [{ x: 1.2, y: 0.25, z: 1.25, face: 0.75 }, { x: -0.6, y: 1.0, z: 0, face: Math.PI / 2, sleep: true, inside: true }] },
   airstream: { use: ['cooler'], seats: [{ x: -2.85, y: 0.42, z: -0.55, face: -Math.PI / 2 }, { x: -2.85, y: 0.42, z: 0.85, face: -Math.PI / 2 }] }, // 車尾露台的兩張躺椅
   bench: { seats: [{ x: -0.6, y: 0.42, z: 0, face: 0 }, { x: 0.6, y: 0.42, z: 0, face: 0 }] },
-  bistro: { seats: [{ x: -0.55, y: 0.45, z: 0, face: Math.PI / 2 }, { x: 0.55, y: 0.45, z: 0, face: -Math.PI / 2 }] },
-  firestool: { seats: [{ x: -0.6, y: 0.35, z: 0.1, face: Math.PI / 2 }, { x: 0.6, y: 0.35, z: 0.1, face: -Math.PI / 2 }] },
+  bistro: { seats: [{ x: -0.64, y: 0.45, z: 0, face: Math.PI / 2 }, { x: 0.64, y: 0.45, z: 0, face: -Math.PI / 2 }] },
+  firestool: { seats: [{ x: -0.64, y: 0.35, z: 0.1, face: Math.PI / 2 }, { x: 0.64, y: 0.35, z: 0.1, face: -Math.PI / 2 }] },
   cn_pavilion: { seats: [{ x: -0.6, y: 0.5, z: 0, face: Math.PI / 2 }, { x: 0.6, y: 0.5, z: 0, face: -Math.PI / 2 }] }, // 🏯 小涼亭的兩張石凳
   swing: { seats: [{ x: -0.6, y: 0.5, z: 0, face: 0, swing: true }, { x: 0.6, y: 0.5, z: 0, face: 0, swing: true }] },
 };

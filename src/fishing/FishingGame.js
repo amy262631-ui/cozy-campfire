@@ -328,6 +328,18 @@ export class FishingGame {
     }
   }
 
+  /** 🐟 撒魚飼料（作者 11/22）：浮標附近冒出一圈水波＋小水花；正在等魚的這一竿也馬上變快 */
+  bait() {
+    const p = this.phase === 'wait' || this.phase === 'bite' ? this.bobber.position : this.target ?? this.bobber.position;
+    if (p) {
+      this.#splash(p.x, p.z, 10, 0.35);
+      this.#ring(p.x, p.z, true);
+      setTimeout(() => this.#ring(p.x + 0.3, p.z - 0.2), 250);
+      setTimeout(() => this.#ring(p.x - 0.25, p.z + 0.2), 500);
+    }
+    if (this.phase === 'wait' && this.biteAt - this.t > 4) this.biteAt = this.t + 1.5 + Math.random() * 2.5;
+  }
+
   #ring(x, z, big = false) {
     const r = this.rings.find((q) => q.t >= 1) ?? this.rings[0];
     Object.assign(r, { t: 0, x, z, big });

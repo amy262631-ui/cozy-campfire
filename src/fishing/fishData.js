@@ -56,7 +56,7 @@ export const FISH = [
   { name: t('銀河鯨鯉'), rarity: 5, min: 90, max: 128, color: 0x1a2050, glow: 0xc8a0ff, weight: 1.2, pull: 26, fight: 0.14, window: 1.0, when: 'event', note: t('只在早晚 9:30 營火時間出現') },
   { name: t('鳳凰鯉'), rarity: 5, min: 80, max: 125, color: 0xff5030, glow: 0xffd060, weight: 1.2, pull: 26, fight: 0.14, window: 1.0, when: 'contest', note: t('只在釣魚大賽時出現') },
   { name: t('彩虹獨角魚'), rarity: 5, min: 50, max: 90, color: 0xffb0e0, glow: 0xa0e0ff, weight: 0.25, pull: 26, fight: 0.14, window: 1.0, note: t('看過的人都說會帶來好運') },
-  { name: t('漂流瓶'), rarity: 0, junk: 'bottle', min: 18, max: 22, color: 0xd8f0ff, weight: 1.5, pull: 4, fight: 0.02, window: 1.6, note: t('裡面有一張紙條') },
+  { name: t('漂流瓶'), rarity: 0, junk: 'bottle', glass: true, min: 18, max: 22, color: 0xd8f0ff, weight: 1.5, pull: 4, fight: 0.02, window: 1.6, note: t('裡面有一張紙條') },
   { name: t('生鏽罐頭'), rarity: 0, junk: 'can', min: 10, max: 12, color: 0x9a8a7a, weight: 1.5, pull: 4, fight: 0.02, window: 1.6 },
   // ---- 🐉 傳說之魚：超大、超稀有，釣到時整個伺服器都會看到公告 ----
   { name: t('遠古湖神鯨'), rarity: 5, legend: true, min: 180, max: 299, color: 0x2d4a6a, glow: 0x7ad8ff, weight: 0.12, pull: 34, fight: 0.17, window: 0.95, where: 'lake', note: t('傳說中住在湖底最深處') },
@@ -79,8 +79,8 @@ export const FISH = [
   { name: t('藍鯨寶寶'), rarity: 5, legend: true, min: 300, max: 399, color: 0x4a7fc8, glow: 0x9fd0ff, weight: 0.55, pull: 40, fight: 0.18, window: 0.9, where: 'boat', boat: true, shape: 'whale', from: '2026-11-27', keep: false, note: t('⛵ 船釣傳說：釣到送 🐳 藍鯨帳篷') },
   // ---- 🔥 營火河畔限定（作者 11/20，11/27 開）：不算進全收集，圖鑑「🗓️ 限定」 ----
   //   fire：營火超旺（75% 以上）才游出來；coop：河神大鯉魚，一個人拉不動，要附近的人按「🤝 幫忙拉」
-  { name: t('火光魚'), rarity: 4, min: 25, max: 50, color: 0xff7a2a, glow: 0xffb030, fin: 0xffd060, weight: 3, pull: 18, fight: 0.11, window: 1.15, where: 'pond', fire: true, from: '2026-11-27', note: t('🔥 營火超旺的時候才游出來') },
-  { name: t('河神大鯉魚'), rarity: 5, legend: true, min: 150, max: 220, color: 0xd8a03a, glow: 0xffe08a, patch: 0xc8402a, weight: 1.4, pull: 60, fight: 0.06, window: 1.1, where: 'pond', coop: true, from: '2026-11-27', keep: false, note: t('🤝 一個人拉不動，要大家一起拉') },
+  { name: t('火光魚'), rarity: 4, min: 25, max: 50, color: 0xff7a2a, glow: 0xffb030, fin: 0xffd060, weight: 3, pull: 18, fight: 0.11, window: 1.15, where: 'pond', fire: true, from: '2026-11-22', note: t('🔥 營火超旺的時候才游出來') },
+  { name: t('河神大鯉魚'), rarity: 5, legend: true, min: 150, max: 220, color: 0xd8a03a, glow: 0xffe08a, patch: 0xc8402a, weight: 1.4, pull: 60, fight: 0.06, window: 1.1, where: 'pond', coop: true, from: '2026-11-22', keep: false, note: t('🤝 一個人拉不動，要大家一起拉') },
 ];
 /** 第一次釣到某種魚（收進圖鑑）送的松果，依星等（伺服器 server/index.js 的 DEX_GAIN 相同） */
 export const DEX_GAIN = [1, 2, 3, 5, 10, 20];

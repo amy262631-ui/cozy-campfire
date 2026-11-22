@@ -54,10 +54,14 @@ export function buildYard(id) {
       box(0.04, 0.18, 0.03, mat(0xf2c14e), -0.07, 1.39, 0.185);
       break;
     case 'picnic': {
-      box(1.8, 0.08, 0.8, wood, 0, 0.75);
-      box(1.82, 0.02, 0.82, mat(0xd2453c), 0, 0.8); // 格子布
-      for (let i = -3; i <= 3; i++) box(0.06, 0.021, 0.83, mat(0xfff3e2), i * 0.26, 0.805);
-      for (const z of [-0.65, 0.65]) box(1.8, 0.06, 0.3, wood, 0, 0.42, z);
+      // 作者 11/22：坐下身體會卡進桌子 → 桌面窄一點、長椅往外移（0.65 → 0.85），長椅下面補椅腳
+      box(1.8, 0.08, 0.6, wood, 0, 0.75);
+      box(1.82, 0.02, 0.62, mat(0xd2453c), 0, 0.8); // 格子布
+      for (let i = -3; i <= 3; i++) box(0.06, 0.021, 0.63, mat(0xfff3e2), i * 0.26, 0.805);
+      for (const z of [-0.8, 0.8]) {
+        box(1.8, 0.06, 0.3, wood, 0, 0.42, z);
+        for (const x of [-0.75, 0.75]) box(0.07, 0.39, 0.07, dark, x, 0.2, z);
+      }
       for (const x of [-0.7, 0.7]) for (const s of [-1, 1]) {
         const leg = box(0.08, 0.85, 0.08, dark, x, 0.42, s * 0.3);
         leg.rotation.x = s * 0.45;
@@ -133,9 +137,19 @@ export function buildYard(id) {
         }
         box(0.1, 0.07, 0.7, wood, x, 0.9, 0);
       }
-      const hull = add(new THREE.SphereGeometry(0.4, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mat(0xc8763a), 0, 1.1, 0);
+      const hull = add(new THREE.SphereGeometry(0.4, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mat(0xc8763a), 0, 1.25, 0);
       hull.scale.set(4.2, 0.9, 1);
-      const rim = add(new THREE.TorusGeometry(0.4, 0.035, 6, 24), mat(0x8a4a22), 0, 1.1, 0);
+      // 作者 11/22：從上面看船是空的（只畫外面）→ 補船裡面（深一點的木頭色）、兩片坐板、一條條船肋
+      const inner = add(new THREE.SphereGeometry(0.385, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mat(0xa8622e, { side: THREE.BackSide }), 0, 1.25, 0);
+      inner.scale.set(4.2, 0.88, 1);
+      for (const x of [-0.55, 0.55]) box(0.16, 0.035, 0.66, mat(0xe0b070), x, 1.19, 0);
+      for (const x of [-1.2, -0.9, -0.3, 0, 0.3, 0.9, 1.2]) {
+        const rib = add(new THREE.TorusGeometry(0.37, 0.012, 4, 12, Math.PI), mat(0x8a4a22), x, 1.25, 0);
+        rib.rotation.y = Math.PI / 2;
+        rib.rotation.z = Math.PI;
+        rib.scale.set(1, 0.85 * Math.sqrt(Math.max(0.15, 1 - (x / 1.68) ** 2)), Math.sqrt(Math.max(0.15, 1 - (x / 1.68) ** 2)));
+      }
+      const rim = add(new THREE.TorusGeometry(0.4, 0.035, 6, 24), mat(0x8a4a22), 0, 1.25, 0);
       rim.rotation.x = Math.PI / 2;
       rim.scale.set(4.2, 1, 1);
       const pad = box(1.6, 0.04, 0.06, mat(0xe8c77e), 0.5, 0.25, 0.45);
@@ -295,13 +309,13 @@ export function buildYard(id) {
     }
     case 'bistro': {
       const white = mat(0xf4f0e8);
-      cyl(0.36, 0.04, white, 0, 0.74, 0, 16);
+      cyl(0.19, 0.04, white, 0, 0.74, 0, 16); // 作者 11/22：坐下會卡桌子、旁邊那格的人會背靠背撞到 → 桌面變小、椅子靠近（0.6 → 0.64）
       cyl(0.04, 0.72, mat(0x3a3a3a), 0, 0.36, 0, 6);
       cyl(0.2, 0.03, mat(0x3a3a3a), 0, 0.015, 0, 10);
-      cyl(0.06, 0.1, mat(0xc9483c), 0.1, 0.81, 0.05, 8); // 茶杯
-      cyl(0.06, 0.1, mat(0x5f8a5a), -0.12, 0.81, -0.06, 8);
+      cyl(0.045, 0.08, mat(0xc9483c), 0.07, 0.8, 0.05, 8); // 茶杯
+      cyl(0.045, 0.08, mat(0x5f8a5a), -0.08, 0.8, -0.05, 8);
       for (const s of [-1, 1]) {
-        const x = s * 0.6;
+        const x = s * 0.66;
         box(0.42, 0.04, 0.42, white, x, 0.44, 0);
         box(0.04, 0.42, 0.42, white, x + s * 0.2, 0.66, 0);
         for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(0.018, 0.44, mat(0x3a3a3a), x + sx * 0.18, 0.22, sz * 0.18, 5);
@@ -310,17 +324,17 @@ export function buildYard(id) {
     }
     case 'firestool': {
       const iron = mat(0x3a3330);
-      add(new THREE.CylinderGeometry(0.28, 0.2, 0.32, 12, 1, true), iron, 0, 0.36, 0).material.side = THREE.DoubleSide;
+      add(new THREE.CylinderGeometry(0.18, 0.13, 0.28, 12, 1, true), iron, 0, 0.34, 0).material.side = THREE.DoubleSide; // 作者 11/22：火盆小一點，坐的人手腳不會伸進去
       for (let k = 0; k < 3; k++) {
         const a = (k / 3) * Math.PI * 2;
-        cyl(0.025, 0.22, iron, Math.cos(a) * 0.17, 0.11, Math.sin(a) * 0.17, 5);
+        cyl(0.025, 0.22, iron, Math.cos(a) * 0.1, 0.11, Math.sin(a) * 0.1, 5);
       }
-      const fire = add(new THREE.ConeGeometry(0.13, 0.3, 7), glowMat(0xffa040), 0, 0.6, 0);
+      const fire = add(new THREE.ConeGeometry(0.09, 0.26, 7), glowMat(0xffa040), 0, 0.56, 0);
       fire.name = 'flame';
       add(new THREE.ConeGeometry(0.07, 0.2, 6), glowMat(0xffe08a), 0, 0.58, 0);
       for (const s of [-1, 1]) {
-        cyl(0.2, 0.34, wood, s * 0.6, 0.17, 0.1, 12);
-        cyl(0.17, 0.01, mat(0xd8b48a), s * 0.6, 0.345, 0.1, 12);
+        cyl(0.2, 0.34, wood, s * 0.64, 0.17, 0.1, 12); // 作者 11/22：火盆變小，木樁不用往外（太遠會跟旁邊那格的人撞到）
+        cyl(0.17, 0.01, mat(0xd8b48a), s * 0.64, 0.345, 0.1, 12);
       }
       g.userData.glow = { x: 0, y: 0.7, z: 0, color: 0xffa050 };
       break;
@@ -623,4 +637,4 @@ export function buildYard(id) {
 }
 
 /** 擺設佔多大（營地裡擋路用，原尺寸的半徑） */
-export const yardRadius = (id) => ({ jeep: 1.6, camper: 2.2, airstream: 2.4, tarp: 1.6, hammock: 1.4, canoe: 1.3, picnic: 1.0, bench: 0.95, bistro: 1.0, firestool: 0.9, swing: 1.35, jp_garden: 1.25, jp_fence: 0.9, jp_lantern: 0.4, jp_torii: 0.05, eu_lamp: 0.25, eu_planter: 0.45, eu_rosearch: 0.05, eu_fountain: 1.1, cn_redlanterns: 0.1, cn_lions: 0.8, cn_bamboo: 0.7, cn_pavilion: 1.15 })[id] ?? 0.6; // ⛩️ 小鳥居中間走得過去
+export const yardRadius = (id) => ({ jeep: 1.6, camper: 2.2, airstream: 2.4, tarp: 1.6, hammock: 1.4, canoe: 1.3, picnic: 1.0, bench: 0.95, bistro: 0.95, firestool: 0.9, swing: 1.35, jp_garden: 1.25, jp_fence: 0.9, jp_lantern: 0.4, jp_torii: 0.05, eu_lamp: 0.25, eu_planter: 0.45, eu_rosearch: 0.05, eu_fountain: 1.1, cn_redlanterns: 0.1, cn_lions: 0.8, cn_bamboo: 0.7, cn_pavilion: 1.15 })[id] ?? 0.6; // ⛩️ 小鳥居中間走得過去

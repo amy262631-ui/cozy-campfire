@@ -46,6 +46,7 @@ import { PASS, PASS_TIERS, PASS_PLANS, FREE, SPONSOR, SPONSOR_BOX, sponsorAmount
 import { BOARD_ON, BOARD_GAMES, BOARD_MIN, BOARD_MAX as BG_MAX, BOARD_WIN, BOARD_DAY_CAP, FROG_HOLES } from '../src/game/boardGames.js';
 import crypto from 'node:crypto';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack, hasLoft } from './homes.js';
+import { cleanNameText, AUTHOR_MARK } from '../src/game/nameRules.js';
 import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS, isLoftCell } from '../src/game/furnitureCatalog.js';
 import { YARD_BY_ID, hasYard, isBigYard, isDoorYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
@@ -1879,6 +1880,7 @@ const playerCard = (vid) => {
     ban: banOf(vid) ?? null,
     netBan: Object.values(bans.n).some((b) => b.vid === vid && (!b.until || b.until > Date.now())),
     warns: (w.warns ?? []).slice(-10).reverse(),
+    author: !!w.author,
     names: (w.nh ?? []).slice(-30).reverse(),
     chats: chatLog.filter((c) => c.hid === hid).slice(-60).reverse(),
     log: invites.filter((x) => x.ref === hid || x.friend === hid).slice(-30).reverse(),
@@ -1926,6 +1928,19 @@ app.post('/api/warn', express.json(), (req, res) => {
   saveJson('players.json', players);
   for (const so of socketsOf(vid)) so.emit('warned', warn);
   console.log(`[管理] 警告 ${nameOfVid(vid)}（${WARN_REASONS[r]}${note ? `：${note}` : ''}）第 ${w.warns.length} 次`);
+  res.json({ ok: true, ...playerCard(vid) });
+});
+
+/** 🪄 作者標誌（作者 11/22）：{ q } 切換；名字前面變 🪄（頭上、聊天、大聲公），蓋過月票的 🔥／✨ */
+app.post('/api/author', express.json(), (req, res) => {
+  if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
+  const vid = findVid(req.body?.q);
+  if (!vid || !players[vid]) return res.json({ ok: false, reason: '找不到這個玩家' });
+  const w = players[vid];
+  if (w.author) delete w.author;
+  else w.author = true;
+  saveJson('players.json', players);
+  console.log(`[管理] ${w.author ? '標成作者' : '取消作者'} ${nameOfVid(vid)}`);
   res.json({ ok: true, ...playerCard(vid) });
 });
 
@@ -2141,6 +2156,7 @@ app.get('/admin', (req, res) => {
       '<br><input id="bnote" placeholder="原因（自己看的）" size="24"> <select id="bdays"><option value="1">1 天</option><option value="7">7 天</option><option value="30">30 天</option><option value="0">永久</option></select>' +
       ' <button data-ban="mute">🔇 禁言</button> <button data-ban="ban">⛔ 停權</button> <label><input type="checkbox" id="bnet"> 停權時連他現在的網路一起擋</label>' + (r.ban ? ' <button data-ban="clear">✅ 解除</button>' : '') +
       '<div class="hint">🔇 禁言：還能玩，但不能聊天、大聲公、留言、繪馬、密頻。⛔ 停權：馬上踢出去，進不來。「連網路一起擋」可以擋他開新帳號，但同一個家裡、學校的人也會一起進不來，小心用（只有他在線上時才擋得到網路）。</div></div>' +
+      '<div class="box" style="margin-top:10px"><b>${AUTHOR_MARK} 作者標誌</b>　' + (r.author ? '<span class="err">現在：名字前面有 ${AUTHOR_MARK}</span>' : '<span class="hint">沒有</span>') + ' <button id="authorBtn">' + (r.author ? '取消' : '標成作者') + '</button><div class="hint">標了以後，這個帳號的名字前面會有 ${AUTHOR_MARK}（頭上、聊天、大聲公都看得到），蓋過月票的 🔥／✨。重新進遊戲才會換。其他人名字裡打不了 ${AUTHOR_MARK}。</div></div>' +
       '<div class="box" style="margin-top:10px"><b>⚠️ 警告這個人</b>　' + (r.warns && r.warns.length ? '<span class="err">已警告 ' + r.warns.length + ' 次</span>' : '<span class="hint">還沒警告過</span>') +
       '<br><select id="wr"><option value="curse">罵人、說髒話</option><option value="note">亂留言</option><option value="name">名字不恰當</option><option value="spam">洗版、一直刷聊天</option><option value="other">其他（自己寫）</option></select> <input id="wnote" placeholder="其他的原因（玩家會看到）" size="22"> <label><input type="checkbox" id="wsc"> 用簡體字</label> <button data-warn="1">⚠️ 送出警告</button>' +
       '<div class="hint">他的畫面會跳出警告（5 秒後才能關）。在線上馬上跳；不在線上，下次進來時跳。他的瀏覽器是大陸的設定會自動用簡體字；勾「用簡體字」一定用簡體。</div>' +
@@ -2157,6 +2173,10 @@ app.get('/admin', (req, res) => {
   document.addEventListener('click', function (e) {
     var a = e.target.closest('[data-q]');
     if (a) { e.preventDefault(); if (a.dataset.q) { find(a.dataset.q); scrollTo(0, 0); } return; }
+    if (e.target.id === 'authorBtn') {
+      fetch('/api/author' + K, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: cur }) }).then(function (r) { return r.json(); }).then(function (r) { if (r.ok) show(r); else alert(r.reason); });
+      return;
+    }
     var b = e.target.closest('[data-ban]');
     if (b) {
       var t = b.dataset.ban, days = $('bdays').value;
@@ -2340,12 +2360,10 @@ const num = (v, min, max, fallback = 0) => {
   return Math.min(max, Math.max(min, n));
 };
 
+/** 🪄 作者的名字前面加魔法棒（只有 /admin 標成作者的帳號；名字裡不能自己打 🪄；🏕️ 是營地居民用的） */
+const authorName = (p) => (p?.vid && players[p.vid]?.author ? `${AUTHOR_MARK} ${p.name}` : p?.name ?? '');
 function cleanName(raw) {
-  const name = String(raw ?? '')
-    .replace(/[\u0000-\u001f<>]/g, '')
-    .replace(/🔥|✨|🌌|\uFE0F/gu, '') // 🎫 月票的標誌不能放在名字裡（作者 11/14：有人取「🔥狂」看起來像有月票）
-    .trim()
-    .slice(0, 12);
+  const name = cleanNameText(raw); // 📝 作者 11/22：名字不能放符號、表情（月票 🔥✨、作者 🪄 才看得出來；舊名字下次進來會被清掉）
   return name || `旅人${Math.floor(Math.random() * 900 + 100)}`;
 }
 
@@ -2915,7 +2933,7 @@ io.on('connection', (socket) => {
       if (player.tl && player.tl !== SPECIES_TAIL[player.sp] && !(lk.tail ?? []).includes(player.tl)) player.tl = '';
       if (player.er && player.er !== SPECIES_EARS[player.sp] && !(lk.ear ?? []).includes(player.er)) player.er = '';
     }
-    if (wal) player.pb = passTier(wal)?.rank ?? 0;
+    if (wal) player.pb = wal.author ? 9 : (passTier(wal)?.rank ?? 0); // 🪄 作者（/admin 標的，作者 11/22）蓋過月票徽章
     if (wal) noteName(wal, player.name); // 最近一次用的名字（好友、查核顯示用；沒存過外型的人也有名字） // 月票徽章：1＝🔥 小營火、2＝✨ 星空
     // 第一次來：記住是從哪裡來的（算隔天回來的比例用）
     if (firstVisit && wal) {
@@ -3292,7 +3310,7 @@ io.on('connection', (socket) => {
     logChat({ at: now, name: player.name, hid: msg.hid, where: '📣 大聲公', ch: 0, text });
     if (shouts.length > 50) shouts.splice(0, shouts.length - 50);
     bump('shouts');
-    io.emit('shout', { name: msg.name, text, at: now });
+    io.emit('shout', { name: authorName(player), text, at: now });
     console.log(`[大聲公] ${player.name}：${text}`);
     ack?.({ ok: true, pc: wal.pc });
   });
@@ -3307,7 +3325,7 @@ io.on('connection', (socket) => {
     const mu = banOf(player.vid, 'mute');
     if (mu) return socket.emit('muted', { until: mu.until || 0 });
     bump('chats');
-    io.to(rkey).emit('chat', { id: socket.id, name: player.name, text });
+    io.to(rkey).emit('chat', { id: socket.id, name: authorName(player), text });
     logChat({ at: now, name: player.name, hid: player.vid ? homeId(player.vid) : '', where: ROOM_DEFS[roomId]?.label ?? roomId, ch: chan?.ch ?? 0, text });
     // ☁️ 陪別人聊天（同一區有別人才算，每分鐘最多一次）
     if (room?.players.size > 1 && now - lastSpiritChat > 60000) (lastSpiritChat = now), spiritGain('chat');
@@ -5157,7 +5175,7 @@ io.on('connection', (socket) => {
   const boatSync = () => rkey && io.to(rkey).emit('boats', { list: boatList(rkey) });
   socket.on('boatInfo', (_d, ack) => {
     const now = Date.now();
-    ack?.({ ok: true, open: isOpen({ from: BOAT_FROM }), list: boatList(rkey ?? ''), mine: boatNow()?.id ?? null, feedLeft: Math.max(0, (wal?.feedUntil ?? 0) - now), full: (boatRooms.get(rkey)?.size ?? 0) >= BOAT_MAX });
+    ack?.({ ok: true, open: isOpen({ from: BOAT_FROM }), list: boatList(rkey ?? ''), mine: boatNow()?.id ?? null, feedLeft: Math.max(0, (wal?.feedUntil ?? 0) - now), bait: wal?.bait ?? 0, full: (boatRooms.get(rkey)?.size ?? 0) >= BOAT_MAX });
   });
   let lastBoat = 0;
   socket.on('boatRent', (data = {}, ack) => {
@@ -5237,18 +5255,31 @@ io.on('connection', (socket) => {
     socket.to(rkey).emit('boatPos', [b.id, +b.x.toFixed(2), +b.z.toFixed(2), +b.ry.toFixed(3)]);
   });
   // 🐟 特殊魚飼料：10 分鐘稀有魚 ×2（再買一次往後延）
+  // 🐟 魚飼料（作者 11/22）：買了放進背包（wal.bait 包數），釣魚時按「🐟 撒」才開始算 10 分鐘
   socket.on('buyFeed', (_d, ack) => {
     if (!player || !wal || !player.vid) return ack?.({ ok: false, reason: 'noWallet' });
     if (!isOpen({ from: BOAT_FROM })) return ack?.({ ok: false, reason: 'later' });
     if (wal.pc < FEED_PRICE) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
-    const now = Date.now();
-    if ((wal.feedUntil ?? 0) - now > FEED_MS * 2) return ack?.({ ok: false, reason: 'tooMany' });
+    if ((wal.bait ?? 0) >= 20) return ack?.({ ok: false, reason: 'bagFull' });
     wal.pc -= FEED_PRICE;
-    wal.feedUntil = Math.max(now, wal.feedUntil ?? 0) + FEED_MS;
+    wal.bait = (wal.bait ?? 0) + 1;
     bump('feed');
     saveJson('players.json', players);
     socket.emit('wallet', { pc: wal.pc, delta: -FEED_PRICE, reason: 'feed' });
-    ack?.({ ok: true, pc: wal.pc, feedLeft: wal.feedUntil - now });
+    ack?.({ ok: true, pc: wal.pc, bait: wal.bait, feedLeft: Math.max(0, (wal.feedUntil ?? 0) - Date.now()) });
+  });
+  socket.on('useFeed', (_d, ack) => {
+    if (!player || !wal || !player.vid) return ack?.({ ok: false });
+    if (!(wal.bait > 0)) return ack?.({ ok: false, reason: 'none' });
+    if (!['lake_dock', 'forest_main'].includes(roomId)) return ack?.({ ok: false, reason: 'place' });
+    const now = Date.now();
+    if ((wal.feedUntil ?? 0) - now > FEED_MS * 2) return ack?.({ ok: false, reason: 'tooMany' });
+    wal.bait--;
+    wal.feedUntil = Math.max(now, wal.feedUntil ?? 0) + FEED_MS;
+    bump('feedUse');
+    saveJson('players.json', players);
+    if (rkey) socket.to(rkey).emit('feedThrow', { id: socket.id }); // 旁邊的人也看到撒飼料
+    ack?.({ ok: true, bait: wal.bait, feedLeft: wal.feedUntil - now });
   });
 
   // 🤝 河神大鯉魚（作者 11/20）：上鉤後釣的人送 coopStart，附近的人按「幫忙拉」→ 進度送給釣的人

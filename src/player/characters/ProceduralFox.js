@@ -51,8 +51,103 @@ const v3 = (a) => new THREE.Vector3(...a);
  * 回傳睜眼與閉眼兩張貼圖，眨眼／打瞌睡時直接換圖。
  */
 const faceCache = new Map();
-function makeFaceTextures(kind = 'fox') {
-  if (faceCache.has(kind)) return faceCache.get(kind);
+/** 💄 臉妝（任務獎勵，作者 11/22）：畫在臉的貼圖上，不另外加模型 */
+function drawMakeup(g, mk, eyesClosed) {
+  const blob = (x, y, r, inner, outer) => {
+    const b = g.createRadialGradient(x, y, 0, x, y, r);
+    b.addColorStop(0, inner);
+    b.addColorStop(1, outer);
+    g.fillStyle = b;
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  };
+  const star = (cx, cy, r, color) => {
+    g.fillStyle = color;
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const rr = i % 2 ? r * 0.45 : r;
+      g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+    }
+    g.closePath();
+    g.fill();
+  };
+  if (mk === 'mk_pink') {
+    // 🌸 粉嫩腮紅：大一點、粉一點，上面三條小斜線
+    for (const x of [108, 404]) {
+      blob(x, 300, 66, 'rgba(255, 110, 150, 0.85)', 'rgba(255, 130, 160, 0)');
+      g.strokeStyle = 'rgba(230, 80, 120, 0.7)';
+      g.lineWidth = 5;
+      g.lineCap = 'round';
+      for (const dx of [-18, 0, 18]) {
+        g.beginPath();
+        g.moveTo(x + dx - 6, 312);
+        g.lineTo(x + dx + 6, 290);
+        g.stroke();
+      }
+    }
+  } else if (mk === 'mk_peach') {
+    // 🍑 蜜桃腮紅：橘橘的、橫向橢圓
+    for (const x of [112, 400]) {
+      g.save();
+      g.translate(x, 302);
+      g.scale(1.35, 0.8);
+      blob(0, 0, 58, 'rgba(255, 150, 90, 0.85)', 'rgba(255, 170, 110, 0)');
+      g.restore();
+    }
+  } else if (mk === 'mk_freckle') {
+    // 🫘 小雀斑：鼻子兩邊一點一點
+    g.fillStyle = 'rgba(150, 90, 60, 0.75)';
+    for (const side of [-1, 1]) {
+      for (const [dx, dy] of [[70, 272], [92, 290], [110, 270], [84, 252], [124, 292]]) {
+        g.beginPath();
+        g.arc(256 + side * (dx + 40), dy + 8, 9, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  } else if (mk === 'mk_star') {
+    // ⭐ 星星貼紙：右眼下面一顆金色星星＋小亮點
+    star(384, 302, 50, '#ffc81f');
+    star(384, 302, 28, '#fff1a8');
+    star(436, 252, 16, '#ffc81f');
+  } else if (mk === 'mk_heart') {
+    // 💗 愛心貼紙：左臉頰一顆粉紅愛心
+    g.fillStyle = '#ff6f9a';
+    g.beginPath();
+    const hx = 124;
+    const hy = 290;
+    g.moveTo(hx, hy + 44);
+    g.bezierCurveTo(hx - 68, hy, hx - 44, hy - 50, hx, hy - 18);
+    g.bezierCurveTo(hx + 44, hy - 50, hx + 68, hy, hx, hy + 44);
+    g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.8)';
+    g.beginPath();
+    g.arc(hx - 18, hy - 14, 9, 0, Math.PI * 2);
+    g.fill();
+  } else if (mk === 'mk_shimmer' && !eyesClosed) {
+    // ✨ 閃閃眼影：眼睛上方淡紫色＋小亮片
+    for (const x of [158, 354]) {
+      g.save();
+      g.translate(x, 204);
+      g.scale(1.6, 0.8);
+      blob(0, 0, 46, 'rgba(160, 100, 230, 0.95)', 'rgba(180, 130, 240, 0)');
+      g.restore();
+      for (const [dx, dy] of [[-26, -14], [22, -20], [2, -30]]) star(x + dx, 200 + dy, 10, 'rgba(255,255,255,0.95)');
+    }
+  } else if (mk === 'mk_shimmer') {
+    for (const x of [158, 354]) {
+      g.save();
+      g.translate(x, 214);
+      g.scale(1.5, 0.6);
+      blob(0, 0, 40, 'rgba(180, 130, 230, 0.85)', 'rgba(190, 140, 240, 0)');
+      g.restore();
+    }
+  }
+}
+function makeFaceTextures(kind = 'fox', makeup = '') {
+  const key = `${kind}|${makeup}`;
+  if (faceCache.has(key)) return faceCache.get(key);
   const S = 512;
   const draw = (eyesClosed) => {
     const c = document.createElement('canvas');
@@ -103,6 +198,8 @@ function makeFaceTextures(kind = 'fox') {
       g.arc(x, 300, 52, 0, Math.PI * 2);
       g.fill();
     }
+
+    if (makeup) drawMakeup(g, makeup, eyesClosed);
 
     // 眼睛：睜眼＝小豆豆，閉眼＝彎彎的線（熊貓的眼圈是黑的，閉眼線改用白色）
     const eyeColor = kind === 'panda' ? '#141010' : '#3a2824';
@@ -169,7 +266,7 @@ function makeFaceTextures(kind = 'fox') {
     return tex;
   };
   const pair = { open: draw(false), closed: draw(true) };
-  faceCache.set(kind, pair);
+  faceCache.set(key, pair);
   return pair;
 }
 
@@ -241,6 +338,7 @@ export class ProceduralFox {
     const HEAD_SCALE = [1.1, 0.95, 1];
     add(head, HEAD_R, fur, [0, 0, 0], HEAD_SCALE);
 
+    this.faceKind = sp.face;
     this.faceTextures = makeFaceTextures(sp.face);
     this.faceMat = new THREE.MeshStandardMaterial({
       map: this.faceTextures.open,
@@ -604,6 +702,15 @@ export class ProceduralFox {
   }
 
   /** 造型：{ head, back, neck }（造型代號，沒穿是 null） */
+  /** 💄 換臉妝（'' ＝ 沒有） */
+  setMakeup(mk = '') {
+    if ((this.makeup ?? '') === mk) return;
+    this.makeup = mk;
+    this.faceTextures = makeFaceTextures(this.faceKind, mk);
+    this.faceMat.map = this.faceTextures.open;
+    this.faceMat.needsUpdate = true;
+  }
+
   setOutfit(wear = {}) {
     const key = `${wear.head ?? ''}|${wear.back ?? ''}|${wear.neck ?? ''}|${wear.hair ?? ''}|${wear.clip ?? ''}`;
     if (this._outfitKey === key) return;

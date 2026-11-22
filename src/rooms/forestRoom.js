@@ -748,6 +748,11 @@ export function createForestRoom() {
           actions.onCook?.();
           return true;
         }
+        // 🏆 打水漂木牌：打水漂、釣魚排行
+        if (river.nearSign(pos)) {
+          actions.onRiverBoard?.();
+          return true;
+        }
         // 🪨 扁石頭堆：撿一顆來打水漂
         if (river.nearPile(pos)) {
           actions.onSkipPick?.();
@@ -823,6 +828,7 @@ export function createForestRoom() {
       if (extras.nearMuseum(p0)) return ['🏛️', t('標本櫃')];
       if (extras.nearPot(p0)) return ['🍲', t('料理')];
       if (river.aiming) return ['🪨', t('不丟了')];
+      if (river.nearSign(p0)) return ['🏆', t('排行')];
       if (!carrying && river.nearPile(p0)) return ['🪨', t('撿扁石頭')];
       if (!carrying && river.nearBank(p0)) return ['🦆', t('餵小鴨')];
       if (nearShrine(actions)) return ['⛩️', t('祈福')];
@@ -844,6 +850,7 @@ export function createForestRoom() {
     prompt(actions) {
       const p0 = actions.player.position;
       if (river.aiming) return t('<kbd>F</kbd> 🪨 丟！（看準綠色）　<kbd>E</kbd> 不丟了');
+      if (river.nearSign(p0)) return t('<kbd>E</kbd> 🏆 看排行（打水漂、釣魚）');
       if (!carrying && river.nearPile(p0)) return t('<kbd>E</kbd> 🪨 撿扁石頭打水漂');
       if (!carrying && river.nearBank(p0) && pond.spotAt(p0)) return actions.compact ? t('<kbd>F</kbd> 釣魚　<kbd>E</kbd> 🦆 餵小鴨') : t('<kbd>F</kbd> 坐下釣魚　<kbd>E</kbd> 🦆 餵小鴨');
       if (!carrying && treasures.near(p0)) return t('<kbd>E</kbd> ✨ 撿起閃閃發光的東西');

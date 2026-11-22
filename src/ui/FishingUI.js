@@ -155,7 +155,7 @@ export class FishingUI {
     if (shiny) badges.push('<b class="badge shiny">' + t('✨ 異色') + '</b>');
     if (firstTime && !f.junk) badges.push('<b class="badge new">' + t('第一次釣到') + '</b>');
     else if (newRecord && !f.junk) badges.push('<b class="badge record">' + t('個人新紀錄') + '</b>');
-    if (rank) badges.push(`<b class="badge rank">${t('湖畔排行第 {rank} 名', { rank })}</b>`);
+    if (rank) badges.push(`<b class="badge rank">${t('釣魚排行第 {rank} 名', { rank })}</b>`);
     const title = f.junk ? t('撈到了垃圾⋯') : shiny ? t('✨ 哇！異色的！') : f.legend ? t('🐉 傳說之魚現身！') : f.rarity >= 4 ? t('🎉 大豐收！') : t('🎣 釣到了！');
     this.el.card.className = `fish-card show rarity-${f.rarity}${shiny ? ' shiny' : ''}`;
     this.el.card.innerHTML = `
@@ -315,7 +315,7 @@ export class FishingUI {
     this._modal = 'board';
     this._btab = tab;
     if (fetch && tab === 'all') this.onBoardOpen?.();
-    this.el.modalTitle.textContent = tab === 'all' ? t('🏆 湖畔排行（歷史最大的魚）') : t('🏆 我的最大紀錄');
+    this.el.modalTitle.textContent = tab === 'all' ? t('🏆 釣魚排行（歷史最大的魚）') : t('🏆 我的最大紀錄');
     const tabs = `<div class="dex-tabs">${[
       ['all', t('🌍 大家')],
       ['me', t('🙋 自己')],

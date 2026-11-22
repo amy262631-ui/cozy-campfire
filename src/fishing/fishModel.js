@@ -12,51 +12,178 @@ export function createFishMesh(index, shiny = false) {
   const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, ...extra });
   const glow = f.glow ? { emissive: f.glow, emissiveIntensity: 0.55 } : {};
 
+  // ♻️ 釣到的垃圾（作者 11/22：舉在頭上要像真的 → 重做靴子、寶特瓶、漂流瓶、罐頭）
+  const lathe = (pts, m, seg = 20) => new THREE.Mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg), m);
+  const weedTube = (pts, r = 0.018) => new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(([x, y, z]) => new THREE.Vector3(x, y, z))), 12, r, 5), mat(0x4f8a3a, { roughness: 0.8 }));
+  const drip = (x, y, z, r = 0.022) => {
+    const d = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), mat(0xbfe6ff, { transparent: true, opacity: 0.75, roughness: 0.05 }));
+    d.scale.y = 1.4;
+    d.position.set(x, y, z);
+    return d;
+  };
   if (f.junk === 'boot') {
-    const leather = mat(f.color);
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.55, 10), leather);
-    leg.position.set(-0.1, 0.12, 0);
-    leg.rotation.z = Math.PI / 2;
-    g.add(leg);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.22, 0.3), leather);
-    foot.position.set(0.25, -0.02, 0);
-    g.add(foot);
-    const sole = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.05, 0.32), mat(0x2a2018));
-    sole.position.set(0.25, -0.14, 0);
-    g.add(sole);
-    const weed = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.3, 4), mat(0x5c8a3a));
-    weed.position.set(-0.36, 0.25, 0.05);
-    g.add(weed);
+    // 🥾 舊靴子：直立的靴筒＋圓圓的鞋頭、厚鞋底、鞋跟、鞋帶、後面的拉環，掛著水草、滴水
+    const leather = mat(f.color, { roughness: 0.75 });
+    const dark = mat(0x2a2018, { roughness: 0.9 });
+    const boot = new THREE.Group();
+    const shaft = lathe([[0.0, 0.0], [0.15, 0.0], [0.15, 0.1], [0.135, 0.3], [0.145, 0.46], [0.155, 0.5], [0.13, 0.5], [0.12, 0.47], [0.11, 0.2], [0.0, 0.2]], leather, 18);
+    shaft.scale.z = 0.85;
+    boot.add(shaft);
+    const inside = new THREE.Mesh(new THREE.CircleGeometry(0.118, 16), mat(0x140e0a));
+    inside.rotation.x = -Math.PI / 2;
+    inside.position.y = 0.47;
+    inside.scale.y = 0.85;
+    boot.add(inside);
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 12), leather);
+    foot.scale.set(1.45, 0.62, 0.82);
+    foot.position.set(0.13, 0.07, 0);
+    boot.add(foot);
+    const toe = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), mat(0x3a2a1e, { roughness: 0.6 }));
+    toe.scale.set(1.1, 0.75, 1.15);
+    toe.position.set(0.33, 0.06, 0);
+    boot.add(toe);
+    const sole = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 18), dark);
+    sole.scale.set(2.05, 1, 1.0);
+    sole.position.set(0.12, -0.035, 0);
+    boot.add(sole);
+    const heel = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, 0.24), dark);
+    heel.position.set(-0.08, -0.07, 0);
+    boot.add(heel);
+    const lace = mat(0xd9c9a3);
+    for (let i = 0; i < 4; i++) {
+      const y = 0.16 + i * 0.075;
+      for (const s of [-1, 1]) {
+        const eye = new THREE.Mesh(new THREE.TorusGeometry(0.014, 0.006, 6, 10), mat(0xc9a14a, { metalness: 0.6, roughness: 0.4 }));
+        eye.position.set(0.13, y, s * 0.06);
+        eye.rotation.y = Math.PI / 2;
+        boot.add(eye);
+      }
+      const l = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.15, 5), lace);
+      l.position.set(0.135, y + 0.035, 0);
+      l.rotation.x = i % 2 ? 0.95 : -0.95;
+      boot.add(l);
+    }
+    boot.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0.14, 0.43, 0), new THREE.Vector3(0.22, 0.36, 0.04), new THREE.Vector3(0.25, 0.22, 0.02)]), 8, 0.007, 4), lace));
+    const tab = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.012, 6, 12, Math.PI), leather);
+    tab.position.set(-0.13, 0.5, 0);
+    tab.rotation.y = Math.PI / 2;
+    boot.add(tab);
+    const patch = new THREE.Mesh(new THREE.CircleGeometry(0.045, 6), mat(0x7a5a40, { roughness: 0.9 }));
+    patch.position.set(0.02, 0.3, 0.13);
+    patch.rotation.y = 0.15;
+    boot.add(patch);
+    boot.add(weedTube([[-0.1, 0.5, 0.08], [-0.16, 0.42, 0.13], [-0.18, 0.28, 0.12], [-0.15, 0.16, 0.1]]));
+    boot.add(weedTube([[0.05, 0.49, -0.1], [0.08, 0.4, -0.14], [0.06, 0.3, -0.13]], 0.014));
+    boot.add(drip(0.3, -0.1, 0.05), drip(-0.12, -0.13, -0.06, 0.018));
+    boot.position.set(-0.12, -0.2, 0);
+    g.add(boot);
+    return g;
+  }
+  if (f.junk === 'bottle' && f.glass) {
+    // 🍾 漂流瓶：綠色玻璃瓶、軟木塞、裡面捲起來的紙條（紅繩），外面黏著小藤壺
+    const glassM = mat(0x8fcf9a, { transparent: true, opacity: 0.45, roughness: 0.08, metalness: 0.1 });
+    const inner = new THREE.Group();
+    inner.add(lathe([[0.0, -0.3], [0.15, -0.3], [0.17, -0.26], [0.17, 0.08], [0.15, 0.15], [0.07, 0.24], [0.055, 0.34], [0.06, 0.38], [0.0, 0.38]], glassM, 22));
+    const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.045, 0.1, 12), mat(0xc79a5a, { roughness: 0.9 }));
+    cork.position.y = 0.41;
+    const paper = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.36, 14), mat(0xf3e6c4, { roughness: 0.9 }));
+    paper.position.y = -0.06;
+    const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.36, 14, 1, true, 0, 1.2), mat(0xe8d7ad, { side: THREE.DoubleSide }));
+    roll.position.y = -0.06;
+    const tie = new THREE.Mesh(new THREE.TorusGeometry(0.064, 0.008, 6, 16), mat(0xc8463c));
+    tie.rotation.x = Math.PI / 2;
+    tie.position.y = -0.04;
+    inner.add(cork, paper, roll, tie);
+    for (const [x, y, z] of [[0.15, -0.18, 0.08], [0.12, -0.24, -0.1], [-0.16, 0.0, 0.05]]) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.024, 8, 6), mat(0xd8d2c2, { roughness: 0.9 }));
+      b.scale.set(1, 0.6, 1);
+      b.position.set(x, y, z);
+      inner.add(b);
+    }
+    inner.add(weedTube([[0.12, 0.12, 0.08], [0.2, 0.0, 0.1], [0.19, -0.15, 0.06]], 0.012));
+    inner.rotation.z = -Math.PI / 2;
+    g.add(inner);
+    g.add(drip(-0.05, -0.2, 0.05));
     return g;
   }
   if (f.junk === 'bottle') {
-    const plastic = mat(f.color, { transparent: true, opacity: 0.6, roughness: 0.1 });
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.6, 14), plastic);
-    body.rotation.z = Math.PI / 2;
-    g.add(body);
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.13, 0.16, 12), plastic);
-    neck.rotation.z = -Math.PI / 2;
-    neck.position.x = 0.38;
-    g.add(neck);
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.07, 12), mat(0x3a8fd8));
-    cap.rotation.z = Math.PI / 2;
-    cap.position.x = 0.49;
-    g.add(cap);
-    const label = new THREE.Mesh(new THREE.CylinderGeometry(0.145, 0.145, 0.22, 14, 1, true), mat(0x6ec27a, { side: THREE.DoubleSide }));
-    label.rotation.z = Math.PI / 2;
-    g.add(label);
+    // 🥤 寶特瓶：一圈一圈的瓶身、壓扁一點、標籤、螺紋瓶蓋、裡面還有一點水
+    const pet = mat(f.color, { transparent: true, opacity: 0.42, roughness: 0.06 });
+    const prof = [[0.0, -0.3], [0.11, -0.3], [0.13, -0.27]];
+    for (let i = 0; i < 6; i++) prof.push([0.135, -0.24 + i * 0.07], [0.122, -0.205 + i * 0.07]);
+    prof.push([0.135, 0.18], [0.11, 0.25], [0.055, 0.31], [0.05, 0.35], [0.0, 0.35]);
+    const inner = new THREE.Group();
+    const body = lathe(prof, pet, 22);
+    body.scale.z = 0.88;
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.11, 0.16, 18), mat(0x7ec4e8, { transparent: true, opacity: 0.55, roughness: 0.05 }));
+    water.position.y = -0.21;
+    water.scale.z = 0.86;
+    const label = new THREE.Mesh(new THREE.CylinderGeometry(0.138, 0.138, 0.16, 22, 1, true, 0.3, 4.6), mat(0x4fb06a, { side: THREE.DoubleSide, roughness: 0.6 }));
+    label.scale.z = 0.88;
+    const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.139, 0.139, 0.03, 22, 1, true, 0.3, 4.6), mat(0xf4f1e6, { side: THREE.DoubleSide }));
+    stripe.scale.z = 0.88;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.058, 0.01, 6, 16), pet);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.33;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.07, 16), mat(0x3a8fd8, { roughness: 0.5 }));
+    cap.position.y = 0.39;
+    inner.add(body, water, label, stripe, ring, cap);
+    for (let i = 0; i < 8; i++) {
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.07, 0.012), mat(0x2f6fb0));
+      const a = (i / 8) * Math.PI * 2;
+      rib.position.set(Math.cos(a) * 0.063, 0.39, Math.sin(a) * 0.063);
+      rib.rotation.y = -a;
+      inner.add(rib);
+    }
+    inner.rotation.z = -Math.PI / 2;
+    g.add(inner);
+    g.add(drip(-0.1, -0.16, 0.04), drip(0.12, -0.15, -0.03, 0.017));
     return g;
   }
 
   if (f.junk === 'can') {
-    const tin = mat(f.color, { metalness: 0.6, roughness: 0.5 });
-    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.42, 14), tin);
-    can.rotation.z = Math.PI / 2;
+    // 🥫 生鏽罐頭：上下捲邊、一圈圈的紋、撕掉一半的標籤、生鏽斑點、蓋子翹開
+    const tin = mat(0xb8b8b0, { metalness: 0.7, roughness: 0.42 });
+    const can = new THREE.Group();
+    can.add(new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.36, 22), tin));
+    for (const y of [-0.18, 0.18]) {
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.014, 6, 24), tin);
+      rim.rotation.x = Math.PI / 2;
+      rim.position.y = y;
+      can.add(rim);
+    }
+    for (const y of [-0.1, -0.05, 0.05, 0.1]) {
+      const groove = new THREE.Mesh(new THREE.TorusGeometry(0.171, 0.004, 4, 24), mat(0x8c8c86, { metalness: 0.6 }));
+      groove.rotation.x = Math.PI / 2;
+      groove.position.y = y;
+      can.add(groove);
+    }
+    can.add(new THREE.Mesh(new THREE.CylinderGeometry(0.173, 0.173, 0.24, 22, 1, true, 0.8, 3.6), mat(0xd8483a, { side: THREE.DoubleSide, roughness: 0.8 })));
+    can.add(new THREE.Mesh(new THREE.CylinderGeometry(0.174, 0.174, 0.05, 22, 1, true, 0.8, 3.6), mat(0xf2c94a, { side: THREE.DoubleSide })));
+    const flap = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.16), mat(0xd8483a, { side: THREE.DoubleSide, roughness: 0.8 }));
+    flap.position.set(Math.sin(0.8) * 0.2, -0.02, Math.cos(0.8) * 0.2);
+    flap.rotation.set(0, 0.8 + 0.6, 0.2);
+    can.add(flap);
+    for (const [a, y, s] of [[2.2, -0.12, 1], [3.0, 0.08, 0.8], [5.2, -0.05, 1.2], [4.5, 0.13, 0.7], [0.3, -0.14, 0.9]]) {
+      const rust = new THREE.Mesh(new THREE.SphereGeometry(0.04 * s, 8, 6), mat(0xa0522d, { roughness: 0.95 }));
+      rust.scale.set(1, 1, 0.25);
+      rust.position.set(Math.cos(a) * 0.168, y, Math.sin(a) * 0.168);
+      rust.lookAt(Math.cos(a) * 2, y, Math.sin(a) * 2);
+      can.add(rust);
+    }
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.155, 0.012, 22), tin);
+    lid.geometry.translate(0.155, 0, 0);
+    lid.position.set(-0.155, 0.19, 0);
+    lid.rotation.z = 0.7;
+    can.add(lid);
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(0.155, 22), mat(0x2a2620));
+    hole.rotation.x = -Math.PI / 2;
+    hole.position.y = 0.181;
+    can.add(hole);
+    can.add(weedTube([[0.15, 0.17, 0.06], [0.22, 0.08, 0.08], [0.21, -0.08, 0.05]], 0.013));
+    can.add(drip(0.05, -0.24, 0.05));
+    can.rotation.z = 0.35;
     g.add(can);
-    const rust = new THREE.Mesh(new THREE.CylinderGeometry(0.205, 0.205, 0.16, 14, 1, true), mat(0xa0522d, { side: THREE.DoubleSide }));
-    rust.rotation.z = Math.PI / 2;
-    rust.position.x = -0.06;
-    g.add(rust);
     return g;
   }
 

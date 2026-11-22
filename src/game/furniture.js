@@ -3226,6 +3226,42 @@ export function buildFurniture(id, opts = {}) {
       };
       break;
     }
+    case 'q_trophy': {
+      // 🏆 蓋章紀念小獎盃（任務本，作者 11/22）：木頭底座、金色杯子兩個耳朵、正面一個紅色印章
+      const gold = mat(0xf2c14a, { metalness: 0.25, roughness: 0.35 });
+      box(0.24, 0.06, 0.18, mat(0x7a5236), 0, 0.03);
+      box(0.18, 0.06, 0.13, mat(0x8f6440), 0, 0.09);
+      cyl(0.025, 0.04, 0.08, gold, 0, 0.16);
+      add(new THREE.LatheGeometry([[0.0, 0], [0.05, 0.0], [0.09, 0.05], [0.1, 0.12], [0.095, 0.14], [0.0, 0.14]].map(([x, y]) => new THREE.Vector2(x, y)), 18), gold, 0, 0.2, 0);
+      for (const sx of [-1, 1]) {
+        const ear = add(new THREE.TorusGeometry(0.035, 0.01, 6, 12, Math.PI), gold, sx * 0.1, 0.29, 0);
+        ear.rotation.z = sx > 0 ? -Math.PI / 2 : Math.PI / 2;
+      }
+      const seal = add(new THREE.CircleGeometry(0.032, 16), mat(0xd8443a), 0, 0.27, 0.104);
+      seal.rotation.x = -0.05;
+      box(0.1, 0.02, 0.005, mat(0xf2e6c8), 0, 0.09, 0.068); // 名牌
+      break;
+    }
+    case 'q_plant': {
+      // 🪴 每週小盆栽：小陶盆＋三片圓葉子＋一朵小花，盆子上貼一張小章
+      cyl(0.09, 0.07, 0.12, mat(0xc8754a), 0, 0.06);
+      cyl(0.095, 0.095, 0.02, mat(0xb4653e), 0, 0.12);
+      cyl(0.085, 0.085, 0.01, mat(0x5a4030), 0, 0.125);
+      const leaf = mat(0x6cbf5a);
+      for (const [a, h] of [[0, 0.26], [2.1, 0.22], [4.2, 0.24]]) {
+        const st = cyl(0.008, 0.008, h - 0.12, mat(0x4f8f3e), Math.cos(a) * 0.02, 0.13 + (h - 0.12) / 2, Math.sin(a) * 0.02, 5);
+        st.rotation.set(Math.sin(a) * 0.3, 0, -Math.cos(a) * 0.3);
+        ball(0.05, leaf, Math.cos(a) * 0.06, h, Math.sin(a) * 0.06, 1.2, 0.35, 0.8).rotation.y = -a;
+      }
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * Math.PI * 2;
+        ball(0.022, mat(0xffb3c8), Math.cos(a) * 0.025, 0.31, Math.sin(a) * 0.025);
+      }
+      ball(0.018, mat(0xffd23f), 0, 0.315, 0);
+      const seal = add(new THREE.CircleGeometry(0.022, 14), mat(0xd8443a), 0, 0.065, 0.088);
+      seal.rotation.x = -0.15;
+      break;
+    }
     default:
       box(0.3, 0.3, 0.3, mat(0xffffff));
   }

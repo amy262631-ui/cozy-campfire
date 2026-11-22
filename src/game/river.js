@@ -5,7 +5,7 @@
  *   🪨 打水漂：每天 10 顆扁石頭，跳越多下越厲害，每天排行
  *   🦆 迷你小鴨：餵蔬菜或果實，跟著走 3 分鐘（只在營火廣場；離開時在河邊等，回來再跟）
  */
-export const RIVER_FROM = '2026-11-27';
+export const RIVER_FROM = '2026-11-22'; // 作者 11/22：營火河畔、小肥雞、種菜擴充先開（11/27 東西才不會太多）
 /** 火有多旺（0～1）→ 稀有魚倍數 */
 export const fireLuck = (ratio) => (ratio >= 0.75 ? 1.6 : ratio >= 0.4 ? 1.3 : 1);
 export const FIRE_HOT = 0.75;
