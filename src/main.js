@@ -2465,7 +2465,7 @@ async function init() {
     const cell = (sl, i) => {
       if (!sl) {
         if (!mine) return `<div class="gcell empty"><i>🟫</i><b>${t('空著')}</b></div>`;
-        return `<button type="button" class="gcell empty" data-pick="${i}"><i>🌱</i><b>${t('空著')}</b><small>${t('點我種菜')}</small></button>`;
+        return `<button type="button" class="gcell empty" data-pick="${i}"><span class="gck">☐</span><i>🌱</i><b>${t('空著')}</b><small>${t('點我種菜')}</small></button>`;
       }
       const c = CROP_BY_ID[sl.c];
       const remain = sl.ready - (Date.now() + skew);
@@ -2480,9 +2480,10 @@ async function init() {
     };
     const readyN = mine ? res.slots.filter((sl) => sl && sl.ready - (Date.now() + skew) <= 0 && !(CROP_BY_ID[sl.c]?.night && !isNight())).length : 0;
     const allBtn = readyN >= 2 ? `<button type="button" class="garden-harvest-all" id="garden-harvest-all">${t('🧺 全部收成（{n} 格）', { n: readyN })}</button>` : '';
-    const slots = `${allBtn}<div class="garden-grid">${res.slots.map(cell).join('')}</div>${
+    const selBar = mine && emptyIdx.length > 1 ? `<div class="garden-selbar"><span class="gsel-tip">${t('點空格打勾，可以多選')}</span><button type="button" class="gp-all" id="garden-all">☐ ${t('全選空格（{n}）', { n: emptyIdx.length })}</button><button type="button" class="gp-all" id="garden-clr" hidden>✕ ${t('清除')}</button></div>` : '';
+    const slots = `${allBtn}${selBar}<div class="garden-grid">${res.slots.map(cell).join('')}</div>${
       mine && emptyIdx.length
-        ? `<div class="garden-pick" id="garden-pick" hidden><b id="garden-pick-t"></b>${emptyIdx.length > 1 ? `<button type="button" class="gp-all" id="garden-all">☐ ${t('全部 {n} 個空格都種', { n: emptyIdx.length })}</button>` : ''}<div class="crop-pick">${CROPS.filter((c) => isOpen(c)).map((c) => `<button type="button" class="mini-btn" data-c="${c.id}">${c.icon} ${t(c.zh)}<small>🌰 ${c.seed}・${t('{h} 小時', { h: c.hours })}</small></button>`).join('')}</div></div>`
+        ? `<div class="garden-pick" id="garden-pick" hidden><b id="garden-pick-t"></b><div class="crop-pick">${CROPS.filter((c) => isOpen(c)).map((c) => `<button type="button" class="mini-btn" data-c="${c.id}">${c.icon} ${t(c.zh)}<small>🌰 ${c.seed}・${t('{h} 小時', { h: c.hours })}</small></button>`).join('')}</div></div>`
         : ''
     }${!mine && !res.slots.some(Boolean) ? `<div class="dex-note">${t('菜園現在空空的')}</div>` : ''}`;
     const expand =
@@ -2515,48 +2516,66 @@ async function init() {
           return actions.perform(pose, dur, face);
         };
         const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-        // 點空格 → 下面跳出作物；可以切換「全部空格都種」
-        let pickI = null;
-        let pickAll = false;
+        // 點空格 → 打勾（可以多選，作者 11/23：玩家建議；松果不夠時少勾幾格就能種）→ 下面選作物 → 一次種下去
+        const sel = new Set();
         const pickEl = body.querySelector('#garden-pick');
         const allBtn = body.querySelector('#garden-all');
+        const clrBtn = body.querySelector('#garden-clr');
         const drawPick = () => {
-          body.querySelector('#garden-pick-t').textContent = pickAll ? t('全部 {n} 個空格要種什麼？', { n: emptyIdx.length }) : t('第 {n} 格要種什麼？', { n: pickI + 1 });
-          if (allBtn) allBtn.textContent = (pickAll ? '☑ ' : '☐ ') + t('全部 {n} 個空格都種', { n: emptyIdx.length });
-          allBtn?.classList.toggle('on', pickAll);
-          for (const e of body.querySelectorAll('[data-pick]')) e.classList.toggle('sel', pickAll || Number(e.dataset.pick) === pickI);
-          for (const e of body.querySelectorAll('.crop-pick [data-c]')) e.disabled = (pinecones ?? 0) < CROP_BY_ID[e.dataset.c].seed * (pickAll ? emptyIdx.length : 1);
+          const n = sel.size;
+          pickEl.hidden = !n;
+          body.querySelector('#garden-pick-t').innerHTML = t('已選 <b>{n}</b> 格要種什麼？（你有 🌰 {p}）', { n, p: pinecones ?? 0 });
+          if (allBtn) {
+            const all = n === emptyIdx.length;
+            allBtn.textContent = (all ? '☑ ' : '☐ ') + t('全選空格（{n}）', { n: emptyIdx.length });
+            allBtn.classList.toggle('on', all);
+          }
+          if (clrBtn) clrBtn.hidden = !n;
+          for (const e of body.querySelectorAll('[data-pick]')) {
+            const on = sel.has(Number(e.dataset.pick));
+            e.classList.toggle('sel', on);
+            const ck = e.querySelector('.gck');
+            if (ck) ck.textContent = on ? '☑' : '☐';
+          }
+          for (const e of body.querySelectorAll('.crop-pick [data-c]')) {
+            const c = CROP_BY_ID[e.dataset.c];
+            const cost = c.seed * Math.max(1, n);
+            e.disabled = (pinecones ?? 0) < cost;
+            const sm = e.querySelector('small');
+            if (sm) sm.textContent = `${t('{n} 格', { n: Math.max(1, n) })} 🌰 ${cost}・${t('{h} 小時', { h: c.hours })}${e.disabled ? `・${t('松果不夠')}` : ''}`;
+          }
         };
         for (const e of body.querySelectorAll('[data-pick]')) {
           e.addEventListener('click', () => {
-            pickI = Number(e.dataset.pick);
-            pickAll = false;
-            pickEl.hidden = false;
+            const i = Number(e.dataset.pick);
+            sel.has(i) ? sel.delete(i) : sel.add(i);
             drawPick();
-            pickEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            if (sel.size === 1) pickEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
           });
         }
         allBtn?.addEventListener('click', () => {
-          pickAll = !pickAll;
-          if (pickI == null) pickI = emptyIdx[0];
+          if (sel.size === emptyIdx.length) sel.clear();
+          else for (const i of emptyIdx) sel.add(i);
           drawPick();
+          if (sel.size) pickEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         });
+        clrBtn?.addEventListener('click', () => (sel.clear(), drawPick()));
         for (const b of body.querySelectorAll('.crop-pick [data-c]')) {
           b.addEventListener('click', async () => {
-            if (pickI == null) return;
+            if (!sel.size) return;
             const c = CROP_BY_ID[b.dataset.c];
-            const n = pickAll ? emptyIdx.length : 1;
+            const idx = [...sel].sort((x, y) => x - y);
+            const n = idx.length;
             const cost = c.seed * n;
-            if ((pinecones ?? 0) < cost) return hud.toast(t('松果不夠，還差 {n} 顆 🌰', { n: cost - (pinecones ?? 0) }));
-            if (pickAll && !(await confirmBuy.ask({ icon: c.icon, name: t('{crop}種子 ×{n}（全部空格）', { crop: t(c.zh), n }), price: cost, coins: pinecones }))) return;
-            const i = pickAll ? emptyIdx[0] : pickI;
-            if (!act(i, 'plant', 1.6)) return;
-            for (const k of pickAll ? emptyIdx : [i]) camp.gardenFx(hid, k, 'dirt');
+            if ((pinecones ?? 0) < cost) return hud.toast(t('松果不夠，還差 {n} 顆 🌰，少勾幾格試試', { n: cost - (pinecones ?? 0) }));
+            if (n > 1 && !(await confirmBuy.ask({ icon: c.icon, name: t('{crop}種子 ×{n}', { crop: t(c.zh), n }), price: cost, coins: pinecones }))) return;
+            if (!act(idx[0], 'plant', 1.6)) return;
+            for (const k of idx) camp.gardenFx(hid, k, 'dirt');
             audio.sfx('tap');
             await wait(1100); // 挖好土再種下去
-            const r = pickAll ? await net.request('gardenPlantAll', { c: c.id }) : await net.request('gardenPlant', { slot: i, c: c.id });
+            const r = n > 1 ? await net.request('gardenPlantAll', { c: c.id, idx }) : await net.request('gardenPlant', { slot: idx[0], c: c.id });
             if (r?.ok) {
-              hud.toast(pickAll ? t('🌱 {n} 格都種下{icon} {name}了！大約 {h} 小時後收成', { n: r.n ?? n, icon: c.icon, name: t(c.zh), h: c.hours }) : t('🌱 種下{icon} {name}了！大約 {h} 小時後收成', { icon: c.icon, name: t(c.zh), h: c.hours }), 4000);
+              hud.toast(n > 1 ? t('🌱 {n} 格都種下{icon} {name}了！大約 {h} 小時後收成', { n: r.n ?? n, icon: c.icon, name: t(c.zh), h: c.hours }) : t('🌱 種下{icon} {name}了！大約 {h} 小時後收成', { icon: c.icon, name: t(c.zh), h: c.hours }), 4000);
               refreshCamp();
             } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : t('沒種成，再試一次吧'));
           });
@@ -3039,6 +3058,76 @@ async function init() {
     else el.style.top = `${Math.round(Math.max(...rects.map((r) => r.bottom)) + 6)}px`;
     el.style.right = '14px';
   };
+  // 🍾 漂流瓶（作者 11/23，玩家建議）：釣魚時旁邊一顆「🍾 寫信」，寫一封信丟進湖裡；別人撈到漂流瓶時有一半機會讀到
+  const bottleBtn = document.createElement('button');
+  bottleBtn.type = 'button';
+  bottleBtn.className = 'bait-btn bottle-btn';
+  bottleBtn.hidden = true;
+  bottleBtn.innerHTML = `🍾<small>${t('寫信')}</small>`;
+  bottleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openBottle();
+  });
+  document.getElementById('ui').appendChild(bottleBtn);
+  async function openBottle() {
+    if (!net.online) return hud.toast(t('還沒連上伺服器，等一下再試'));
+    const info = await net.request('bottleInfo', {});
+    if (!info?.ok) return;
+    const mine = (info.mine ?? [])
+      .slice()
+      .reverse()
+      .map((b) => `<div class="btl-mine${b.hidden ? ' off' : ''}"><span>${escapeHtml(b.text)}</span><small>${b.hidden ? t('被檢舉，先收起來了') : t('被撈到 {n} 次・💗 {h}', { n: b.read, h: b.hearts })}</small></div>`)
+      .join('');
+    modal.open(
+      t('🍾 漂流瓶'),
+      `<div class="dex-note">${t('寫一封信裝進瓶子丟進湖裡，別人釣魚時可能會撈到、讀到你的信 💌')}</div>
+       <textarea class="btl-text" maxlength="${info.len}" placeholder="${t('想對撈到的人說什麼？')}"></textarea>
+       <div class="dex-note">${t('最多 {n} 字・今天還能丟 {left} 瓶・作者會看信，亂寫的會被收回', { n: info.len, left: info.left })}</div>
+       <button type="button" class="shop-buy-tent" id="btl-go" ${info.left > 0 ? '' : 'disabled'}>${info.left > 0 ? t('🍾 丟進湖裡（🌰 {p}）', { p: info.price }) : t('今天丟完了，明天再來')}</button>
+       ${mine ? `<div class="dex-note">${t('📮 我丟過的瓶子')}</div>${mine}` : ''}`,
+      (body) => {
+        const ta = body.querySelector('.btl-text');
+        body.querySelector('#btl-go')?.addEventListener('click', async (e) => {
+          const text = ta.value.trim();
+          if (text.length < 2) return hud.toast(t('多寫幾個字吧 ✏️'));
+          e.currentTarget.disabled = true;
+          const r = await net.request('bottleThrow', { text });
+          if (!r?.ok) {
+            e.currentTarget.disabled = false;
+            return hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : r?.reason === 'limit' ? t('今天丟完了，明天再來') : r?.reason === 'muted' ? t('🔇 你暫時不能說話') : r?.reason === 'where' ? t('要在湖邊或河邊才能丟') : t('沒丟成，再試一次吧'));
+          }
+          modal.close();
+          audio.sfx('splash');
+          hud.toast(t('🍾 撲通！瓶子漂走了，等有緣人撈到它 💌'), 4000);
+        });
+      },
+    );
+  }
+  net.on('bottleLetter', ({ k, text, name, hearted }) => {
+    audio.sfx('bell');
+    modal.open(
+      t('🍾 瓶子裡有一封信！'),
+      `<div class="btl-paper">${escapeHtml(text)}<small>—— ${escapeHtml(name)}</small></div>
+       <div class="btl-row"><button type="button" class="mini-btn" id="btl-heart" ${hearted ? 'disabled' : ''}>${hearted ? t('💗 已經送過了') : t('💗 回一顆愛心')}</button><button type="button" class="mini-btn" id="btl-rep">${t('🚩 檢舉')}</button></div>
+       <div class="dex-note">${t('想寫信給別人？釣魚時按旁邊的「🍾 寫信」')}</div>`,
+      (body) => {
+        body.querySelector('#btl-heart')?.addEventListener('click', async (e) => {
+          e.currentTarget.disabled = true;
+          const r = await net.request('bottleHeart', { k });
+          e.currentTarget.textContent = t('💗 已經送過了');
+          if (r?.ok) hud.toast(t('💗 送出愛心了！{name} 會收到', { name }));
+        });
+        body.querySelector('#btl-rep')?.addEventListener('click', async (e) => {
+          if (!confirm(t('確定要檢舉這封信嗎？'))) return;
+          e.currentTarget.disabled = true;
+          await net.request('bottleReport', { k });
+          hud.toast(t('🚩 謝謝你，作者會看一下'));
+          modal.close();
+        });
+      },
+    );
+  });
+  net.on('bottleHeart', ({ name, text }) => hud.toast(t('💗 {name} 撈到你的漂流瓶「{text}⋯」，送你一顆愛心！', { name, text }), 6000));
   /** 每 0.25 秒：釣魚時顯示「🐟 撒」按鈕、飼料還剩多久 */
   let baitUiT = 0;
   const baitTick = (dt) => {
@@ -3051,6 +3140,8 @@ async function init() {
     const fishingNow = ['fish', 'boat'].includes(actions.state);
     const btnOn = fishingNow && baitBag > 0 && isOpen({ from: BOAT_FROM });
     baitBtn.hidden = !btnOn;
+    bottleBtn.hidden = !fishingNow;
+    bottleBtn.classList.toggle('up', btnOn);
     if (btnOn) {
       const txt = `🐟<small>${t('撒')} ×${baitBag}</small>`;
       if (baitBtn._t !== txt) (baitBtn._t = txt), (baitBtn.innerHTML = txt);

@@ -572,20 +572,39 @@ export function createCampgroundRoom() {
   }
   // 小路邊的小火爐：挑離帳篷遠一點的地方
   const braziers = [];
-  for (let i = 0; i < LAYOUT.loop.length && braziers.length < 3; i += 7) {
+  const brazierCand = []; // 其他可以放的位置（作者 11/23：雞舍擺到小火爐上 → 把小火爐搬開）
+  for (let i = 0; i < LAYOUT.loop.length; i += 3) {
     const p = LAYOUT.loop[(i + 40) % LAYOUT.loop.length];
     for (const side of [1, -1]) {
       const x = p.x - p.tz * side * 2.1;
       const z = p.z + p.tx * side * 2.1;
       const farTents = PLOTS.every((q, k) => Math.hypot(q.x - x, q.z - z) > 4.2 && Math.hypot(spots[k].garden.x - x, spots[k].garden.z - z) > 2.2);
-      const farOthers = braziers.every((b) => Math.hypot(b.x - x, b.z - z) > 22) && posts.every((q) => Math.hypot(q.x - x, q.z - z) > 1.2);
-      if (farTents && farOthers) {
-        braziers.push({ x, z });
-        break;
-      }
+      if (!farTents || !posts.every((q) => Math.hypot(q.x - x, q.z - z) > 1.2)) continue;
+      brazierCand.push({ x, z });
+      if (i % 7 === 0 && braziers.length < 3 && braziers.every((b) => Math.hypot(b.x - x, b.z - z) > 22)) braziers.push({ x, z });
     }
   }
-  braziers.forEach((b) => firePit(b.x, b.z, 0.6, 3.2));
+  for (const b of braziers) {
+    b.g = firePit(b.x, b.z, 0.6, 3.2);
+    b.col = colliders[colliders.length - 1];
+  }
+  /** 雞舍蓋在小火爐上的話，把小火爐搬到附近沒有雞舍的地方 */
+  function fixBraziers() {
+    const pens = [...penAt.values()];
+    const clear = (x, z) => pens.every((w) => Math.hypot(w.x - x, w.z - z) > 2.6);
+    for (const b of braziers) {
+      if (clear(b.x, b.z)) continue;
+      const c = brazierCand
+        .filter((q) => clear(q.x, q.z) && braziers.every((o) => o === b || Math.hypot(o.x - q.x, o.z - q.z) > 8))
+        .sort((a, c2) => Math.hypot(a.x - b.x, a.z - b.z) - Math.hypot(c2.x - b.x, c2.z - b.z))[0];
+      if (!c) continue;
+      b.x = c.x;
+      b.z = c.z;
+      b.g.position.set(c.x, 0, c.z);
+      b.col.x = c.x;
+      b.col.z = c.z;
+    }
+  }
 
   // ---- 螢火蟲 ----
   const FLY = 70;
@@ -822,30 +841,30 @@ export function createCampgroundRoom() {
     // ⛵ 船屋外面那一片水（作者 11/22：小雞跑到水裡）：圍籬整圈都要在水外面（圍籬半寬約 1 公尺，再多留一點）
     const inBoatWater = (x, lz) => sh.id === 'houseboat' && Math.hypot(x, lz - 0.6 * SCALE) < sh.W * 2.3 * SCALE + 1.35;
     // 作者 11/22：雞舍卡到別人家的露營車 → 鄰居的大型、小型門口擺設位置也要避開（不管他有沒有擺，免得之後擺了又撞到）
-    const neighborYard = (w) =>
-      PLOTS.some((q, k) => {
-        if (q === PLOTS[p.i]) return false;
+    // 鄰居的東西離這裡還有多少空間（負的＝會撞到）：雞舍、帳篷本身（船屋的水）、大型／小型門口擺設位置、菜園
+    const neighborGap = (w) => {
+      let gap = Infinity;
+      PLOTS.forEach((q, k) => {
+        if (q === PLOTS[p.i]) return;
         const f2 = frame(q.ry);
         const s2 = q.gardenSide || 1;
         const at = (lx, lz) => [q.x + f2.fx * lz + f2.rx * lx * s2, q.z + f2.fz * lz + f2.rz * lx * s2];
-        // 鄰居的雞舍（作者 11/22：兩家雞舍貼在一起分不出是誰的）
+        const near = (x, z, r) => (gap = Math.min(gap, Math.hypot(x - w.x, z - w.z) - r));
         const pen = penAt.get(k);
-        if (pen && Math.hypot(pen.x - w.x, pen.z - w.z) < 2.8) return true;
-        // 鄰居的帳篷本身（大帳篷、船屋的水池）
+        if (pen) near(pen.x, pen.z, 2.8); // 作者 11/22：兩家雞舍貼在一起分不出是誰的
         const nt = curTents[k];
         if (nt) {
           const s3 = shapeOf(nt.shape);
           const [cx, cz] = at(0, s3.id === 'houseboat' ? 0.6 * SCALE : 0);
-          const rad = s3.id === 'houseboat' ? s3.W * 2.3 * SCALE + 1.35 : ((s3.kind === 'rect' ? Math.hypot(s3.W, s3.D ?? s3.W) : s3.R) || 3) * SCALE + 1.3;
-          if (Math.hypot(cx - w.x, cz - w.z) < rad) return true;
+          near(cx, cz, s3.id === 'houseboat' ? s3.W * 2.3 * SCALE + 1.35 : ((s3.kind === 'rect' ? Math.hypot(s3.W, s3.D ?? s3.W) : s3.R) || 3) * SCALE + 1.3);
         }
-        const [bx, bz] = at(BIG_SPOT.x, BIG_SPOT.z);
-        if (Math.hypot(bx - w.x, bz - w.z) < 3.1) return true;
-        return SMALL_SPOTS.some((sp) => {
-          const [sx, sz] = at(sp.x, sp.z);
-          return Math.hypot(sx - w.x, sz - w.z) < 1.9;
-        });
+        near(...at(BIG_SPOT.x, BIG_SPOT.z), 3.1);
+        for (const sp of SMALL_SPOTS) near(...at(sp.x, sp.z), 2.0);
+        near(spots[k].garden.x, spots[k].garden.z, 2.0);
       });
+      return gap;
+    };
+    const neighborYard = (w) => neighborGap(w) < 0;
     const coopSpot = () => {
       const hw = (sh.kind === 'rect' ? sh.W : sh.R) * SCALE + 0.6;
       const hd = front + 0.6;
@@ -895,8 +914,9 @@ export function createCampgroundRoom() {
         const pd = pathDist(w.x, w.z);
         if (pd < 1.25) continue; // 小路
         if (PLOTS.some((q, k) => q !== PLOTS[p.i] && (Math.hypot(q.x - w.x, q.z - w.z) < 3.6 || Math.hypot(spots[k].garden.x - w.x, spots[k].garden.z - w.z) < 1.8))) continue; // 鄰居
-        if (neighborYard(w)) {
-          loose ??= { x, z: lz, w, pd }; // 真的都找不到時的最後備案
+        const gap = neighborGap(w);
+        if (gap < 0) {
+          if (!loose || gap > loose.gap) loose = { x, z: lz, w, pd, gap }; // 真的都找不到時：挑離鄰居最遠的那個
           continue;
         }
         if (!best || pd > best.pd) best = { x, z: lz, w, pd }; // 離小路越遠越好
@@ -1123,6 +1143,7 @@ export function createCampgroundRoom() {
       if (built.gg) gardensGroup.add(built.gg);
       return { ...p, tent, key, ...built };
     });
+    if (changed) fixBraziers();
     if (!changed) return;
     colliders.length = 0;
     colliders.push(...staticColliders, ...plots.flatMap((p) => [p.collider, p.coopCol, ...(p.yards ?? []).map((y) => y.col)]).filter(Boolean)); // 🐔 雞舍也擋人

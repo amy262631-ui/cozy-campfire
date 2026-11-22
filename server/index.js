@@ -194,8 +194,8 @@ function pickChannel(wanted) {
 const DATA_DIR = path.resolve(__dirname, 'data');
 await storage.init(DATA_DIR);
 const asArray = (v) => (Array.isArray(v) ? v : []);
-const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog, savedAccounts, savedHomes, savedIdeas, savedTotals, savedMuseum, savedOrders, savedInvites, savedGrants, savedDms, savedSupport, savedBans, savedChat] = await Promise.all(
-  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json', 'ideas.json', 'totals.json', 'museum2.json', 'orders.json', 'invites.json', 'grants.json', 'dms.json', 'support.json', 'bans.json', 'chatlog.json'].map((f) =>
+const [savedNotes, savedWishes, savedBoard, savedCairns, savedStats, savedPlayers, savedTree, savedCairnLog, savedAccounts, savedHomes, savedIdeas, savedTotals, savedMuseum, savedOrders, savedInvites, savedGrants, savedDms, savedSupport, savedBans, savedChat, savedBottles] = await Promise.all(
+  ['notes.json', 'wishes.json', 'board.json', 'cairns.json', 'stats.json', 'players.json', 'tree.json', 'cairnlog.json', 'accounts.json', 'homes.json', 'ideas.json', 'totals.json', 'museum2.json', 'orders.json', 'invites.json', 'grants.json', 'dms.json', 'support.json', 'bans.json', 'chatlog.json', 'bottles.json'].map((f) =>
     storage.load(f),
   ),
 );
@@ -225,6 +225,28 @@ const netBanOf = (net) => {
 /** 💬 公開聊天＋大聲公紀錄（/admin 看；作者 11/18：存進存檔、保留 7 天，最多 6000 則；密頻不記在這裡） */
 const CHAT_KEEP_MS = 7 * 86400000;
 const chatLog = asArray(savedChat).filter((c) => c && c.at > Date.now() - CHAT_KEEP_MS);
+/**
+ * 🍾 漂流瓶（作者 11/23，玩家建議）：在湖邊寫一封信（最多 60 字）丟進湖裡，別人釣到漂流瓶時有一半機會裡面有信。
+ * 只能回 💗、可以檢舉（2 次自動收起來）；作者在 /admin「🍾 漂流瓶」看、刪。最多留 600 封。
+ * [{ k, v（寫的人）, name, text, at, hearts, hv（回過愛心的人）, rep（檢舉的人）, hidden, read（被撈到幾次） }]
+ */
+const bottles = asArray(savedBottles);
+let bottleSeq = bottles.reduce((m, b) => Math.max(m, b.k ?? 0), 0);
+const BOTTLE_LEN = 60;
+const BOTTLE_PER_DAY = 3;
+const BOTTLE_PRICE = 2;
+const saveBottles = () => {
+  if (bottles.length > 600) bottles.splice(0, bottles.length - 600);
+  saveJson('bottles.json', bottles);
+};
+/** 撈到漂流瓶時挑一封：不是自己寫的、沒被收起來；被讀比較少的優先 */
+function pickBottle(vid) {
+  const ok = bottles.filter((b) => !b.hidden && b.v !== vid);
+  if (!ok.length) return null;
+  ok.sort((a, b) => (a.read ?? 0) - (b.read ?? 0) || Math.random() - 0.5);
+  const pool = ok.slice(0, 12);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 function logChat(entry) {
   chatLog.push(entry);
   const old = Date.now() - CHAT_KEEP_MS;
@@ -2155,6 +2177,17 @@ app.post('/api/delNote', express.json(), (req, res) => {
   console.log(`[管理] 刪掉一張${kind === 'notes' ? '留言' : '繪馬'}`);
   res.json({ ok: true });
 });
+/** 🍾 漂流瓶：刪掉、放回去（作者 11/23）{ op: 'del'|'show', k } */
+app.post('/api/bottle', express.json(), (req, res) => {
+  if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
+  const i = bottles.findIndex((b) => b.k === Number(req.body?.k));
+  if (i < 0) return res.json({ ok: false, reason: '找不到（可能已經刪了）' });
+  if (req.body?.op === 'del') bottles.splice(i, 1);
+  else Object.assign(bottles[i], { hidden: false, rep: [] });
+  saveBottles();
+  console.log(`[管理] 漂流瓶 ${req.body?.op === 'del' ? '刪掉' : '放回去'} 一封`);
+  res.json({ ok: true });
+});
 /** ⚠️ 警告（作者 11/18）：玩家畫面跳警告視窗（5 秒後才能關）。在線上馬上跳，不在線上下次進來跳。{ q: 玩家編號, r: 原因代號, note: 其他原因的文字 } */
 const WARN_REASONS = { curse: '罵人、說髒話', note: '亂留言', name: '名字不恰當', spam: '洗版、一直刷聊天', other: '其他' };
 app.post('/api/warn', express.json(), (req, res) => {
@@ -2338,6 +2371,11 @@ app.get('/admin', (req, res) => {
   const supRows = support.slice(-100).reverse().map((x) => `<tr><td>${t(x.at)}</td><td><a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a><br><small>${escH(x.hid)}</small></td><td style="white-space:pre-wrap;max-width:360px">${escH(x.t)}</td><td>${x.re ? `<div class="re">${escH(x.re)}</div><small>${t(x.reAt)}${x.seen ? '・玩家看過了' : '・玩家還沒看'}</small>` : `<textarea data-re="${x.id}" rows="2" cols="34" placeholder="回覆（玩家下次上線會看到）"></textarea><br><button data-send="${x.id}">回覆</button>`}</td></tr>`).join('');
   const onRows = onlineList((hid, name) => `<a href="#" data-q="${escH(hid)}">${escH(name)}</a>`);
   const chatRows = chatLog.slice(-600).reverse().map((c) => `<tr><td>${t(c.at)}</td><td>${escH(c.where)}${c.ch ? ` <small>分流 ${c.ch}</small>` : ''}</td><td>${c.hid ? `<a href="#" data-q="${escH(c.hid)}">${escH(c.name)}</a>` : escH(c.name)}</td><td style="text-align:left">${escH(c.text)}</td></tr>`).join('');
+  const bottleRows = bottles
+    .slice(-150)
+    .reverse()
+    .map((x) => `<tr${x.hidden ? ' style="opacity:.55"' : ''}><td>${t(x.at)}</td><td><a href="#" data-q="${escH(homeId(x.v))}">${escH(x.name)}</a></td><td style="text-align:left">${escH(x.text)}</td><td>💗${x.hearts ?? 0}・被撈 ${x.read ?? 0}${x.rep?.length ? `・🚩${x.rep.length}` : ''}${x.hidden ? '<br>（收起來了）' : ''}</td><td>${x.hidden ? `<button data-btl="show:${x.k}">👀 放回去</button>` : ''}<button data-btl="del:${x.k}">🗑️ 刪掉</button></td></tr>`)
+    .join('');
   const noteRow = (kind) => (x) => `<tr><td>${t(x.at)}</td><td>${x.hid ? `<a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a>` : `<a href="#" data-q="${escH(x.name)}">${escH(x.name)}</a>`}</td><td style="text-align:left">${escH(x.text)}</td><td><button data-del="${kind}:${x.at}">🗑️ 刪掉</button></td></tr>`;
   const noteRows = shared.notes.slice(-60).reverse().map(noteRow('notes')).join('');
   const wishRows = shared.wishes.slice(-30).reverse().map(noteRow('wishes')).join('');
@@ -2346,7 +2384,7 @@ app.get('/admin', (req, res) => {
   res.send(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>營地管理</title>
 <style>body{font-family:system-ui,sans-serif;background:#1d1714;color:#f5e6d3;padding:16px;max-width:1100px;margin:auto}.tabs{position:sticky;top:0;z-index:5;background:#1d1714;padding:8px 0;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid #3a2e27;margin:10px 0}.tabs button{background:#2c231e;color:#f5e6d3;border:1px solid #4a3a30;border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer}.tabs button.on{background:#ff9a4a;color:#2a1a10;border-color:#ff9a4a;font-weight:700}section.tab{display:none}section.tab.on{display:block}section.tab h3{margin-top:8px}h3{color:#ffb46b;margin-top:26px}table{border-collapse:collapse;font-size:13px;width:100%}th,td{padding:6px 8px;border-bottom:1px solid #3a2e27;text-align:left;vertical-align:top}th{color:#ffb46b}small{opacity:.6}.wrap{overflow-x:auto}.box{background:#2a211c;border-radius:12px;padding:12px 14px;margin:8px 0}input,select,button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3}button{background:#f08a3c;color:#2a1608;border:none;font-weight:700;cursor:pointer}a{color:#ffd08a}#card p{margin:4px 0}.ok{color:#9be29b}.err{color:#ff9a8a}p.hint{opacity:.7;font-size:13px}.re{background:#3a2e27;border-radius:8px;padding:6px 8px;white-space:pre-wrap;max-width:360px}textarea{font:inherit;border-radius:8px;border:1px solid #4a3b31;background:#1d1714;color:#f5e6d3;padding:6px}</style></head>
 <body>${staffNav(req, 'admin')}<h2>🛠️ 營地管理</h2><p class="hint">可以用名字、「玩家編號」或「帳號名稱」找人（名字大家會改，同名的會列出來讓你選；編號不會變，最準）。玩家用遊戲裡「✉️ 聯絡作者」寄信時會自動附上玩家編號；編號也顯示在「🔥 約朋友」和「👫 好友」視窗裡。</p>
-<div class="tabs">${[['on', `🟢 現在在線（${onRows.length}）`], ['chat', `💬 聊天（${Math.min(chatLog.length, 600)}）`], ['notes', '📝 留言板・繪馬'], ['mail', `✉️ 來信${support.filter((x) => !x.re).length ? `（${support.filter((x) => !x.re).length} 則沒回）` : ''}`], ['inv', '👫 邀請紀錄'], ['shout', '📣 大聲公'], ['ban', `⛔ 停權／禁言${banRows ? `（${banRows.split('<tr>').length - 1}）` : ''}`], ['grant', '🎁 補償紀錄'], ['money', '💸 退款・自己人']].map(([k, v]) => `<button type="button" data-tab="${k}">${v}</button>`).join('')}</div>
+<div class="tabs">${[['on', `🟢 現在在線（${onRows.length}）`], ['chat', `💬 聊天（${Math.min(chatLog.length, 600)}）`], ['notes', `📝 留言板・繪馬・🍾 漂流瓶${bottles.some((b) => b.hidden && b.rep?.length) ? `（🚩${bottles.filter((b) => b.hidden && b.rep?.length).length}）` : ''}`], ['mail', `✉️ 來信${support.filter((x) => !x.re).length ? `（${support.filter((x) => !x.re).length} 則沒回）` : ''}`], ['inv', '👫 邀請紀錄'], ['shout', '📣 大聲公'], ['ban', `⛔ 停權／禁言${banRows ? `（${banRows.split('<tr>').length - 1}）` : ''}`], ['grant', '🎁 補償紀錄'], ['money', '💸 退款・自己人']].map(([k, v]) => `<button type="button" data-tab="${k}">${v}</button>`).join('')}</div>
 <div class="box"><b>🔍 查玩家</b><br><input id="q" placeholder="名字、玩家編號 或 帳號名稱" size="28"> <button id="find">查詢</button><div id="card"></div></div>
 <div class="box" id="gbox" hidden><b>🎁 發補償／收回：<span id="gname"></span></b><br>
 <select id="gtype"><option value="outfit">👒 造型</option><option value="pc">🌰 松果</option><option value="furn">🪑 家具</option></select>
@@ -2365,6 +2403,7 @@ app.get('/admin', (req, res) => {
 <div class="wrap" style="max-height:480px;overflow:auto"><table><tr><th>時間</th><th>在哪裡</th><th>玩家</th><th>說了什麼</th></tr>${chatRows || '<tr><td colspan="4">還沒有人聊天（這版上線後才開始記）</td></tr>'}</table></div>
 </section><section class="tab" data-tab="notes"><h3 id="notes">📝 告示牌留言（最近 60 張）</h3><p class="hint">有人亂寫可以直接刪掉，大家的畫面會馬上更新。這版之後貼的留言才有玩家編號（點名字可以直接查到人）。</p>
 <div class="wrap" style="max-height:420px;overflow:auto"><table><tr><th>時間</th><th>玩家</th><th>留言</th><th></th></tr>${noteRows || '<tr><td colspan="4">沒有留言</td></tr>'}</table></div>
+<h3 id="bottles">🍾 漂流瓶（最近 150 封，新的在上面）</h3><p class="hint">玩家在湖邊寫的信，別人撈到漂流瓶時會讀到。2 個人檢舉就自動收起來（變淡的那幾封），看過沒問題可以「放回去」。</p><div class="wrap" style="max-height:360px;overflow:auto"><table><tr><th>時間</th><th>玩家</th><th>信</th><th>狀態</th><th></th></tr>${bottleRows || '<tr><td colspan="5">還沒有人丟漂流瓶</td></tr>'}</table></div>
 <h3>🎋 繪馬（最近 30 塊）</h3><div class="wrap" style="max-height:300px;overflow:auto"><table><tr><th>時間</th><th>玩家</th><th>內容</th><th></th></tr>${wishRows || '<tr><td colspan="4">沒有繪馬</td></tr>'}</table></div>
 </section><section class="tab" data-tab="ban"><h3 id="bans">⛔ 停權／🔇 禁言名單</h3><div class="wrap"><table><tr><th>玩家</th><th>種類</th><th>到什麼時候</th><th>原因</th></tr>${banRows || '<tr><td colspan="4">沒有人</td></tr>'}</table></div>
 </section><section class="tab" data-tab="grant"><h3>🎁 補償紀錄</h3><div class="wrap"><table><tr><th>時間</th><th>玩家</th><th>送了</th><th>備註</th></tr>${grantRows || '<tr><td colspan="4">還沒有</td></tr>'}</table></div></section></section>
@@ -2435,6 +2474,13 @@ app.get('/admin', (req, res) => {
       if (wr === 'other' && !wn.trim()) { alert('選「其他」要寫原因'); return; }
       if (!confirm('確定警告 ' + $('gname').textContent + '？')) return;
       fetch('/api/warn' + K, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: cur, r: wr, note: wn, sc: $('wsc').checked }) }).then(function (r) { return r.json(); }).then(function (r) { if (r.ok) show(r); else alert(r.reason); });
+      return;
+    }
+    var bt = e.target.closest('[data-btl]');
+    if (bt) {
+      var q = bt.dataset.btl.split(':');
+      if (q[0] === 'del' && !confirm('確定刪掉這封漂流瓶？')) return;
+      fetch('/api/bottle' + K, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: q[0], k: Number(q[1]) }) }).then(function (r) { return r.json(); }).then(function (r) { if (!r.ok) return alert(r.reason); if (q[0] === 'del') bt.closest('tr').remove(); else { bt.closest('tr').style.opacity = 1; bt.remove(); } });
       return;
     }
     var d = e.target.closest('[data-del]');
@@ -4962,8 +5008,10 @@ io.on('connection', (socket) => {
     const c = CROP_BY_ID[String(data.c ?? '')];
     if (!c || !isOpen(c)) return ack?.({ ok: false, reason: 'unknown' });
     h.garden ??= [];
+    // 作者 11/22：可以只種勾選的那幾格（idx）；沒帶就是全部空格
+    const pickIdx = Array.isArray(data.idx) ? new Set(data.idx.map(Number)) : null;
     const empty = [];
-    for (let i = 0; i < gardenSlotsOf(h); i++) if (!h.garden[i]?.c) empty.push(i);
+    for (let i = 0; i < gardenSlotsOf(h); i++) if (!h.garden[i]?.c && (!pickIdx || pickIdx.has(i))) empty.push(i);
     if (!empty.length) return ack?.({ ok: false, reason: 'busy' });
     const cost = c.seed * empty.length;
     if (wal.pc < cost) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
@@ -5846,6 +5894,64 @@ io.on('connection', (socket) => {
     // 📣 五星魚與傳說之魚：整個伺服器（所有分流、所有地點）跳出大公告
     if (FISH_RARITY[fish] >= 5 || shiny) io.emit('bigCatch', { name: player.name, fish, size, ch: chan.ch, place: roomId, shiny }); // ✨ 異色魚也全營地公告
     io.to(rkey).emit('caught', { id: socket.id, name: player.name, fish, size, rank, shiny });
+    // 🍾 撈到漂流瓶：一半機會裡面有別人寫的信
+    if (FISH[fish].junk === 'bottle' && Math.random() < 0.5) {
+      const b = pickBottle(socket.data.vid);
+      if (b) {
+        b.read = (b.read ?? 0) + 1;
+        saveBottles();
+        setTimeout(() => socket.emit('bottleLetter', { k: b.k, text: b.text, name: b.name, hearted: (b.hv ?? []).includes(socket.data.vid) }), 1600);
+      }
+    }
+  });
+  // 🍾 寫一封漂流瓶（湖畔碼頭、營火河畔）
+  socket.on('bottleThrow', (data = {}, ack) => {
+    if (!player?.vid || !wal) return ack?.({ ok: false });
+    if (roomId !== 'lake_dock' && roomId !== 'forest_main') return ack?.({ ok: false, reason: 'where' });
+    if (banOf(player.vid, 'mute')) return ack?.({ ok: false, reason: 'muted' });
+    const text = String(data.text ?? '').replace(/\s+/g, ' ').trim().slice(0, BOTTLE_LEN);
+    if (text.length < 2) return ack?.({ ok: false, reason: 'short' });
+    const d = dayKey();
+    if (wal.btd?.d !== d) wal.btd = { d, n: 0 };
+    if (wal.btd.n >= BOTTLE_PER_DAY) return ack?.({ ok: false, reason: 'limit' });
+    if (wal.pc < BOTTLE_PRICE) return ack?.({ ok: false, reason: 'poor' });
+    wal.pc -= BOTTLE_PRICE;
+    wal.btd.n++;
+    socket.emit('wallet', { pc: wal.pc, delta: 0 });
+    bottles.push({ k: ++bottleSeq, v: player.vid, name: player.name, text, at: Date.now(), hearts: 0, hv: [], rep: [], read: 0 });
+    saveBottles();
+    saveJson('players.json', players);
+    bump('bottle');
+    console.log(`[漂流瓶] ${player.name}：${text}`);
+    io.to(rkey).emit('bottleSplash', { id: socket.id });
+    ack?.({ ok: true, left: BOTTLE_PER_DAY - wal.btd.n });
+  });
+  socket.on('bottleInfo', (data, ack) => {
+    const d = dayKey();
+    ack?.({ ok: true, left: wal?.btd?.d === d ? BOTTLE_PER_DAY - wal.btd.n : BOTTLE_PER_DAY, price: BOTTLE_PRICE, len: BOTTLE_LEN, mine: bottles.filter((b) => b.v === player?.vid).slice(-5).map((b) => ({ text: b.text, at: b.at, hearts: b.hearts ?? 0, read: b.read ?? 0, hidden: !!b.hidden })) });
+  });
+  // 💗 回一顆愛心（同一封信每人一次）；寄信的人在線上會收到通知
+  socket.on('bottleHeart', (data = {}, ack) => {
+    const b = bottles.find((x) => x.k === Number(data.k));
+    if (!b || !player?.vid || b.v === player.vid) return ack?.({ ok: false });
+    b.hv ??= [];
+    if (b.hv.includes(player.vid)) return ack?.({ ok: false, reason: 'done' });
+    b.hv.push(player.vid);
+    b.hearts = (b.hearts ?? 0) + 1;
+    saveBottles();
+    for (const s2 of socketsOf(b.v)) s2.emit('bottleHeart', { name: player.name, text: b.text.slice(0, 16) });
+    ack?.({ ok: true });
+  });
+  // 🚩 檢舉：2 個人檢舉就先收起來，等作者看
+  socket.on('bottleReport', (data = {}, ack) => {
+    const b = bottles.find((x) => x.k === Number(data.k));
+    if (!b || !player?.vid) return ack?.({ ok: false });
+    b.rep ??= [];
+    if (!b.rep.includes(player.vid)) b.rep.push(player.vid);
+    if (b.rep.length >= 2) b.hidden = true;
+    saveBottles();
+    console.log(`[漂流瓶檢舉] ${player.name} 檢舉了 ${b.name}：${b.text}（${b.rep.length} 次）`);
+    ack?.({ ok: true });
   });
 
   // 添柴火：伺服器加 fuel，通知其他人播放火星特效
