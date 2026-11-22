@@ -17,6 +17,7 @@ export const OUTFIT_SLOTS = [
   { id: 'neck', icon: '🧣', zh: '脖子' },
   { id: 'hair', icon: '💇', zh: '頭髮' }, // 💇 贊助限定假髮（可以跟帽子一起戴）
   { id: 'clip', icon: '📎', zh: '髮夾' }, // 📎 月票本月髮夾（12 月起；每種頭髮、帽子都能一起戴）
+  { id: 'face', icon: '💄', zh: '臉妝' }, // 💄 任務本集章送的臉妝（作者 11/22；畫在臉上，什麼都能一起戴）
 ];
 
 export const OUTFITS = [
@@ -103,6 +104,13 @@ export const OUTFITS = [
   { id: 'wig_curtain', slot: 'hair', kind: 'hair', hair: 'curtain', sex: 'm', c1: 0x23202a, c2: 0x23202a, icon: '🖤', zh: '韓系中分瀏海', src: 'sponsor', month: '2027-05' },
   // 🔥 營火翅膀（作者 11/21：營火之約第 7 款）
   { id: 'dt_ember_wings', slot: 'back', kind: 'wings', c1: 0xf08a3c, c2: 0xffb04a, glow: true, deco: 'ember', icon: '🔥', zh: '營火翅膀', src: 'date' },
+  // 💄 臉妝 6 款（作者 11/22：任務本每月集滿 20 個章送 1 款，照順序；quests.js MAKEUP_ORDER）
+  { id: 'mk_pink', slot: 'face', kind: 'makeup', icon: '🌸', zh: '粉嫩腮紅', src: 'quest' },
+  { id: 'mk_peach', slot: 'face', kind: 'makeup', icon: '🍑', zh: '蜜桃腮紅', src: 'quest' },
+  { id: 'mk_freckle', slot: 'face', kind: 'makeup', icon: '🫘', zh: '小雀斑', src: 'quest' },
+  { id: 'mk_star', slot: 'face', kind: 'makeup', icon: '⭐', zh: '星星貼紙', src: 'quest' },
+  { id: 'mk_heart', slot: 'face', kind: 'makeup', icon: '💗', zh: '愛心貼紙', src: 'quest' },
+  { id: 'mk_shimmer', slot: 'face', kind: 'makeup', icon: '✨', zh: '閃閃眼影', src: 'quest' },
 ];
 
 export const OUTFIT_BY_ID = Object.fromEntries(OUTFITS.map((o) => [o.id, o]));

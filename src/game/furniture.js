@@ -12,7 +12,9 @@ import { FISH } from '../fishing/fishData.js';
 export const TENT_PRICE = 30;
 const withName = (f) => ({ ...f, name: t(f.zh) });
 /** 小舖賣的家具 */
-export const FURNITURE = FURNITURE_CATALOG.filter((f) => !f.gift && !f.craft).map(withName);
+export const FURNITURE = FURNITURE_CATALOG.filter((f) => !f.gift && !f.craft && !f.quest).map(withName);
+/** 📒 任務獎勵家具（作者 11/22：小舖買不到，做任務才拿得到） */
+export const QUEST_FURNITURE = FURNITURE_CATALOG.filter((f) => f.quest).map(withName);
 /** 🔨 手作家具 */
 export const CRAFT_FURNITURE = FURNITURE_CATALOG.filter((f) => f.craft).map(withName);
 /**
@@ -21,7 +23,7 @@ export const CRAFT_FURNITURE = FURNITURE_CATALOG.filter((f) => f.craft).map(with
  */
 export const GIFT_FURNITURE = FURNITURE_CATALOG.filter((f) => f.gift).map((f) => ({ ...withName(f), how: f.gift }));
 /** 布置時背包會列出的所有家具（買的＋送的） */
-export const ALL_FURNITURE = [...FURNITURE, ...GIFT_FURNITURE, ...CRAFT_FURNITURE];
+export const ALL_FURNITURE = [...FURNITURE, ...GIFT_FURNITURE, ...CRAFT_FURNITURE, ...QUEST_FURNITURE];
 export const FURNITURE_BY_ID = Object.fromEntries(ALL_FURNITURE.map((f) => [f.id, f]));
 export const CATS = FURNITURE_CATS.map(withName);
 
@@ -3226,20 +3228,73 @@ export function buildFurniture(id, opts = {}) {
       };
       break;
     }
+    case 'q_cabinet': {
+      // 🏆 獎盃展示牆（作者 11/22）：兩格寬、靠牆的 3×3 格子櫃，深色木框＋暖色背板，每格上面一顆小燈
+      const frame = mat(0x6a4a32);
+      const back = mat(0xe8d6b8);
+      const X = 0.4;
+      box(1.52, 0.06, 0.34, frame, X, 0.03, 0);
+      for (const y of [0.56, 1.08]) box(1.46, 0.03, 0.32, mat(0x8a6644), X, y, 0);
+      box(1.52, 0.06, 0.36, frame, X, 1.62, 0);
+      for (const dx of [-0.75, -0.24, 0.24, 0.75]) box(dx === -0.75 || dx === 0.75 ? 0.05 : 0.03, 1.62, 0.34, frame, X + dx, 0.81, 0);
+      box(1.5, 1.6, 0.02, back, X, 0.81, -0.16);
+      for (const y of [0.52, 1.04, 1.58]) for (const dx of [-0.46, 0, 0.46]) ball(0.016, mat(0xfff2c0, { emissive: 0xffd88a, emissiveIntensity: 0.8 }), X + dx, y, -0.12);
+      box(0.4, 0.08, 0.01, mat(0xc9a14a, { metalness: 0.4 }), X, 1.62, 0.185); // 金色小牌子
+      break;
+    }
+    case 'q_tro_silver':
+    case 'q_tro_heart':
+    case 'q_tro_fish':
+    case 'q_tro_garden':
+    case 'q_tro_hen':
+    case 'q_tro_leaf':
+    case 'q_tro_duck':
+    case 'q_tro_cook':
+    case 'q_tro_camp':
     case 'q_trophy': {
-      // 🏆 蓋章紀念小獎盃（任務本，作者 11/22）：木頭底座、金色杯子兩個耳朵、正面一個紅色印章
-      const gold = mat(0xf2c14a, { metalness: 0.25, roughness: 0.35 });
+      // 🏆 任務獎盃（作者 11/22：要多幾種）：同一個杯子，顏色和杯子上面的小圖案不一樣
+      const TRO = {
+        q_trophy: [0xf2c14a, 'seal'], q_tro_silver: [0xd4d8de, 'star'], q_tro_heart: [0xf2a8b4, 'heart'], q_tro_fish: [0x7cc8de, 'fish'],
+        q_tro_garden: [0x9ccf72, 'carrot'], q_tro_hen: [0xf6ead2, 'egg'], q_tro_leaf: [0x7fbf6a, 'leaf'], q_tro_duck: [0xf6d84a, 'duck'],
+        q_tro_cook: [0xd8935a, 'pan'], q_tro_camp: [0xf2a050, 'flame'],
+      };
+      const [cc, top] = TRO[id] ?? TRO.q_trophy;
+      const cup = mat(cc, { metalness: 0.25, roughness: 0.35 });
       box(0.24, 0.06, 0.18, mat(0x7a5236), 0, 0.03);
       box(0.18, 0.06, 0.13, mat(0x8f6440), 0, 0.09);
-      cyl(0.025, 0.04, 0.08, gold, 0, 0.16);
-      add(new THREE.LatheGeometry([[0.0, 0], [0.05, 0.0], [0.09, 0.05], [0.1, 0.12], [0.095, 0.14], [0.0, 0.14]].map(([x, y]) => new THREE.Vector2(x, y)), 18), gold, 0, 0.2, 0);
+      cyl(0.025, 0.04, 0.08, cup, 0, 0.16);
+      add(new THREE.LatheGeometry([[0.0, 0], [0.05, 0.0], [0.09, 0.05], [0.1, 0.12], [0.095, 0.14], [0.0, 0.14]].map(([x, y]) => new THREE.Vector2(x, y)), 18), cup, 0, 0.2, 0);
       for (const sx of [-1, 1]) {
-        const ear = add(new THREE.TorusGeometry(0.035, 0.01, 6, 12, Math.PI), gold, sx * 0.1, 0.29, 0);
+        const ear = add(new THREE.TorusGeometry(0.035, 0.01, 6, 12, Math.PI), cup, sx * 0.1, 0.29, 0);
         ear.rotation.z = sx > 0 ? -Math.PI / 2 : Math.PI / 2;
       }
-      const seal = add(new THREE.CircleGeometry(0.032, 16), mat(0xd8443a), 0, 0.27, 0.104);
-      seal.rotation.x = -0.05;
       box(0.1, 0.02, 0.005, mat(0xf2e6c8), 0, 0.09, 0.068); // 名牌
+      // 杯子上面的小圖案（看得出是哪一種獎盃）
+      const y = 0.38;
+      if (top === 'seal') ball(0.04, mat(0xd8443a), 0, y, 0, 1, 1, 0.35);
+      else if (top === 'star') stand(star(0.05), 0.02, mat(0x6a9ad8), 0, y, 0);
+      else if (top === 'heart') stand(heart(0.04), 0.02, mat(0xe8506a), 0, y, 0);
+      else if (top === 'fish') {
+        ball(0.045, mat(0x4a8ad0), 0, y, 0, 1.4, 0.8, 0.5);
+        const tail = add(new THREE.ConeGeometry(0.03, 0.05, 4), mat(0x4a8ad0), -0.075, y, 0);
+        tail.rotation.z = Math.PI / 2;
+      } else if (top === 'carrot') {
+        const c = add(new THREE.ConeGeometry(0.03, 0.1, 8), mat(0xf08a3c), 0, y - 0.01, 0);
+        c.rotation.z = Math.PI;
+        for (const a of [-0.4, 0, 0.4]) ball(0.015, mat(0x5aa84a), Math.sin(a) * 0.02, y + 0.05, 0, 0.6, 1.6, 0.6).rotation.z = a;
+      } else if (top === 'egg') ball(0.04, mat(0xfff8ea), 0, y, 0, 0.85, 1.1, 0.85);
+      else if (top === 'leaf') ball(0.05, mat(0x4f9a44), 0, y, 0, 0.6, 1.1, 0.25).rotation.z = 0.5;
+      else if (top === 'duck') {
+        ball(0.035, mat(0xffd23f), 0, y - 0.01, 0, 1.2, 0.9, 1);
+        ball(0.025, mat(0xffd23f), 0.03, y + 0.03, 0);
+        ball(0.012, mat(0xf08a3c), 0.058, y + 0.028, 0, 1.4, 0.6, 0.8);
+      } else if (top === 'pan') {
+        cyl(0.045, 0.045, 0.012, mat(0x3a3a3a), 0, y - 0.03, 0, 14);
+        ball(0.02, mat(0xffd23f), 0, y - 0.02, 0, 1, 0.5, 1);
+      } else if (top === 'flame') {
+        add(new THREE.ConeGeometry(0.035, 0.09, 7), mat(0xff8a3a, { emissive: 0xff6a1a, emissiveIntensity: 0.5 }), 0, y, 0);
+        add(new THREE.ConeGeometry(0.018, 0.05, 6), mat(0xffe08a, { emissive: 0xffd060, emissiveIntensity: 0.6 }), 0, y - 0.01, 0.012);
+      }
       break;
     }
     case 'q_plant': {

@@ -712,9 +712,10 @@ export class ProceduralFox {
   }
 
   setOutfit(wear = {}) {
-    const key = `${wear.head ?? ''}|${wear.back ?? ''}|${wear.neck ?? ''}|${wear.hair ?? ''}|${wear.clip ?? ''}`;
+    const key = `${wear.head ?? ''}|${wear.back ?? ''}|${wear.neck ?? ''}|${wear.hair ?? ''}|${wear.clip ?? ''}|${wear.face ?? ''}`;
     if (this._outfitKey === key) return;
     this._outfitKey = key;
+    this.setMakeup(wear.face ?? ''); // 💄 臉妝（任務本集章送的；id 就是臉妝的樣子）
     this.outfit ??= {};
     // 💇 頭髮會看同時戴了什麼：戴帽子就收起頭頂的丸子、刺刺；背背包、圍圍巾就把長髮收短一點
     const fit = { hat: !!wear.head, back: !!wear.back, neck: !!wear.neck };

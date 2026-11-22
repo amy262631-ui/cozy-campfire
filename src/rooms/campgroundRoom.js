@@ -816,6 +816,8 @@ export function createCampgroundRoom() {
     // 作者 11/19：要注意跟其他擺件干涉 → 幾個候選位置一個一個試，避開帳篷（含船屋的水池）、菜園、門牌、門口擺設、小路、鄰居
     const fr = frame(p.ry);
     const toW = (lx, lz) => ({ x: p.x + fr.fx * lz + fr.rx * lx, z: p.z + fr.fz * lz + fr.rz * lx });
+    // ⛵ 船屋外面那一片水（作者 11/22：小雞跑到水裡）：圍籬整圈都要在水外面（圍籬半寬約 1 公尺，再多留一點）
+    const inBoatWater = (x, lz) => sh.id === 'houseboat' && Math.hypot(x, lz - 0.6 * SCALE) < sh.W * 2.3 * SCALE + 1.35;
     const coopSpot = () => {
       const hw = (sh.kind === 'rect' ? sh.W : sh.R) * SCALE + 0.6;
       const hd = front + 0.6;
@@ -845,10 +847,19 @@ export function createCampgroundRoom() {
         [hw * 0.5, -(hd + 1.7)],
         [0, -(hd + 1.9)],
         [-(hw * 0.5), -(hd + 1.7)],
+        [hw + 2.6, 0],
+        [hw + 2.6, hd + 0.8],
+        [hw + 1.2, hd + 1.8],
+        // 都不行（例：船屋的水很大）→ 繞著帳篷一圈一圈往外找
+        ...[0, 1, 2].flatMap((k) => Array.from({ length: 16 }, (_, i) => {
+          const a = (i / 16) * Math.PI * 2;
+          const rad = (sh.id === 'houseboat' ? sh.W * 2.3 * SCALE + 1.5 : Math.max(hw, hd) + 1.4) + k * 0.8;
+          return [Math.sin(a) * rad * side, Math.cos(a) * rad + (sh.id === 'houseboat' ? 0.6 * SCALE : 0)];
+        })),
       ]) {
         const x = lx * side;
         if (Math.abs(x) < hw + 1.0 && Math.abs(lz) < hd + 0.9) continue; // 帳篷本身
-        if (sh.id === 'houseboat' && Math.hypot(x, lz - 0.6 * SCALE) < sh.W * 2.3 * SCALE + 0.8) continue; // ⛵ 船屋外面那一片水
+        if (inBoatWater(x, lz)) continue; // ⛵ 船屋外面那一片水
         if (sh.id === 'treehouse' && Math.hypot(x - TREEHOUSE_SPOTS.branch.x * SCALE, lz - TREEHOUSE_SPOTS.branch.z * SCALE) < 1.6) continue; // 🌳 樹屋的鞦韆
         if (busy.some(([bx, bz, r]) => Math.hypot(x - bx, lz - bz) < r + 1.0)) continue; // 圍籬比雞舍寬
         const w = toW(x, lz);
@@ -865,6 +876,7 @@ export function createCampgroundRoom() {
         ['big', BIG_SPOT.x, BIG_SPOT.z + 0.4],
       ]) {
         const x = lx * side;
+        if (inBoatWater(x, lz)) continue;
         const w = toW(x, lz);
         if (pathDist(w.x, w.z) < 0.9) continue;
         if (PLOTS.some((q, k) => q !== PLOTS[p.i] && Math.hypot(q.x - w.x, q.z - w.z) < 3.2)) continue;
@@ -966,7 +978,7 @@ export function createCampgroundRoom() {
                 if (h.wait <= 0) {
                   // 圍籬裡隨便找一個地方走過去（橢圓形裡面）
                   const a = Math.random() * Math.PI * 2;
-                  const r = Math.sqrt(Math.random());
+                  const r = Math.sqrt(Math.random()) * 0.8; // 不要走到圍籬邊邊（作者 11/22：小雞跑出去）
                   h.tx = cx + Math.cos(a) * r * inW;
                   h.tz = cz + Math.sin(a) * r * inD;
                 }
@@ -983,6 +995,16 @@ export function createCampgroundRoom() {
               const v = Math.min(d, dt * 0.3);
               h.x += (dx / d) * v;
               h.z += (dz / d) * v;
+              // 保險：一定待在圍籬裡（橢圓 85% 以內）
+              const ex = (h.x - cx) / inW;
+              const ez = (h.z - cz) / inD;
+              const e = Math.hypot(ex, ez);
+              if (e > 0.85) {
+                h.x = cx + (ex / e) * 0.85 * inW;
+                h.z = cz + (ez / e) * 0.85 * inD;
+                h.tx = h.x;
+                h.tz = h.z;
+              }
               h.o.position.set(h.x, 0, h.z);
               h.o.rotation.y = Math.atan2(dx, dz);
             }

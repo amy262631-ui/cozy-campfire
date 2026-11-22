@@ -408,6 +408,12 @@ export class RitualGuide {
     }
   }
 
+  /** 📒 任務本「🌱 新手」頁用：做完幾步、一共幾步 */
+  introStatus() {
+    const done = this.#introDone();
+    return { done: INTRO.filter((id) => done.includes(id)).length, total: INTRO.length };
+  }
+
   /** 新手小任務還在進行中（第一次來，或之前做到一半） */
   get kidMode() {
     const done = this.#introDone();

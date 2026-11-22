@@ -2,7 +2,6 @@ import { t } from '../i18n/i18n.js';
 import { GIFT_FURNITURE } from '../game/furniture.js';
 import { TENT_STYLE_BY_ID } from '../game/tentStyles.js';
 import { OUTFIT_BY_ID } from '../game/outfits.js';
-import { CHALLENGE_BY_ID } from '../game/dailyChallenge.js';
 import { addCloseX } from './CloseX.js';
 
 /**
@@ -121,7 +120,7 @@ export class GiftPanel {
         flow(step('📤', t('傳連結')), step('👆', t('朋友點進來')), step('⏱️', t('玩 {m} 分鐘', { m: R.share ?? 1 })), step('🎁', t('你拿到'))) +
           netNote +
           `<div class="flow-or">${t('或')}</div>` +
-          flow(step('🎯', t('今日挑戰 3 題')), step('✅', t('全部做完')), step('🎁', t('你拿到'))),
+          flow(step('📒', t('每日任務 3 題')), step('✅', t('全部做完')), step('🎁', t('你拿到'))),
       ),
       card(
         'fc-new',
@@ -157,21 +156,11 @@ export class GiftPanel {
     const o = (id) => OUTFIT_BY_ID[id];
     const rows = [];
     if (o(info.daily)) {
-      rows.push(row(o(info.daily).icon, t(o(info.daily).zh), t('👒 今天的每日造型・朋友點你的連結進來玩 1 分鐘，或完成下面的「今日挑戰」'), info.dailyGot, '', `outfit:${info.daily}`));
-      // 🎯 今日挑戰：不想分享的人，做完今天 3 題也能拿
-      if (!info.dailyGot && info.chal?.length) {
-        rows.push(
-          `<div class="chal-box"><div class="chal-title">${t('🎯 今日挑戰（3 題都做完就拿到今天的每日造型）')}</div>${info.chal
-            .map((c) => {
-              const d = CHALLENGE_BY_ID[c.id];
-              const ok = c.have >= c.need;
-              return `<div class="chal-row${ok ? ' ok' : ''}"><span>${d?.icon ?? ''} ${t(d?.zh ?? '')}</span><b>${ok ? '✅' : `${c.have}/${c.need}`}</b></div>`;
-            })
-            .join('')}</div>`,
-        );
-      }
+      rows.push(row(o(info.daily).icon, t(o(info.daily).zh), t('👒 今天的每日造型・朋友點你的連結進來玩 1 分鐘；做完任務本的每日 3 題也送'), info.dailyGot, '', `outfit:${info.daily}`));
     }
-    if (o(info.weekly)) rows.push(row(o(info.weekly).icon, t(o(info.weekly).zh), t('🌟 這週限定造型・朋友第一次透過你的連結來玩，待滿 {m} 分鐘', { m: info.stay }), info.weeklyGot, '', `outfit:${info.weekly}`));
+    if (o(info.weekly)) rows.push(row(o(info.weekly).icon, t(o(info.weekly).zh), t('🌟 這週限定造型・朋友第一次透過你的連結來玩，待滿 {m} 分鐘；做完任務本每週 5 題也送', { m: info.stay }), info.weeklyGot, '', `outfit:${info.weekly}`));
+    // 📒 作者 11/22：造型也能做任務拿 → 一顆按鈕帶去任務本
+    rows.push(`<button type="button" class="shop-buy-tent gift-quest" data-quest>${t('📒 看任務')}</button>`);
     if (o(info.dateNext)) rows.push(row(o(info.dateNext).icon, t(o(info.dateNext).zh), t('🔥 營火之約限定・早上或晚上 9:30～10:00 朋友透過你的連結進來，兩個人都拿到'), false, '', `outfit:${info.dateNext}`));
     const nameOf = (id) => {
       const f = GIFT_FURNITURE.find((x) => x.id === id);
@@ -186,6 +175,7 @@ export class GiftPanel {
       rows.push(row(g.icon, g.name, how, info.gifts.includes(r.id), prog, `${GIFT_FURNITURE.some((x) => x.id === r.id) ? 'furn' : 'style'}:${r.id}`));
     }
     this.list.innerHTML = rows.join('');
+    this.list.querySelector('[data-quest]')?.addEventListener('click', () => (this.close(), this.onQuest?.()));
     for (const el of this.list.querySelectorAll('[data-prev]')) {
       el.addEventListener('click', () => {
         const [kind, id] = el.dataset.prev.split(':');

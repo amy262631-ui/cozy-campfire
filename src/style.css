@@ -7722,3 +7722,44 @@ body.touch .bait-btn { right: 10px; bottom: 262px; }
 .fish-tools button[hidden] { display: none; }
 .rank-tabs { margin-bottom: 8px; }
 .join-name-hint { font-size: 12px; opacity: 0.7; margin: 4px 2px 0; }
+
+/* ---------- 📒 任務本（作者 11/22） ---------- */
+.quest-chip { margin-left: 6px; padding: 2px 9px; border-radius: 999px; font: inherit; font-size: 12px; cursor: pointer; border: 1px solid rgba(255, 200, 120, 0.6); background: rgba(233, 138, 60, 0.3); color: #ffe9cc; pointer-events: auto; }
+.qb-tabs { margin-bottom: 8px; }
+.qb-q { display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 8px 10px; margin: 6px 0; }
+.qb-q.done { background: rgba(122, 192, 106, 0.16); }
+.qb-ic { font-size: 24px; flex: none; }
+.qb-t { flex: 1; min-width: 0; }
+.qb-t b { display: block; font-size: 14px; line-height: 1.35; }
+.qb-t small { font-size: 12px; opacity: 0.8; }
+.qb-bar { height: 6px; background: rgba(0, 0, 0, 0.35); border-radius: 4px; margin-top: 4px; overflow: hidden; }
+.qb-bar i { display: block; height: 100%; background: #7ac06a; }
+.qb-st { flex: none; width: 50px; height: 50px; white-space: nowrap; letter-spacing: -0.3px; border-radius: 50%; border: 2px dashed rgba(255, 230, 200, 0.45); display: flex; align-items: center; justify-content: center; font-size: 11.5px; color: rgba(255, 230, 200, 0.75); text-align: center; line-height: 1.1; }
+.qb-st.ok { border: 3px solid #d8443a; color: #d8443a; background: #f6e7d2; font-weight: 800; transform: rotate(-12deg); font-size: 12.5px; }
+.qb-swap { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255, 230, 200, 0.4); background: rgba(255, 255, 255, 0.08); color: inherit; font-size: 14px; cursor: pointer; }
+.qb-rew { margin: 6px 0; padding: 8px 10px; border-radius: 12px; background: rgba(255, 196, 107, 0.12); font-size: 13px; line-height: 1.45; }
+.qb-rew.ok { background: rgba(122, 192, 106, 0.2); }
+.qb-stamps { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; margin: 4px 0 6px; }
+.qb-mini { aspect-ratio: 1; border-radius: 50%; border: 1.5px dashed rgba(255, 230, 200, 0.4); }
+.qb-mini.ok { border: 2px solid #d8443a; background: #f6e7d2; }
+.qb-cats { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0; }
+.qb-cat { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.07); }
+.qb-cat.ok { background: rgba(242, 193, 74, 0.3); font-weight: 700; }
+.qb-big { font-size: 18px; font-weight: 800; text-align: center; margin: 14px 0 6px; }
+.gift-quest { margin-top: 8px; }
+
+/* ---------- 🐔 小肥雞格子（作者 11/22） ---------- */
+.hen-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
+.hcell { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 6px 8px; border-radius: 14px; background: rgba(120, 90, 60, 0.28); border: 2px solid transparent; text-align: center; min-width: 0; }
+.hcell.has-egg { background: rgba(255, 226, 160, 0.18); }
+.hcell.sel { border-color: #f2c14a; background: rgba(242, 193, 74, 0.16); }
+.hcell.empty { border: 2px dashed rgba(255, 230, 200, 0.3); background: transparent; justify-content: center; }
+.hcell > i { font-style: normal; font-size: 36px; line-height: 1.05; }
+.hcell.empty > i { opacity: 0.6; }
+.hcell small { font-size: 11.5px; opacity: 0.85; line-height: 1.35; }
+.hc-nm { font: inherit; font-weight: 800; font-size: 14px; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hc-nm small { font-weight: 400; opacity: 0.7; font-size: 11px; }
+.hc-dots { font-size: 12px; letter-spacing: 2px; color: #f2c14a; }
+.hc-badge { position: absolute; top: 5px; right: 5px; background: #fff3d6; color: #8a5a20; border-radius: 999px; font-size: 12px; font-weight: 800; padding: 1px 7px; }
+.hc-full { position: absolute; top: 5px; left: 5px; font-size: 11px; background: rgba(0, 0, 0, 0.3); border-radius: 999px; padding: 1px 6px; }
+.hcell .mini-btn { margin-top: 4px; }

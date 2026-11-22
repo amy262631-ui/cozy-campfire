@@ -50,7 +50,7 @@ import { cleanNameText, AUTHOR_MARK } from '../src/game/nameRules.js';
 import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS, isLoftCell } from '../src/game/furnitureCatalog.js';
 import { YARD_BY_ID, hasYard, isBigYard, isDoorYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
-import { CHALLENGE_BY_ID, challengesOf } from '../src/game/dailyChallenge.js';
+import { DAILY_BY_ID, WEEKLY_BY_ID, CAT_TROPHY, MAKEUP_ORDER, DAILY_GAIN, STAMP_MONTH, STAMP_DAILY, STAMP_WEEKLY, WEEKLY_PLANT_AT, WEEKLY_BAIT_AT, CAT_TROPHY_AT, dailyOf, dailySwapTo, weeklyOf, weekKey } from '../src/game/quests.js';
 import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_FIRST_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, SPIRIT_ACT_KIND, SPIRIT_NIGHT_STAR, SPIRIT_PLAY_DAY, SPIRIT_ACCS, SPIRIT_ACC_BY_ID, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
 import { isXmasDay as isXmasDay0, isXmasShopDay as isXmasShopDay0 } from '../src/game/season.js';
 const isXmasDay = (k) => process.env.XMAS_TEST === '1' || isXmasDay0(k);
@@ -929,6 +929,8 @@ function finishStay(st) {
     const a = players[friend] ? grantOutfit(friend, nextDateOutfit(players[friend].outfits, isOpen)?.id, 'date') : null;
     const b = grantOutfit(ref, nextDateOutfit(players[ref].outfits, isOpen)?.id, 'date');
     if (a || b) bump('dates');
+    questEv(friend, 'date'); // 📒 營火之約
+    questEv(ref, 'date');
     logInvite(kind, ref, friend, name, a || b ? '✅ 成功：兩個人拿營火之約造型' : '✅ 成立了（兩個人造型都已經有了）', !!st.net);
     for (const s2 of io.sockets.sockets.values()) if (s2.data.vid === ref) s2.emit('dateFriend', { name });
     suggestFriend(friend, ref);
@@ -956,9 +958,143 @@ function checkStays(onlyFriend = null) {
 setInterval(() => checkStays(), 5000);
 
 // ---------- 👒 造型收集 ----------
-const OUTFIT_SLOTS = ['head', 'back', 'neck', 'hair', 'clip']; // 📎 髮夾（12 月起，月票本月造型）
+const OUTFIT_SLOTS = ['head', 'back', 'neck', 'hair', 'clip', 'face']; // 📎 髮夾（12 月起，月票本月造型）；💄 臉妝（任務本）
 /** 身上穿的造型 → 線上同步用的代號 [頭, 背, 脖子]（0＝沒穿） */
 const wearCodes = (w) => OUTFIT_SLOTS.map((k) => outfitCode(w?.wear?.[k]));
+// ---------- 📒 任務本（作者 11/22；規則在 src/game/quests.js） ----------
+/** 這個人能抽到哪些題目 */
+const questCtx = (vid) => {
+  const h = homes[vid];
+  return { home: !!h?.tent, hens: !!(h?.hens?.length && isOpen({ from: HEN_FROM })), spirit: !!(players[vid]?.spirit?.own || players[vid]?.spirit?.xp > 0) };
+};
+/** 送任務家具（沒帳篷也先放背包，有帳篷就能擺） */
+function giveQuestFurn(vid, id) {
+  if (!CATALOG_BY_ID[id]) return;
+  const h = (homes[vid] ??= newHome());
+  h.inv[id] = (h.inv[id] ?? 0) + 1;
+  saveJson('homes.json', homes);
+  for (const s of socketsOf(vid)) s.emit('staffGift', { kind: 'furn', id, home: publicHome(h), why: 'quest' });
+}
+/** 這週的題目（星期一換新；換週那天才抽，之後固定） */
+function weekState(vid) {
+  const w = players[vid];
+  const wk = weekKey(dayKey());
+  if (w.wq?.w !== wk) w.wq = { w: wk, ids: weeklyOf(wk, questCtx(vid)), n: {}, p: {}, got: {} };
+  return w.wq;
+}
+/** 任務本的樣子（給前端畫） */
+function questView(vid) {
+  const w = players[vid];
+  if (!w) return null;
+  const d = dayKey();
+  const ctx = questCtx(vid);
+  const ch = w.ch?.d === d ? w.ch : { d, n: {} };
+  const daily = dailyOf(d, ctx, ch.sw).map((id) => ({ id, have: Math.min(ch.n[id] ?? 0, DAILY_BY_ID[id].n), need: DAILY_BY_ID[id].n }));
+  const wq = weekState(vid);
+  const weekly = wq.ids.map((id) => ({ id, have: Math.min(wq.n[id] ?? 0, WEEKLY_BY_ID[id].n), need: WEEKLY_BY_ID[id].n }));
+  const ym = d.slice(0, 7);
+  const st = w.stamp?.m === ym ? w.stamp : { m: ym, n: 0 };
+  return {
+    daily, swapped: !!ch.sw, dailyOutfit: dailyOutfit(d).id, dailyDone: daily.every((x) => x.have >= x.need),
+    weekly, wk: wq.w, weeklyOutfit: weeklyOutfit(d).id, weeklyGot: wq.got ?? {}, baitOn: isOpen({ from: BOAT_FROM }),
+    stamps: st.n, stampNeed: STAMP_MONTH, stampGot: !!st.got, makeupNext: MAKEUP_ORDER.find((m) => !(w.outfits ?? []).includes(m)) ?? null,
+    cats: w.qcat ?? {}, catAt: CAT_TROPHY_AT,
+  };
+}
+/** 蓋章（每月集滿 20 個：臉妝＋金獎盃） */
+function addStamp(vid, n) {
+  const w = players[vid];
+  const ym = dayKey().slice(0, 7);
+  if (w.stamp?.m !== ym) w.stamp = { m: ym, n: 0 };
+  w.stamp.n += n;
+  if (w.stamp.n >= STAMP_MONTH && !w.stamp.got) {
+    w.stamp.got = true;
+    const mk = MAKEUP_ORDER.find((m) => !(w.outfits ?? []).includes(m));
+    if (mk) grantOutfit(vid, mk, 'stamp');
+    giveQuestFurn(vid, 'q_trophy');
+    bump('questMonth');
+  }
+}
+/** 一題做完：那一類累積 10 題送達人獎盃 */
+function questCat(vid, cat) {
+  const w = players[vid];
+  w.qcat ??= {};
+  w.qcat[cat] = (w.qcat[cat] ?? 0) + 1;
+  w.qtro ??= [];
+  if (w.qcat[cat] >= CAT_TROPHY_AT && CAT_TROPHY[cat] && !w.qtro.includes(cat)) {
+    w.qtro.push(cat);
+    giveQuestFurn(vid, CAT_TROPHY[cat]);
+  }
+}
+/**
+ * 📒 發生一件事（ev）：算進今天的每日、這週的每週任務。
+ * opt.who：對象（要「不同的人」的題目用）；opt.net：做的人的網路（同一個網路的對象不算）
+ */
+function questEv(vid, ev, k = 1, opt = {}) {
+  const w = players[vid];
+  if (!w || !vid) return;
+  const d = dayKey();
+  const ctx = questCtx(vid);
+  const done = [];
+  let moved = false;
+  // 📅 每日
+  if (w.ch?.d !== d) w.ch = { d, n: {} };
+  const dv = dailyOf(d, ctx, w.ch.sw);
+  for (const id of dv) {
+    const q = DAILY_BY_ID[id];
+    if (q.ev !== ev || (w.ch.n[id] ?? 0) >= q.n) continue;
+    w.ch.n[id] = Math.min(q.n, (w.ch.n[id] ?? 0) + k);
+    moved = true;
+    if (w.ch.n[id] >= q.n) {
+      done.push(['d', id]);
+      giveTo(vid, DAILY_GAIN, 'quest');
+      questCat(vid, q.cat);
+    }
+  }
+  // 🗓️ 每週
+  const wq = weekState(vid);
+  for (const id of wq.ids) {
+    const q = WEEKLY_BY_ID[id];
+    if (!q || q.ev !== ev || (wq.n[id] ?? 0) >= q.n) continue;
+    if (q.who) {
+      if (!opt.who || opt.who === vid) continue;
+      if (opt.net && socketsOf(opt.who).some((s) => s.data.netKey === opt.net)) continue; // 同一個網路的不算
+      wq.p ??= {};
+      wq.p[id] ??= [];
+      if (wq.p[id].includes(opt.who)) continue;
+      wq.p[id].push(opt.who);
+      wq.n[id] = wq.p[id].length;
+    } else wq.n[id] = Math.min(q.n, (wq.n[id] ?? 0) + k);
+    moved = true;
+    if (wq.n[id] >= q.n) {
+      done.push(['w', id]);
+      questCat(vid, q.cat);
+    }
+  }
+  if (!moved) return;
+  // 📅 每日 3 題都做完：今天的造型＋1 個章
+  if (done.some(([t]) => t === 'd') && dv.every((id) => (w.ch.n[id] ?? 0) >= DAILY_BY_ID[id].n) && !w.ch.all) {
+    w.ch.all = true;
+    grantOutfit(vid, dailyOutfit(d).id, 'chal');
+    addStamp(vid, STAMP_DAILY);
+    bump('chals');
+  }
+  // 🗓️ 每週：3 題小盆栽、4 題魚飼料（11/27 起）、5 題本週造型＋3 個章＋銀獎盃
+  const wdone = wq.ids.filter((id) => (wq.n[id] ?? 0) >= WEEKLY_BY_ID[id].n).length;
+  wq.got ??= {};
+  if (wdone >= WEEKLY_PLANT_AT && !wq.got.plant) (wq.got.plant = true), giveQuestFurn(vid, 'q_plant');
+  if (wdone >= WEEKLY_BAIT_AT && !wq.got.bait && isOpen({ from: BOAT_FROM })) (wq.got.bait = true), (w.bait = (w.bait ?? 0) + 1);
+  if (wdone >= wq.ids.length && !wq.got.all) {
+    wq.got.all = true;
+    grantOutfit(vid, weeklyOutfit(d).id, 'qweek');
+    addStamp(vid, STAMP_WEEKLY);
+    giveQuestFurn(vid, 'q_tro_silver');
+    bump('questWeek');
+  }
+  saveJson('players.json', players);
+  for (const s of socketsOf(vid)) s.emit('quest', { view: questView(vid), done });
+}
+
 /** 送一款造型（不一定在線上；在線上的話通知他）；已經有了回傳 null */
 function grantOutfit(vid, id, why) {
   const w = players[vid];
@@ -1040,9 +1176,11 @@ const boatRooms = new Map();
 const coopRuns = new Map();
 let coopSeq = 0;
 /** 🪨 今天的打水漂排行（全營地一起）：{ day, list: [{ name, vid, b }] }（前 5 名，一人一筆） */
+// 作者 11/22：排行存進 totals.json，伺服器重開（Render 更新）也不會不見
 let skipBoard = { day: '', list: [] };
 const skipTop = () => {
-  if (skipBoard.day !== dayKey()) skipBoard = { day: dayKey(), list: [] };
+  if (skipBoard.day !== dayKey()) skipBoard = totals.skipB?.day === dayKey() ? totals.skipB : { day: dayKey(), list: [] };
+  totals.skipB = skipBoard;
   return skipBoard.list.map((e) => ({ name: e.name, b: e.b }));
 };
 let boatSeq = 0;
@@ -2487,6 +2625,7 @@ function bgFinish(g) {
   if (g.players.length < 2) best = []; // 只剩一個人：不算輸贏
   g.winners = best.map((p) => p.id);
   g.gain = Object.fromEntries(best.map((p) => [p.id, bgAward(p.vid)]));
+  if (g.players.length >= 2) for (const p of g.players) if (p.vid) questEv(p.vid, 'bgame'); // 📒 玩一局桌遊
   const d = today();
   d.bg ??= {};
   d.bg[g.game] = (d.bg[g.game] ?? 0) + 1;
@@ -2598,30 +2737,34 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     socket.emit('wallet', { pc: wal.pc, delta: n, reason });
   };
-  /** 🎯 今日挑戰：今天的 3 題做完，就拿到今天的每日造型（不用分享連結） */
-  const chalView = () => {
-    const d = dayKey();
-    const n = wal?.ch?.d === d ? wal.ch.n : {};
-    return challengesOf(d).map((id) => ({ id, have: Math.min(n[id] ?? 0, CHALLENGE_BY_ID[id].n), need: CHALLENGE_BY_ID[id].n }));
-  };
-  const chal = (id, k = 1) => {
+  /** 🎯 今日挑戰 → 📒 任務本（作者 11/22）：舊的 chal(ev) 照樣能用，現在轉成任務事件 */
+  const chalView = () => questView(player?.vid)?.daily ?? [];
+  const chal = (ev, k = 1, opt = {}) => {
     if (!wal || !player?.vid) return;
     wal.act = Date.now(); // 有在玩（同一個網路的邀請要看這個）
-    const d = dayKey();
-    const ids = challengesOf(d);
-    if (!ids.includes(id)) return;
-    if (wal.ch?.d !== d) wal.ch = { d, n: {} };
-    const c = CHALLENGE_BY_ID[id];
-    if ((wal.ch.n[id] ?? 0) >= c.n) return;
-    wal.ch.n[id] = Math.min(c.n, (wal.ch.n[id] ?? 0) + k);
-    const view = chalView();
-    const done = view.every((x) => x.have >= x.need);
-    socket.emit('chal', { list: view, id, done });
-    if (done) {
-      const got = grantOutfit(player.vid, dailyOutfit(d).id, 'chal');
-      if (got) bump('chals');
-    }
+    questEv(player.vid, ev, k, { net: socket.data.netKey, ...opt });
   };
+  // 📒 打開任務本
+  socket.on('questInfo', (_d, ack) => {
+    if (!player?.vid || !wal) return ack?.({ ok: false });
+    ack?.({ ok: true, ...questView(player.vid) });
+  });
+  // 🔄 每日換一題（一天一次，換同一類：互動換互動）
+  socket.on('questSwap', (data = {}, ack) => {
+    if (!player?.vid || !wal) return ack?.({ ok: false });
+    const d = dayKey();
+    if (wal.ch?.d !== d) wal.ch = { d, n: {} };
+    if (wal.ch.sw) return ack?.({ ok: false, reason: 'used' });
+    const ctx = questCtx(player.vid);
+    const ids = dailyOf(d, ctx);
+    const from = String(data.id ?? '');
+    if (!ids.includes(from) || (wal.ch.n[from] ?? 0) >= DAILY_BY_ID[from].n) return ack?.({ ok: false, reason: 'bad' });
+    const to = dailySwapTo(d, ctx, ids, from);
+    if (!to) return ack?.({ ok: false, reason: 'none' });
+    wal.ch.sw = { from, to };
+    saveJson('players.json', players);
+    ack?.({ ok: true, ...questView(player.vid) });
+  });
   /** ✨ 小精靈：存檔、加親密度、長大（規則在 src/game/spiritRules.js） */
   /** 有沒有小精靈（11/11 改：要到商店買蛋才有；xp>0 的是之前就在養的，也算有） */
   const spiritOf = () => {
@@ -3758,6 +3901,8 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     io.to(rkey).emit('ate', { id: socket.id, dish });
     dineEmit(h);
+    chal('dine'); // 📒 在朋友家吃一份
+    questEv(homeOwner, 'guest', 1, { who: player.vid, net: socket.data.netKey }); // 📒 主人：有人來吃
     ack?.({ ok: true, dish, buff: wal.buff ?? null });
   });
   // 🐾 買動物外型：kind＝fur（特殊毛色索引）／tail／ear
@@ -4132,9 +4277,17 @@ io.on('connection', (socket) => {
     }
     saveJson('players.json', players);
     bump('gathers');
+    // 📒 任務本：抓蟲、採集、迷霧森林
     if (isBug) {
-      if (item.rarity >= 2) chal('bug');
+      chal('bug');
+      if (item.rarity >= 2) chal('bug2');
     } else chal('gather');
+    if (roomId === 'mist_forest') {
+      chal('mistGather');
+      if (item.type === 'mush') chal('mistMush');
+      if (item.rarity >= 3) chal('mistRare');
+    }
+    if (first) chal('dexNew');
     spiritGain(item.type === 'mush' || roomId === 'mist_forest' ? 'mushGather' : 'gather'); // 🍄 採蘑菇、在迷霧森林採集算蘑菇
     ack?.({ ok: true, id: item.id, count: wal.bk[item.id], first, gain, bonus, extra, readyAt: wal.gat[i], now });
   });
@@ -4275,6 +4428,7 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     bump('cooks');
     if (d.need.length >= 3) chal('cook3');
+    chal('cookKind', 1, { who: `dish:${d.id}` }); // 📒 煮不同的料理
     spiritGain('cook');
     io.to(rkey).emit('cooked', { id: socket.id, name: player.name, dish: d.id });
     // 🍲 大菜（營火大鍋菜、營火麻辣鍋）：附近 6 公尺內的每個人都分到一份
@@ -4432,6 +4586,8 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     bump('cooks');
     if (items.length >= 3) chal('cook3');
+    if (!r.dark) chal('cookKind', 1, { who: `dish:${r.id}` }); // 📒 煮不同的料理
+    if (!r.dark && items.some((x) => /:(gold_)?egg$/.test(x))) chal('eggCook'); // 📒 用雞蛋煮
     spiritGain('cook');
     io.to(rkey).emit('cooked', { id: socket.id, name: player.name, dish: r.id });
     if (r.recipe && POT_BY_ID[r.recipe.id] && (kind === 'hidden' || kind === 'unlock') && firstKind) console.log(`[料理] ${player.name} 第一次煮出隱藏食譜 ${r.recipe.zh}`);
@@ -4449,6 +4605,7 @@ io.on('connection', (socket) => {
     if (first) award(LEGEND_GAIN, 'legend');
     saveJson('players.json', players);
     bump('legends');
+    chal('legend'); // 📒
     ack?.({ ok: true, first, gain: first ? LEGEND_GAIN : 0, lg: wal.lg });
   });
   socket.on('legendInfo', (data, ack) => ack?.({ ok: !!wal, lg: wal?.lg ?? {} }));
@@ -4499,6 +4656,7 @@ io.on('connection', (socket) => {
     sp.day.play[gk] = (sp.day.play[gk] ?? 0) + 1;
     const before = sp.xp;
     bump('spiritPlay');
+    chal('spiritPlay'); // 📒
     spiritGain('play');
     saveJson('players.json', players);
     ack?.({ ok: true, gain: sp.xp - before, sp: spiritView() });
@@ -4673,6 +4831,7 @@ io.on('connection', (socket) => {
     h.garden[i] = { c: c.id, at: Date.now(), w: [] };
     saveJson('homes.json', homes);
     bump('plants');
+    chal('plant'); // 📒
     ack?.(gardenInfo(player.vid));
   });
   // 🌱 全部空格一次種同一種（作者 11/20）：種子錢 × 空格數
@@ -4695,6 +4854,7 @@ io.on('connection', (socket) => {
     for (const i of empty) h.garden[i] = { c: c.id, at: now, w: [] };
     saveJson('homes.json', homes);
     bump('plants', empty.length);
+    chal('plant', empty.length); // 📒
     ack?.({ ...gardenInfo(player.vid), n: empty.length });
   });
   // ➕ 開墾菜園：多一格（最多 6 格），越後面越貴
@@ -4735,6 +4895,7 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     bump('harvests');
     chal('harvest');
+    chal('harvestCell'); // 📒
     spiritGain('harvest');
     ack?.({ ...gardenInfo(player.vid), got: { id: c.id, n }, first, gain: first ? CROP_FIRST_GAIN : 0, basket: wal.bk });
   });
@@ -4764,6 +4925,7 @@ io.on('connection', (socket) => {
       got[c.id] = (got[c.id] ?? 0) + n;
       bump('harvests');
       chal('harvest');
+      chal('harvestCell'); // 📒
       spiritGain('harvest');
     });
     if (!slots.length) return ack?.({ ok: false, reason: skipNight ? 'night' : 'notYet' });
@@ -4789,7 +4951,7 @@ io.on('connection', (socket) => {
     sl.w.push(me);
     saveJson('homes.json', homes);
     bump('waters');
-    chal('water');
+    chal('water', 1, { who: owner }); // 📒 幫朋友澆水（每週要不同的人）
     for (const s2 of io.sockets.sockets.values()) if (s2.data.vid === owner) s2.emit('gardenWatered', { name: player.name, c: sl.c });
     ack?.(gardenInfo(owner));
   });
@@ -4859,6 +5021,7 @@ io.on('connection', (socket) => {
     if (!wal.bk[id]) delete wal.bk[id];
     saveJson('players.json', players);
     saveJson('homes.json', homes);
+    chal('henfeed'); // 📒
     ack?.({ ...henInfo(player.vid), basket: wal.bk, up: fatOf(hen.fed) > before ? fatOf(hen.fed) : 0 });
   });
   // 🥚 撿蛋：全部的雞一起撿；1% 是金蛋
@@ -4885,6 +5048,7 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     saveJson('homes.json', homes);
     bump('eggs');
+    chal('egg', egg + gold); // 📒 撿雞蛋（每日 1 次就算、每週算顆數）
     if (gold) console.log(`[小肥雞] ${player.name} 撿到金蛋 ×${gold}`);
     ack?.({ ...henInfo(player.vid), got: { egg, gold }, basket: wal.bk });
   });
@@ -4919,6 +5083,7 @@ io.on('connection', (socket) => {
     h.notes = h.notes.slice(-30);
     saveJson('homes.json', homes);
     io.to(rkey).emit('homeUpdate', { owner: homeId(homeOwner), home: publicHome(h) });
+    if (homeOwner !== player.vid) chal('note', 1, { who: homeOwner }); // 📒 去朋友帳篷留言
     ack?.({ ok: true });
   });
   // 🗑️ 主人刪掉自己帳篷留言本的一則（作者 11/16：有人在作者的留言本亂寫）
@@ -5225,6 +5390,11 @@ io.on('connection', (socket) => {
     const seat = seatAt(b, i);
     [player.x, player.z, player.posAt, player.dirty] = [seat.x, seat.z, Date.now(), true];
     bump('boatRide');
+    // 📒 坐上朋友的船／跟朋友一起坐船
+    chal('boatRide');
+    chal('boatMate');
+    const ownerVid = io.sockets.sockets.get(b.o)?.data.vid;
+    if (ownerVid) questEv(ownerVid, 'boatMate');
     boatSync();
     ack?.({ ok: true, boat: boatPublic(b), seat: i });
   });
@@ -5356,9 +5526,10 @@ io.on('connection', (socket) => {
       L.length = Math.min(L.length, 5);
       boardChanged = L.some((e) => e.vid === player.vid);
     }
-    if (boardChanged) io.emit('skipBoard', { top: skipTop() });
+    if (boardChanged) io.emit('skipBoard', { top: skipTop() }), saveJson('totals.json', totals);
     saveJson('players.json', players);
     bump('skip');
+    if (b >= 5) chal('skip5'); // 📒
     socket.to(rkey).emit('skip', { id: socket.id, b, x: +player.x.toFixed(2), z: +player.z.toFixed(2), ry: +player.ry.toFixed(3) });
     ack?.({ ok: true, b, gain, left: SKIP_PER_DAY - wal.sk.n, best: wal.sk.best, pb, top: skipTop() });
   });
@@ -5383,6 +5554,7 @@ io.on('connection', (socket) => {
     if (!wal.duckFirst) (wal.duckFirst = 1), (gain = DUCK_FIRST_GAIN), award(gain, 'duck');
     saveJson('players.json', players);
     bump('duck');
+    chal('duck'); // 📒
     io.to(rkey).emit('duck', { id: socket.id, until: player.dk });
     ack?.({ ok: true, item: pick[0], until: player.dk, left: DUCK_PER_DAY - wal.dk.n, gain, basket: wal.bk });
   });
@@ -5413,7 +5585,7 @@ io.on('connection', (socket) => {
     let fish = rollFish({ place, event: !!eventInfo().active, contest: m?.kind === 'fish', luck, boost: today.fish, boat: onBoat, night: hr >= 18 || hr < 6, open: isOpen, fire: fireOn && fr >= 0.75 }); // 🎣 吃了「釣魚好運」：稀有魚機率變高
     if (process.env.COOP_TEST === '1' && place === 'pond') fish = FISH.findIndex((f) => f.coop); // 本機測試：營火河畔每竿都是河神大鯉魚（Render 不要設）
     const shiny = canShiny(FISH[fish]) && Math.random() < (Number(process.env.SHINY_TEST) || SHINY_CHANCE * (today.shiny ? SHINY_DAY_MULT : 1)); // ✨ 異色魚（本機測試：SHINY_TEST=1 每條都是異色；Render 不要設）
-    hooked = { fish, size: rollSize(fish), at: now, shiny, fast: feed }; // fast：🐟 撒了魚飼料，上鉤比較快
+    hooked = { fish, size: rollSize(fish), at: now, shiny, fast: feed, boat: onBoat }; // fast：🐟 撒了魚飼料，上鉤比較快；boat：📒 船上釣的
     ack?.({ ok: true, fish, size: hooked.size, shiny });
   });
   // 釣到魚：全場公告＋湖畔排行（只收湖畔房間；一定要先有伺服器給的魚，而且要過了最少的時間）
@@ -5428,9 +5600,11 @@ io.on('connection', (socket) => {
     // 浮標一沉就拉的漂亮時機：魚大一點（和前端同一個算法）
     if (data.perfect && !FISH[fish].junk) size = Math.min(FISH[fish].max, Math.round(size * 1.15) + 1);
     // 🤝 河神大鯉魚：要有人一起拉才算（幫忙的人每人 +5）
+    const onBoatCatch = !!hooked.boat;
     if (FISH[fish].coop) {
       const c = coopRuns.get(rkey);
       const helpers = c && c.fisher === socket.id ? [...c.taps.values()].filter((e) => e.n >= COOP_MIN_TAPS) : [];
+      for (const e of helpers) if (e.vid) questEv(e.vid, 'coop'); // 📒 幫別人拉河神
       if (!helpers.length) return;
       coopRuns.delete(rkey);
       for (const e of helpers) if (e.vid) giveTo(e.vid, COOP_GAIN, 'coop');
@@ -5453,6 +5627,10 @@ io.on('connection', (socket) => {
     }
     bump('fish');
     if (!JUNK.has(fish)) chal('fish'), spiritGain('fish');
+    // 📒 任務本：★3 以上、船上釣、船釣限定
+    if (!JUNK.has(fish) && FISH[fish].rarity >= 3) chal('fishRare');
+    if (!JUNK.has(fish) && onBoatCatch) chal('boatFish');
+    if (FISH[fish].boat) chal('boatOnly');
     // 🌰 釣魚松果：每天前 FISH_DAILY_FULL 條照算（營火時間加倍）；之後每條固定 1 顆，稀有魚（四星以上）照算
     {
       const gain = catchGain(FISH[fish]);
@@ -5608,6 +5786,7 @@ io.on('connection', (socket) => {
     io.to(rkey).emit('fire', { fuel: chan.fuel, by: player.id, name: player.name });
     miniBonus('wood');
     spiritGain('fire');
+    chal('wood'); // 📒 添柴
     pushNews('fire');
   });
 
@@ -5803,6 +5982,7 @@ io.on('connection', (socket) => {
       so.emit('giftGot', { name: nameOfVid(me), icon: info.icon, zh: info.zh, n, cat, basket: tw.bk ?? {}, dishes: tw.dish ?? {}, home: cat === 'furn' ? publicHome(th) : null });
     }
     pushBadge(to);
+    chal('gift', 1, { who: to }); // 📒 送朋友禮物
     ack?.({ ok: true, left: GIFT_DAILY_CAP - tw.grc.v, basket: wal.bk ?? {}, dishes: wal.dish ?? {}, home: cat === 'furn' ? publicHome(h) : null });
   });
 

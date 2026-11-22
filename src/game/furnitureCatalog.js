@@ -61,7 +61,7 @@ export const ALL_COLORS = [...FURNITURE_COLORS, ...PASS_COLORS];
 export const fishFits = (tank, fish) => !!tank?.fish && !!fish && !fish.junk && (fish.legend ? 6 : fish.rarity) <= tank.fish;
 /** 這件家具算不算這個分類（cat 或 cat2） */
 export const inCat = (f, cat) => !!f && (f.cat === cat || f.cat2 === cat);
-export const hasColors = (f) => !!f && !f.gift && !f.craft && f.color !== false;
+export const hasColors = (f) => !!f && !f.gift && !f.craft && !f.quest && f.color !== false;
 
 export const FURNITURE_CATALOG = [
   // ---- 地墊 ----
@@ -278,6 +278,19 @@ export const FURNITURE_CATALOG = [
   { id: 'pass_jelly', icon: '🪼', zh: '水母燈', price: 50, cat: 'light', pass: 1, from: '2026-11-27' },
   { id: 'pass_photowall', icon: '📷', zh: '照片網牆', price: 40, cat: 'deco', wide: 0.8, pass: 1, from: '2026-11-27' },
   { id: 'pass_bouncebed', icon: '🛏️', zh: '彈簧床', price: 80, cat: 'toy', seat: 0.3, bounce: true, pass: 1, from: '2026-11-27' }, // 站上去一直彈，大家都看得到
+  // ---- 📒 任務獎勵（作者 11/22：小舖買不到，quest: 1；獎盃櫃在小舖賣） ----
+  { id: 'q_plant', icon: '🪴', zh: '每週小盆栽', cat: 'plant', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_trophy', icon: '🏆', zh: '集章金獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_silver', icon: '🥈', zh: '每週全勤銀獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_heart', icon: '💗', zh: '熱心助人獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_fish', icon: '🎣', zh: '釣魚達人獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_garden', icon: '🥕', zh: '園藝達人獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_hen', icon: '🐔', zh: '養雞達人獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_leaf', icon: '🍃', zh: '森林探險家獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_duck', icon: '🦆', zh: '河畔小高手獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_cook', icon: '🍳', zh: '小廚神獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_camp', icon: '🔥', zh: '營地小幫手獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_cabinet', icon: '🗄️', zh: '獎盃展示牆', price: 40, cat: 'table', shelf: 9, wide: 0.8, color: false }, // 一面牆的格子櫃：3×3 九格，擺獎盃、小東西
 ];
 /** 🍽️ 餐桌上的盤子放哪（相對格子中心；大餐桌往右多一格） */
 export const DINE_SLOTS = {
@@ -315,6 +328,8 @@ export const SHELF_SLOTS = [
   [-0.18, 1.0], [0.18, 1.0],
   [-0.18, 1.455], [0.18, 1.455], // 作者 11/22：最上面也能擺
 ];
+/** 🏆 獎盃展示牆 9 格（3 層 × 3 格；櫃子佔兩格寬，中心在 x +0.4） */
+export const CABINET_SLOTS = [0.1, 0.62, 1.14].flatMap((y) => [-0.06, 0.4, 0.86].map((x) => [x, y]));
 /** 這一疊還能不能再放 id（有展示櫃的話放在櫃子的格子裡） */
 export function canAddTo(stack, id) {
   const f = CATALOG_BY_ID[id];
@@ -328,7 +343,8 @@ export function canAddTo(stack, id) {
 export function stackOffset(stack, level) {
   const si = stack.findIndex((it) => CATALOG_BY_ID[it.i]?.shelf);
   if (si >= 0 && level > si) {
-    const [x, y] = SHELF_SLOTS[level - si - 1] ?? [0, 1.4];
+    const slots = stack[si].i === 'q_cabinet' ? CABINET_SLOTS : SHELF_SLOTS;
+    const [x, y] = slots[level - si - 1] ?? [0, 1.4];
     return { x, y: stackY(stack, si) + y, z: 0.02 };
   }
   return { x: 0, y: stackY(stack, level), z: 0 };
