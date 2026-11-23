@@ -7102,6 +7102,10 @@ body.touch .camp-btn[hidden] { display: none; }
   body.touch .ritual.kid { max-width: 330px; padding: 8px 12px; }
   body.touch .ritual.kid .ritual-text { font-size: 15px; }
   .ritual-sub { font-size: 12px; }
+  /* 11/23：手機橫放「👉 帶我去／打開小舖」那顆按鈕讓卡片變高，會蓋到搖桿上緣 → 按鈕、進度點縮小 */
+  body.touch .ritual.kid:has(.ritual-walk:not([hidden])) { max-width: 420px; padding-right: 150px; }
+  body.touch .ritual.kid .ritual-walk { position: absolute; right: 12px; top: calc(50% - 18px); margin: 0; padding: 6px 14px; font-size: 14px; }
+  body.touch .ritual.kid .ritual-dots { display: none; }
 }
 .flow-note { font-size: 11px; opacity: 0.75; margin: 4px 2px 0; }
 /* 🗺️ 搬家小地圖（11/09）：照營地真正的樣子 */

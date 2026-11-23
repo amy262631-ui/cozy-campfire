@@ -1383,7 +1383,7 @@ function snapPc() {
   const seen = new Set();
   for (const k of Object.keys(stats).sort().reverse().slice(0, 14)) for (const v of stats[k]?.vids ?? []) seen.add(v);
   const pcs = {};
-  for (const v of seen) if (players[v]) pcs[v] = [players[v].pc ?? 0, players[v].tot ?? 0];
+  for (const v of seen) if (players[v] && !isAuthorVid(v) && !players[v].author) pcs[v] = [players[v].pc ?? 0, players[v].tot ?? 0]; // 作者自己的不算（作者 11/23）
   d.pcs = pcs;
   for (const k of Object.keys(stats).sort().reverse().slice(30)) delete stats[k].pcs; // 只留 30 天，存檔不要變太大
   saveJson('stats.json', stats);
@@ -1882,8 +1882,9 @@ app.get(['/stats', '/api/stats'], (req, res) => {
     for (const k of allDays.slice(from, to)) for (const v of stats[k]?.vids ?? []) m.set(v, (m.get(v) ?? 0) + 1);
     return m;
   };
-  const wk = dayCount(0, 7);
-  const prev = dayCount(7, 14);
+  const notAuthor = (m) => { for (const v of [...m.keys()]) if (isAuthorVid(v) || players[v]?.author) m.delete(v); return m; }; // 作者自己的帳號不算（作者 11/23）
+  const wk = notAuthor(dayCount(0, 7));
+  const prev = notAuthor(dayCount(7, 14));
   const bucket = (m) => {
     const c = { one: 0, two: 0, reg: 0, fan: 0 };
     for (const n of m.values()) {
@@ -1929,13 +1930,13 @@ app.get(['/stats', '/api/stats'], (req, res) => {
     ? Object.entries(iaSum).sort((a, b) => b[1] - a[1]).map(([ia, n]) => `${iaNames[ia] ?? ia} ${n} 次`).join('・')
     : '還沒有（11/08 之後才開始統計）';
   const onNow = onlineList((hid, name) => escH(name));
-  const regTable = `<h3>👥 固定玩家（最近 7 天）</h3>
+  const regTable = `<h3>👥 固定玩家（最近 7 天，不算作者）</h3>
 <p>📲 從手機桌面圖示打開的次數（最近 7 天）：${allDays.slice(0, 7).reduce((n, k) => n + (stats[k]?.pwa ?? 0), 0)} 次<br>📱 從 App 內建瀏覽器或嵌入網頁進來的次數：${iaLine}<br><small>這些人常常存不了進度，下次進來會被當成新的人（「只來 1 天」會偏多）。遊戲會跳提示請他們用瀏覽器打開。</small></p>
 <p>來 3 天以上（固定玩家）<b>${bw.reg}</b> 人${trend(bw.reg, bp.reg)}・其中 5 天以上（常客）<b>${bw.fan}</b> 人${trend(bw.fan, bp.fan)}・來 2 天 ${bw.two} 人・只來 1 天 ${bw.one} 人<br><small>箭頭是跟再前一週比。名字是帳篷門牌上的名字；沒買帳篷的顯示「（沒帳篷）」。</small></p>
 <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start"><div class="wrap"><table><tr><th>名字</th><th>這週來了</th><th>連續天數</th><th>營位</th><th>上週來了</th><th>🌰 現在有</th><th>這 7 天拿到</th><th>這 7 天花掉</th></tr>${regs || '<tr><td colspan="8">這週還沒有來 3 天以上的玩家</td></tr>'}</table></div>
 <div class="wrap"><b style="color:#9fe39f">🟢 現在在線（${onNow.length} 人）</b><small>　打開這頁那一刻，重新整理才更新</small><table><tr><th>名字</th><th>在哪裡</th><th>分流</th><th>第一次來</th><th>營位</th><th>月票</th></tr>${onNow.map((r) => r.row).join('') || '<tr><td colspan="6">現在沒有人在線上</td></tr>'}</table></div></div>`;
   // 🌰 松果存量：常客（這週來 3 天以上）平均手上有幾顆，每天一行，看是不是一直在漲
-  const regVids = [...wk.entries()].filter(([, n]) => n >= 3).map(([v]) => v);
+  const regVids = [...wk.entries()].filter(([, n]) => n >= 3).map(([v]) => v); // wk 已經拿掉作者
   const pcStat = (pcs) => {
     const xs = regVids.map((v) => pcs?.[v]?.[0]).filter((x) => typeof x === 'number').sort((a, b) => a - b);
     if (!xs.length) return null;
@@ -1946,7 +1947,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
     const r = pcStat(stats[k].pcs);
     return r ? `<tr><td>${k}</td><td>${r.avg}</td><td>${r.mid}</td><td>${r.max}</td><td>${r.n}</td></tr>` : '';
   }).join('');
-  const pcTable = `<h3>🌰 松果存量（這週的固定玩家）</h3>
+  const pcTable = `<h3>🌰 松果存量（這週的固定玩家，不算作者）</h3>
 <p>現在：平均 <b>${pcNow?.avg ?? '-'}</b> 顆・一半的人有 ${pcNow?.mid ?? '-'} 顆以下・最多 ${pcNow?.max ?? '-'} 顆<br><small>每天第一次記一筆（那天一開始手上有幾顆）。平均一直往上漲＝大家松果花不完，可以考慮加新的東西讓大家花；每個人「這 7 天拿到／花掉」在上面固定玩家表的最右邊。11/23 之後才開始記。</small></p>
 <div class="wrap"><table><tr><th>日期</th><th>平均</th><th>一半的人在這以下</th><th>最多</th><th>算了幾人</th></tr>${pcRows || '<tr><td colspan="5">明天開始會有資料</td></tr>'}</table></div>`;
   // 🌱 新手小任務每一步＋👤 新帳號（作者 11/12）
@@ -1987,6 +1988,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   // ✨ 小精靈（11/11）：誰在養、養到哪裡（親密度 60 變小精靈、400 長大）
   const KIND_ZH = { light: '✨ 小光點', drop: '💧 水滴', flame: '🔥 火苗', leaf: '🍃 葉子', cloud: '☁️ 雲朵', star: '⭐ 星星', mush: '🍄 蘑菇' };
   const owners = Object.entries(players).flatMap(([v, w]) => {
+    if (isAuthorVid(v) || w.author) return []; // 作者自己的不算（作者 11/23）
     const all = [w.spirit, ...(w.spiritBox ?? [])].filter((x) => x && (x.own || x.xp > 0));
     return all.length ? [{ v, w, sp: all[0], n: all.length }] : [];
   });
@@ -2418,10 +2420,12 @@ app.get('/admin', (req, res) => {
   const supRows = support.slice(-100).reverse().map((x) => `<tr><td>${t(x.at)}</td><td><a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a><br><small>${escH(x.hid)}</small></td><td style="white-space:pre-wrap;max-width:360px">${escH(x.t)}</td><td>${x.re ? `<div class="re">${escH(x.re)}</div><small>${t(x.reAt)}${x.seen ? '・玩家看過了' : '・玩家還沒看'}</small>` : `<textarea data-re="${x.id}" rows="2" cols="34" placeholder="回覆（玩家下次上線會看到）"></textarea><br><button data-send="${x.id}">回覆</button>`}</td></tr>`).join('');
   const onRows = onlineList((hid, name) => `<a href="#" data-q="${escH(hid)}">${escH(name)}</a>`);
   const chatRows = chatLog.slice(-600).reverse().map((c) => `<tr><td>${t(c.at)}</td><td>${escH(c.where)}${c.ch ? ` <small>分流 ${c.ch}</small>` : ''}</td><td>${c.hid ? `<a href="#" data-q="${escH(c.hid)}">${escH(c.name)}</a>` : escH(c.name)}</td><td style="text-align:left">${escH(c.text)}</td></tr>`).join('');
+  // 🌐 11/23 作者：別國語言的漂流瓶可以翻成中文看（有日文假名、韓文、俄文，或幾乎沒有中文字）
+  const foreignText = (x) => /[\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff]/.test(x) || !/[\u4e00-\u9fff]/.test(x) && /[a-zA-Z]{2,}/.test(x);
   const bottleRows = bottles
     .slice(-150)
     .reverse()
-    .map((x) => `<tr${x.hidden ? ' style="opacity:.55"' : ''}><td>${t(x.at)}</td><td><a href="#" data-q="${escH(homeId(x.v))}">${escH(x.name)}</a></td><td style="text-align:left">${escH(x.text)}</td><td>💗${x.hearts ?? 0}・被撈 ${x.read ?? 0}${x.rep?.length ? `・🚩${x.rep.length}` : ''}${x.hidden ? '<br>（收起來了）' : ''}</td><td>${x.hidden ? `<button data-btl="show:${x.k}">👀 放回去</button>` : ''}<button data-btl="del:${x.k}">🗑️ 刪掉</button></td></tr>`)
+    .map((x) => `<tr${x.hidden ? ' style="opacity:.55"' : ''}><td>${t(x.at)}</td><td><a href="#" data-q="${escH(homeId(x.v))}">${escH(x.name)}</a></td><td style="text-align:left">${escH(x.text)}${foreignText(x.text) ? ` <button data-tr="${escH(x.text)}" title="翻成中文">🌐</button>` : ''}</td><td>💗${x.hearts ?? 0}・被撈 ${x.read ?? 0}${x.rep?.length ? `・🚩${x.rep.length}` : ''}${x.hidden ? '<br>（收起來了）' : ''}</td><td>${x.hidden ? `<button data-btl="show:${x.k}">👀 放回去</button>` : ''}<button data-btl="del:${x.k}">🗑️ 刪掉</button></td></tr>`)
     .join('');
   const noteRow = (kind) => (x) => `<tr><td>${t(x.at)}</td><td>${x.hid ? `<a href="#" data-q="${escH(x.hid)}">${escH(x.name)}</a>` : `<a href="#" data-q="${escH(x.name)}">${escH(x.name)}</a>`}</td><td style="text-align:left">${escH(x.text)}</td><td><button data-del="${kind}:${x.at}">🗑️ 刪掉</button></td></tr>`;
   const noteRows = shared.notes.slice(-60).reverse().map(noteRow('notes')).join('');
@@ -2521,6 +2525,18 @@ app.get('/admin', (req, res) => {
       if (wr === 'other' && !wn.trim()) { alert('選「其他」要寫原因'); return; }
       if (!confirm('確定警告 ' + $('gname').textContent + '？')) return;
       fetch('/api/warn' + K, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: cur, r: wr, note: wn, sc: $('wsc').checked }) }).then(function (r) { return r.json(); }).then(function (r) { if (r.ok) show(r); else alert(r.reason); });
+      return;
+    }
+    var tb = e.target.closest('[data-tr]');
+    if (tb) {
+      var tx = tb.dataset.tr, src = /[ぁ-ヿ]/.test(tx) ? 'ja' : /[가-힯]/.test(tx) ? 'ko' : /[Ѐ-ӿ]/.test(tx) ? 'ru' : 'en';
+      tb.disabled = true; tb.textContent = '⋯';
+      fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(tx) + '&langpair=' + src + '|zh-TW').then(function (r) { return r.json(); }).then(function (d) {
+        var out = d && d.responseStatus === 200 && d.responseData && d.responseData.translatedText;
+        var em = document.createElement('div'); em.style.cssText = 'color:#9fd3ff;margin-top:4px';
+        em.textContent = out ? '🌐 ' + out : '🌐 翻譯失敗，等一下再試';
+        tb.after(em); tb.remove();
+      }).catch(function () { tb.disabled = false; tb.textContent = '🌐'; alert('翻譯失敗，等一下再試'); });
       return;
     }
     var bt = e.target.closest('[data-btl]');
