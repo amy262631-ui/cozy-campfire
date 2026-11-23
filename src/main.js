@@ -1720,12 +1720,22 @@ async function init() {
       if (!r?.ok) return;
       legendLg = r.lg;
       const L = LEGEND_BY_ID[d.id];
-      hud.toast(
-        r.first
-          ? t('🌟 你遇見了傳說中的{icon} {name}！+{n} 🌰（📖 圖鑑 → 🌟 傳說）', { icon: L.icon, name: t(L.zh), n: r.gain })
-          : t('🌟 {icon} {name} 經過了⋯⋯（看過 {n} 次）', { icon: L.icon, name: t(L.zh), n: r.lg[d.id] }),
-        6000,
-      );
+      const msg = r.first
+        ? t('🌟 你遇見了傳說中的{icon} {name}！+{n} 🌰（📖 圖鑑 → 🌟 傳說）', { icon: L.icon, name: t(L.zh), n: r.gain })
+        : t('🌟 {icon} {name} 經過了⋯⋯（看過 {n} 次）', { icon: L.icon, name: t(L.zh), n: r.lg[d.id] });
+      hud.toast(msg, 6000);
+      // 作者 11/23：掛機的人回來也要知道 → 記進聊天紀錄；在別的分頁時，分頁標題換成「🌟 守護神出現了！」
+      social.addLog('', msg, { system: true, big: true });
+      if (document.hidden) {
+        const old = document.title;
+        document.title = t('🌟 守護神出現了！');
+        const back = () => {
+          if (document.hidden) return;
+          document.title = old;
+          document.removeEventListener('visibilitychange', back);
+        };
+        document.addEventListener('visibilitychange', back);
+      }
     }, 3000);
   });
   const LEGEND_HINT = { tortoise: '迷霧森林・晚上 7～12 點', whale: '湖畔碼頭・晚上 7～12 點', sleigh: '聖誕期間的晚上・抬頭看天空' };
@@ -2463,7 +2473,8 @@ async function init() {
   net.on('cooked', ({ id, name, dish }) => {
     const d = DISH_BY_ID[dish];
     // 作者 11/22：畫面中間太多別人的消息 → 別人煮了什麼改放左下聊天紀錄（小小一行），不跳在畫面中間
-    if (d && id !== net.id) social.addLog('', t('🍲 {name} 煮了一道{icon} {dish}', { name, icon: d.icon, dish: dishName(d, t) }), { system: true, feed: true });
+    // 作者 11/23：聊天紀錄不放了，改跑在上方的即時動態（跟釣魚同一條）
+    if (d && id !== net.id) lakeNews.push({ kind: 'cook', name, text: t('🍲 {name} 煮了一道{icon} {dish}', { name, icon: d.icon, dish: dishName(d, t) }) });
   });
   net.on('dishGift', ({ from, dish, dishes: all, share }) => {
     dishes = all ?? dishes;
@@ -3120,10 +3131,11 @@ async function init() {
         body.querySelector('#btl-go')?.addEventListener('click', async (e) => {
           const text = ta.value.trim();
           if (text.length < 2) return hud.toast(t('多寫幾個字吧 ✏️'));
-          e.currentTarget.disabled = true;
+          const btn = e.currentTarget; // await 之後 e.currentTarget 會是 null
+          btn.disabled = true;
           const r = await net.request('bottleThrow', { text });
           if (!r?.ok) {
-            e.currentTarget.disabled = false;
+            btn.disabled = false;
             return hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : r?.reason === 'limit' ? t('今天丟完了，明天再來') : r?.reason === 'muted' ? t('🔇 你暫時不能說話') : r?.reason === 'where' ? t('要在湖邊或河邊才能丟') : t('沒丟成，再試一次吧'));
           }
           modal.close();
@@ -3149,9 +3161,11 @@ async function init() {
           el.hidden = false;
         });
         body.querySelector('#btl-heart')?.addEventListener('click', async (e) => {
-          e.currentTarget.disabled = true;
+          // 作者 11/23 回報錯誤：await 之後 e.currentTarget 會變成 null，要先把按鈕存起來
+          const btn = e.currentTarget;
+          btn.disabled = true;
           const r = await net.request('bottleHeart', { k });
-          e.currentTarget.textContent = t('💗 已經送過了');
+          btn.textContent = t('💗 已經送過了');
           if (r?.ok) hud.toast(t('💗 送出愛心了！{name} 會收到', { name }));
         });
         body.querySelector('#btl-rep')?.addEventListener('click', async (e) => {
@@ -4577,13 +4591,13 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       return;
     }
     if (!f) return;
-    // 作者 11/22：別人釣到一般的魚、垃圾改放聊天紀錄；★4 才在畫面上跳一下（★5、傳說另外有大公告）
-    if (f.junk) social.addLog('', t('{name} 撈到了{fish}，順手帶走了 ♻️', { name, fish: f.name }), { system: true, feed: true });
+    // 作者 11/23：一般的魚、垃圾不進聊天紀錄（上方即時動態已經有）；★4 以上才記在聊天
+    if (f.junk || f.rarity < 4) return;
     else if (f.rarity >= 5) return; // ★5、傳說：bigCatch 那邊會跳大公告、也會記進聊天紀錄
     else if (f.rarity >= 4) {
       hud.toast(t('🎉 哇！{name} 釣到了 {size} 公分的{fish}！', { name, size, fish: f.name }), 4500);
       social.addLog('', t('🎉 {name} 釣到了 {size} 公分的{fish}！', { name, size, fish: f.name }), { system: true, feed: true, big: true });
-    } else social.addLog('', t('🎣 {name} 釣到了 {size} 公分的{fish}', { name, size, fish: f.name }), { system: true, feed: true });
+    }
   });
   net.on('board', ({ board }) => fishingUI.setBoard(board, true));
   // 📣 五星魚、傳說之魚：全伺服器大公告

@@ -206,7 +206,7 @@ export function createRiverFun(group) {
       if (!root.visible) return;
       // 鴨子一家：鴨媽媽在前，小鴨排一排跟在後面
       family.forEach((d, i) => {
-        const a = time * 0.06 - i * 0.075;
+        const a = time * 0.06 - (i === 0 ? 0 : 0.055 + i * 0.075); // 作者 11/23：鴨媽媽比較大，第一隻小鴨多空一點，頭才不會卡進媽媽屁股
         const [x, z] = swimAt(a);
         const [x2, z2] = swimAt(a + 0.01);
         d.position.set(x, WY - 0.02 + Math.sin(time * 3 + i) * 0.008, z);

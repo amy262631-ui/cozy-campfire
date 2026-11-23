@@ -50,6 +50,7 @@ export class LakeNews {
         wish: t('🎋 {name} 掛上了繪馬'),
         hang: t('🎄 {name} 在心願大樹掛了裝飾'),
       };
+      if (it.kind === 'cook') return esc(it.text ?? ''); // 🍲 別人煮了什麼（main.js 已翻好整句）
       return (TEXT[it.kind] ?? '').replace('{name}', esc(it.name));
     }
     const f = FISH[it.fish] ?? FISH[0];

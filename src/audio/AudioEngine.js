@@ -686,13 +686,13 @@ export class AudioEngine {
         break;
       case 'legend': // 稀有魚：更長的琶音＋鈴聲
         [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(f, now + i * 0.08, 0.5, { type: 'triangle', amp: 0.13 }));
-        setTimeout(() => this.chime(), 520);
+        setTimeout(() => this.chime(this.sfxGain), 520); // 作者 11/23：五星魚的鈴聲也要跟 🎣 遊戲音效走
         break;
     }
   }
 
   /** 番茄鐘提示音：清脆的三聲鈴 */
-  chime() {
+  chime(out = this.master) {
     if (!this.ctx) return;
     const ctx = this.ctx;
     const now = ctx.currentTime;
@@ -707,7 +707,7 @@ export class AudioEngine {
         g.gain.linearRampToValueAtTime(amp, t + 0.005);
         g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
         osc.connect(g);
-        g.connect(this.master);
+        g.connect(out);
         osc.start(t);
         osc.stop(t + 1.7);
       }
