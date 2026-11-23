@@ -113,11 +113,9 @@ function buildTasks(touch) {
       icon: '🛒',
       name: t('去小舖看帳篷'),
       on: 'shop',
+      // 11/23 作者：最後一步掉很多人（釣完魚人在湖邊，要自己走回營火找小舖）→ 任務卡直接放「👉 打開小舖」，在哪裡都能按，打開就算完成
       guide(s) {
-        const sub = t('帳篷 {p} 顆，你有 {n} 顆 🌰', { p: s.tentPrice, n: s.coins ?? 0 });
-        if (!s.inForest) return { step: 0, text: t('去小舖看帳篷'), sub: t('點右邊「🛒 小舖」'), target: null };
-        const d = dist(s.pos, s.shopFront, 0.8);
-        return { step: d > 1 ? 0 : 1, text: t('去小舖看帳篷'), sub: d > 1 ? sub : k(t('按 E 打開小舖'), t('點右下「🏪 小舖」')), target: s.shopFront };
+        return { step: 0, text: t('看看小舖有什麼'), sub: t('帳篷 {p} 顆，你有 {n} 顆 🌰', { p: s.tentPrice, n: s.coins ?? 0 }), target: null, walk: 'shop', walkLabel: t('👉 打開小舖') };
       },
     },
     k_home: {
@@ -515,6 +513,8 @@ export class RitualGuide {
     const walk = g.walk && !this.walking ? g.walk : null;
     this._walk = g.walk ?? null;
     if (this.walkBtn.hidden === !!walk) this.walkBtn.hidden = !walk;
+    const wl = g.walkLabel ?? t('👉 帶我去'); // 第 6 步：「👉 打開小舖」
+    if (this.walkBtn.textContent !== wl) this.walkBtn.textContent = wl;
     const key = `${g.step}|${g.text}|${g.sub ?? ''}`;
     if (key !== this._key) {
       this._key = key;

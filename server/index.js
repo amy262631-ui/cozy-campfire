@@ -241,7 +241,7 @@ const saveBottles = () => {
 };
 /** 撈到漂流瓶時挑一封：不是自己寫的、沒被收起來；被讀比較少的優先 */
 function pickBottle(vid) {
-  const ok = bottles.filter((b) => !b.hidden && b.v !== vid);
+  const ok = bottles.filter((b) => !b.hidden && b.v !== vid && !(b.rv ?? []).includes(vid)); // 作者 11/23：玩家少，同一封一直撈到很無聊 → 讀過的不會再撈到；都讀過了就只是空瓶子
   if (!ok.length) return null;
   ok.sort((a, b) => (a.read ?? 0) - (b.read ?? 0) || Math.random() - 0.5);
   const pool = ok.slice(0, 12);
@@ -1373,6 +1373,23 @@ const bump = (field, n = 1) => {
   d[field] = (d[field] ?? 0) + n;
   saveJson('stats.json', stats);
 };
+/**
+ * 🌰 松果存量（作者 11/23：老玩家會不會越存越多）：每天第一次記一筆「最近 14 天來過的人，手上有幾顆／總共拿過幾顆」
+ * stats[日期].pcs = { vid: [現在有, 總共拿過] }。/stats「🌰 松果存量」用它算平均、這 7 天賺多少花多少。
+ */
+function snapPc() {
+  const d = today();
+  if (d.pcs) return;
+  const seen = new Set();
+  for (const k of Object.keys(stats).sort().reverse().slice(0, 14)) for (const v of stats[k]?.vids ?? []) seen.add(v);
+  const pcs = {};
+  for (const v of seen) if (players[v]) pcs[v] = [players[v].pc ?? 0, players[v].tot ?? 0];
+  d.pcs = pcs;
+  for (const k of Object.keys(stats).sort().reverse().slice(30)) delete stats[k].pcs; // 只留 30 天，存檔不要變太大
+  saveJson('stats.json', stats);
+}
+setInterval(snapPc, 60000);
+setTimeout(snapPc, 20000);
 /** 一直累計的數字（不會每天歸零）：疊了幾顆石頭。第一次啟用時用還留著的每日統計當起點 */
 const totals = asObject(savedTotals);
 if (typeof totals.stones !== 'number') totals.stones = Object.values(stats).reduce((a, d) => a + (Number(d?.stones) || 0), 0);
@@ -1880,6 +1897,20 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   const bw = bucket(wk);
   const bp = bucket(prev);
   const trend = (a, b) => (a > b ? ` <small style="color:#9fe39f">↑${a - b}</small>` : a < b ? ` <small style="color:#ff9f8a">↓${b - a}</small>` : '');
+  // 🌰 每個人：現在有幾顆、這 7 天拿了幾顆、花了幾顆（用 7 天前那天的存量紀錄算；紀錄不到 7 天就用最早那天）
+  const pcDays = allDays.filter((k) => stats[k]?.pcs);
+  const pcBase = (v) => {
+    for (const k of pcDays.slice(0, 8).reverse()) if (stats[k].pcs[v]) return stats[k].pcs[v];
+    return null;
+  };
+  const pcRow = (v) => {
+    const w = players[v];
+    if (!w) return { now: '-', earn: '-', spend: '-' };
+    const b = pcBase(v);
+    if (!b) return { now: w.pc ?? 0, earn: '-', spend: '-' };
+    const earn = Math.max(0, (w.tot ?? 0) - b[1]);
+    return { now: w.pc ?? 0, earn, spend: Math.max(0, earn - ((w.pc ?? 0) - b[0])) };
+  };
   const regs = [...wk.entries()]
     .filter(([, n]) => n >= 3)
     .sort((x, y) => y[1] - x[1])
@@ -1887,7 +1918,8 @@ app.get(['/stats', '/api/stats'], (req, res) => {
     .map(([v, n]) => {
       const h = homes[v];
       const nm = String(h?.name ?? '').replace(/[<>&]/g, '') || '（沒帳篷）';
-      return `<tr><td>${nm}</td><td>${n} 天</td><td>${players[v]?.streak ?? '-'} 天</td><td>${h?.tent ? (h.plot ? `${zoneName(h.plot.z)} 區 ${h.plot.n} 號` : '有') : '-'}</td><td>${prev.get(v) ?? 0} 天</td></tr>`;
+      const pc = pcRow(v);
+      return `<tr><td>${nm}</td><td>${n} 天</td><td>${players[v]?.streak ?? '-'} 天</td><td>${h?.tent ? (h.plot ? `${zoneName(h.plot.z)} 區 ${h.plot.n} 號` : '有') : '-'}</td><td>${prev.get(v) ?? 0} 天</td><td>${pc.now}</td><td>${pc.earn}</td><td>${pc.spend}</td></tr>`;
     })
     .join('');
   const iaSum = {};
@@ -1900,8 +1932,23 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   const regTable = `<h3>👥 固定玩家（最近 7 天）</h3>
 <p>📲 從手機桌面圖示打開的次數（最近 7 天）：${allDays.slice(0, 7).reduce((n, k) => n + (stats[k]?.pwa ?? 0), 0)} 次<br>📱 從 App 內建瀏覽器或嵌入網頁進來的次數：${iaLine}<br><small>這些人常常存不了進度，下次進來會被當成新的人（「只來 1 天」會偏多）。遊戲會跳提示請他們用瀏覽器打開。</small></p>
 <p>來 3 天以上（固定玩家）<b>${bw.reg}</b> 人${trend(bw.reg, bp.reg)}・其中 5 天以上（常客）<b>${bw.fan}</b> 人${trend(bw.fan, bp.fan)}・來 2 天 ${bw.two} 人・只來 1 天 ${bw.one} 人<br><small>箭頭是跟再前一週比。名字是帳篷門牌上的名字；沒買帳篷的顯示「（沒帳篷）」。</small></p>
-<div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start"><div class="wrap"><table><tr><th>名字</th><th>這週來了</th><th>連續天數</th><th>營位</th><th>上週來了</th></tr>${regs || '<tr><td colspan="5">這週還沒有來 3 天以上的玩家</td></tr>'}</table></div>
+<div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start"><div class="wrap"><table><tr><th>名字</th><th>這週來了</th><th>連續天數</th><th>營位</th><th>上週來了</th><th>🌰 現在有</th><th>這 7 天拿到</th><th>這 7 天花掉</th></tr>${regs || '<tr><td colspan="8">這週還沒有來 3 天以上的玩家</td></tr>'}</table></div>
 <div class="wrap"><b style="color:#9fe39f">🟢 現在在線（${onNow.length} 人）</b><small>　打開這頁那一刻，重新整理才更新</small><table><tr><th>名字</th><th>在哪裡</th><th>分流</th><th>第一次來</th><th>營位</th><th>月票</th></tr>${onNow.map((r) => r.row).join('') || '<tr><td colspan="6">現在沒有人在線上</td></tr>'}</table></div></div>`;
+  // 🌰 松果存量：常客（這週來 3 天以上）平均手上有幾顆，每天一行，看是不是一直在漲
+  const regVids = [...wk.entries()].filter(([, n]) => n >= 3).map(([v]) => v);
+  const pcStat = (pcs) => {
+    const xs = regVids.map((v) => pcs?.[v]?.[0]).filter((x) => typeof x === 'number').sort((a, b) => a - b);
+    if (!xs.length) return null;
+    return { n: xs.length, avg: Math.round(xs.reduce((a, x) => a + x, 0) / xs.length), mid: xs[Math.floor(xs.length / 2)], max: xs[xs.length - 1] };
+  };
+  const pcNow = pcStat(Object.fromEntries(regVids.map((v) => [v, [players[v]?.pc ?? 0]])));
+  const pcRows = pcDays.slice(0, 14).map((k) => {
+    const r = pcStat(stats[k].pcs);
+    return r ? `<tr><td>${k}</td><td>${r.avg}</td><td>${r.mid}</td><td>${r.max}</td><td>${r.n}</td></tr>` : '';
+  }).join('');
+  const pcTable = `<h3>🌰 松果存量（這週的固定玩家）</h3>
+<p>現在：平均 <b>${pcNow?.avg ?? '-'}</b> 顆・一半的人有 ${pcNow?.mid ?? '-'} 顆以下・最多 ${pcNow?.max ?? '-'} 顆<br><small>每天第一次記一筆（那天一開始手上有幾顆）。平均一直往上漲＝大家松果花不完，可以考慮加新的東西讓大家花；每個人「這 7 天拿到／花掉」在上面固定玩家表的最右邊。11/23 之後才開始記。</small></p>
+<div class="wrap"><table><tr><th>日期</th><th>平均</th><th>一半的人在這以下</th><th>最多</th><th>算了幾人</th></tr>${pcRows || '<tr><td colspan="5">明天開始會有資料</td></tr>'}</table></div>`;
   // 🌱 新手小任務每一步＋👤 新帳號（作者 11/12）
   const acctDay = {};
   for (const a of Object.values(accounts)) if (a.at) acctDay[dayKey(new Date(a.at))] = (acctDay[dayKey(new Date(a.at))] ?? 0) + 1;
@@ -2019,7 +2066,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   };
 })();
 </script><p>伺服器已經連續醒著 <b>${awakeText()}</b>（從 ${new Date(BOOT_AT).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })} 起；正常只有重新部署時才會歸零，如果常常歸零，代表定時叫醒沒有生效、伺服器睡著過）</p><p>現在在線：${online} 人（名單在下面「👥 固定玩家」右邊）· 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好；「新旅人」是第一次來的人（從 11/3 開始統計）。</p>
-<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="${head.length}">還沒有資料</td></tr>'}</table></div>${regTable}${kidTable}${srcTable}${passTable}${spiritTable}</body></html>`);
+<div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="${head.length}">還沒有資料</td></tr>'}</table></div>${regTable}${pcTable}${kidTable}${srcTable}${passTable}${spiritTable}</body></html>`);
 });
 
 // 📍 網頁一打開就記一次（還沒載入遊戲）：算「載入完成前就離開」；遊戲畫出第一張畫面再記一次 loaded
@@ -5895,10 +5942,12 @@ io.on('connection', (socket) => {
     if (FISH_RARITY[fish] >= 5 || shiny) io.emit('bigCatch', { name: player.name, fish, size, ch: chan.ch, place: roomId, shiny }); // ✨ 異色魚也全營地公告
     io.to(rkey).emit('caught', { id: socket.id, name: player.name, fish, size, rank, shiny });
     // 🍾 撈到漂流瓶：一半機會裡面有別人寫的信
-    if (FISH[fish].junk === 'bottle' && Math.random() < 0.5) {
+    if (FISH[fish].junk === 'bottle' && FISH[fish].glass && Math.random() < 0.5) { // 作者 11/23：只有玻璃的「漂流瓶」裡面有信，寶特瓶沒有
       const b = pickBottle(socket.data.vid);
       if (b) {
         b.read = (b.read ?? 0) + 1;
+        (b.rv ??= []).push(socket.data.vid); // 誰讀過（不會再撈到同一封）
+        if (b.rv.length > 200) b.rv.shift();
         saveBottles();
         setTimeout(() => socket.emit('bottleLetter', { k: b.k, text: b.text, name: b.name, hearted: (b.hv ?? []).includes(socket.data.vid) }), 1600);
       }

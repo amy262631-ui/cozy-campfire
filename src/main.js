@@ -3107,10 +3107,17 @@ async function init() {
     audio.sfx('bell');
     modal.open(
       t('🍾 瓶子裡有一封信！'),
-      `<div class="btl-paper">${escapeHtml(text)}<small>—— ${escapeHtml(name)}</small></div>
+      `<div class="btl-paper">${escapeHtml(text)}<small>—— ${escapeHtml(name)}</small><div class="btl-tr" id="btl-tr" hidden></div></div>
        <div class="btl-row"><button type="button" class="mini-btn" id="btl-heart" ${hearted ? 'disabled' : ''}>${hearted ? t('💗 已經送過了') : t('💗 回一顆愛心')}</button><button type="button" class="mini-btn" id="btl-rep">${t('🚩 檢舉')}</button></div>
        <div class="dex-note">${t('想寫信給別人？釣魚時按旁邊的「🍾 寫信」')}</div>`,
       (body) => {
+        // 🌐 11/23 作者：別國語言寫的信自動翻成自己的語言（信很少，不管聊天的 🌐 開關都翻）
+        translateChat(text, true).then((tr) => {
+          const el = body.querySelector('#btl-tr');
+          if (!tr || !el?.isConnected) return;
+          el.textContent = `🌐 ${tr}`;
+          el.hidden = false;
+        });
         body.querySelector('#btl-heart')?.addEventListener('click', async (e) => {
           e.currentTarget.disabled = true;
           const r = await net.request('bottleHeart', { k });
@@ -4106,6 +4113,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     // 🌱 新手小任務 6 步做完：送 20 松果，再跳歡迎卡
     onIntroDone: async () => {
       if (net.online) await net.request('kidDone', {});
+      setTimeout(() => shopPanel.refresh(), 400); // 第 6 步按「打開小舖」時，小舖已經開著 → 送的 20 松果要馬上顯示
       setTimeout(() => inviteNudge('intro', t('🎉 你學會了！邀朋友一起來烤火，新朋友來了你和他都 +10 🌰')), 45000); // 👫 11/14
       setTimeout(() => showInappTip(), 25000); // 歡迎卡、取名提醒之後再說
       setTimeout(showSeeYou, 8000);
@@ -4128,6 +4136,11 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     onKidStep: (id) => kidStep(id),
     // 👉 帶我去：角色自己走過去（frame() 裡的 stepAutoWalk 負責走）
     onWalk: (kind) => {
+      if (kind === 'shop') { // 🛒 新手第 6 步：直接打開小舖（打開就算完成）
+        ritual.walking = false;
+        shopPanel.open();
+        return;
+      }
       autoWalk = { kind, best: Infinity, stuckT: 0, sideT: 0, side: 1, tries: 0 };
       input.markActive();
     },
