@@ -51,6 +51,7 @@ import { FUR_PALETTES } from './player/characters/furPalettes.js';
 import { BASE_FUR, PREMIUM_FUR, TAILS, EARS, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from './game/looks.js';
 import { GuestPanel } from './ui/GuestPanel.js';
 import { translateChat, translateEnabled, setTranslateEnabled } from './network/chatTranslate.js';
+import { ANNOUNCE_TPL, ANNOUNCE_SHOW_MS } from './game/announce.js';
 import { GiftPanel } from './ui/GiftPanel.js';
 import { GIFT_FURNITURE } from './game/furniture.js';
 import { TENT_STYLE_BY_ID, styleOf, tentTexture } from './game/tentStyles.js';
@@ -1915,6 +1916,35 @@ async function init() {
     );
   }
   document.getElementById('bag-btn').addEventListener('click', () => openBag());
+  // ---------- 📢 作者的全營地公告（作者 11/23，後台 /admin 發） ----------
+  const annBox = document.createElement('div');
+  annBox.className = 'announce-banner';
+  annBox.hidden = true;
+  document.getElementById('ui').appendChild(annBox);
+  let annTimer = 0;
+  let annSeen = 0;
+  annBox.addEventListener('click', () => (annBox.hidden = true)); // 點一下就收起來
+  net.on('announce', (m) => {
+    if (!m || m.at === annSeen) return; // 晚進來補送的，同一則不重複跳
+    annSeen = m.at;
+    const show = (text) => {
+      annBox.innerHTML = `<b>📢 ${escapeHtml(t('營地公告'))}</b><span>${escapeHtml(text)}</span>`;
+      annBox.hidden = false;
+      annBox.classList.remove('in');
+      void annBox.offsetWidth;
+      annBox.classList.add('in');
+      clearTimeout(annTimer);
+      annTimer = setTimeout(() => (annBox.hidden = true), ANNOUNCE_SHOW_MS);
+    };
+    if (m.tpl && ANNOUNCE_TPL[m.tpl]) {
+      const text = t(ANNOUNCE_TPL[m.tpl]);
+      social.addLog(`📢 ${t('營地公告')}`, text, { system: true });
+      return show(text);
+    }
+    social.addLog(`📢 ${t('營地公告')}`, m.text, { system: true });
+    show(m.text);
+    translateChat(m.text, true).then((tr) => tr && !annBox.hidden && show(tr)); // 外國玩家：自動翻成自己的語言
+  });
   // ---------- 📣 大聲公（作者 11/12：30 松果，全營地都看得到） ----------
   const shoutBox = document.createElement('div');
   shoutBox.className = 'shout-banner';

@@ -37,44 +37,13 @@ export const CHANNELS = [
 
 function loadPrefs() {
   // 一開始只有營火、微風、環境音；背景音樂要自己打開（或到樹屋點歌）
-  const def = { fire: 0.8, wind: 0.6, ambient: 0.6, music: 0, muted: false };
+  const def = { fire: 0.8, wind: 0.6, ambient: 0.6, music: 0, sfx: 0.9, muted: false }; // sfx＝🎣 遊戲音效（作者 11/23 要能自己調）
   try {
     return { ...def, ...JSON.parse(localStorage.getItem(STORE_KEY)) };
   } catch {
     return def;
   }
 }
-
-/** 產生 1 秒的無聲 WAV（16-bit、22050Hz），用來讓 iPhone 進入「播放媒體」模式、不受靜音鍵影響 */
-let silentUrl = null;
-function silentWavUrl() {
-  if (silentUrl) return silentUrl;
-  const rate = 22050;
-  const samples = rate; // 1 秒
-  const bytes = samples * 2;
-  const buf = new ArrayBuffer(44 + bytes);
-  const v = new DataView(buf);
-  const str = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
-  str(0, 'RIFF');
-  v.setUint32(4, 36 + bytes, true);
-  str(8, 'WAVE');
-  str(12, 'fmt ');
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true); // PCM
-  v.setUint16(22, 1, true); // 單聲道
-  v.setUint32(24, rate, true);
-  v.setUint32(28, rate * 2, true);
-  v.setUint16(32, 2, true);
-  v.setUint16(34, 16, true);
-  str(36, 'data');
-  v.setUint32(40, bytes, true);
-  // 資料區保持 0 ＝ 無聲
-  silentUrl = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
-  return silentUrl;
-}
-
-const IS_IOS =
-  /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 export class AudioEngine {
   constructor() {
@@ -134,7 +103,7 @@ export class AudioEngine {
 
     // 音效（釣魚等）：不屬於四條音軌，但跟著一鍵靜音
     this.sfxGain = ctx.createGain();
-    this.sfxGain.gain.value = 0.9;
+    this.sfxGain.gain.value = this.prefs.sfx ?? 0.9;
     this.sfxGain.connect(this.master);
 
     this.white = this.#noise('white', 4);
@@ -161,12 +130,12 @@ export class AudioEngine {
    * 手機解鎖聲音：必須在「點擊／觸控的當下」同步呼叫（不能在 await 之後）。
    * - 建立或恢復 AudioContext
    * - 播一個無聲的極短音，iOS 才會真正開始輸出
-   * - iPhone 側邊靜音鍵開著時，網頁音效預設會被關掉：
-   *   新版 Safari 用 navigator.audioSession 改成「播放」類型；舊版改用一個無聲的 <audio> 迴圈
+   * - iPhone 側邊靜音鍵開著時就不出聲（作者 11/23 決定；新版 Safari 用 navigator.audioSession 設成 ambient）
    */
   unlock() {
     try {
-      if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback';
+      // 作者 11/23：iPhone 側邊靜音鍵要有效（午休完手機一打開很大聲）→ 'ambient'＝跟著靜音鍵；以前用 'playback'＋無聲 <audio> 迴圈故意不管靜音鍵
+      if (navigator.audioSession && navigator.audioSession.type !== 'ambient') navigator.audioSession.type = 'ambient';
     } catch {
       /* 不支援就略過 */
     }
@@ -183,38 +152,6 @@ export class AudioEngine {
         src.start(0);
       } catch {
         /* 忽略 */
-      }
-    }
-
-    // iPhone：一律在點擊當下播放無聲的 <audio> 迴圈。
-    // 有「媒體在播放」時，iPhone 會改用媒體音量、不再被側邊靜音鍵關掉網頁音效。
-    if (IS_IOS) {
-      if (!this._silentEl) {
-        const el = document.createElement('audio');
-        el.src = silentWavUrl();
-        el.loop = true;
-        el.preload = 'auto';
-        el.setAttribute('playsinline', '');
-        el.setAttribute('webkit-playsinline', '');
-        el.style.display = 'none';
-        document.body.appendChild(el);
-        this._silentEl = el;
-        this._silentState = t('準備中');
-      }
-      if (this._silentEl.paused) {
-        const pr = this._silentEl.play();
-        if (pr?.then) {
-          pr.then(
-            () => {
-              this._silentState = t('播放中');
-              this.#notify();
-            },
-            (e) => {
-              this._silentState = t('被擋（{reason}）', { reason: e?.name || t('未知') });
-              this.#notify();
-            },
-          );
-        }
       }
     }
   }
@@ -520,7 +457,7 @@ export class AudioEngine {
       this.ch[key].gain.setTargetAtTime(this.#effective(key), now, timeConstant);
     }
     this.natureGain.gain.setTargetAtTime(1, now, timeConstant);
-    this.sfxGain.gain.setTargetAtTime(this.prefs.muted || this.focusMuted ? 0 : 0.9, now, 0.05);
+    this.sfxGain.gain.setTargetAtTime(this.prefs.muted || this.focusMuted ? 0 : (this.prefs.sfx ?? 0.9), now, 0.05);
     this.waterGain.gain.setTargetAtTime(this.preset.water ?? 0, now, timeConstant);
     this.#notify();
   }

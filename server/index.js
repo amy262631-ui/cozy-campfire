@@ -28,6 +28,7 @@ import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateO
 import { todaySpecial, SHINY_DAY_MULT, isOpen } from '../src/game/dailySpecial.js';
 import { GATHER_SPOTS, GATHER_ITEMS, isLimited, gatherDexItems, regrowMs, GATHER_FIRST_GAIN, GATHER_DEX_BONUS, gatherItemAt, isNight, GATHER_R, NET_PRICE, BUG_WANDER, BUG_CATCH_R } from '../src/game/gathering.js';
 import { SOURCES, cleanSource, sourceFrom } from '../src/game/sources.js';
+import { ANNOUNCE_TPL, ANNOUNCE_MAX, ANNOUNCE_LATE_MS } from '../src/game/announce.js';
 import { GATHER_BY_ID, treasureTime, TREASURE_MAX, taipeiMonth } from '../src/game/gathering.js';
 import { giftInfo, basketCat, GIFT_DAILY_CAP, GIFT_MIN_DAYS, GIFT_SEND_MAX, GIFT_MAX_N } from '../src/game/gifts.js';
 import { CROP_BY_ID, GARDEN_MAX, gardenMax, GARDEN_EXPAND, gardenSlotsOf, WATER_MAX, CROP_FIRST_GAIN, readyAtOf, stageOf } from '../src/game/garden.js';
@@ -2257,6 +2258,23 @@ app.post('/api/warn', express.json(), (req, res) => {
   res.json({ ok: true, ...playerCard(vid) });
 });
 
+/** 📢 全營地公告（作者 11/23）：{ tpl } 套版，或 { text } 自己打字。所有人畫面上方跳出來、聊天紀錄也有；10 分鐘內才進來的人進來時也看得到 */
+let lastAnnounce = null;
+const announces = []; // 最近 30 則（記憶體，伺服器重開清空）
+app.post('/api/announce', express.json(), (req, res) => {
+  if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
+  const tpl = ANNOUNCE_TPL[req.body?.tpl] ? req.body.tpl : '';
+  const text = tpl ? '' : String(req.body?.text ?? '').replace(/\s+/g, ' ').trim().slice(0, ANNOUNCE_MAX);
+  if (!tpl && !text) return res.json({ ok: false, reason: '選一個套版，或自己打字' });
+  const m = { tpl, text, at: Date.now() };
+  lastAnnounce = m;
+  announces.push(m);
+  if (announces.length > 30) announces.shift();
+  io.emit('announce', m);
+  console.log(`[公告] ${tpl ? ANNOUNCE_TPL[tpl] : text}（在線 ${io.engine.clientsCount} 個連線）`);
+  res.json({ ok: true, online: io.engine.clientsCount });
+});
+
 /** 🪄 作者標誌（作者 11/22）：{ q } 切換；名字前面變 🪄（頭上、聊天、大聲公），蓋過月票的 🔥／✨ */
 app.post('/api/author', express.json(), (req, res) => {
   if (!keyOk(req)) return res.status(403).json({ ok: false, reason: '密碼不對' });
@@ -2437,6 +2455,7 @@ app.get('/admin', (req, res) => {
 <body>${staffNav(req, 'admin')}<h2>🛠️ 營地管理</h2><p class="hint">可以用名字、「玩家編號」或「帳號名稱」找人（名字大家會改，同名的會列出來讓你選；編號不會變，最準）。玩家用遊戲裡「✉️ 聯絡作者」寄信時會自動附上玩家編號；編號也顯示在「🔥 約朋友」和「👫 好友」視窗裡。</p>
 <div class="tabs">${[['on', `🟢 現在在線（${onRows.length}）`], ['chat', `💬 聊天（${Math.min(chatLog.length, 600)}）`], ['notes', `📝 留言板・繪馬・🍾 漂流瓶${bottles.some((b) => b.hidden && b.rep?.length) ? `（🚩${bottles.filter((b) => b.hidden && b.rep?.length).length}）` : ''}`], ['mail', `✉️ 來信${support.filter((x) => !x.re).length ? `（${support.filter((x) => !x.re).length} 則沒回）` : ''}`], ['inv', '👫 邀請紀錄'], ['shout', '📣 大聲公'], ['ban', `⛔ 停權／禁言${banRows ? `（${banRows.split('<tr>').length - 1}）` : ''}`], ['grant', '🎁 補償紀錄'], ['money', '💸 退款・自己人']].map(([k, v]) => `<button type="button" data-tab="${k}">${v}</button>`).join('')}</div>
 <div class="box"><b>🔍 查玩家</b><br><input id="q" placeholder="名字、玩家編號 或 帳號名稱" size="28"> <button id="find">查詢</button><div id="card"></div></div>
+<div class="box"><b>📢 全營地公告</b> <small>（所有分流、所有地方的人畫面上方跳出 15 秒，聊天紀錄也有；之後 10 分鐘內才進來的人也看得到。套版會照玩家的語言顯示，自己打的字會自動翻譯給外國玩家）</small><br>${Object.entries(ANNOUNCE_TPL).map(([k, v]) => `<button type="button" data-atpl="${k}" style="margin:3px 4px 3px 0">${escH(v)}</button>`).join('')}<br><input id="atext" maxlength="${ANNOUNCE_MAX}" size="56" placeholder="點上面的套版，或自己打字（最多 ${ANNOUNCE_MAX} 字）"> <button id="asend">📢 發公告</button> <span id="ares"></span>${announces.length ? `<div style="margin-top:6px;font-size:13px;color:#bba">最近發過：${announces.slice(-5).reverse().map((a) => `<br>${new Date(a.at).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}　${escH(a.tpl ? ANNOUNCE_TPL[a.tpl] : a.text)}`).join('')}</div>` : ''}</div>
 <div class="box" id="gbox" hidden><b>🎁 發補償／收回：<span id="gname"></span></b><br>
 <select id="gtype"><option value="outfit">👒 造型</option><option value="pc">🌰 松果</option><option value="furn">🪑 家具</option></select>
 <select id="gout">${outfitOpts}</select><select id="gfurn" hidden>${furnOpts}</select><input id="gn" type="number" min="1" value="10" hidden>
@@ -2462,6 +2481,22 @@ app.get('/admin', (req, res) => {
 (function () {
   var K = location.search, cur = '';
   var $ = function (id) { return document.getElementById(id); };
+  // 📢 全營地公告
+  var aTpl = '';
+  document.querySelectorAll('[data-atpl]').forEach(function (b) {
+    b.addEventListener('click', function () { aTpl = b.dataset.atpl; $('atext').value = b.textContent; $('atext').focus(); });
+  });
+  $('atext').addEventListener('input', function () { aTpl = ''; });
+  $('asend').addEventListener('click', function () {
+    var tx = $('atext').value.trim();
+    if (!tx) return alert('選一個套版，或自己打字');
+    if (!confirm('發給全營地所有人？\\n\\n' + tx)) return;
+    fetch('/api/announce' + K, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(aTpl ? { tpl: aTpl } : { text: tx }) }).then(function (r) { return r.json(); }).then(function (r) {
+      if (!r.ok) return alert(r.reason);
+      $('ares').textContent = '✅ 發出去了（現在有 ' + r.online + ' 個連線）';
+      $('atext').value = ''; aTpl = '';
+    });
+  });
   // 📑 分頁（作者 11/17：網頁太長 → 一次只看一區；記在網址 # 裡，重新整理還在同一頁）
   function tab(k) {
     if (!document.querySelector('section.tab[data-tab="' + k + '"]')) k = 'on';
@@ -3341,6 +3376,7 @@ io.on('connection', (socket) => {
     if (wal) setTimeout(() => checkStays(myVid), 0); // 朋友跳出去又回來：時間已經到了就馬上發
     if (wal) setTimeout(() => socket.emit('socialBadge', socialBadge(myVid)), 1500); // 有沒有未讀的密頻、好友邀請、作者回覆
     if (wal?.warnPending) setTimeout(() => socket.emit('warned', wal.warnPending), 2500); // ⚠️ 不在線上時收到的警告
+    if (lastAnnounce && Date.now() - lastAnnounce.at < ANNOUNCE_LATE_MS) setTimeout(() => socket.connected && socket.emit('announce', lastAnnounce), 3500); // 📢 剛發的公告，晚進來的也看得到
     let daily = null;
     if (wal) {
       const d = dayKey();

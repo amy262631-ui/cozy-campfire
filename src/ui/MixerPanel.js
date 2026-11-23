@@ -23,9 +23,14 @@ export class MixerPanel {
               <input type="range" min="0" max="100" step="1" data-key="${c.key}" />
             </label>`,
           ).join('')}
+          <label class="mixer-row">
+            <span class="mixer-label">🎣 ${t('遊戲音效')}</span>
+            <input type="range" min="0" max="100" step="1" data-key="sfx" />
+          </label>
           <div class="mixer-song" id="mixer-song"></div>
           <button class="mixer-mute" id="mixer-mute" type="button"></button>
           <button class="mixer-test" id="mixer-test" type="button">${t('🔔 測試聲音')}</button>
+          ${/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? `<div class="mixer-status">${t('📱 iPhone 側邊靜音鍵打開時，遊戲不會有聲音')}</div>` : ''}
           <div class="mixer-status" id="mixer-status"></div>
         </div>
       </div>
