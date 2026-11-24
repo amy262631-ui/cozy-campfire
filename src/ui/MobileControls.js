@@ -31,12 +31,32 @@ export class MobileControls {
         ${BUTTONS.map(
           (b) => `<button class="action-btn" data-action="${b.action}"><span>${b.icon}</span><small>${b.label}</small></button>`,
         ).join('')}
+        <button class="action-rest" id="action-rest" type="button"><span>🧘</span><small>${t('休息')}</small></button>
+      </div>
+      <div class="rest-pop" id="rest-pop" hidden>
+        <button type="button" data-rest="blanket"><span>🧣</span>${t('裹毯子')}</button>
+        <button type="button" data-rest="stargaze"><span>✨</span>${t('看星星')}</button>
       </div>
       `,
     );
 
     this.#bindJoystick(root.querySelector('#joystick'), root.querySelector('#joystick-knob'));
 
+    // 🧘 作者 11/24（手機精簡）：手機直放「裹毯」「星空」合成一顆「休息」，按了再選
+    const restBtn = root.querySelector('#action-rest');
+    const restPop = root.querySelector('#rest-pop');
+    restBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      restPop.hidden = !restPop.hidden;
+    });
+    restPop.addEventListener('pointerdown', (e) => e.stopPropagation());
+    for (const b of restPop.querySelectorAll('[data-rest]'))
+      b.addEventListener('click', () => {
+        restPop.hidden = true;
+        input.emitAction(b.dataset.rest);
+      });
+    document.addEventListener('pointerdown', () => (restPop.hidden = true));
     root.querySelectorAll('.action-btn').forEach((btn) => {
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
@@ -110,6 +130,8 @@ export class MobileControls {
       btn.querySelector('small').textContent = label;
       btn.classList.toggle('glow', a === 'interact' && !!override);
     });
+    // 「休息」選單：用不到的選項藏起來（例如帳篷裡不能看星星）
+    for (const b of document.querySelectorAll('#rest-pop [data-rest]')) b.hidden = layout[b.dataset.rest] === null;
   }
 
   #bindJoystick(base, knob) {

@@ -85,7 +85,12 @@ export class FishingUI {
       if (this.el.reel.classList.contains('coop')) this.onCoopPress?.();
       else this.onPress?.();
     };
-    this.el.alert.addEventListener('pointerdown', press);
+    // 「！」只會是自己的魚咬鉤 → 一定是自己收竿（作者 11/24：幫別人拉的時候自己的魚咬鉤，點了變成幫別人拉）
+    this.el.alert.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.onPress?.();
+    });
     $('#fish-reel-btn').addEventListener('pointerdown', press);
     for (const el of [this.el.reel, this.el.tools, this.el.modal]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
 

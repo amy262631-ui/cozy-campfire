@@ -18,6 +18,7 @@ export class SocialPanel {
       `
       <div class="social" id="social">
         <div class="chat-log" id="chat-log"></div>
+        <button type="button" class="chat-peek" id="chat-peek" hidden></button>
         <div class="social-buttons">
           <button type="button" class="social-btn" id="emote-btn">😊<small>${t('表情')}</small></button>
           <button type="button" class="social-btn" id="chat-btn">💬<small>${t('聊天')}</small></button>
@@ -37,6 +38,7 @@ export class SocialPanel {
 
       <form class="chat-input" id="chat-input" autocomplete="off">
         <input id="chat-text" maxlength="40" placeholder="${t('說點什麼⋯（最多 40 字）')}" enterkeyhint="send" />
+        <button type="button" class="chat-tr-toggle chat-emote" id="chat-emote" title="${t('表情')}">😊</button>
         <button type="button" class="chat-tr-toggle" id="chat-tr-toggle" title="${t('自動翻譯其他語言的聊天')}">🌐</button>
         <button type="button" class="chat-tr-toggle" id="chat-feed-toggle" title="${t('顯示大家釣魚、煮料理的消息')}">🎣</button>
         <button type="button" class="chat-shout" id="chat-shout" title="${t('📣 大聲公：全營地都看得到（30 🌰）')}"><span class="cs-ic">📣</span><span class="cs-tx">${t('大聲公')}</span></button>
@@ -52,7 +54,16 @@ export class SocialPanel {
       form: $('#chat-input'),
       input: $('#chat-text'),
       chatBtn: $('#chat-btn'),
+      peek: $('#chat-peek'),
     };
+    // 📱 作者 11/24（手機畫面太滿）：手機直放聊天紀錄平常收起來，最新一句在「💬」小條淡淡出現 5 秒；點一下展開紀錄
+    this.unread = 0;
+    this.el.peek.addEventListener('click', () => this.openLog());
+    this.el.peek.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.el.log.addEventListener('pointerdown', () => this.#keepLog());
+    this.el.log.addEventListener('scroll', () => this.#keepLog(), { passive: true });
+    // 打字框旁邊的 😊：手機上「表情」按鈕收起來，改從這裡開
+    $('#chat-emote').addEventListener('click', () => this.el.menu.classList.toggle('show'));
 
     // 📱 手機、平板打字時：鍵盤跳出來，輸入框就貼在鍵盤正上方，聊天訊息顯示在它上面（像 LINE 一樣）
     //    沒偵測到鍵盤（例如平板接實體鍵盤）就留在畫面上方
@@ -151,6 +162,8 @@ export class SocialPanel {
     this.el.menu.classList.remove('show');
     this.el.form.classList.add('show');
     document.body.classList.add('chatting'); // 手機打字時先把左上的資訊收起來，免得重疊
+    this.unread = 0;
+    this.el.peek.hidden = true;
     requestAnimationFrame(() => (this.el.log.scrollTop = this.el.log.scrollHeight)); // 📜 聊天紀錄：打開時捲到最新，往上滑看更早的
     setTimeout(() => this.el.input.focus(), 30);
     // 鍵盤是慢慢滑上來的，多量幾次
@@ -168,6 +181,47 @@ export class SocialPanel {
     return this.el.form.classList.contains('show');
   }
 
+  /** 手機直放：聊天紀錄平常收起來 */
+  get compact() {
+    return document.body.classList.contains('touch') && innerWidth < 600 && innerHeight > innerWidth;
+  }
+
+  openLog() {
+    document.body.classList.add('chat-open');
+    this.unread = 0;
+    this.#peek();
+    requestAnimationFrame(() => (this.el.log.scrollTop = this.el.log.scrollHeight));
+    this.#keepLog();
+  }
+
+  closeLog() {
+    document.body.classList.remove('chat-open');
+    this.#peek();
+  }
+
+  /** 展開的紀錄 10 秒沒碰就收起來（打字時不收） */
+  #keepLog() {
+    clearTimeout(this._logT);
+    this._logT = setTimeout(() => (this.typing ? this.#keepLog() : this.closeLog()), 10000);
+  }
+
+  /** 「💬」小條：剛來的一句淡淡顯示 5 秒，之後變成「💬 N」（沒讀的幾則） */
+  #peek(name = null, text = null) {
+    const el = this.el.peek;
+    clearTimeout(this._peekT);
+    if (!this.compact || document.body.classList.contains('chat-open') || this.typing) return (el.hidden = true);
+    if (text != null) {
+      el.hidden = false;
+      el.classList.add('line');
+      el.innerHTML = `💬 ${name ? `<b>${esc(name)}</b>` : ''}${esc(text)}`;
+      this._peekT = setTimeout(() => this.#peek(), 5000);
+      return;
+    }
+    el.classList.remove('line');
+    el.hidden = !this.unread;
+    el.innerHTML = `💬 <i class="social-badge in">${this.unread > 9 ? '9+' : this.unread}</i>`;
+  }
+
   /** 加一則聊天紀錄（會慢慢淡掉；畫面上大約 6 則的高度，往上滑看最近 80 則） */
   addLog(name, text, { system = false, feed = false, big = false } = {}) {
     const log = this.el.log;
@@ -179,6 +233,10 @@ export class SocialPanel {
     while (this.el.log.children.length > 80) this.el.log.firstChild.remove();
     if (atBottom) log.scrollTop = log.scrollHeight;
     setTimeout(() => line.classList.add('old'), 15000);
+    if (this.compact && !document.body.classList.contains('chat-open') && !this.typing) {
+      this.unread++;
+      this.#peek(system ? '' : name, text);
+    }
     return line;
   }
 

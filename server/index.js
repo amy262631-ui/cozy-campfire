@@ -23,7 +23,7 @@ import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
 import geoip from 'geoip-country';
 import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM, rollFish, rollSize, DEX_TOTAL, SHINY_CHANCE, SHINY_DEX_GAIN, SHINY_BONUS, SHINY_TOTAL, canShiny, isLimitedFish } from '../src/fishing/fishData.js';
-import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
+import { RACE_LANTERNS, makeRaceRoute, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
 import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateOutfit, sponsorOutfits, XMAS_OUTFITS, XMAS_STREAK } from '../src/game/outfits.js';
 import { todaySpecial, SHINY_DAY_MULT, isOpen } from '../src/game/dailySpecial.js';
 import { GATHER_SPOTS, GATHER_ITEMS, isLimited, gatherDexItems, regrowMs, GATHER_FIRST_GAIN, GATHER_DEX_BONUS, gatherItemAt, isNight, GATHER_R, NET_PRICE, BUG_WANDER, BUG_CATCH_R } from '../src/game/gathering.js';
@@ -768,6 +768,8 @@ const miniNow = () => {
   if (!m.active) return null;
   if (miniRun.id !== m.id) {
     miniRun = { id: m.id, kind: m.kind, best: new Map(), got: new Map(), spots: [] };
+    // 🏃 作者 11/24：燈籠位置每場隨機，同一場大家一樣
+    if (m.kind === 'race') miniRun.route = makeRaceRoute();
     if (m.kind === 'hunt') {
       // 從候選地點隨機挑幾個藏金松果
       const pool = HUNT_SPOTS.map((p, i) => ({ ...p, i })).sort(() => Math.random() - 0.5);
@@ -1013,7 +1015,57 @@ function checkStays(onlyFriend = null) {
     }
   }
 }
-setInterval(() => checkStays(), 5000);
+/**
+ * 🔥 營火之約（作者 11/24）：老朋友不用再點連結 → 營火時間，兩個互相加好友的人在同一個分流的營火廣場一起待滿 1 分鐘就算
+ * （玩家回報：老朋友都是直接開遊戲、或從群組點連結變成新角色，一直約不成功）
+ */
+const datePresence = new Map(); // 「a|b」→ 一起在營火廣場的開始時間
+function checkDatePresence() {
+  if (!eventInfo().active) return datePresence.clear();
+  const now = Date.now();
+  const byRoom = new Map();
+  for (const so of io.sockets.sockets.values()) {
+    const v = so.data.vid;
+    if (!v || !players[v]) continue;
+    for (const r of so.rooms) if (r.endsWith(':forest_main')) (byRoom.has(r) ? byRoom.get(r) : byRoom.set(r, new Set()).get(r)).add(v);
+  }
+  const seen = new Set();
+  const d = dayKey();
+  shared.datePairs ??= {};
+  if (shared.datePairs.d !== d) shared.datePairs = { d, list: [] };
+  for (const vids of byRoom.values()) {
+    const list = [...vids];
+    for (let i = 0; i < list.length; i++)
+      for (let j = i + 1; j < list.length; j++) {
+        const [a, b] = [list[i], list[j]].sort();
+        const pair = `${a}|${b}`;
+        if (shared.datePairs.list.includes(pair) || !isFriend(a, b)) continue;
+        seen.add(pair);
+        if (!datePresence.has(pair)) datePresence.set(pair, now);
+        else if (now - datePresence.get(pair) >= DATE_STAY_MS) {
+          datePresence.delete(pair);
+          finishStay({ kind: 'date', friend: a, ref: b, name: nameOfVid(a), net: null });
+        }
+      }
+  }
+  for (const pair of [...datePresence.keys()]) if (!seen.has(pair)) datePresence.delete(pair);
+}
+/** 🔑 從群組（LINE、IG 內建瀏覽器）點連結會先變成新角色，再登入帳號：把還在計時的分享、營火之約轉到帳號的角色（作者 11/24）
+ *  「邀請新朋友」不轉：登入的是老帳號，不算新朋友 */
+function moveStays(oldVid, newVid) {
+  if (!oldVid || !newVid || oldVid === newVid) return;
+  for (const [k, st] of [...stays]) {
+    if (st.friend !== oldVid) continue;
+    stays.delete(k);
+    if (st.kind === 'invite' || st.ref === newVid) continue;
+    const key = `${st.kind}:${newVid}:${st.ref}`;
+    if (!stays.has(key)) stays.set(key, { ...st, friend: newVid, name: nameOfVid(newVid) || st.name });
+  }
+}
+setInterval(() => {
+  checkStays();
+  checkDatePresence();
+}, 5000);
 
 // ---------- 👒 造型收集 ----------
 const OUTFIT_SLOTS = ['head', 'back', 'neck', 'hair', 'clip', 'face']; // 📎 髮夾（12 月起，月票本月造型）；💄 臉妝（任務本）
@@ -5537,6 +5589,7 @@ io.on('connection', (socket) => {
       return ack?.({ ok: false, reason: 'wrong' });
     }
     loginFails.delete(lower);
+    moveStays(socket.data.vid, rec.vid); // 🔑 點連結變成新角色、再登入帳號：計時跟著過去
     ack?.({ ok: true, user: rec.u, vid: rec.vid });
   });
 
@@ -5989,7 +6042,8 @@ io.on('connection', (socket) => {
       }
     }
     // 湖畔即時動態：所有分流、所有地點都看得到（垃圾不算）
-    if (!JUNK.has(fish)) pushNews('fish', { fish, size, rank, ...(shiny ? { shiny: 1 } : {}) });
+    // 作者 11/24（玩家：別人釣魚的通知一直跑，畫面太滿）：上方即時動態只跑 ★4 以上、異色、上排行的（作者 11/24：4 星以上再跟大家說）
+    if (!JUNK.has(fish) && ((FISH[fish]?.rarity ?? 0) >= 4 || shiny || rank)) pushNews('fish', { fish, size, rank, ...(shiny ? { shiny: 1 } : {}) });
     // 📣 五星魚與傳說之魚：整個伺服器（所有分流、所有地點）跳出大公告
     if (FISH_RARITY[fish] >= 5 || shiny) io.emit('bigCatch', { name: player.name, fish, size, ch: chan.ch, place: roomId, shiny }); // ✨ 異色魚也全營地公告
     io.to(rkey).emit('caught', { id: socket.id, name: player.name, fish, size, rank, shiny });
@@ -6057,16 +6111,20 @@ io.on('connection', (socket) => {
 
   // 添柴火：伺服器加 fuel，通知其他人播放火星特效
   // 🏃 燈籠賽跑：依序碰到 1 → 5 號燈籠，伺服器用自己記的位置確認
+  // 作者 11/24：位置每場隨機（miniRun.route，同一場大家一樣），玩法照舊
   let race = { next: 0, t0: 0 };
   const nearSpot = (p) => player && Math.hypot(player.x - p.x, player.z - p.z) < TOUCH_R + 1.2;
   socket.on('race', (data = {}, ack) => {
     const m = miniNow();
     if (m?.kind !== 'race' || roomId !== 'forest_main' || !socket.data.vid) return ack?.({ ok: false, reason: 'off' });
+    const route = miniRun.route ?? (miniRun.route = makeRaceRoute());
+    if (race.mid !== m.id) race = { next: 0, t0: 0, mid: m.id };
+    if (data.op === 'route') return ack?.({ ok: true, route, next: race.next });
     const i = Math.floor(num(data.i, -1, RACE_LANTERNS.length - 1, -1));
     if (i < 0 || (i !== 0 && i !== race.next)) return ack?.({ ok: false, reason: 'order', next: race.next });
-    if (!nearSpot(RACE_LANTERNS[i])) return ack?.({ ok: false, reason: 'far', next: race.next });
+    if (!nearSpot(route[i])) return ack?.({ ok: false, reason: 'far', next: race.next });
     if (i === 0) {
-      race = { next: 1, t0: Date.now() }; // 隨時可以從 1 號重新開始
+      race = { next: 1, t0: Date.now(), mid: m.id }; // 隨時可以從 1 號重新開始
       return ack?.({ ok: true, next: 1 });
     }
     if (i < RACE_LANTERNS.length - 1) {
@@ -6074,7 +6132,7 @@ io.on('connection', (socket) => {
       return ack?.({ ok: true, next: race.next });
     }
     const time = Math.round((Date.now() - race.t0) / 100) / 10;
-    race = { next: 0, t0: 0 };
+    race = { next: 0, t0: 0, mid: m.id };
     if (time < 6) return ack?.({ ok: false, reason: 'tooFast', next: 0 }); // 不可能這麼快
     const prev = miniRun.best.get(socket.data.vid);
     const best = !prev || time < prev.time;
@@ -6268,10 +6326,12 @@ io.on('connection', (socket) => {
     const to = targetVid(data);
     if (!me || !to) return ack?.({ ok: false });
     if (to === me) return ack?.({ ok: false, reason: 'self' });
-    if (!isFriend(me, to)) return ack?.({ ok: false, reason: 'notFriend' });
+    const cat = String(data.cat ?? '');
+    // 🍲 作者 11/24：料理可以送給同一個地方、同一個分流的人（還不是好友也可以）；其他東西照舊要互相加好友
+    const nearby = cat === 'dish' && data.sid && rkey && !!io.sockets.sockets.get(String(data.sid))?.rooms.has(rkey);
+    if (!isFriend(me, to) && !nearby) return ack?.({ ok: false, reason: 'notFriend' });
     if (!hasAccount()) return ack?.({ ok: false, reason: 'account' });
     if (walletAge(wal) < GIFT_MIN_DAYS) return ack?.({ ok: false, reason: 'young', days: GIFT_MIN_DAYS - walletAge(wal) });
-    const cat = String(data.cat ?? '');
     const id = String(data.id ?? '');
     const n = Math.floor(num(data.n, 1, GIFT_MAX_N, 1));
     const info = giftInfo(cat, id);

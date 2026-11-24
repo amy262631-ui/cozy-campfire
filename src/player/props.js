@@ -117,26 +117,60 @@ export function createBlanket() {
 
 /**
  * 釣竿：沿 +Z 方向伸出、往上翹。tip 是竿尖的參考點（釣線從這裡垂下）。
+ * skin（作者 11/24「像皮膚，可以切原本也能切聖誕」）：'' 原本木頭竿；'xmas' 🎄 拐杖糖聖誕竿（紅白條紋、金色捲線器、竿尖小鈴鐺）
  */
-export function createFishingRod() {
+export function createFishingRod(skin = '') {
   const group = new THREE.Group();
-  const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.9 });
   const len = 1.5;
-  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.02, len, 6).rotateX(Math.PI / 2), wood);
-  rod.position.z = len / 2;
-  rod.castShadow = true;
-  group.add(rod);
+  if (skin === 'xmas') {
+    // 紅白一段一段（像拐杖糖），粗細照原本的竿子慢慢變細
+    const red = new THREE.MeshStandardMaterial({ color: 0xd62a2a, roughness: 0.45 });
+    const white = new THREE.MeshStandardMaterial({ color: 0xfaf6ee, roughness: 0.45 });
+    const N = 14;
+    for (let i = 0; i < N; i++) {
+      const r0 = 0.02 - (0.012 * i) / N;
+      const r1 = 0.02 - (0.012 * (i + 1)) / N;
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len / N, 8).rotateX(Math.PI / 2), i % 2 ? white : red);
+      seg.position.z = (len / N) * (i + 0.5);
+      seg.castShadow = true;
+      group.add(seg);
+    }
+    // 作者 11/24：竿尖的球不要；改成一圈小燈泡繞著竿子（一個 InstancedMesh＝只畫一次，不會卡）
+    const N_BULB = 14;
+    const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.017, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }), N_BULB);
+    const BULB_COLORS = [0xff4a4a, 0xffd24a, 0x4aff7a, 0x6ab8ff].map((c) => new THREE.Color(c));
+    const m4 = new THREE.Matrix4();
+    for (let i = 0; i < N_BULB; i++) {
+      const z = 0.3 + (i / (N_BULB - 1)) * 1.05;
+      const r = 0.02 - (0.012 * z) / len + 0.014;
+      const a = i * 1.35;
+      m4.makeTranslation(Math.cos(a) * r, Math.sin(a) * r, z);
+      bulbs.setMatrixAt(i, m4);
+      bulbs.setColorAt(i, BULB_COLORS[i % BULB_COLORS.length]);
+    }
+    bulbs.userData.bulbColors = BULB_COLORS;
+    group.add(bulbs);
+    group.userData.bulbs = bulbs;
+  } else {
+    const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.9 });
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.02, len, 6).rotateX(Math.PI / 2), wood);
+    rod.position.z = len / 2;
+    rod.castShadow = true;
+    group.add(rod);
+  }
 
   // 握把與捲線器
   const grip = new THREE.Mesh(
     new THREE.CylinderGeometry(0.026, 0.026, 0.22, 8).rotateX(Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x3d2a1e, roughness: 1 }),
+    new THREE.MeshStandardMaterial({ color: skin === 'xmas' ? 0x1f5a34 : 0x3d2a1e, roughness: 1 }),
   );
   grip.position.z = 0.1;
   group.add(grip);
   const reel = new THREE.Mesh(
     new THREE.CylinderGeometry(0.04, 0.04, 0.03, 12).rotateZ(Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0xd8c9a8, roughness: 0.6 }),
+    skin === 'xmas'
+      ? new THREE.MeshStandardMaterial({ color: 0xf2c24a, roughness: 0.3, metalness: 0.6 })
+      : new THREE.MeshStandardMaterial({ color: 0xd8c9a8, roughness: 0.6 }),
   );
   reel.position.set(0, -0.04, 0.2);
   group.add(reel);

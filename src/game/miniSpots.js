@@ -25,3 +25,23 @@ export const HUNT_COUNT = 5;
 export const HUNT_GAIN = 5;
 /** 碰到燈籠／撿到金松果的距離（伺服器會放寬一點，因為位置有延遲） */
 export const TOUCH_R = 1.6;
+
+/**
+ * 🏃 燈籠賽跑隨機位置（作者 11/24：玩法跟原本一樣，1～5 號燈籠都看得到；只是每場位置不同，有時遠有時近）
+ * 從森林裡的地點隨機挑 5 個，相鄰兩盞至少 5 公尺。同一場大家一樣。
+ */
+// 11/24 檢查過：(4.2,4.2)、(7.4,7.4) 太靠近心願大樹、(7.4,-7.4) 太靠近小屋 → 燈籠不放這三個地方（找金松果照用）
+const RACE_SKIP = [[4.2, 4.2], [7.4, 7.4], [7.4, -7.4]];
+export const RACE_POOL = [...RACE_LANTERNS, ...HUNT_SPOTS]
+  .filter((p, i, a) => a.findIndex((q) => Math.hypot(q.x - p.x, q.z - p.z) < 2) === i)
+  .filter((p) => !RACE_SKIP.some(([x, z]) => Math.hypot(p.x - x, p.z - z) < 0.5));
+export function makeRaceRoute(rand = Math.random) {
+  const pick = [];
+  for (let tries = 0; pick.length < RACE_LANTERNS.length && tries < 500; tries++) {
+    const p = RACE_POOL[Math.floor(rand() * RACE_POOL.length)];
+    const prev = pick[pick.length - 1];
+    if (pick.includes(p) || (prev && Math.hypot(p.x - prev.x, p.z - prev.z) < 5)) continue;
+    pick.push(p);
+  }
+  return pick.length === RACE_LANTERNS.length ? pick.map((p) => ({ x: p.x, z: p.z })) : RACE_LANTERNS.map((p) => ({ ...p }));
+}

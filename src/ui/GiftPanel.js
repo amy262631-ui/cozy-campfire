@@ -161,7 +161,7 @@ export class GiftPanel {
     if (o(info.weekly)) rows.push(row(o(info.weekly).icon, t(o(info.weekly).zh), t('🌟 這週限定造型・朋友第一次透過你的連結來玩，待滿 {m} 分鐘；做完任務本每週 5 題也送', { m: info.stay }), info.weeklyGot, '', `outfit:${info.weekly}`));
     // 📒 作者 11/22：造型也能做任務拿 → 一顆按鈕帶去任務本
     rows.push(`<button type="button" class="shop-buy-tent gift-quest" data-quest>${t('📒 看任務')}</button>`);
-    if (o(info.dateNext)) rows.push(row(o(info.dateNext).icon, t(o(info.dateNext).zh), t('🔥 營火之約限定・早上或晚上 9:30～10:00 朋友透過你的連結進來，兩個人都拿到'), false, '', `outfit:${info.dateNext}`));
+    if (o(info.dateNext)) rows.push(row(o(info.dateNext).icon, t(o(info.dateNext).zh), t('🔥 營火之約限定・早上或晚上 9:30～10:00 和互相加好友的朋友一起在營火廣場待 1 分鐘（新朋友點你的連結進來），兩個人都拿到'), false, '', `outfit:${info.dateNext}`));
     const nameOf = (id) => {
       const f = GIFT_FURNITURE.find((x) => x.id === id);
       if (f) return { icon: f.icon, name: f.name, kind: t('家具') };

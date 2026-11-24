@@ -161,7 +161,7 @@ export class HelpPanel {
       },
       {
         q: t('👒 怎麼換衣服？'),
-        a: t('點上面「👒 造型」，可以換帽子、圍巾、毛色。'),
+        a: t('點下面「🎒 背包」→「👒 造型」，可以換帽子、圍巾、毛色。'),
         btn: t('👉 打開造型'),
         go: 'look',
       },
@@ -219,8 +219,8 @@ export class HelpPanel {
       { ic: '🏕️', title: t('帳篷營地'), line: t('大家的帳篷都在這裡。'), more: [t('每頂帳篷都有門牌，像「A 區 5 號」'), t('走過木頭拱門，可以去別區'), t('想換位置可以搬家，第一次免費'), t('7 天沒上線營位會空出來，回來自動分新營位，東西都還在')], go: ['camp', t('👉 帶我去營地')] },
       { ic: '🍲', title: t('料理和手作'), line: t('用採到的東西煮料理、做家具。'), more: [t('營火旁的「營火料理」鍋子可以煮'), t('🍳 自由料理鍋：自己放 2～4 樣材料、加調味料，可能煮出隱藏料理，也可能變成黑暗料理 😵'), t('吃了黑暗料理臉會變黑、頭上冒煙 10 分鐘，大家都看得到'), t('煮好的料理在下面「🎒 背包」裡吃；太多了可以按「🗑️ 丟掉」'), t('「📖 圖鑑」裡的「🔨 手作」可以做家具'), t('帳篷門口可以種菜 🥕，長好了按「🧺 全部收成」一次收完')] },
       { ic: '✨', title: t('小精靈'), line: t('小精靈會跟在你身邊，玩遊戲就會長大。'), more: spiritRuleLines(), go: ['spirit', t('👉 看我的小精靈')] },
-      // 👒 作者 11/17：大家以為一定要邀朋友才拿得到造型，手冊寫清楚（不加按鈕）
-      { ic: '👒', title: t('拿造型'), line: t('邀朋友、做今日挑戰，都能拿到造型。'), more: [t('🎯 每日造型：做完今天的 3 個挑戰就拿到（在「🔥 約朋友」裡看題目）'), t('👫 每日造型：朋友點你的連結來玩 1 分鐘也能拿'), t('🌟 每週限定：朋友透過你的連結來玩'), t('🔥 營火之約：營火時間約朋友來，兩個人都拿到'), t('♻️ 垃圾圖鑑全部收集完，也送一款')] },
+      // 👒 作者 11/17：大家以為一定要邀朋友才拿得到造型，手冊寫清楚（不加按鈕）；11/24 作者：全部拿法都寫上
+      { ic: '👒', title: t('拿造型'), line: t('做任務、約朋友、收集圖鑑，都能拿到造型。'), more: [t('📅 每日造型：「📒 任務」→ 每日 3 題做完；或朋友點你的連結來玩一下'), t('🗓️ 每週造型（每週一換）：「📒 任務」→ 每週 5 題做完；或邀一位新朋友來玩'), t('🔥 營火之約（7 款照順序送）：早晚 9:30～10:00 營火時間，和互相加好友的朋友一起在營火廣場待 1 分鐘（新朋友就點你的連結進來），兩個人各拿一款；同一位朋友一天算一次'), t('🎄 聖誕造型：11/27～1/6 連續上線，每 3 天送 1 款'), t('💄 臉妝：「📒 任務」一個月集滿 20 個章'), t('😵 灰頭土臉：自由料理鍋煮失敗 10 次'), t('♻️ 垃圾圖鑑全部收集完，送 1 款'), ...(this.ctx.payOn?.() ? [t('🎫 月票：小舖「🎫 月票」每個月有限定髮型、髮夾')] : [])] },
       { ic: '👫', title: t('朋友'), line: t('加好友，就可以聊天、送禮物。'), more: [t('點下面「👫 好友」'), t('邀朋友來玩，可以拿到造型')], go: ['friends', t('👉 打開好友')] },
       { ic: '🌙', title: t('晚上活動'), line: t('晚上 7～11 點，每半小時有小活動。'), more: [t('疊石接力、找金松果⋯⋯'), t('晚上 8～10 點營火旁會有寶藏 ✨'), t('營火時間有流星雨 🌠'), t('🌟 晚上 7～12 點，迷霧森林和湖畔偶爾有森林傳說經過，遇見送 20 🌰'), t('🔥 晚上 9:30 營火時間約朋友來，兩個人都拿到限定造型')] },
       ...(this.ctx.payOn?.()
@@ -245,12 +245,16 @@ export class HelpPanel {
     modal.open(
       t('❓ 常見問題'),
       `<div class="help-faq">
+        <div class="help-top"><button type="button" class="mini-btn" id="help-news">${t('📢 看更新公告')}</button><button type="button" class="mini-btn" id="help-manual-top">${t('📖 營地手冊')}</button></div>
         ${faq.map((f, i) => `<div class="hf-row"><b class="hf-q">${f.q}</b><div class="hf-a">${f.a}</div><button type="button" class="mini-btn hf-go" data-hgo="${i}">${f.btn}</button></div>`).join('')}
         <button type="button" class="help-manual-btn" id="help-manual">${t('📖 看營地手冊')}</button>
       </div>`,
       (body) => {
         for (const b of body.querySelectorAll('[data-hgo]')) b.addEventListener('click', () => this.#go(faq[Number(b.dataset.hgo)].go));
         body.querySelector('#help-manual').addEventListener('click', () => this.openManual());
+        body.querySelector('#help-manual-top').addEventListener('click', () => this.openManual());
+        // 作者 11/24：「📢 更新」按鈕併進「❓ 問題」（上方按鈕少一顆）
+        body.querySelector('#help-news').addEventListener('click', () => this.ctx.go?.news?.());
       },
     );
   }

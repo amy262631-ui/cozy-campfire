@@ -6,6 +6,7 @@ import { makeSign, lowpoly, shadowAll } from './shared.js';
 import { buildShrine } from './shrine.js';
 import { buildCairnGarden, CAIRN_GARDEN_CLEARING } from './cairns.js';
 import { buildMiniLayer } from './miniLayer.js';
+import { RACE_POOL } from '../game/miniSpots.js';
 import { buildPond } from './pond.js';
 import { createRiverFun } from './riverFun.js';
 import { ENTRANCE_GEO } from '../game/entrances.js';
@@ -595,6 +596,7 @@ export function createForestRoom() {
     const nearPath = defs.some((d) => Math.abs(Math.atan2(Math.sin(a - d.angle), Math.cos(a - d.angle))) < 0.32);
     if (nearPath) continue;
     if (world.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + 1.1)) continue;
+    if (RACE_POOL.some((p) => Math.hypot(p.x - x, p.z - z) < 2.2)) continue; // 11/24：燈籠、金松果可能放的地方留空
     if (xmasSpots.some((p) => Math.hypot(p.x - x, p.z - z) < 4.2)) continue;
     xmasSpots.push({ x, z, s: 0.9 + ((k * 37) % 5) * 0.08 });
   }

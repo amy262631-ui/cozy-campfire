@@ -49,7 +49,7 @@ function buildTasks(touch) {
   // 🌱 新手小任務：text＝大字（12 字內），sub＝小字操作提示（手機、電腦各自的）
   const kidWalk = (s, target, near, big) => {
     const d = dist(s.pos, target, 0.6);
-    return { step: d > near ? 0 : 1, text: big, sub: d > near ? t('還有 {n} 公尺', { n: Math.ceil(d) }) + '・' + k(t('用 WASD 走路'), t('用左下角搖桿走路')) : null, target };
+    return { step: d > near ? 0 : 1, text: big, sub: d > near ? t('還有 {n} 公尺', { n: Math.ceil(d) }) + '・' + k(t('用 WASD 走路・Shift 跑步'), t('用左下角搖桿走路')) : null, target };
   };
   const kidBack = (s) => ({ step: 0, text: t('先回到營火旁'), sub: t('點「🧭 去哪裡」→「🔥 中央營火」'), target: null, go: true });
   const kid = {

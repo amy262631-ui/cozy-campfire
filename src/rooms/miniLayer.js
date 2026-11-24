@@ -5,7 +5,7 @@ import { RACE_LANTERNS, TOUCH_R } from '../game/miniSpots.js';
 
 /**
  * 整點小活動在森林裡的道具：
- *   🏃 燈籠賽跑：1～5 號燈籠，下一個要跑的那盞會亮起光柱
+ *   🏃 燈籠賽跑：1～5 號燈籠（作者 11/24：位置每場隨機，伺服器給），下一個要跑的那盞會亮起光柱
  *   ✨ 找金松果：發光的金松果，被撿走就消失
  */
 export function buildMiniLayer() {
@@ -19,7 +19,6 @@ export function buildMiniLayer() {
   const beamMat = new THREE.MeshBasicMaterial({ color: 0xffd38a, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
   const lanterns = RACE_LANTERNS.map((p, i) => {
     const g = new THREE.Group();
-    g.position.set(p.x, 0, p.z);
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.7, 6), wood);
     post.position.y = 0.85;
     g.add(post);
@@ -64,20 +63,25 @@ export function buildMiniLayer() {
 
   let raceOn = false;
   let next = 0;
+  let route = null; // 這一場 5 盞燈籠的位置（伺服器給）
   setRace(false);
 
-  function setRace(on, nextIndex = 0) {
+  function setRace(on, nextIndex = 0, r = null) {
     raceOn = on;
     next = nextIndex;
+    if (r) route = r.map((p) => ({ x: p.x, z: p.z }));
+    if (!on) route = null;
     lanterns.forEach((l, i) => {
-      l.g.visible = on;
-      const lit = on && i === next;
+      const show = on && !!route;
+      l.g.visible = show;
+      if (show) l.g.position.set(route[i].x, 0, route[i].z);
+      const lit = show && i === next;
       l.lamp.material = lit ? paperOn : paperOff;
       l.beam.visible = lit;
     });
-    const p = RACE_LANTERNS[next];
-    raceLight.position.set(p.x + 0.38, 1.42, p.z);
-    raceLight.intensity = on ? 6 : 0;
+    const p = route?.[next];
+    if (p) raceLight.position.set(p.x + 0.38, 1.42, p.z);
+    raceLight.intensity = on && p ? 6 : 0;
   }
 
   function setHunt(spots = []) {
@@ -128,13 +132,17 @@ export function buildMiniLayer() {
     },
     /** 有沒有碰到下一盞燈籠 */
     touchingLantern(pos) {
-      if (!raceOn) return -1;
-      const p = RACE_LANTERNS[next];
+      if (!raceOn || !route) return -1;
+      const p = route[next];
       if (Math.hypot(pos.x - p.x, pos.z - p.z) < TOUCH_R) return next;
       // 隨時可以回到 1 號重新開始
-      const s = RACE_LANTERNS[0];
+      const s = route[0];
       if (next !== 0 && next !== 1 && Math.hypot(pos.x - s.x, pos.z - s.z) < TOUCH_R) return 0;
       return -1;
+    },
+    /** 這一場的燈籠位置拿到了沒 */
+    get hasRoute() {
+      return !!route;
     },
     get huntLeft() {
       return cones.filter((c) => !c.taken || c.hidden).length;

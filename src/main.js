@@ -56,7 +56,7 @@ import { GiftPanel } from './ui/GiftPanel.js';
 import { GIFT_FURNITURE } from './game/furniture.js';
 import { TENT_STYLE_BY_ID, styleOf, tentTexture } from './game/tentStyles.js';
 import { createCampgroundRoom } from './rooms/campgroundRoom.js';
-import { RACE_LANTERNS, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN } from './game/miniSpots.js';
+import { RACE_LANTERNS, makeRaceRoute, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN } from './game/miniSpots.js';
 import { TENT_SHAPE_BY_ID, buildTentShell } from './game/tentShapes.js';
 import { lowpoly, updateNearFade } from './rooms/shared.js';
 import { FURNITURE_BY_ID, TENT_PRICE, buildFurniture } from './game/furniture.js';
@@ -268,6 +268,8 @@ async function init() {
   setTimeout(() => setStage(2), 10 * 60000); // 玩滿 10 分鐘
   if (safeMode && crashCount >= 1) setTimeout(() => hud.toast(t('🛟 上次好像沒有順利載入，這次先用省電畫質，比較不會被關掉'), 6000), 4000);
   const mobile = isTouchDevice() ? new MobileControls(input) : null;
+  /** 📱 手機直放（作者 11/24 精簡用） */
+  const compactPortrait = () => !!mobile && innerWidth < 600 && innerHeight > innerWidth;
   setupFrameFocus(); // 🖱️ 被遊戲入口網站嵌進去時：先「點一下開始」，鍵盤才收得到
 
   const audio = new AudioEngine();
@@ -557,7 +559,7 @@ async function init() {
   const MINI_START = {
     fish: () => t('🎣 釣魚大賽開始了！10 分鐘內到營火河畔或湖邊釣最大的魚，前三名送松果'),
     stone: () => t('🪨 疊石接力開始了！10 分鐘內每疊一顆石頭多 1 顆松果'),
-    race: () => t('🏃 燈籠賽跑開始了！依序跑過森林裡 1→5 號燈籠，最快的前三名送松果'),
+    race: () => t('🏃 燈籠賽跑開始了！依序跑過森林裡 1→5 號燈籠，最快的前三名送松果') + (isTouch() ? '' : ' ' + t('💡 電腦按 Shift 可以跑步，比較快')),
     hunt: () => t('✨ 找金松果開始了！森林裡會一顆一顆冒出 5 顆發光的金松果，找到一顆 +5 松果'),
     wood: () => t('🔥 添柴時光開始了！10 分鐘內每添一根柴多 1 顆松果'),
   };
@@ -565,7 +567,9 @@ async function init() {
     const sameRace = miniState?.active && miniState.kind === 'race' && m.active && m.kind === 'race';
     miniState = { ...m, top: m.top ?? [], spots: m.spots ?? [], at: performance.now() };
     // 森林裡的道具
-    forest.mini.setRace(m.active && m.kind === 'race', sameRace ? forest.mini.next : 0);
+    // 作者 11/24：燈籠位置每場隨機 → 新的一場先清掉，checkMini 再跟伺服器拿這場的位置
+    if (!sameRace) forest.mini.setRace(false);
+    if (m.active && m.kind === 'race') forest.mini.setRace(true, sameRace ? forest.mini.next : 0);
     forest.mini.setHunt(m.active && m.kind === 'hunt' ? m.spots ?? [] : []);
     miniState.left = forest.mini.huntLeft;
     hud.setMini(currentMini());
@@ -657,11 +661,23 @@ async function init() {
   /** 走到燈籠、金松果旁邊時通知伺服器（同一時間只送一個） */
   let miniBusy = false;
   let raceStart = 0;
+  let raceAskAt = 0;
   const checkMini = () => {
     const m = miniState;
     if (miniBusy || !m?.active || roomMgr?.current !== forest) return;
     const pos = player.position;
     if (m.kind === 'race') {
+      if (!forest.mini.hasRoute) {
+        // 還不知道這一場燈籠在哪：跟伺服器拿
+        if (performance.now() < raceAskAt) return;
+        raceAskAt = performance.now() + 3000;
+        miniBusy = true;
+        miniReq('race', { op: 'route' }).then((res) => {
+          miniBusy = false;
+          if (res?.ok && res.route) forest.mini.setRace(true, res.next ?? 0, res.route);
+        });
+        return;
+      }
       const i = forest.mini.touchingLantern(pos);
       if (i < 0) return;
       miniBusy = true;
@@ -888,9 +904,10 @@ async function init() {
   net.on('wallet', ({ pc, delta, reason }) => {
     setCoins(pc, delta);
     if (delta <= 0) return;
-    if (reason === 'sit') hud.toast(t('🌰 在營地待了一會兒，撿到 {n} 顆松果', { n: delta }));
+    // 📱 作者 11/24（手機精簡）：一般的撿到松果，手機直放只在上方松果數字旁邊飄「+n」，不跳到畫面中間
+    if (reason === 'sit') compactPortrait() || hud.toast(t('🌰 在營地待了一會兒，撿到 {n} 顆松果', { n: delta }));
     else if (reason === 'quest') hud.toast(t('🌰 完成任務，拿到 {n} 顆松果！可以去心願大樹換裝飾', { n: delta }), 3500);
-    else if (reason === 'fish' && !fishingUI.addCoin(delta, !!fishing.active)) hud.toast(t('🌰 釣到魚，撿到 {n} 顆松果', { n: delta }));
+    else if (reason === 'fish' && !fishingUI.addCoin(delta, !!fishing.active)) compactPortrait() || hud.toast(t('🌰 釣到魚，撿到 {n} 顆松果', { n: delta }));
     else if (reason === 'kid') hud.toast(t('🌱 新手小任務完成！送你 {n} 顆松果 🌰', { n: delta }), 5000);
     else if (reason === 'staff') hud.toast(t('🎁 營地作者送你 {n} 顆松果！', { n: delta }), 5000);
     else if (reason === 'fishCap') hud.toast(t('🎣 今天前 {n} 條魚的松果拿滿了，之後每條 +1（稀有魚照算），明天再來！', { n: passState.active ? (PASS_TIERS[passState.tier] ?? PASS).fish : FREE.fish }), 5000);
@@ -907,11 +924,11 @@ async function init() {
   const outfitName = (id) => (OUTFIT_BY_ID[id] ? `${OUTFIT_BY_ID[id].icon} ${t(OUTFIT_BY_ID[id].zh)}` : '');
   /** 怎麼拿到：長的說明（滑鼠移上去）、短的（卡片上） */
   const HOW = {
-    daily: [t('每日造型：完成當天的每日任務就拿到；那天有朋友點你的連結來玩 1 分鐘也能拿（大約一個月輪一次，錯過會再回來）'), t('完成每日任務')],
-    weekly: [t('每週限定：做完任務本這週的 5 題就拿到；朋友透過你的連結來玩也能拿'), t('做完每週任務')],
-    date: [t('營火之約限定：朋友在早上或晚上 9:30 營火時間透過你的連結進來，兩個人都拿到'), t('9:30 營火時間約朋友')],
+    daily: [t('📅 每日造型：打開「📒 任務」→「📅 每日」，3 題做完就拿到；那天有朋友點你的連結來玩 1 分鐘也能拿（大約一個月輪一次，錯過會再回來）'), t('完成每日任務')],
+    weekly: [t('🗓️ 每週限定：打開「📒 任務」→「🗓️ 每週」，5 題做完就拿到；或邀一位第一次來玩的新朋友（點你的連結、待滿 3 分鐘）。每週一換，8 週輪一次'), t('做完每週任務')],
+    date: [t('🔥 營火之約：早上或晚上 9:30～10:00 營火時間，和互相加好友的朋友一起在營火廣場待 1 分鐘（或朋友點你的連結進來），兩個人各拿一款；7 款照順序送，同一位朋友一天算一次'), t('9:30 和好友一起烤火')],
     eco: [t('垃圾圖鑑全部收集完就拿到'), t('垃圾圖鑑收集完')],
-    sponsor: [t('贊助限定：那個月贊助就送一頂'), t('贊助限定')],
+    sponsor: [t('11 月支持營地限定：那個月贊助就送一頂（已經結束，之後的假髮改成月票用松果買）'), t('贊助限定（已結束）')],
     pass: [t('🎫 月票限定：有月票的人在「🏪 小舖 → 🎫 月票」用松果買（只賣那個月，隔年同月再回來）'), t('月票用松果買')],
     xmas: [t('聖誕限定：11/27～1/6 連續上線每滿 3 天送一款'), t('聖誕期間連續上線 3 天')],
     cook: [t('自由料理鍋煮失敗（黑暗料理）10 次就拿到'), t('煮失敗 10 次')],
@@ -943,7 +960,7 @@ async function init() {
         <div class="outfit-today">
           ${today ? (look.dailyGot ? t('✅ 今天的每日造型「{name}」已經拿到了', { name: outfitName(today.id) }) : t('🎁 今天的每日造型：{name}（朋友點你的連結進來玩 1 分鐘就拿到）', { name: outfitName(today.id) })) : ''}
           ${week ? `<br>${look.weeklyGot ? t('✅ 這週限定「{name}」已經拿到了', { name: outfitName(week.id) }) : t('🌟 這週限定：{name}（朋友透過你的連結來玩就拿到）', { name: outfitName(week.id) })}` : ''}
-          <br>${t('🔥 營火之約：朋友在 9:30 營火時間透過你的連結進來，兩個人都拿到限定造型')}
+          <br>${t('🔥 營火之約：9:30 營火時間和互相加好友的朋友一起在營火廣場待 1 分鐘（新朋友點你的連結進來），兩個人都拿到限定造型')}
           ${!look.dailyGot && net.online ? `<br><button type="button" id="outfit-share">${t('🔥 約朋友今晚 9:30，順便領今天的造型')}</button>` : ''}
         </div>
         ${slotTabs()}
@@ -1090,7 +1107,7 @@ async function init() {
       look.dailyGot = look.weeklyGot = true;
       look.dateNext = null;
       audio.sfx('bell');
-      return hud.toast(t('🎁 拿到全部造型了！按上方「👒 造型」挑一件穿'), 6000);
+      return hud.toast(t('🎁 拿到全部造型了！到「🎒 背包 → 👒 造型」挑一件穿'), 6000);
     }
     if (id === look.daily) look.dailyGot = true;
     if (id === look.weekly) look.weeklyGot = true;
@@ -1118,7 +1135,7 @@ async function init() {
             : why === 'staff'
             ? t('🎁 營地作者送你一款造型：{name}', { name: outfitName(id) })
             : t('👒 拿到今天的每日造型：{name}', { name: outfitName(id) });
-    hud.toast(`${msg}${t('（按上方「👒 造型」穿上）')}`, 6500);
+    hud.toast(`${msg}${t('（到「🎒 背包 → 👒 造型」穿上）')}`, 6500);
     // 還沒穿這個部位：直接幫他穿上，馬上看得到
     const o = OUTFIT_BY_ID[id];
     if (o && !look.wear?.[o.slot]) wearOutfit(id);
@@ -1789,6 +1806,7 @@ async function init() {
     const tabs = [
       ['dish', t('🍱 料理')],
       ['basket', t('🧺 採集籃')],
+      ['furn', t('🪑 家具')],
       ['look', t('👒 造型')],
     ];
     // 11/09 作者：背包改成一般遊戲那種「格子＋縮圖」：大圖示、右下角數量、下面小字名稱；點一格看說明（料理可以吃）
@@ -1819,6 +1837,23 @@ async function init() {
         ? groups.map(([title, list]) => `<div class="dex-note">${title}</div><div class="inv-grid">${list.map((x) => cell(x.icon, t(x.zh), basket[x.id], x.id)).join('')}</div>`).join('')
         : `<div class="dex-note">${t('採集籃是空的。去迷霧森林、湖邊採採看吧 🍄')}</div>`;
       html += `<div class="dex-note">${t('採集籃的東西可以煮料理（「🍲 營火料理」鍋子）、做家具（「📖 圖鑑 → 🔨 手作」）')}</div>`;
+    } else if (tab === 'furn') {
+      // 🪑 作者 11/24：家具也放進背包看得到（擺在家裡的也算在數量裡）
+      const items = myHome?.items ?? [];
+      const own = Object.entries(myHome?.inv ?? {})
+        .filter(([id, n]) => n > 0 && FURNITURE_BY_ID[id])
+        .map(([id, n]) => ({ id, n, f: FURNITURE_BY_ID[id], placed: items.filter((x) => x.i === id).length }));
+      const atHome = inHome() && homeRoom.mine;
+      for (const o of own) {
+        const colored = Object.entries(myHome?.cinv ?? {}).reduce((a, [k, v]) => (k.startsWith(`${o.id}~`) ? a + v : a), 0);
+        const spare = Math.max(0, o.n - colored - items.filter((x) => x.i === o.id && !x.c).length);
+        info[o.id] = `<b>${o.f.icon} ${o.f.name} ×${o.n}</b><small class="fx-tag">${t('🏠 家裡擺了 {n} 個', { n: o.placed })}・${t('背包裡 {n} 個', { n: Math.max(0, o.n - o.placed) })}</small><button type="button" class="mini-btn" data-build="1">${atHome ? t('🛠️ 布置') : t('🏠 回家布置')}</button>${giftInfo('furn', o.id) && spare > 0 ? `<button type="button" class="mini-btn" data-giftfr="furn|${o.id}">${t('🎁 送朋友')}</button>` : ''}`;
+      }
+      html = !myHome?.tent
+        ? `<div class="dex-note">${t('還沒有帳篷。到營火旁的「🏪 營地小舖」買一頂，就能放家具了')}</div>`
+        : own.length
+          ? `<div class="inv-grid">${own.map((o) => cell(o.f.icon, o.f.name, o.n, o.id)).join('')}</div>`
+          : `<div class="dex-note">${t('還沒有家具。到「🏪 營地小舖」逛逛吧')}</div>`;
     }
     if (Object.keys(info).length) html += `<div class="inv-info" hidden></div><div class="bin-ask" data-binfor="item" hidden></div>`;
     // 🗑️ 丟掉：選數量（－／＋、可以直接打數字、全部），丟之前寫清楚丟幾個（作者 11/20）
@@ -1860,9 +1895,9 @@ async function init() {
     };
     modal.open(
       t('🎒 背包'),
-      `<div class="shop-cats bag-tabs">${tabs.map(([id, label]) => `<button type="button" data-bag="${id}" class="${id === tab ? 'on' : ''}">${label}</button>`).join('')}</div>${html}`,
+      `<div class="shop-cats bag-tabs bag-big">${tabs.map(([id, label]) => `<button type="button" data-bag="${id}" class="${id === tab ? 'on' : ''}">${label}</button>`).join('')}</div>${html}`,
       (body) => {
-        for (const b of body.querySelectorAll('[data-bag]')) b.addEventListener('click', () => (b.dataset.bag === 'look' ? (modal.close(), fishingUI.openCreel('outfit')) : openBag(b.dataset.bag)));
+        for (const b of body.querySelectorAll('[data-bag]')) b.addEventListener('click', () => (b.dataset.bag === 'look' ? (modal.close(), hud.onLook()) : openBag(b.dataset.bag)));
         const box = body.querySelector('.inv-info');
         for (const c of body.querySelectorAll('[data-inv]')) {
           c.addEventListener('click', () => {
@@ -1876,6 +1911,12 @@ async function init() {
             box.querySelector('[data-giftfr]')?.addEventListener('click', (e) => {
               const [cat, id] = e.currentTarget.dataset.giftfr.split('|');
               pickFriendToGift(cat, id, tab);
+            });
+            // 🪑 家具：在自己家就直接開布置，不在家就先回家
+            box.querySelector('[data-build]')?.addEventListener('click', () => {
+              modal.close();
+              if (inHome() && homeRoom.mine) startBuild();
+              else goHome();
             });
           });
         }
@@ -1892,24 +1933,28 @@ async function init() {
     const r = await net.request('friendList');
     if (!r?.ok || !g) return hud.toast(t('沒有成功，再試一次'));
     const mutual = r.friends.filter((f) => f.mutual).sort((a, b) => (b.online ? 1 : 0) - (a.online ? 1 : 0));
+    // 🍲 作者 11/24：料理也能送給同一個地方的人（還不是好友也可以）
+    const frNames = new Set(mutual.map((f) => f.name));
+    const near = cat === 'dish' ? [...(remotes?.players?.entries?.() ?? [])].filter(([, p]) => !p.npc && p.name && !frNames.has(p.name)).map(([sid, p]) => ({ sid, name: p.name })) : [];
+    const nearHtml = near.length ? `<div class="dex-note">${t('📍 在你附近的人（還不是好友也能送料理）')}</div><div class="fr-chips">${near.map((f) => `<button type="button" class="fr-chip" data-sid="${escapeHtml(f.sid)}" data-name="${escapeHtml(f.name)}"><b><i class="fr-dot on"></i>${escapeHtml(f.name)}</b></button>`).join('')}</div>` : '';
     modal.open(
       t('🎁 把 {icon} {item} 送給誰？', { icon: g.icon, item: t(g.zh) }),
       `<div class="dm-top"><button type="button" class="mini-btn ghost" id="gfp-back">‹ ${t('回到背包')}</button></div>
-      ${mutual.length ? `<div class="dex-note">${t('選一位好友，送 1 個（價值 {v} 🌰）', { v: g.value })}</div><div class="fr-chips">${mutual.map((f) => `<button type="button" class="fr-chip" data-to="${f.hid}" data-name="${escapeHtml(f.name)}"><b><i class="fr-dot${f.online ? ' on' : ''}"></i>${escapeHtml(f.name)}</b>${f.plot ? `<small>🏕️ ${plotName(f.plot)}</small>` : ''}</button>`).join('')}</div>` : `<div class="dex-note">${t('還沒有好友。點下面「👫 好友」加朋友，就能互相送禮了')}</div>`}`,
+      ${mutual.length ? `<div class="dex-note">${t('選一位好友，送 1 個（價值 {v} 🌰）', { v: g.value })}</div><div class="fr-chips">${mutual.map((f) => `<button type="button" class="fr-chip" data-to="${f.hid}" data-name="${escapeHtml(f.name)}"><b><i class="fr-dot${f.online ? ' on' : ''}"></i>${escapeHtml(f.name)}</b>${f.plot ? `<small>🏕️ ${plotName(f.plot)}</small>` : ''}</button>`).join('')}</div>` : `<div class="dex-note">${t('還沒有好友。點下面「👫 好友」加朋友，就能互相送禮了')}</div>`}${nearHtml}`,
       (body) => {
         body.querySelector('#gfp-back').addEventListener('click', () => openBag(backTab));
-        for (const b of body.querySelectorAll('[data-to]'))
+        for (const b of body.querySelectorAll('[data-to], [data-sid]'))
           b.addEventListener('click', async () => {
             const name = b.dataset.name;
             if (!(await confirmBuy.ask({ icon: '🎁', name: t('送 {icon} {item} 給 {name}', { icon: g.icon, item: t(g.zh), name }), price: 0, desc: t('送出去就會從你的身上拿走喔'), title: t('🎁 要送這個嗎？'), yes: t('送出') }))) return pickFriendToGift(cat, id, backTab);
-            const res = await net.request('giftSend', { hid: b.dataset.to, cat, id, n: 1 });
+            const res = await net.request('giftSend', b.dataset.sid ? { sid: b.dataset.sid, cat, id, n: 1 } : { hid: b.dataset.to, cat, id, n: 1 });
             if (!res?.ok) {
               hud.toast(
                 ({
                   account: t('要先建立帳號才能送禮'),
                   cap: t('{name} 今天收的禮物已經夠多了，明天再送吧 🎁', { name }),
                   sendMax: t('今天已經送很多次了，明天再送吧'),
-                  notFriend: t('要互相加好友才能送禮'),
+                  notFriend: b.dataset.sid ? t('對方已經離開這裡了') : t('要互相加好友才能送禮'),
                   tooFast: t('慢慢來 🙂'),
                 })[res?.reason] ?? t('沒有成功，再試一次'),
                 4000,
@@ -2524,7 +2569,7 @@ async function init() {
     const selBar = mine && emptyIdx.length > 1 ? `<div class="garden-selbar"><span class="gsel-tip">${t('點空格打勾，可以多選')}</span><button type="button" class="gp-all" id="garden-all">☐ ${t('全選空格（{n}）', { n: emptyIdx.length })}</button><button type="button" class="gp-all" id="garden-clr" hidden>✕ ${t('清除')}</button></div>` : '';
     const slots = `${allBtn}${selBar}<div class="garden-grid">${res.slots.map(cell).join('')}</div>${
       mine && emptyIdx.length
-        ? `<div class="garden-pick" id="garden-pick" hidden><b id="garden-pick-t"></b><div class="crop-pick">${CROPS.filter((c) => isOpen(c)).map((c) => `<button type="button" class="mini-btn" data-c="${c.id}">${c.icon} ${t(c.zh)}<small>🌰 ${c.seed}・${t('{h} 小時', { h: c.hours })}</small></button>`).join('')}</div></div>`
+        ? `<div class="garden-pick" id="garden-pick" hidden><b id="garden-pick-t"></b><div class="crop-pick">${CROPS.filter((c) => isOpen(c)).map((c) => `<button type="button" class="mini-btn" data-c="${c.id}">${c.icon} ${t(c.zh)}<small>🌰 ${c.seed}・${t('{h} 小時', { h: c.hours })}・🧺 ${basket[c.id] ?? 0}</small></button>`).join('')}</div></div>`
         : ''
     }${!mine && !res.slots.some(Boolean) ? `<div class="dex-note">${t('菜園現在空空的')}</div>` : ''}`;
     const expand =
@@ -3082,10 +3127,12 @@ async function init() {
   baitChip.className = 'bait-chip';
   baitChip.hidden = true;
   document.getElementById('ui').appendChild(baitChip);
-  /** 😋 手機：料理倒數放在上方按鈕最後一排的右邊空位（作者 11/22：原本固定位置會壓到「❓ 問題」）；放不下就放按鈕列下面 */
+  /** 😋 手機、平板：料理倒數放在上方按鈕最後一排的右邊空位（作者 11/22：原本固定位置會壓到「❓ 問題」）；放不下就放按鈕列下面 */
   const placeBuff = () => {
     const el = document.getElementById('buff-chip');
-    if (!el || el.hidden || window.innerWidth >= 600) return el && (el.style.top = el.style.right = '');
+    // 作者 11/24（平板直放在湖畔）：寬畫面、營火廣場以外的地方原本固定在左上 (22,102)，平板按鈕排成三排時會壓在按鈕上 → 一樣找空位
+    const inline = window.innerWidth >= 600 && document.body.classList.contains('room-forest_main');
+    if (!el || el.hidden || inline) return el && (el.style.top = el.style.right = el.style.left = '');
     const bar = document.getElementById('online');
     const btns = [...(bar?.querySelectorAll('button, .chip, [class*="-chip"]') ?? [])].filter((b) => b !== el && b.offsetParent && b.getBoundingClientRect().width > 0);
     if (!btns.length) return;
@@ -3098,6 +3145,7 @@ async function init() {
     if (window.innerWidth - right > w + 26) el.style.top = `${Math.round(lastTop + (h - el.offsetHeight) / 2)}px`;
     else el.style.top = `${Math.round(Math.max(...rects.map((r) => r.bottom)) + 6)}px`;
     el.style.right = '14px';
+    el.style.left = 'auto';
   };
   // 🍾 漂流瓶（作者 11/23，玩家建議）：釣魚時旁邊一顆「🍾 寫信」，寫一封信丟進湖裡；別人撈到漂流瓶時有一半機會讀到
   const bottleBtn = document.createElement('button');
@@ -3393,7 +3441,11 @@ async function init() {
   /** 🤝 幫忙拉一下（按鈕、E、F、空白鍵都可以） */
   /** 作者 11/22：幫忙拉要跟自己釣魚一樣 → 用同一條收線進度條（畫面中間那條），點畫面任何地方、E、F、空白鍵都能拉 */
   const coopReel = () => {
-    if (fishing.phase === 'reel') return; // 自己也在收線：不要蓋掉自己的
+    // 自己的魚上鉤／在收線：讓回自己的釣魚畫面（作者 11/24 玩家回報：自己釣到魚，畫面還卡著「幫 ○○ 一起拉」）
+    if (fishing.phase === 'reel' || fishing.phase === 'bite') {
+      if (fishingUI.el.reel.classList.contains('coop')) fishingUI.el.reel.classList.remove('coop'), coopEl.classList.remove('slim');
+      return;
+    }
     if (!coopHelp) return fishingUI.el.reel.classList.contains('coop') && (fishingUI.el.reel.classList.remove('coop'), fishingUI.showReel(false), coopEl.classList.remove('slim'));
     fishingUI.el.reel.classList.add('coop');
     fishingUI.onCoopPress = coopPullOnce;
@@ -3435,7 +3487,7 @@ async function init() {
   };
   // 📱🖱️ 幫忙中：點畫面任何地方都算拉一下（跟自己釣魚一樣）
   renderer.domElement.addEventListener('pointerdown', (e) => {
-    if (!coopHelp || coopHelp.done || fishing.phase === 'reel' || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    if (!coopHelp || coopHelp.done || fishing.phase === 'reel' || fishing.phase === 'bite' || (e.pointerType === 'mouse' && e.button !== 0)) return;
     coopPullOnce();
   });
   // ⌨️ 電腦：E、F、空白鍵也能幫忙拉（自己正在收線時不搶）
@@ -3445,7 +3497,7 @@ async function init() {
       if (!coopHelp || coopHelp.done || coopEl.hidden || e.repeat) return;
       if (!['KeyE', 'KeyF', 'Space'].includes(e.code)) return;
       if (/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName ?? '')) return;
-      if (fishing.phase === 'reel') return;
+      if (fishing.phase === 'reel' || fishing.phase === 'bite') return; // 自己的魚咬鉤／收線：按鍵給自己用
       e.preventDefault();
       e.stopImmediatePropagation();
       coopPullOnce();
@@ -5236,6 +5288,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     plotName,
     payOn: () => payOn, // 🎫 月票開通後，手冊、常見問題才說明月票
     go: {
+      news: () => updNews.show(),
       quest: () => document.getElementById('quest-chip')?.click(),
       pass: () => openPass('pass'),
       spirit: () => openSpirit(),
@@ -5519,12 +5572,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       const img = snapshot(`${daily.gift}|0`, () => buildFurniture(daily.gift, {}));
       rows.push(`<div class="lc-row lc-gift">${img ? `<img src="${img}" alt="">` : `<span class="ic">${f.icon}</span>`}<div><b>${t('🎉 第 7 天大禮：🌰 30＋{icon} {name}', { icon: f.icon, name: f.name })}</b><small>${t('已經放進你的帳篷背包')}</small></div></div>`);
     }
-    if (today) rows.push(`<div class="lc-row" data-prev="outfit:${today.id}"><span class="ic">${today.icon}</span><div><b>${t('今天的每日造型：{name}', { name: t(today.zh) })} 🔍</b><small>${outfit?.dailyGot ? t('✅ 已經拿到了') : t('約朋友或做完今日挑戰就拿到')}</small></div></div>`);
+    if (today) rows.push(`<div class="lc-row" data-prev="outfit:${today.id}"><span class="ic">${today.icon}</span><div><b>${t('今天的每日造型：{name}', { name: t(today.zh) })} 🔍</b><small>${outfit?.dailyGot ? t('✅ 已經拿到了') : t('做完「📒 任務」每日 3 題，或朋友點你的連結就拿到')}</small></div></div>`);
     const xm = daily.xmas;
     if (xm) {
       const go = xm.got ? OUTFIT_BY_ID[xm.got] : null;
       const nx = xm.next ? OUTFIT_BY_ID[xm.next] : null;
-      if (go) rows.push(`<div class="lc-row lc-gift"><span class="ic">${go.icon}</span><div><b>${t('🎄 連續上線 3 天！送你聖誕造型：{name}', { name: t(go.zh) })}</b><small>${t('到「👒 造型」穿上')}</small></div></div>`);
+      if (go) rows.push(`<div class="lc-row lc-gift"><span class="ic">${go.icon}</span><div><b>${t('🎄 連續上線 3 天！送你聖誕造型：{name}', { name: t(go.zh) })}</b><small>${t('到「🎒 背包 → 👒 造型」穿上')}</small></div></div>`);
       else if (nx) rows.push(`<div class="lc-row"><span class="ic lc-sil">${nx.icon}</span><div><b>${t('🎄 連續上線 {n}／{need} 天', { n: xm.n, need: xm.need })}</b><small>${t('連續滿 3 天送一款聖誕造型（斷一天要重算）')}</small></div></div>`);
     }
     if (!todaySpecial().off) rows.push(todayRow()); // 📅 11/20 起
@@ -5778,7 +5831,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       audio.sfx('bell');
       if (r.outfits) look.outfits = r.outfits;
       if (r.home) setMyHome(r.home);
-      hud.toast(kind === 'look' ? t('💇 買到「{icon} {name}」了！到「📖 圖鑑 → 👒 造型」戴上', { icon: o.icon, name: t(o.zh) }) : t('🎁 買到「{icon} {name}」了！回帳篷按「🛠️ 布置」擺出來', { icon: o.icon, name: o.name }), 5000);
+      hud.toast(kind === 'look' ? t('💇 買到「{icon} {name}」了！到「🎒 背包 → 👒 造型」戴上', { icon: o.icon, name: t(o.zh) }) : t('🎁 買到「{icon} {name}」了！回帳篷按「🛠️ 布置」擺出來', { icon: o.icon, name: o.name }), 5000);
     } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : r?.reason === 'needPass' ? t('🎫 這是月票限定，有月票才能買') : r?.reason === 'noTent' ? t('⛺ 先有帳篷，才能買家具') : r?.reason === 'notNow' ? t('這個月沒有賣這個喔') : t('現在買不了，等一下再試'));
     await shopPanel.onPassTab();
   };
@@ -6569,10 +6622,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   if (demoMini) {
     const spots = [...HUNT_SPOTS].sort(() => Math.random() - 0.5).slice(0, HUNT_COUNT).map((p) => ({ ...p, by: null }));
     let race = { next: 0, t0: 0 };
+    const demoRoute = makeRaceRoute();
     let best = null;
     localMini = (ev, data) => {
       const pos = player.position;
       if (ev === 'race') {
+        if (data.op === 'route') return { ok: true, next: race.next, route: demoRoute };
         const i = data.i;
         if (i === 0) race = { next: 1, t0: performance.now() };
         else if (i !== race.next) return { ok: false, reason: 'order', next: race.next };
@@ -7054,7 +7109,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       if (!zoneBusy) switchZone(z, z > campZone ? 'next' : 'prev');
     } else if (goTo) roomMgr.switchTo(goTo, switchOnServer);
 
-    updateNearFade(camera);
+    updateNearFade(camera, compactPortrait());
     updateDozeZzz(dt);
     zzz.update(dt);
     bubbles.update(dt, headOf);

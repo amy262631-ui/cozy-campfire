@@ -16,11 +16,33 @@ export function fadeNear(o) {
   return o;
 }
 const _fp = new THREE.Vector3();
-export function updateNearFade(camera) {
+/** 浮在空中的文字招牌（makeSign 做的） */
+export const SIGNS = new Set();
+const shown = (o) => {
+  for (let q = o; q; q = q.parent) if (!q.visible) return false;
+  return true;
+};
+/**
+ * @param {boolean} compact 手機直放（作者 11/24 精簡）：招牌字縮小，只顯示離你最近的 3 個（16 公尺內）
+ */
+export function updateNearFade(camera, compact = false) {
+  let keep = null;
+  if (compact) {
+    const list = [];
+    for (const o of SIGNS) if (shown(o)) list.push([o.getWorldPosition(_fp).distanceTo(camera.position), o]);
+    list.sort((a, b) => a[0] - b[0]);
+    keep = new Set(list.filter(([d]) => d < 16).slice(0, 3).map(([, o]) => o));
+  }
   for (const o of NEAR_FADE) {
     o.getWorldPosition(_fp);
     const d = _fp.distanceTo(camera.position);
-    const a = d < 1.4 ? 0.08 : d > 3.4 ? 1 : 0.08 + ((d - 1.4) / 2) * 0.92;
+    let a = d < 1.4 ? 0.08 : d > 3.4 ? 1 : 0.08 + ((d - 1.4) / 2) * 0.92;
+    const sg = o.userData.sign;
+    if (sg) {
+      if (keep && !keep.has(o)) a = 0;
+      const k = compact ? 0.62 : 1;
+      if (o.scale.y !== sg.sy * k) o.scale.set(sg.sx * k, sg.sy * k, 1);
+    }
     o.traverse((m) => {
       if (m.material && m.material.opacity !== a) m.material.opacity = a;
     });
@@ -54,8 +76,10 @@ export function makeSign(text, { height = 0.32, bg = 'rgba(30, 20, 14, 0.7)', co
     new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }),
   );
   sprite.scale.set((height * w) / 68, height, 1);
+  sprite.userData.sign = { sx: sprite.scale.x, sy: sprite.scale.y };
   sprite.renderOrder = 5;
   NEAR_FADE.add(sprite);
+  SIGNS.add(sprite);
   return sprite;
 }
 

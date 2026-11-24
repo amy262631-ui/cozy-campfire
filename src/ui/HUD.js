@@ -6,7 +6,8 @@ import { t } from '../i18n/i18n.js';
  * 畫面上的介面：營火火力表、互動提示、烤棉花糖進度條、小提示訊息（toast）。
  */
 /** 手機（觸控、畫面窄或橫放很矮）：文字用短版 */
-export const compactScreen = () => document.body.classList.contains('touch') && Math.min(innerWidth, innerHeight) < 600;
+// 作者 11/24：平板也要精簡（觸控、短邊 1024 以下）
+export const compactScreen = () => document.body.classList.contains('touch') && Math.min(innerWidth, innerHeight) <= 1024;
 
 export class HUD {
   constructor(root = document.getElementById('ui')) {
@@ -33,7 +34,7 @@ export class HUD {
 
       <div class="prompt" id="prompt"></div>
 
-      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="date-chip" id="date-chip" hidden>${t('🔥 約朋友')}<i class="date-gain">+10🌰</i></button><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="go-chip" id="go-chip">${t('🧭 去哪裡')} ▾</button><button type="button" class="help-chip" id="help-chip" title="${t('常見問題・營地手冊')}">${t('❓ 問題')}</button><button type="button" class="quest-chip" id="quest-chip">${t('📒 任務')}</button><button type="button" class="home-chip fire-chip" id="fire-chip" hidden>${t('🔥 回營火')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="news-chip" id="news-chip" title="${t('更新紀錄')}">${t('📢 更新')}</button><button type="button" class="look-chip" id="look-chip">${t('👒 造型')}</button><button type="button" class="spirit-chip" id="spirit-chip">${t('✨ 小精靈')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button><a class="shopinfo-chip" href="/shop.html" target="_blank" rel="noopener">${t('ℹ️ 商店資訊・聯絡')}</a></div>
+      <div class="online" id="online"><i></i><span id="online-text">${t('連線中⋯')}</span><button type="button" class="ch-chip" id="ch-chip" hidden></button><button type="button" class="me-chip" id="me-chip"></button><span class="pc-chip" id="pc-chip" hidden></span><button type="button" class="date-chip" id="date-chip" hidden>${t('🔥 約朋友')}<i class="date-gain">+10🌰</i></button><button type="button" class="invite-chip" id="invite-chip" hidden>${t('🎁 邀朋友送禮')}</button><button type="button" class="go-chip" id="go-chip">${t('🧭 去哪裡')} ▾</button><button type="button" class="help-chip" id="help-chip" title="${t('常見問題・營地手冊・更新公告')}">${t('❓ 問題')}</button><button type="button" class="quest-chip" id="quest-chip">${t('📒 任務')}</button><button type="button" class="home-chip fire-chip" id="fire-chip" hidden>${t('🔥 回營火')}</button><button type="button" class="home-chip" id="home-chip" hidden>${t('🏠 回家')}</button><button type="button" class="dex-chip" id="dex-chip">${t('📖 圖鑑')}</button><button type="button" class="news-chip" id="news-chip" hidden title="${t('更新紀錄')}">${t('📢 更新')}</button><button type="button" class="look-chip" id="look-chip" hidden>${t('👒 造型')}</button><button type="button" class="spirit-chip" id="spirit-chip">${t('✨ 小精靈')}</button><button type="button" class="acct-chip" id="acct-chip" hidden>${t('👤 存檔')}</button><a class="shopinfo-chip" href="/shop.html" target="_blank" rel="noopener">${t('ℹ️ 商店資訊・聯絡')}</a></div>
       <div class="go-menu" id="go-menu" hidden></div>
       <div class="today" id="today" hidden></div>
       <div class="event-line" id="event-line" hidden></div>
@@ -259,16 +260,31 @@ export class HUD {
    * 每晚的營火時間：進行中顯示倒數；還沒開始顯示「今晚 9 點」
    * @param {{ active: boolean, endsIn?: number, startsIn?: number } | null} ev 秒數
    */
+  /** 📱 手機、平板（作者 11/24：畫面越精簡越好）：營火時間、小活動兩行只留比較近的那一行 */
+  #mergeLines() {
+    const ev = this.el.eventLine;
+    const mi = this.el.miniLine;
+    if (!compactScreen()) return;
+    ev.hidden = !this._evWant;
+    mi.hidden = !this._miWant;
+    if (ev.hidden || mi.hidden) return;
+    if ((this._miT ?? Infinity) <= (this._evT ?? Infinity)) ev.hidden = true;
+    else mi.hidden = true;
+  }
+
   setEvent(ev) {
     const el = this.el.eventLine;
     el.hidden = !ev;
-    if (!ev) return;
+    this._evT = ev ? (ev.active ? 0 : ev.startsIn) : Infinity;
+    if (!ev) return (this._evWant = false), this.#mergeLines();
     el.classList.toggle('active', ev.active);
     // 手機：短短一行；營火時間快到了（1 小時內）或進行中才顯示
     if (compactScreen()) {
       if (ev.active) el.textContent = t('🌠 營火時間・剩 {m} 分', { m: Math.max(1, Math.ceil(ev.endsIn / 60)) });
-      else if (ev.startsIn < 3600) el.textContent = t('🌙 營火時間 {m} 分後開始', { m: Math.max(1, Math.ceil(ev.startsIn / 60)) });
+      else if (ev.startsIn < 1800) el.textContent = t('🌙 營火時間 {m} 分後開始', { m: Math.max(1, Math.ceil(ev.startsIn / 60)) }); // 作者 11/24：30 分鐘內才顯示
       else el.hidden = true;
+      this._evWant = !el.hidden;
+      this.#mergeLines();
       return;
     }
     if (ev.active) {
@@ -289,7 +305,8 @@ export class HUD {
   setMini(m) {
     const el = this.el.miniLine;
     el.hidden = !m;
-    if (!m) return;
+    this._miT = m ? (m.active ? 0 : m.startsIn) : Infinity;
+    if (!m) return (this._miWant = false), this.#mergeLines();
     el.classList.toggle('active', !!m.active);
     const NAME = { fish: t('🎣 釣魚大賽'), stone: t('🪨 疊石接力'), wood: t('🔥 添柴時光'), race: t('🏃 燈籠賽跑'), hunt: t('✨ 找金松果') };
     if (compactScreen()) {
@@ -303,6 +320,8 @@ export class HUD {
       } else {
         el.textContent = t('下一場 {time} {name}', { name: NAME[m.kind] ?? '', time: `${m.hour}:${String(m.minute ?? 0).padStart(2, '0')}` });
       }
+      this._miWant = !el.hidden;
+      this.#mergeLines();
       return;
     }
     if (m.active) {
@@ -359,7 +378,22 @@ export class HUD {
   setSoundBlocked(blocked) {
     if (blocked === this._soundBlocked) return;
     this._soundBlocked = blocked;
-    this.el.soundUnlock.classList.toggle('show', blocked);
+    const el = this.el.soundUnlock;
+    el.classList.toggle('show', blocked);
+    // 作者 11/24（手機畫面太滿）：10 秒沒按就縮成一顆小喇叭，點了一樣能開聲音
+    clearTimeout(this._suT);
+    el.classList.remove('mini');
+    el.textContent = t('🔈 輕點這裡開啟聲音');
+    // 📱 作者 11/24：觸控裝置點畫面任何地方就會開聲音 → 不放按鈕，只提示一次
+    if (blocked && document.body.classList.contains('touch') && !this._suTold) {
+      this._suTold = true;
+      this.toast(t('🔈 點一下畫面就會有聲音'), 4000);
+    }
+    if (blocked)
+      this._suT = setTimeout(() => {
+        el.classList.add('mini');
+        el.textContent = '🔈';
+      }, 10000);
   }
 
   /** 😋 吃料理的小效果：營火條旁邊顯示圖示和剩下的時間（null＝沒有） */
@@ -411,6 +445,12 @@ export class HUD {
   }
 
   toast(message, ms = 2600) {
+    // 作者 11/24（玩家：畫面太滿）：一模一樣的提示 3 秒內不重複跳；手機、平板同時最多 2 則
+    const now = performance.now();
+    this._recent ??= new Map();
+    if (now - (this._recent.get(message) ?? -1e9) < 3000) return;
+    this._recent.set(message, now);
+    if (this._recent.size > 50) this._recent.clear();
     const el = document.createElement('div');
     el.className = 'toast';
     el.textContent = message;
@@ -421,6 +461,7 @@ export class HUD {
       setTimeout(() => el.remove(), 500);
     }, ms);
     // 最多同時 3 則
-    while (this.el.toasts.children.length > 3) this.el.toasts.firstChild.remove();
+    const max = compactScreen() ? 2 : 3;
+    while (this.el.toasts.children.length > max) this.el.toasts.firstChild.remove();
   }
 }
