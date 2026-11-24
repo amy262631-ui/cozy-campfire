@@ -7934,3 +7934,5 @@ body.fishing .chat-peek:not([hidden]) {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 body.fishing .chat-peek b { color: #ffd59a; margin-right: 4px; }
+/* 🍾 作者 11/25：手機打字時「寫信」「撒飼料」圓鈕壓到聊天的「送出」→ 打字時先藏起來 */
+body.chatting .bait-btn { display: none !important; }
