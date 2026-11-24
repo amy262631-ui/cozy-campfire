@@ -7936,3 +7936,9 @@ body.fishing .chat-peek:not([hidden]) {
 body.fishing .chat-peek b { color: #ffd59a; margin-right: 4px; }
 /* 🍾 作者 11/25：手機打字時「寫信」「撒飼料」圓鈕壓到聊天的「送出」→ 打字時先藏起來 */
 body.chatting .bait-btn { display: none !important; }
+/* 🍾 作者 11/25：手機直放「寫信」「撒飼料」圓鈕縮小、貼右邊、放高一點（不跟聊天、動作鈕搶位置） */
+@media (max-width: 599px) and (orientation: portrait) {
+  body.touch .bait-btn { width: 48px; height: 48px; font-size: 19px; right: 6px; bottom: auto; top: 40%; }
+  body.touch .bait-btn small { font-size: 10px; }
+  body.touch .bait-btn.bottle-btn.up { bottom: auto; top: calc(40% - 58px); }
+}
