@@ -3415,11 +3415,13 @@ async function init() {
   document.getElementById('ui').appendChild(coopMateEl);
   net.on('coopPush', ({ id, name }) => {
     if (id !== coopId) return;
+    // 作者 11/24 回報：別人那一下剛好把魚拉上來時，「正在幫你拉」又被打開、一直留著 → 先記名字、更新文字，最後才算進度
+    if (name) {
+      coopMates.set(name, (coopMates.get(name) ?? 0) + 1);
+      coopMateEl.hidden = false;
+      coopMateEl.textContent = t('🤝 {list} 正在幫你拉！', { list: [...coopMates.keys()].join('、') });
+    }
     fishing.coopPush(1);
-    if (!name) return;
-    coopMates.set(name, (coopMates.get(name) ?? 0) + 1);
-    coopMateEl.hidden = false;
-    coopMateEl.textContent = t('🤝 {list} 正在幫你拉！', { list: [...coopMates.keys()].join('、') });
   });
   const COOP_PULL = FISH.find((f) => f.coop)?.pull ?? 60;
   // 🤝 旁邊的人看到的「幫忙拉」視窗
