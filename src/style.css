@@ -7923,3 +7923,14 @@ body.touch .sound-unlock { display: none !important; }
   body.touch:not(.m-more) #online > button, body.touch:not(.m-more) #online > span { font-size: 12.5px; padding-left: 7px; padding-right: 7px; flex: none; }
   body.touch .pc-chip { margin-left: -2px; }
 }
+/* 💬 電腦、平板、手機橫放：釣魚時聊天紀錄也收成「💬」小條（作者 11/24：釣魚時聊天擋畫面） */
+body.fishing:not(.chat-open):not(.chatting) .chat-log { display: none; }
+body.fishing.chat-open:not(.chatting) .chat-log { max-height: 190px; }
+body.fishing .chat-peek:not([hidden]) {
+  display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
+  max-width: min(420px, 86vw); margin: 0 0 6px 4px; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid rgba(255, 220, 180, 0.35); background: rgba(20, 16, 12, 0.72);
+  color: #fff3df; font: inherit; font-size: 13px; pointer-events: auto; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+body.fishing .chat-peek b { color: #ffd59a; margin-right: 4px; }

@@ -181,9 +181,10 @@ export class SocialPanel {
     return this.el.form.classList.contains('show');
   }
 
-  /** 手機直放：聊天紀錄平常收起來 */
+  /** 手機直放、或正在釣魚：聊天紀錄平常收起來 */
   get compact() {
-    return document.body.classList.contains('touch') && innerWidth < 600 && innerHeight > innerWidth;
+    // 作者 11/24：電腦、平板釣魚時聊天也擋畫面 → 釣魚時一樣收起來
+    return (document.body.classList.contains('touch') && innerWidth < 600 && innerHeight > innerWidth) || document.body.classList.contains('fishing');
   }
 
   openLog() {
@@ -192,6 +193,12 @@ export class SocialPanel {
     this.#peek();
     requestAnimationFrame(() => (this.el.log.scrollTop = this.el.log.scrollHeight));
     this.#keepLog();
+  }
+
+  /** 不再收起來的時候（例如釣完魚）：數字歸零 */
+  resetPeek() {
+    this.unread = 0;
+    this.closeLog();
   }
 
   closeLog() {

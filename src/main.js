@@ -7090,6 +7090,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     if (isFishing !== wasFishing) {
       wasFishing = isFishing;
       document.body.classList.toggle('fishing', isFishing);
+      if (!isFishing) social.resetPeek(); // 💬 釣完魚：聊天紀錄恢復顯示，「💬 N」歸零
     }
     // 舉著魚到處走：又坐下來釣魚、去做別的事（烤棉花糖、撿石頭、裹毯⋯）就收進魚簍
     if (trophy) {
