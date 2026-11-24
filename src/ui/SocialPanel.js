@@ -71,6 +71,8 @@ export class SocialPanel {
     for (const ev of ['wheel', 'touchmove', 'pointerup']) this.el.log.addEventListener(ev, markUser, { passive: true });
     // 打字框旁邊的 😊：手機上「表情」按鈕收起來，改從這裡開
     $('#chat-emote').addEventListener('click', () => this.el.menu.classList.toggle('show'));
+    setTimeout(() => this.#peek(), 0);
+    addEventListener('resize', () => this.#peek());
 
     // 📱 手機、平板打字時：鍵盤跳出來，輸入框就貼在鍵盤正上方，聊天訊息顯示在它上面（像 LINE 一樣）
     //    沒偵測到鍵盤（例如平板接實體鍵盤）就留在畫面上方
@@ -187,6 +189,7 @@ export class SocialPanel {
     this._userUp = false;
     const log = this.el.log;
     requestAnimationFrame(() => requestAnimationFrame(() => (log.scrollTop = log.scrollHeight)));
+    this.#peek(); // 手機直放：收回「💬 聊天紀錄」小條
   }
 
   get typing() {
@@ -237,8 +240,9 @@ export class SocialPanel {
       return;
     }
     el.classList.remove('line');
-    el.hidden = !this.unread;
-    el.innerHTML = `💬 <i class="social-badge in">${this.unread > 9 ? '9+' : this.unread}</i>`;
+    // 作者 11/25：沒有新訊息時小條原本會整個藏起來，就看不到聊天紀錄了 → 一直留一顆「💬」，點了就能看以前的聊天
+    el.hidden = false;
+    el.innerHTML = this.unread ? `💬 <i class="social-badge in">${this.unread > 9 ? '9+' : this.unread}</i>` : `💬 ${t('聊天紀錄')}`;
   }
 
   /** 加一則聊天紀錄（會慢慢淡掉；畫面上大約 6 則的高度，往上滑看最近 80 則） */
