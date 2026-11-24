@@ -545,6 +545,8 @@ export class FishingGame {
           }
         }
         this.bobber.position.set(this.target.x, this.waterY - FLOAT_SINK + Math.sin(time * 1.7) * 0.006 - dip, this.target.z);
+        // 💬 作者 11/24：正在打字時魚先不咬鉤，打完 1.5 秒後才會上鉤（以聊天為主）
+        if (this.hold?.()) this.biteAt = Math.max(this.biteAt, this.t + 1.5);
         if (this.t > this.biteAt && this.served !== 'pending') this.#bite();
         break;
       }

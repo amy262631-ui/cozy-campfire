@@ -3080,6 +3080,7 @@ async function init() {
   let baitUntil = 0;
   let baitBag = 0; // 背包裡還有幾包（作者 11/22：買了先收著，釣魚時按「🐟 撒」）
   fishing.fast = () => Date.now() < baitUntil;
+  fishing.hold = () => social.typing; // 💬 打字時魚先不咬鉤（作者 11/24）
   // 重新整理、換裝置進來：問一下魚飼料還剩多久、背包幾包
   net.on('joined', () => setTimeout(async () => {
     const r = await net.request('boatInfo', {});
