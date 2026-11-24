@@ -2534,8 +2534,10 @@ async function init() {
   async function openGarden(plot) {
     gardenPlot = plot;
     const hid = plot.tent.mine ? undefined : plot.tent.hid;
-    const res = await net.request('gardenInfo', { hid });
+    // 作者 11/25：選種子時要看得到採集籃裡有幾個 → 打開菜園時順便拿最新的採集籃
+    const [res, gi] = await Promise.all([net.request('gardenInfo', { hid }), plot.tent.mine ? net.request('gatherInfo') : null]);
     if (!res?.ok) return hud.toast(t('還沒連上伺服器，等一下再試'));
+    if (gi?.ok) basket = gi.basket ?? basket;
     renderGarden(res, plot);
   }
   function renderGarden(res, plot) {
@@ -2569,7 +2571,7 @@ async function init() {
     const selBar = mine && emptyIdx.length > 1 ? `<div class="garden-selbar"><span class="gsel-tip">${t('點空格打勾，可以多選')}</span><button type="button" class="gp-all" id="garden-all">☐ ${t('全選空格（{n}）', { n: emptyIdx.length })}</button><button type="button" class="gp-all" id="garden-clr" hidden>✕ ${t('清除')}</button></div>` : '';
     const slots = `${allBtn}${selBar}<div class="garden-grid">${res.slots.map(cell).join('')}</div>${
       mine && emptyIdx.length
-        ? `<div class="garden-pick" id="garden-pick" hidden><b id="garden-pick-t"></b><div class="crop-pick">${CROPS.filter((c) => isOpen(c)).map((c) => `<button type="button" class="mini-btn" data-c="${c.id}">${c.icon} ${t(c.zh)}<small>🌰 ${c.seed}・${t('{h} 小時', { h: c.hours })}・🧺 ${basket[c.id] ?? 0}</small></button>`).join('')}</div></div>`
+        ? `<div class="garden-pick" id="garden-pick" hidden><b id="garden-pick-t"></b><div class="crop-pick">${CROPS.filter((c) => isOpen(c)).map((c) => `<button type="button" class="mini-btn" data-c="${c.id}">${c.icon} ${t(c.zh)}<small>🌰 ${c.seed}・${t('{h} 小時', { h: c.hours })}・${t('🧺 背包有 {n}', { n: basket[c.id] ?? 0 })}</small></button>`).join('')}</div></div>`
         : ''
     }${!mine && !res.slots.some(Boolean) ? `<div class="dex-note">${t('菜園現在空空的')}</div>` : ''}`;
     const expand =
@@ -2628,7 +2630,8 @@ async function init() {
             const cost = c.seed * Math.max(1, n);
             e.disabled = (pinecones ?? 0) < cost;
             const sm = e.querySelector('small');
-            if (sm) sm.textContent = `${t('{n} 格', { n: Math.max(1, n) })} 🌰 ${cost}・${t('{h} 小時', { h: c.hours })}${e.disabled ? `・${t('松果不夠')}` : ''}`;
+            // 作者 11/25：勾了格子之後這行會重寫，背包數量也要留著
+            if (sm) sm.textContent = `${t('{n} 格', { n: Math.max(1, n) })} 🌰 ${cost}・${t('{h} 小時', { h: c.hours })}・${t('🧺 背包有 {n}', { n: basket[c.id] ?? 0 })}${e.disabled ? `・${t('松果不夠')}` : ''}`;
           }
         };
         for (const e of body.querySelectorAll('[data-pick]')) {
