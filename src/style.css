@@ -7942,3 +7942,5 @@ body.chatting .bait-btn { display: none !important; }
   body.touch .bait-btn small { font-size: 10px; }
   body.touch .bait-btn.bottle-btn.up { bottom: auto; top: calc(40% - 58px); }
 }
+/* 🧘 作者 11/25：釣魚時用不到「休息」（按了會收竿），先藏起來 */
+body.fishing .action-rest, body.fishing .rest-pop { display: none !important; }
