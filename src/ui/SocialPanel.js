@@ -62,6 +62,13 @@ export class SocialPanel {
     this.el.peek.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.log.addEventListener('pointerdown', () => this.#keepLog());
     this.el.log.addEventListener('scroll', () => this.#keepLog(), { passive: true });
+    // 玩家自己用手指／滾輪往上滑才算「在看舊的」；滑回最下面就恢復自動捲動
+    const markUser = () =>
+      requestAnimationFrame(() => {
+        const l = this.el.log;
+        this._userUp = l.scrollHeight - l.scrollTop - l.clientHeight > 30;
+      });
+    for (const ev of ['wheel', 'touchmove', 'pointerup']) this.el.log.addEventListener(ev, markUser, { passive: true });
     // 打字框旁邊的 😊：手機上「表情」按鈕收起來，改從這裡開
     $('#chat-emote').addEventListener('click', () => this.el.menu.classList.toggle('show'));
 
@@ -164,6 +171,7 @@ export class SocialPanel {
     document.body.classList.add('chatting'); // 手機打字時先把左上的資訊收起來，免得重疊
     this.unread = 0;
     this.el.peek.hidden = true;
+    this._userUp = false;
     requestAnimationFrame(() => (this.el.log.scrollTop = this.el.log.scrollHeight)); // 📜 聊天紀錄：打開時捲到最新，往上滑看更早的
     setTimeout(() => this.el.input.focus(), 30);
     // 鍵盤是慢慢滑上來的，多量幾次
@@ -232,13 +240,18 @@ export class SocialPanel {
   /** 加一則聊天紀錄（會慢慢淡掉；畫面上大約 6 則的高度，往上滑看最近 80 則） */
   addLog(name, text, { system = false, feed = false, big = false } = {}) {
     const log = this.el.log;
-    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30; // 正在往上看舊的，就不要硬拉回最新
+    // 正在往上看舊的，就不要硬拉回最新。作者 11/25：打字時新訊息不會往上跑 → 改成看「玩家自己有沒有往上滑」
+    //（鍵盤打開、輸入框移位時版面會變，原本用位置判斷常常誤判成「在看舊的」）
+    const atBottom = !this._userUp || log.scrollHeight - log.scrollTop - log.clientHeight < 30;
     const line = document.createElement('div');
     line.className = `chat-line${system ? ' system' : ''}${feed ? ' feed' : ''}${big ? ' big' : ''}`;
     line.innerHTML = system ? esc(text) : `<b>${esc(name)}</b>${esc(text)}`;
     this.el.log.appendChild(line);
     while (this.el.log.children.length > 80) this.el.log.firstChild.remove();
-    if (atBottom) log.scrollTop = log.scrollHeight;
+    if (atBottom) {
+      log.scrollTop = log.scrollHeight;
+      requestAnimationFrame(() => (log.scrollTop = log.scrollHeight)); // 版面算好後再捲一次
+    }
     setTimeout(() => line.classList.add('old'), 15000);
     if (this.compact && !document.body.classList.contains('chat-open') && !this.typing) {
       this.unread++;
@@ -254,7 +267,7 @@ export class SocialPanel {
     tr.className = 'chat-tr';
     tr.textContent = `🌐 ${text}`;
     const log = this.el.log;
-    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+    const atBottom = !this._userUp || log.scrollHeight - log.scrollTop - log.clientHeight < 60;
     line.appendChild(tr);
     if (atBottom) log.scrollTop = log.scrollHeight;
   }
