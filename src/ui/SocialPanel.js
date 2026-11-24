@@ -183,6 +183,10 @@ export class SocialPanel {
     document.body.classList.remove('chatting');
     this.el.input.blur();
     this.fitKeyboard();
+    // 作者 11/25：打完字收起來後，紀錄要停在最新（打字時別人說的話要看得到），不要停在打字前那幾句
+    this._userUp = false;
+    const log = this.el.log;
+    requestAnimationFrame(() => requestAnimationFrame(() => (log.scrollTop = log.scrollHeight)));
   }
 
   get typing() {
