@@ -986,12 +986,21 @@ function finishStay(st) {
       return logInvite(kind, ref, friend, name, '❌ 這兩個人今天已經約過了', !!st.net);
     }
     shared.datePairs.list.push(pair);
-    const a = players[friend] ? grantOutfit(friend, nextDateOutfit(players[friend].outfits, isOpen)?.id, 'date') : null;
-    const b = grantOutfit(ref, nextDateOutfit(players[ref].outfits, isOpen)?.id, 'date');
+    // 作者 11/25：一個人一天只拿一款（原本是「同一對一天一次」，一群好友一起待在營火旁，一個人一次拿到好幾款）
+    shared.datePairs.got ??= [];
+    const gotToday = (v) => shared.datePairs.got.includes(v);
+    const give = (v) => {
+      if (!players[v] || gotToday(v)) return null;
+      const id = grantOutfit(v, nextDateOutfit(players[v].outfits, isOpen)?.id, 'date');
+      if (id) shared.datePairs.got.push(v);
+      return id;
+    };
+    const a = give(friend);
+    const b = give(ref);
     if (a || b) bump('dates');
     questEv(friend, 'date'); // 📒 營火之約
     questEv(ref, 'date');
-    logInvite(kind, ref, friend, name, a || b ? '✅ 成功：兩個人拿營火之約造型' : '✅ 成立了（兩個人造型都已經有了）', !!st.net);
+    logInvite(kind, ref, friend, name, a && b ? '✅ 成功：兩個人拿營火之約造型' : a || b ? '✅ 成功：一個人拿營火之約造型（另一個今天已經拿過或都有了）' : '✅ 成立了（兩個人今天都拿過，或造型都已經有了）', !!st.net);
     for (const s2 of io.sockets.sockets.values()) if (s2.data.vid === ref) s2.emit('dateFriend', { name });
     suggestFriend(friend, ref);
   }
@@ -1040,6 +1049,7 @@ function checkDatePresence() {
         const [a, b] = [list[i], list[j]].sort();
         const pair = `${a}|${b}`;
         if (shared.datePairs.list.includes(pair) || !isFriend(a, b)) continue;
+        if (shared.datePairs.got?.includes(a) && shared.datePairs.got?.includes(b)) continue; // 兩個人今天都拿過了
         seen.add(pair);
         if (!datePresence.has(pair)) datePresence.set(pair, now);
         else if (now - datePresence.get(pair) >= DATE_STAY_MS) {
