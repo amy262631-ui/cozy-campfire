@@ -375,6 +375,10 @@ function movePrice(vid) {
 }
 const plotLabel = (p) => (p ? `${zoneName(p.z)} 區 ${p.n} 號` : '');
 const isAuthorVid = (vid) => !!vid && vid === campMeta.author;
+/** 🌰 /stats 不算的自己人（作者 11/25：貓鈴鐺是自己人，作者會直接給他松果）。只排除統計，不影響玩 */
+const STATS_SKIP_VIDS = new Set(['ItHBnIf-LbSO']);
+/** /stats 松果存量、固定玩家、小精靈表要不要跳過這個人：作者帳號＋自己人 */
+const statsSkip = (vid) => isAuthorVid(vid) || !!players[vid]?.author || STATS_SKIP_VIDS.has(vid);
 /** 最近一次上線（每天第一次進來記的 wal.last，和帳篷最近有動靜的時間，取比較晚的） */
 function lastSeen(vid) {
   const d = players[vid]?.last ? Date.parse(`${players[vid].last}T23:59:00+08:00`) : 0;
@@ -1446,7 +1450,7 @@ function snapPc() {
   const seen = new Set();
   for (const k of Object.keys(stats).sort().reverse().slice(0, 14)) for (const v of stats[k]?.vids ?? []) seen.add(v);
   const pcs = {};
-  for (const v of seen) if (players[v] && !isAuthorVid(v) && !players[v].author) pcs[v] = [players[v].pc ?? 0, players[v].tot ?? 0]; // 作者自己的不算（作者 11/23）
+  for (const v of seen) if (players[v] && !statsSkip(v)) pcs[v] = [players[v].pc ?? 0, players[v].tot ?? 0]; // 作者自己的不算（作者 11/23）
   d.pcs = pcs;
   for (const k of Object.keys(stats).sort().reverse().slice(30)) delete stats[k].pcs; // 只留 30 天，存檔不要變太大
   saveJson('stats.json', stats);
@@ -1945,7 +1949,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
     for (const k of allDays.slice(from, to)) for (const v of stats[k]?.vids ?? []) m.set(v, (m.get(v) ?? 0) + 1);
     return m;
   };
-  const notAuthor = (m) => { for (const v of [...m.keys()]) if (isAuthorVid(v) || players[v]?.author) m.delete(v); return m; }; // 作者自己的帳號不算（作者 11/23）
+  const notAuthor = (m) => { for (const v of [...m.keys()]) if (statsSkip(v)) m.delete(v); return m; }; // 作者自己的帳號、自己人（貓鈴鐺）不算（作者 11/23、11/25）
   const wk = notAuthor(dayCount(0, 7));
   const prev = notAuthor(dayCount(7, 14));
   const bucket = (m) => {
@@ -2051,7 +2055,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
   // ✨ 小精靈（11/11）：誰在養、養到哪裡（親密度 60 變小精靈、400 長大）
   const KIND_ZH = { light: '✨ 小光點', drop: '💧 水滴', flame: '🔥 火苗', leaf: '🍃 葉子', cloud: '☁️ 雲朵', star: '⭐ 星星', mush: '🍄 蘑菇' };
   const owners = Object.entries(players).flatMap(([v, w]) => {
-    if (isAuthorVid(v) || w.author) return []; // 作者自己的不算（作者 11/23）
+    if (statsSkip(v)) return []; // 作者自己的、自己人（貓鈴鐺）不算（作者 11/23、11/25）
     const all = [w.spirit, ...(w.spiritBox ?? [])].filter((x) => x && (x.own || x.xp > 0));
     return all.length ? [{ v, w, sp: all[0], n: all.length }] : [];
   });
@@ -4431,7 +4435,7 @@ io.on('connection', (socket) => {
     const { ym, preview } = passMonthOf(data);
     const h = homes[player?.vid];
     const lookYm = preview || process.env.PASS_MONTH_TEST ? ym : passLookMonth(isOpen({ from: '2026-11-27' }) && dayKey() < '2026-11-27' ? '2026-11-27' : dayKey()); // 💇 12 月髮型 11/27 就開賣
-    const looks = passMonthLooks(OUTFITS, lookYm).map((o) => ({ id: o.id, price: o.price, own: !!wal.outfits?.includes(o.id) }));
+    const looks = passMonthLooks(OUTFITS, lookYm).map((o) => ({ id: o.id, price: o.price, m: o.month, own: !!wal.outfits?.includes(o.id) }));
     const furn = Object.entries(PASS_MONTH_FURN[lookYm] ?? {}).map(([id, price]) => ({ id, price, have: h?.inv?.[id] ?? 0 }));
     ack?.({ ok: true, ym, lookYm, preview, on: PASS_ON, rank: passTier(wal)?.rank ?? 0, looks, furn, tent: !!h?.tent });
   });

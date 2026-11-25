@@ -527,10 +527,15 @@ export class ShopPanel {
         ${kind === 'furn' && x.have ? `<span class="si-owned">${t('有 {n} 個', { n: x.have })}</span>` : ''}
         ${locked ? `<span class="si-pass">${t('🔥✨ 月票才可買')}</span>` : ''}</button>`;
     };
+    const lookYm = pmi?.lookYm ?? pmi?.ym ?? '';
+    // 💇 作者 11/26：之前月份的假髮都能買（不下架） → 當月一區、前幾個月一區（舊伺服器沒給 m 就全部當當月）
+    const nowLooks = pmi?.looks?.filter((x) => !x.m || x.m === lookYm) ?? [];
+    const oldLooks = pmi?.looks?.filter((x) => x.m && x.m !== lookYm) ?? [];
     const monthly = pmOn
-      ? `${pmi.looks.length ? `<div class="shop-sub">${t('💇 {m} 月造型', { m: Number((pmi.lookYm ?? pmi.ym).slice(5)) })}</div>
-        <div class="shop-hint">${t('有月票的人才能買・只賣這個月，明年同一個月再回來・買了永久是你的')}${pmi.preview ? `<br>${t('👀 這是預覽，{d} 起才能買', { d: openDay(pmi.ym) })}` : ''}</div>
-        <div class="shop-grid">${pmi.looks.map((x) => pmCard('look', x)).join('')}</div>` : ''}
+      ? `${pmi.looks.length ? `<div class="shop-sub">${t('💇 {m} 月造型', { m: Number(lookYm.slice(5)) })}</div>
+        <div class="shop-hint">${t('有月票的人才能買・假髮上架後一直都能買・買了永久是你的')}${pmi.preview ? `<br>${t('👀 這是預覽，{d} 起才能買', { d: openDay(pmi.ym) })}` : ''}</div>
+        <div class="shop-grid">${nowLooks.map((x) => pmCard('look', x)).join('')}</div>
+        ${oldLooks.length ? `<div class="shop-sub">${t('💇 之前的假髮（有月票都能買）')}</div><div class="shop-grid">${oldLooks.map((x) => pmCard('look', x)).join('')}</div>` : ''}` : ''}
         ${pmi.looks.some((x) => this.outfitOf?.(x.id)?.slot === 'clip') ? `<div class="shop-hint">${t('📎 髮夾每種頭髮都能戴，也能跟帽子、假髮一起戴（造型 → 📎 髮夾）')}</div>` : ''}
         ${pmi.furn.length ? `<div class="shop-sub">${t('🎄 {m} 月限定家具', { m: Number((pmi.lookYm ?? pmi.ym).slice(5)) })}</div><div class="shop-grid">${pmi.furn.map((x) => pmCard('furn', x)).join('')}</div>${pmi.tent ? '' : `<div class="shop-hint">${t('⛺ 先有帳篷，才能買家具')}</div>`}` : ''}`
       : '';

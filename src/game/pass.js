@@ -70,7 +70,9 @@ export const SPONSOR_END = '2026-12';
 /** 作者 11/20：支持營地只剩月票、月票限定聖誕家具也跟 11/27 聖誕更新一起（11 月贊助到 11/26） */
 export const SPONSOR_END_DAY = '2026-11-27';
 /** 月票本月造型的價格：💇 假髮、📎 髮夾 */
-export const PASS_LOOK_PRICE = { hair: 150, clip: 50 };
+export const PASS_LOOK_PRICE = { hair: 200, clip: 50 }; // 作者 11/26：當月假髮 200
+/** 💇 之前月份的假髮（不下架，有月票一直能買）：作者 11/26 定 300 */
+export const PASS_HAIR_OLD_PRICE = 300;
 /** 月票本月限定家具（原本禮盒的家具）：{ 'YYYY-MM': { 家具 id: 松果 } } */
 export const PASS_MONTH_FURN = {
   '2026-12': { box12_lux: 120, box12_globe: 50, box12_train: 50, box12_fire: 50 }, // 作者 11/20：豪華聖誕樹 120（兩種月票都能買）、其他 50
@@ -82,6 +84,11 @@ export function passLookMonth(day) {
   for (const [ym, from] of Object.entries(PASS_LOOK_EARLY)) if (day >= from && day.slice(0, 7) < ym) return ym;
   return day.slice(0, 7);
 }
-/** 這個月（'YYYY-MM'）月票能買的造型（outfits.js 的 OUTFITS 傳進來）：當月的假髮（女生款、男生款）＋當月的髮夾 */
-export const passMonthLooks = (outfits, ym) =>
-  ym < SPONSOR_END ? [] : outfits.filter((o) => (o.src === 'sponsor' || o.src === 'pass') && o.month === ym).map((o) => ({ ...o, price: PASS_LOOK_PRICE[o.slot] ?? 50 }));
+/** 💇 作者 11/26：月票假髮上架後不下架，之前月份的假髮有月票都能買（髮夾還是只賣當月） */
+export const passMonthLooks = (outfits, ym) => {
+  if (ym < SPONSOR_END) return [];
+  return outfits
+    .filter((o) => (o.src === 'sponsor' || o.src === 'pass') && o.month && (o.month === ym || (o.slot === 'hair' && o.month < ym)))
+    .sort((a, b) => (a.month === b.month ? 0 : a.month > b.month ? -1 : 1))
+    .map((o) => ({ ...o, price: o.slot === 'hair' && o.month < ym ? PASS_HAIR_OLD_PRICE : PASS_LOOK_PRICE[o.slot] ?? 50 }));
+};
