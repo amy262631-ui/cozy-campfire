@@ -7944,3 +7944,7 @@ body.chatting .bait-btn { display: none !important; }
 }
 /* 🧘 作者 11/25：釣魚時用不到「休息」（按了會收竿），先藏起來 */
 body.fishing .action-rest, body.fishing .rest-pop { display: none !important; }
+/* 👍 作者 11/25：手機直放釣魚鈕原本在拇指剛好的高度，合併「休息」、釣魚時藏起休息後變太低 → 固定兩排高，第一排位置不動 */
+@media (max-width: 599px) and (orientation: portrait) {
+  body.touch .action-buttons { grid-template-rows: repeat(2, 64px); }
+}
