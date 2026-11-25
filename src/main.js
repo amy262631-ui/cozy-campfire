@@ -2573,7 +2573,7 @@ async function init() {
     const selBar = mine && emptyIdx.length > 1 ? `<div class="garden-selbar"><span class="gsel-tip">${t('點空格打勾，可以多選')}</span><button type="button" class="gp-all" id="garden-all">☐ ${t('全選空格（{n}）', { n: emptyIdx.length })}</button><button type="button" class="gp-all" id="garden-clr" hidden>✕ ${t('清除')}</button></div>` : '';
     const slots = `${allBtn}${selBar}<div class="garden-grid">${res.slots.map(cell).join('')}</div>${
       mine && emptyIdx.length
-        ? `<div class="garden-pick" id="garden-pick" hidden><b id="garden-pick-t"></b><div class="crop-pick">${CROPS.filter((c) => isOpen(c)).map((c) => `<button type="button" class="mini-btn" data-c="${c.id}">${c.icon} ${t(c.zh)}<small>🌰 ${c.seed}・${t('{h} 小時', { h: c.hours })}・${t('🧺 背包有 {n}', { n: basket[c.id] ?? 0 })}</small></button>`).join('')}</div></div>`
+        ? `<div class="garden-pick" id="garden-pick" hidden><b id="garden-pick-t"></b><div class="gp-legend">${t('右邊數字＝背包有幾個')}</div><div class="crop-pick crop-grid">${CROPS.filter((c) => isOpen(c)).map((c) => `<button type="button" class="crop-cell${basket[c.id] ? '' : ' zero'}" data-c="${c.id}">${c.icon} ${t(c.zh)} <span class="cbk">${basket[c.id] ?? 0}</span><small>🌰${c.seed}・${t('{h} 小時', { h: c.hours })}</small></button>`).join('')}</div></div>`
         : ''
     }${!mine && !res.slots.some(Boolean) ? `<div class="dex-note">${t('菜園現在空空的')}</div>` : ''}`;
     const expand =
@@ -2633,7 +2633,9 @@ async function init() {
             e.disabled = (pinecones ?? 0) < cost;
             const sm = e.querySelector('small');
             // 作者 11/25：勾了格子之後這行會重寫，背包數量也要留著
-            if (sm) sm.textContent = `${t('{n} 格', { n: Math.max(1, n) })} 🌰 ${cost}・${t('{h} 小時', { h: c.hours })}・${t('🧺 背包有 {n}', { n: basket[c.id] ?? 0 })}${e.disabled ? `・${t('松果不夠')}` : ''}`;
+            // 作者 11/25：數量放在名字旁邊（.cbk），這行只寫這次要花的松果和幾小時
+            if (sm) sm.textContent = `🌰${cost}・${t('{h} 小時', { h: c.hours })}`;
+            e.title = e.disabled ? t('松果不夠') : '';
           }
         };
         for (const e of body.querySelectorAll('[data-pick]')) {

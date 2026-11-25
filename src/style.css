@@ -7948,3 +7948,18 @@ body.fishing .action-rest, body.fishing .rest-pop { display: none !important; }
 @media (max-width: 599px) and (orientation: portrait) {
   body.touch .action-buttons { grid-template-rows: repeat(2, 64px); }
 }
+
+/* 🥕 菜園選種子：小方格一排 3 個、數量在名字旁邊（作者 11/25 看過 garden_pick2.png；視窗寬度手機平板電腦差不多，4 個時「月光白蘿蔔」會折行） */
+.gp-legend { font-size: 11px; opacity: 0.75; margin-top: 2px; }
+.crop-pick.crop-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.crop-cell {
+  margin: 0; padding: 4px 3px; border-radius: 9px;
+  border: 1px solid rgba(255, 200, 130, 0.5); background: rgba(240, 138, 60, 0.32);
+  color: #ffe9cc; font: inherit; font-size: 12px; line-height: 1.25;
+  text-align: center; overflow-wrap: anywhere; cursor: pointer; pointer-events: auto;
+}
+.crop-cell small { display: block; font-size: 10px; opacity: 0.8; }
+.crop-cell .cbk { color: #bff0a8; font-weight: bold; font-size: 11px; }
+.crop-cell.zero .cbk { color: #ff9f8c; }
+.crop-cell:disabled { opacity: 0.45; cursor: default; }
+.crop-cell:disabled small { color: #ff9f8c; opacity: 1; }
