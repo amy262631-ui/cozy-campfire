@@ -288,7 +288,7 @@ export class HUD {
       return;
     }
     if (ev.active) {
-      el.textContent = t('🌠 營火時間・流星雨中！松果加倍・限定流星吊飾（還剩 {m} 分）', { m: Math.max(1, Math.ceil(ev.endsIn / 60)) });
+      el.textContent = t('🌠 營火時間：流星雨、松果加倍、限定魚和魚王 🐉（還剩 {m} 分）', { m: Math.max(1, Math.ceil(ev.endsIn / 60)) });
     } else if (ev.startsIn < 3 * 3600) {
       const h = Math.floor(ev.startsIn / 3600);
       const m = Math.ceil((ev.startsIn % 3600) / 60);
