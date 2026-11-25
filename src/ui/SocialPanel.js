@@ -236,7 +236,10 @@ export class SocialPanel {
       el.hidden = false;
       el.classList.add('line');
       el.innerHTML = `💬 ${name ? `<b>${esc(name)}</b>` : ''}${esc(text)}`;
-      this._peekT = setTimeout(() => this.#peek(), 5000);
+      this._peekT = setTimeout(() => {
+        this._lineMsg = false;
+        this.#peek();
+      }, 5000);
       return;
     }
     el.classList.remove('line');
@@ -262,7 +265,13 @@ export class SocialPanel {
     }
     setTimeout(() => line.classList.add('old'), 15000);
     if (this.compact && !document.body.classList.contains('chat-open') && !this.typing) {
-      this.unread++;
+      // 作者 11/25：小條上已經顯示過、看過的話，不要再算成紅色「沒看過」。
+      // 只有這兩種才算沒看過：切到別的分頁／螢幕關著時來的；或上一句才出現不到 2 秒就被下一句蓋掉（來不及看）。
+      const now = performance.now();
+      if (document.hidden) this.unread++;
+      else if (this._lineMsg && now - this._lineAt < 2000) this.unread++;
+      this._lineMsg = !document.hidden;
+      this._lineAt = now;
       this.#peek(system ? '' : name, text);
     }
     return line;
