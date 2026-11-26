@@ -2,6 +2,7 @@
  * ⛵ 租船（作者 11/19，模擬圖階段）：小木船、藍鯨帳篷的外型。
  */
 import * as THREE from 'three';
+import { mergeStatic } from '../scene/mergeStatic.js';
 
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, ...o });
 
@@ -280,21 +281,28 @@ export function buildSwanBoat() {
     g.add(t2);
   }
   // 小頂棚：四根細柱＋圓角平頂（粉藍色，邊上一圈白色荷葉邊）
+  // 作者 11/27：高度不要改（比例會怪）→ 維持 1.3；頂棚改成半透明（boatLayer），有人舉魚時再更淡
+  const RY = 1.3;
   for (const x of [-0.6, 0.6]) for (const z of [-1.0, 0.35]) {
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.95, 6), std(0xe8d8b8));
-    p.position.set(x, 0.8, z);
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, RY - 0.35, 6), std(0xe8d8b8));
+    p.position.set(x, 0.33 + (RY - 0.35) / 2, z);
     g.add(p);
   }
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.08, 1.6), std(0x9fd0e8));
-  roof.position.set(0, 1.3, -0.33);
-  g.add(roof);
+  // 作者 11/27：舉超大的魚（大白鯊）還是會穿出頂棚 → 頂棚自己一組（boatLayer 在船上有人舉魚時把它變透明）
+  const canopy = new THREE.Group();
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.08, 1.6), std(0x9fd0e8, { transparent: true }));
+  roof.position.set(0, RY, -0.33);
+  canopy.add(roof);
   for (let k = 0; k < 10; k++) {
     for (const zz of [-1.13, 0.47]) {
-      const sc = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), std(0xffffff));
-      sc.position.set(-0.65 + k * 0.145, 1.27, zz);
-      g.add(sc);
+      const sc = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), std(0xffffff, { transparent: true }));
+      sc.position.set(-0.65 + k * 0.145, RY - 0.03, zz);
+      canopy.add(sc);
     }
   }
+  g.add(canopy);
+  mergeStatic(canopy);
+  canopy.traverse((o) => o.isMesh && (o.userData.canopyPart = true));
   // 四個座位（兩排）
   for (const z of [-0.65, 0.05]) {
     const seat = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.3), std(0xd2524a));

@@ -16,13 +16,22 @@ export function createBoatLayer(group, waterY) {
 
   const add = (d) => {
     const k = BOATS[d.k] ?? BOATS.row;
-    const mesh = mergeStatic((BUILD[d.k] ?? buildRowboat)()); // ⚡ 船的小零件合成幾塊（天鵝船原本 60 多塊）
+    const mesh = mergeStatic((BUILD[d.k] ?? buildRowboat)(), (o) => !!o.userData.canopyPart); // ⚡ 船的小零件合成幾塊（天鵝船原本 60 多塊）；頂棚另外一塊（會變透明）
     mesh.scale.setScalar(k.scale);
     mesh.traverse((o) => {
       if (o.isMesh) o.castShadow = true;
     });
     group.add(mesh);
-    const b = { d, mesh, x: d.x, z: d.z, ry: d.ry, bob: Math.random() * 6 };
+    // 🦢 頂棚：每艘船自己一份材質，才能各自變透明
+    const canopy = [];
+    mesh.traverse((o) => {
+      if (!o.userData.canopyPart) return;
+      o.material = o.material.clone();
+      o.material.opacity = 0.6;
+      o.material.depthWrite = false;
+      canopy.push(o);
+    });
+    const b = { d, mesh, x: d.x, z: d.z, ry: d.ry, bob: Math.random() * 6, canopy };
     boats.set(d.id, b);
     return b;
   };
@@ -35,7 +44,12 @@ export function createBoatLayer(group, waterY) {
   };
   const boatY = (b, t) => waterY - 0.12 + Math.sin(t * 1.6 + b.bob) * 0.025;
 
+  let showFn = null;
   return {
+    /** fn(riders)：這艘船上有沒有人正在舉魚 */
+    setShowFn(fn) {
+      showFn = fn;
+    },
     setSelf(id) {
       selfId = id;
     },
@@ -130,6 +144,14 @@ export function createBoatLayer(group, waterY) {
           let dr = b.tr - b.ry;
           dr = Math.atan2(Math.sin(dr), Math.cos(dr));
           b.ry += dr * k;
+        }
+        // 🦢 船上有人舉魚炫耀：頂棚變淡（作者 11/27：大白鯊這種大魚舉起來會穿出頂棚）
+        if (b.canopy.length) {
+          const want = showFn?.(b.d.r ?? []) ? 0.15 : 0.6; // 平常半透明（作者 11/27），有人舉魚更淡
+          for (const o of b.canopy) {
+            o.material.opacity += (want - o.material.opacity) * k;
+            o.material.depthWrite = false;
+          }
         }
         b.mesh.position.set(b.x, boatY(b, t), b.z);
         b.mesh.rotation.y = b.ry;

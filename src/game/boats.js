@@ -15,7 +15,7 @@ export const BOAT_MAX = 8;
 export const BOATS = {
   canoe: { id: 'canoe', icon: '🛶', zh: '小獨木舟', people: 1, price: 15, scale: 1.25, r: 0.9, y: 0.02, seats: [[0, -0.05]] },
   row: { id: 'row', icon: '🚣', zh: '小木船', people: 2, price: 25, scale: 1.3, r: 1.15, y: 0.1, seats: [[0, -0.45], [0, 0.42]] },
-  swan: { id: 'swan', icon: '🦢', zh: '天鵝船', people: 4, price: 40, scale: 1.75, r: 1.9, y: 0.45, seats: [[-0.34, -0.72], [0.34, -0.72], [-0.34, 0.12], [0.34, 0.12]] },
+  swan: { id: 'swan', icon: '🦢', zh: '天鵝船', people: 4, price: 40, scale: 1.75, r: 1.9, y: 0.68, seats: [[-0.34, -0.72], [0.34, -0.72], [-0.34, 0.12], [0.34, 0.12]] },
 };
 export const BOAT_LIST = [BOATS.canoe, BOATS.row, BOATS.swan];
 /** 🐟 特殊魚飼料（作者 11/20 改）：10 分鐘內等魚上鉤的時間減半（不改稀有魚機率）；在哪裡釣都有效 */

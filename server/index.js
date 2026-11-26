@@ -4797,20 +4797,26 @@ io.on('connection', (socket) => {
     if (d.month && d.month !== taipeiMonth()) return ack?.({ ok: false, reason: 'season' }); // 🗓️ 每月限定
     wal.bk ??= {};
     if (!canMake(wal.bk, d.need)) return ack?.({ ok: false, reason: 'need' });
-    takeMaterials(wal.bk, d.need);
+    // 🍲 作者 11/27：一次煮好幾份（n＝1～10，材料不夠就煮到夠的為止）；大菜一次只煮一份（會分給旁邊的人）
+    const want = d.big ? 1 : Math.floor(num(data.n, 1, 10, 1));
     wal.dish ??= {};
-    wal.dish[d.id] = (wal.dish[d.id] ?? 0) + 1;
     wal.cooked ??= {};
     const first = !wal.cooked[d.id];
-    wal.cooked[d.id] = (wal.cooked[d.id] ?? 0) + 1;
+    let made = 0;
+    while (made < want && canMake(wal.bk, d.need)) {
+      takeMaterials(wal.bk, d.need);
+      wal.dish[d.id] = (wal.dish[d.id] ?? 0) + 1;
+      wal.cooked[d.id] = (wal.cooked[d.id] ?? 0) + 1;
+      made++;
+      bump('cooks');
+      if (d.need.length >= 3) chal('cook3');
+      spiritGain('cook');
+    }
     const gain = first ? dishFirstGain(d) : 0;
     if (gain) award(gain, 'cook');
     saveJson('players.json', players);
-    bump('cooks');
-    if (d.need.length >= 3) chal('cook3');
     chal('cookKind', 1, { who: `dish:${d.id}` }); // 📒 煮不同的料理
-    spiritGain('cook');
-    io.to(rkey).emit('cooked', { id: socket.id, name: player.name, dish: d.id });
+    io.to(rkey).emit('cooked', { id: socket.id, name: player.name, dish: d.id, n: made });
     // 🍲 大菜（營火大鍋菜、營火麻辣鍋）：附近 6 公尺內的每個人都分到一份
     let shared = 0;
     if (d.big) {
@@ -4825,7 +4831,7 @@ io.on('connection', (socket) => {
       }
       if (shared) saveJson('players.json', players);
     }
-    ack?.({ ok: true, first, gain, shared, basket: wal.bk, ...dishView() });
+    ack?.({ ok: true, first, gain, shared, made, basket: wal.bk, ...dishView() });
   });
   let lastEat = 0;
   // 🗑️ 背包丟掉（作者 11/20：黑暗料理太多了）：料理、採集籃選數量丟；kind 'dark'＝黑暗料理一次丟 n 份（數量多的先丟）。不給松果
@@ -4936,42 +4942,49 @@ io.on('connection', (socket) => {
     for (const [k, n] of Object.entries(sea)) if ((wal.sea?.[k] ?? 0) < n) return ack?.({ ok: false, reason: 'sea' });
     const r = potResult(items, sea, wal);
     if (!r) return ack?.({ ok: false, reason: 'bad' });
-    // 扣掉材料、魚、調味料
-    for (const [tok, n] of Object.entries(want)) {
-      const [bag, id] = bagOf(tok);
-      bag[id] -= n;
-      if (bag[id] <= 0) delete bag[id];
-    }
-    for (const [k, n] of Object.entries(sea)) {
-      wal.sea[k] -= n;
-      if (wal.sea[k] <= 0) delete wal.sea[k];
-    }
+    // 🍲 作者 11/27：同樣的材料一次煮好幾份（n＝1～10，材料或調味料不夠就煮到夠的為止）
+    const times = Math.floor(num(data.n, 1, 10, 1));
+    const enough = () => Object.entries(want).every(([tok, n]) => { const [bag, id] = bagOf(tok); return (bag[id] ?? 0) >= n; }) && Object.entries(sea).every(([k, n]) => (wal.sea?.[k] ?? 0) >= n);
     wal.dish ??= {};
-    wal.dish[r.id] = (wal.dish[r.id] ?? 0) + 1;
     wal.cooked ??= {};
     const firstDish = !wal.cooked[r.id];
     // 第一次做出這道（不管口味、哪種魚）送松果：隱藏 10、一般／求生 3、家常／黑暗 1
     const key = r.dark ? `p.d_${r.dark}` : `p.${r.recipe.id}`;
     const firstKind = !Object.keys(wal.cooked).some((k) => k === key || k.startsWith(key + '.') || k.startsWith(key + '~'));
-    wal.cooked[r.id] = (wal.cooked[r.id] ?? 0) + 1;
+    let made = 0;
+    while (made < times && enough()) {
+      // 扣掉材料、魚、調味料
+      for (const [tok, n] of Object.entries(want)) {
+        const [bag, id] = bagOf(tok);
+        bag[id] -= n;
+        if (bag[id] <= 0) delete bag[id];
+      }
+      for (const [k, n] of Object.entries(sea)) {
+        wal.sea[k] -= n;
+        if (wal.sea[k] <= 0) delete wal.sea[k];
+      }
+      wal.dish[r.id] = (wal.dish[r.id] ?? 0) + 1;
+      wal.cooked[r.id] = (wal.cooked[r.id] ?? 0) + 1;
+      made++;
+      // 😵 煮失敗（黑暗料理）10 次：送「灰頭土臉」造型（作者 11/19）
+      if (r.dark) {
+        wal.cnt ??= {};
+        wal.cnt.dark = (wal.cnt.dark ?? 0) + 1;
+        if (wal.cnt.dark >= SOOTY_AT) grantOutfit(player.vid, 'sooty', 'cook');
+      }
+      bump('cooks');
+      if (items.length >= 3) chal('cook3');
+      if (!r.dark && items.some((x) => /:(gold_)?egg$/.test(x))) chal('eggCook'); // 📒 用雞蛋煮
+      spiritGain('cook');
+    }
     const kind = r.recipe?.kind ?? '';
     const gain = firstKind ? (r.dark ? 1 : kind === 'hidden' || kind === 'unlock' ? 10 : r.recipe.basic ? 1 : 3) : 0;
     if (gain) award(gain, 'cook');
-    // 😵 煮失敗（黑暗料理）10 次：送「灰頭土臉」造型（作者 11/19）
-    if (r.dark) {
-      wal.cnt ??= {};
-      wal.cnt.dark = (wal.cnt.dark ?? 0) + 1;
-      if (wal.cnt.dark >= SOOTY_AT) grantOutfit(player.vid, 'sooty', 'cook');
-    }
     saveJson('players.json', players);
-    bump('cooks');
-    if (items.length >= 3) chal('cook3');
     if (!r.dark) chal('cookKind', 1, { who: `dish:${r.id}` }); // 📒 煮不同的料理
-    if (!r.dark && items.some((x) => /:(gold_)?egg$/.test(x))) chal('eggCook'); // 📒 用雞蛋煮
-    spiritGain('cook');
-    io.to(rkey).emit('cooked', { id: socket.id, name: player.name, dish: r.id });
+    io.to(rkey).emit('cooked', { id: socket.id, name: player.name, dish: r.id, n: made });
     if (r.recipe && POT_BY_ID[r.recipe.id] && (kind === 'hidden' || kind === 'unlock') && firstKind) console.log(`[料理] ${player.name} 第一次煮出隱藏食譜 ${r.recipe.zh}`);
-    ack?.({ ok: true, dish: r.id, first: firstDish, firstKind, gain, locked: r.locked?.id ?? null, ...potView() });
+    ack?.({ ok: true, dish: r.id, first: firstDish, firstKind, gain, made, locked: r.locked?.id ?? null, ...potView() });
   });
   // 🌟 看到森林傳說：記次數，第一次送松果（同一次經過只算一次）
   let lastLegend = null;
@@ -5344,6 +5357,30 @@ io.on('connection', (socket) => {
     chal('water', 1, { who: owner }); // 📒 幫朋友澆水（每週要不同的人）
     for (const s2 of io.sockets.sockets.values()) if (s2.data.vid === owner) s2.emit('gardenWatered', { name: player.name, c: sl.c });
     ack?.(gardenInfo(owner));
+  });
+  // 💧 作者 11/27：一次把朋友菜園能澆的全部澆完（每格規則跟單格一樣：還沒長好、自己還沒澆過、還沒澆滿）
+  socket.on('gardenWaterAll', (data = {}, ack) => {
+    if (!player?.vid) return ack?.({ ok: false });
+    const owner = ownerOf(data.hid);
+    if (!owner || owner === player.vid) return ack?.({ ok: false, reason: 'own' });
+    const now = Date.now();
+    if (now - lastWater < 1000) return ack?.({ ok: false, reason: 'tooFast' });
+    const me = homeId(player.vid);
+    const done = [];
+    for (const sl of homes[owner]?.garden ?? []) {
+      if (!sl?.c) continue;
+      sl.w ??= [];
+      if (sl.w.includes(me) || sl.w.length >= WATER_MAX || now >= readyAtOf(sl)) continue;
+      sl.w.push(me);
+      done.push(sl.c);
+    }
+    if (!done.length) return ack?.({ ok: false, reason: 'none' });
+    lastWater = now;
+    saveJson('homes.json', homes);
+    for (let i = 0; i < done.length; i++) bump('waters');
+    chal('water', 1, { who: owner }); // 📒 幫朋友澆水（每週要不同的人；一次澆好幾格也算同一位）
+    for (const s2 of io.sockets.sockets.values()) if (s2.data.vid === owner) s2.emit('gardenWatered', { name: player.name, c: done[0], n: done.length });
+    ack?.({ ...gardenInfo(owner), n: done.length });
   });
   // ---------- 🐔 小肥雞（11/27 開）：菜園旁邊的雞舍 ----------
   const henInfo = (owner) => {

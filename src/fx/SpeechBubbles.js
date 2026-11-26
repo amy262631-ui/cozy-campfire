@@ -69,7 +69,8 @@ export class SpeechBubbles {
   show(id, text, { emoji = false } = {}) {
     this.remove(id);
     const { tex, w, h } = makeTexture(text, emoji);
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+    // 作者 11/27：坐在天鵝船（有頂篷）上說話，泡泡被船頂擋住 → 跟名牌一樣畫在最上層（depthTest: false）
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false, fog: false }));
     sprite.renderOrder = 30;
     const height = emoji ? 0.36 : (h / 60) * 0.18;
     sprite.scale.set((height * w) / h, height, 1);
