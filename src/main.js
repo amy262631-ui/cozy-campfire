@@ -6723,6 +6723,17 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     cameraRig.focusTarget = new THREE.Vector3(p.x, p.y, p.z);
     cameraRig.focusMix = 1;
   }
+  // 🎥 作者 11/27：布置時點過格子，鏡頭就固定在那一格，人物跑來跑去畫面不跟 → 人物一走動，鏡頭就回來跟著人物
+  let buildLastPos = null;
+  setInterval(() => {
+    if (!buildPanel.active) return void (buildLastPos = null);
+    const p = player.position;
+    if (buildLastPos && cameraRig.focusTarget && Math.hypot(p.x - buildLastPos.x, p.z - buildLastPos.z) > 0.05) {
+      cameraRig.focusTarget = null;
+      cameraRig.focusMix = 0.6;
+    }
+    buildLastPos = { x: p.x, z: p.z };
+  }, 150);
   function selectFurn(cell, layer = 0) {
     buildFocus(cell);
     furnSel = cell ? { x: cell.x, z: cell.z, layer } : null;

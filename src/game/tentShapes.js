@@ -740,7 +740,9 @@ function buildCabin(sh, mats, add, outside) {
   for (let i = 0; i < steps; i++) {
     const y = ((i + 1) / steps) * loftY;
     const z = stairBottom - (i + 0.5) * run;
-    add(new THREE.BoxGeometry(stairX1 - stairX0, 0.1, run + 0.02), mats.wood, (stairX0 + stairX1) / 2, y - 0.05, z);
+    // 作者 11/27：樓梯外側跟右牆之間有一條縫（擴建後變寬），從上面看得到一樓 → 踏板一路鋪到牆邊（走的範圍不變）
+    const sx1 = Math.max(stairX1, W - 0.02);
+    add(new THREE.BoxGeometry(sx1 - stairX0, 0.1, run + 0.02), mats.wood, (stairX0 + sx1) / 2, y - 0.05, z);
   }
   // 樓梯扶手（靠屋裡那一側）
   const len = Math.hypot(stairBottom - loftFront, loftY);
