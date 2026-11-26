@@ -27,7 +27,7 @@ import { SpiritGames, SPIRIT_GAMES } from './game/spiritGames.js';
 import { AudioEngine } from './audio/AudioEngine.js';
 import { SONGS } from './audio/music.js';
 import { CHALLENGE_BY_ID } from './game/dailyChallenge.js';
-import { HOLIDAYS, HOL_TASK_BY_ID, HOL_TASK_GAIN, HOL_STEP_GAIN, HOL_START } from './game/holiday.js';
+import { HOLIDAYS, HOL_TASK_BY_ID, HOL_TASK_GAIN, HOL_STEP_GAIN, HOL_START, HOL_END } from './game/holiday.js';
 import { DAILY_BY_ID, WEEKLY_BY_ID, CAT_TROPHY, CAT_NAME, WEEKLY_PLANT_AT, WEEKLY_BAIT_AT, DAILY_GAIN } from './game/quests.js';
 import { RoomManager } from './rooms/RoomManager.js';
 import { createForestRoom } from './rooms/forestRoom.js';
@@ -45,7 +45,7 @@ import { ConfirmBuy } from './ui/ConfirmBuy.js';
 import { buildYard } from './rooms/yardModels.js';
 import { buildSign } from './rooms/signModels.js';
 import { SIGN_BY_ID } from './game/signCatalog.js';
-import { ALL_COLORS, CATALOG_BY_ID, gridOf, expandPrice, fishFits, stackAt, canAddTo } from './game/furnitureCatalog.js';
+import { ALL_COLORS, CATALOG_BY_ID, gridOf, expandPrice, fishFits, stackAt, canAddTo, hasLoft, maxItems } from './game/furnitureCatalog.js';
 import { YARD_BY_ID, YARD_USES } from './game/yardCatalog.js';
 import { FUR_PALETTES } from './player/characters/furPalettes.js';
 import { BASE_FUR, PREMIUM_FUR, TAILS, EARS, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from './game/looks.js';
@@ -83,7 +83,7 @@ import { ORNAMENT_BY_ID } from './game/ornaments.js';
 import { STONE_FLAG, CAIRN_MAX } from './rooms/cairns.js';
 import { FishingGame } from './fishing/FishingGame.js';
 import { FISH, packFish, stars } from './fishing/fishData.js';
-import { todaySpecial, isOpen } from './game/dailySpecial.js';
+import { todaySpecial, isOpen, taipeiDay } from './game/dailySpecial.js';
 import { FishingUI } from './ui/FishingUI.js';
 import { createMistForestRoom } from './rooms/mistForestRoom.js';
 import { OUTFITS, OUTFIT_BY_ID, OUTFIT_SLOTS } from './game/outfits.js';
@@ -94,9 +94,10 @@ import { RECIPES } from './game/crafting.js';
 import { LegendShow } from './rooms/legendShow.js';
 import { HEN_COLORS, HEN_MAX, COOP_PRICE, FEED_PER_DAY, HEN_FROM, canFeed } from './game/hens.js';
 import { LEGENDS, LEGEND_BY_ID } from './game/legendRules.js';
-import { SOOTY_AT, SEASONINGS, SEASON_BY_ID, SEASON_PRICE, SEASON_USES, SEASON_MAX, POT_MAX, POT_RECIPES, DARK, FLAVORS, FLAVOR_TOTAL, unlockHave, unlockLabel } from './game/potCooking.js';
+import { SOOTY_AT, SEASONINGS, SEASON_BY_ID, SEASON_PRICE, SEASON_USES, SEASON_MAX, POT_MAX, POT_RECIPES, DARK, FLAVORS, FLAVOR_TOTAL, unlockHave, unlockLabel, potResult } from './game/potCooking.js';
 import { DISHES, DISH_BY_ID, dishName, myDishes as ownedDishes, activeBuff, DISH_FX, BUFFS, BUFF_MS, homeCanCook } from './game/cooking.js';
-import { museumItems, museumCats, MUSEUM_BY_ID } from './game/museum.js';
+import { museumItems, museumCats, MUSEUM_BY_ID, dishFits } from './game/museum.js';
+import { autoLayout } from './game/autoLayout.js';
 import { TRASH, TRASH_BY_ID, RECYCLE_DAILY_CAP } from './game/trash.js';
 import { PASS, PASS_TIERS, PASS_TIER_LIST, PASS_PLANS, FREE, sponsorTier } from './game/pass.js';
 import { detectSource, inAppKind, isStandalone, installKind } from './game/sources.js';
@@ -542,12 +543,36 @@ async function init() {
     eventState = { ...ev, at: performance.now() };
     world.eventShower = !!ev.active;
     hud.setEvent(currentEvent());
-    if (announce && ev.active && !was) hud.toast(t('🌠 營火時間開始了！流星雨、松果加倍，限定「流星吊飾」只有這 30 分鐘'), 6000);
+    if (announce && ev.active && !was) hud.toast(t('🌠 營火時間開始了！30 分鐘內松果加倍、稀有魚變多。點上面「🌠 營火時間」看說明'), 7000);
     if (announce && !ev.active && was) hud.toast(t('🌙 這場營火時間結束了，下次 {when} 見', { when: ev.slot === 'am' ? t('早上 9:30') : t('晚上 9:30') }), 4000);
     treePanel?.refresh();
   };
   net.on('event', (ev) => applyEvent(ev, true));
   setInterval(() => eventState && hud.setEvent(currentEvent()), 20000);
+  // 🌠 作者 11/26：點上面「營火時間」那行，說明這 30 分鐘有什麼不一樣，可以直接帶過去
+  hud.onEventInfo = () => {
+    const ev = currentEvent();
+    const head = ev?.active ? t('🌠 現在是營火時間！還剩 {m} 分', { m: Math.max(1, Math.ceil(ev.endsIn / 60)) }) : t('🌙 每天早上、晚上 9:30～10:00 是營火時間');
+    modal.open(
+      t('🌠 營火時間'),
+      `<div class="outfit-today">${head}</div>
+       <div class="ev-why">
+         <div><b>🌰 ${t('松果加倍')}</b><small>${t('這 30 分鐘拿到的松果都 ×2：釣魚、掛機、任務、撿垃圾⋯')}</small></div>
+         <div><b>🐉 ${t('稀有魚變多')}</b><small>${t('湖畔、營火河畔多 6 種限定魚（★4、★5 和 3 種魚王），稀有魚比較好釣')}</small></div>
+         <div><b>🌠 ${t('流星雨')}</b><small>${t('抬頭就看得到；心願大樹可以掛限定「流星吊飾」，只有這 30 分鐘')}</small></div>
+         <div><b>🔥 ${t('營火之約')}</b><small>${t('和互加好友的朋友一起在營火廣場待 1 分鐘，兩個人各拿一款限定造型')}</small></div>
+       </div>
+       <div class="ev-go"><button type="button" class="shop-buy-tent" data-evgo="lake_dock">${t('🎣 去湖畔釣魚')}</button><button type="button" class="shop-buy-tent" data-evgo="forest_main">${t('🔥 回營火廣場')}</button></div>`,
+      (body) => {
+        for (const b of body.querySelectorAll('[data-evgo]'))
+          b.addEventListener('click', () => {
+            modal.close();
+            if (b.dataset.evgo === roomMgr.current.id) hud.toast(t('你已經在這裡了 👍'));
+            else hud.onGo(b.dataset.evgo);
+          });
+      },
+    );
+  };
 
   // ---------- 晚上的小活動（19:00～23:00 每半小時：釣魚大賽、疊石接力、添柴時光⋯） ----------
   let miniState = null;
@@ -1290,10 +1315,14 @@ async function init() {
     const tdex = new Set(info.tdex ?? []);
     const tbag = info.tbag ?? {};
     // 🥕✨♻️ 11/22 擴充：菜園蔬菜看收成過、異色魚拓看異色圖鑑、怪東西看垃圾袋（或採集籃）
+    // 🍳 料理展示：背包裡有那道料理（哪種魚、什麼口味都可以）；🌟 傳說目擊牆：不能捐，自己遇見過就看得到名字
+    const myDish = Object.keys(info.dishes ?? {}).filter((k) => info.dishes[k] > 0);
+    const cookedSet = new Set(info.cooked ?? []);
+    const lgSeen = info.lg ?? {};
     const has = (x) =>
-      x.type === 'fish' ? fishDex.has(x.fish) : x.type === 'shiny' ? shinyDex.has(x.fish) : x.type === 'trash' ? tbag[x.trash] > 0 || basket[x.trash] > 0 : basket[x.id] > 0;
-    const known = (x) => (x.type === 'fish' ? fishDex.has(x.fish) : x.type === 'shiny' ? shinyDex.has(x.fish) : x.type === 'trash' ? tdex.has(x.trash) : x.type === 'veg' ? crops.has(x.id) || basket[x.id] > 0 : found(x.id));
-    const nameOf = (x) => (x.type === 'fish' || x.type === 'shiny' ? x.name : t(x.zh));
+      x.type === 'legend' ? false : x.type === 'dish' ? myDish.some((k) => dishFits(x, k)) : x.type === 'fish' ? fishDex.has(x.fish) : x.type === 'shiny' ? shinyDex.has(x.fish) : x.type === 'trash' ? tbag[x.trash] > 0 || basket[x.trash] > 0 : basket[x.id] > 0;
+    const known = (x) => (x.type === 'legend' ? lgSeen[x.legend] > 0 : x.type === 'dish' ? has(x) || [...cookedSet].some((k) => dishFits(x, k)) : x.type === 'fish' ? fishDex.has(x.fish) : x.type === 'shiny' ? shinyDex.has(x.fish) : x.type === 'trash' ? tdex.has(x.trash) : x.type === 'veg' ? crops.has(x.id) || basket[x.id] > 0 : found(x.id));
+    const nameOf = (x) => (x.type === 'fish' || x.type === 'shiny' ? x.name : x.fishT ? t(x.zh, { fish: t('魚') }) : t(x.zh));
     const ITEMS = museumItems();
     const total = ITEMS.length;
     const n = Object.keys(museum).filter((id) => MUSEUM_BY_ID[id] && ITEMS.includes(MUSEUM_BY_ID[id])).length;
@@ -1306,7 +1335,8 @@ async function init() {
     const cards = ITEMS.filter((x) => x.type === museumCat)
       .map((x) => {
         const d = museum[x.id];
-        if (d) return `<div class="dex-card rarity-${x.rarity}"><i class="dex-emoji">${x.icon}</i><b>${nameOf(x)}</b><small>${t('第一個捐的人')}</small><em>${escapeHtml(d.n)}</em></div>`;
+        if (d) return `<div class="dex-card rarity-${x.rarity}"><i class="dex-emoji">${x.icon}</i><b>${nameOf(x)}</b><small>${x.type === 'legend' ? t('第一個遇見的人') : t('第一個捐的人')}</small><em>${escapeHtml(d.n)}</em></div>`;
+        if (x.type === 'legend') return `<div class="dex-card unknown"><i class="dex-emoji">${known(x) ? x.icon : '❔'}</i><b>${known(x) ? nameOf(x) : t('？？？')}</b><small>${rarityStars(x.rarity)}</small><em>${t('還沒有人遇見')}</em></div>`;
         const can = has(x) && info.left > 0;
         return `<div class="dex-card ${has(x) ? 'can-donate' : 'unknown'}"><i class="dex-emoji">${x.icon}</i><b>${known(x) ? nameOf(x) : t('？？？')}</b><small>${rarityStars(x.rarity)}</small>${has(x) ? `<button type="button" class="mini-btn" data-donate="${x.id}" ${can ? '' : 'disabled'}>${x.type === 'fish' || x.type === 'shiny' ? t('🎣 捐魚拓') : t('🎁 捐出')}</button>` : `<em>${t('還沒有人捐')}</em>`}</div>`;
       })
@@ -1316,6 +1346,7 @@ async function init() {
       `<div class="dex-note">${t('大家一起把採集到的東西、釣過的魚拓捐進標本櫃，每一格都會寫上「第一個捐的人」。每個人每天只能捐一件，慢慢一起填滿吧！捐出一件送松果（★ 越多送越多）。')}</div>
        <div class="outfit-today">${info.left > 0 ? t('🎁 今天還可以捐 {n} 件', { n: info.left }) : t('✅ 今天已經捐過了，明天再來捐下一件吧')}</div>
        <div class="museum-tabs">${tabs}</div>
+       ${museumCat === 'legend' ? `<div class="dex-note">${t('🌟 傳說目擊牆不用捐：森林傳說經過時，第一個遇見的人名字會自動寫上')}</div>` : museumCat === 'dish' ? `<div class="dex-note">${t('🍳 捐 1 份煮好的料理（哪種魚、什麼口味都可以）')}</div>` : ''}
        <div class="dex-grid">${cards}</div>`,
       (body) => {
         for (const b of body.querySelectorAll('[data-mcat]')) {
@@ -1331,6 +1362,7 @@ async function init() {
             if (res?.ok) {
               const mt = MUSEUM_BY_ID[b.dataset.donate]?.type;
               if (mt === 'trash') basket = res.basket ?? basket; // 垃圾袋沒有的話是從採集籃拿的
+              else if (mt === 'dish') dishes = res.dishes ?? dishes;
               else if (mt !== 'fish' && mt !== 'shiny') {
                 basket[b.dataset.donate] = res.count;
                 if (!res.count) delete basket[b.dataset.donate];
@@ -1557,9 +1589,112 @@ async function init() {
       <button type="button" class="shop-buy-tent pot-go" data-potgo ${potSel.length && here && net.online ? '' : 'disabled'}>${t('🔥 開煮！')}</button>
       <div class="dex-note">${here ? t('魚、材料、調味料用了會扣掉') : t('到中央營火的料理鍋、自家門口的烤肉爐，或帳篷裡的爐子旁邊才能煮')}</div>`;
   }
+  // 🍳 作者 11/25：料理圖鑑裡煮過的料理 ① 顯示吃了的效果（口味版本變強也寫） ② 「🍳 再煮一次」自動挑材料
+  const fxVal = (k, lv) => {
+    const v = BUFFS[k]?.v?.[lv - 1];
+    if (k === 'speed') return t('走路 ×{v}', { v });
+    if (k === 'fish') return t('稀有魚 ×{v}', { v });
+    if (k === 'gather') return t('採集多拿一個的機會 {p}%', { p: Math.round(v * 100) });
+    if (k === 'idle') return t('每 {m} 分鐘撿一次松果（平常 5 分鐘）', { m: v });
+    return t(BUFFS[k]?.desc ?? '');
+  };
+  const bookFx = (r) => {
+    const [k, lv] = r.fx;
+    const b = BUFFS[k];
+    if (!b) return '';
+    const hasF = r.need.includes('F') || !!r.fishT;
+    const up = k !== 'burnt' && lv < 2;
+    return `<small class="fx-tag">${t('吃了：')}${b.icon} ${t(b.zh)}・${fxVal(k, lv)}・${t('10 分鐘')}${up ? `<br>${hasF ? t('🧂 加調味料、或用 ★4 以上的魚：{v}', { v: fxVal(k, 2) }) : t('🧂 加調味料：{v}', { v: fxVal(k, 2) })}` : ''}</small>`;
+  };
+  const potCount = (tok) => {
+    const [k, id] = tok.split(':');
+    return (k === 'f' ? pot?.fk : k === 't' ? pot?.tbag : pot?.basket)?.[id] ?? 0;
+  };
+  const FOOD_TYPES = ['veg', 'fruit', 'mush', 'flower', 'egg'];
+  /** 這一格可以放哪些材料（有的才算，數量多的排前面） */
+  const againCands = (sp) => {
+    let toks;
+    if (sp === 'F' || sp === 'f*') toks = Object.keys(pot?.fk ?? {}).map((i) => `f:${i}`);
+    else if (/^f\d+$/.test(sp)) toks = [`f:${sp.slice(1)}`];
+    else if (sp.startsWith('t:')) toks = [sp];
+    else if (sp[0] === '@') toks = Object.keys(pot?.basket ?? {}).filter((id) => materialOf(id)?.type === sp.slice(1)).map((id) => `m:${id}`);
+    else if (sp === '*') toks = Object.keys(pot?.basket ?? {}).filter((id) => FOOD_TYPES.includes(materialOf(id)?.type)).map((id) => `m:${id}`);
+    else toks = [`m:${sp}`];
+    return toks.filter((tk) => potCount(tk) > 0).sort((a, b) => potCount(b) - potCount(a));
+  };
+  /** 自動挑材料：指定的先挑，再挑「任意一類」，最後「任意魚／任意一樣」挑數量最多的；挑完確認真的會煮出這道（不會變成別的隱藏料理） */
+  const againPick = (r) => {
+    const rank = (sp) => (sp === '*' ? 3 : sp === 'F' || sp === 'f*' ? 2 : sp[0] === '@' ? 1 : 0);
+    const order = r.need.map((sp, i) => [sp, i]).sort((a, b) => rank(a[0]) - rank(b[0]));
+    const used = {};
+    const out = new Array(r.need.length);
+    const miss = [];
+    let tries = 0;
+    const go = (j) => {
+      if (++tries > 600) return false;
+      if (j === order.length) return potResult(out, {}, pot)?.recipe?.id === r.id;
+      const [sp, i] = order[j];
+      let any = false;
+      for (const tk of againCands(sp).slice(0, 6)) {
+        if ((used[tk] ?? 0) >= potCount(tk)) continue;
+        any = true;
+        used[tk] = (used[tk] ?? 0) + 1;
+        out[i] = tk;
+        if (go(j + 1)) return true;
+        used[tk]--;
+      }
+      if (!any && !miss.includes(sp)) miss.push(sp);
+      return false;
+    };
+    if (go(0)) return { items: out.slice() };
+    // 缺什麼：一格一格照順序拿，拿不到的那幾格就是缺的
+    const left = {};
+    const lack = [];
+    for (const [sp] of order) {
+      const tk = againCands(sp).find((x) => (left[x] ?? 0) < potCount(x));
+      if (tk) left[tk] = (left[tk] ?? 0) + 1;
+      else lack.push(sp);
+    }
+    return { miss: lack.length ? lack : miss };
+  };
+  /** 口味 id → 要加的調味料（大雜燴：挑三種還有的） */
+  const seaOfFlavor = (fl) => {
+    if (!fl) return {};
+    if (fl === 'mix') {
+      const ks = SEASONINGS.map((x) => x.id).filter((k) => (pot?.sea?.[k] ?? 0) > 0).slice(0, 3);
+      return ks.length === 3 ? Object.fromEntries(ks.map((k) => [k, 1])) : null;
+    }
+    const [kind, ...rest] = fl.split('_');
+    if (kind === 's') return { [rest.join('_')]: 1 };
+    if (kind === 'x') return { [rest.join('_')]: 3 };
+    if (kind === 'p') {
+      // p_a_b：調味料 id 本身沒有底線（sugar、salt、soy、honey、chilipow）
+      const [a, b] = rest;
+      return { [a]: 1, [b]: 1 };
+    }
+    return {};
+  };
+  const canAgain = (r) => !r.basic && r.kind !== 'survival';
+  async function potCookNow(items, sea) {
+    const res = await net.request('potCook', { items, sea });
+    if (res?.ok) {
+      pot = res;
+      dishes = res.dishes;
+      cooked = new Set(res.cooked);
+      basket = res.basket;
+      potSel = [];
+      potSea = {};
+      potDone = res;
+      audio.sfx('bell');
+      return true;
+    }
+    hud.toast(res?.reason === 'notHere' ? t('到營火旁的料理鍋才能煮') : res?.reason === 'later' ? t('11/20 才開放喔') : res?.reason === 'sea' ? t('調味料不夠喔，先買一包') : t('材料不夠喔'));
+    return false;
+  }
   function bookHtml() {
     if (!pot) return `<div class="dex-note">${t('讀取中⋯')}</div>`;
     const ck = new Set((pot.cooked ?? []).filter((k) => k.startsWith('p.')));
+    const here = atPot() || atGrill() || !!homeCookAt();
     const made = (rid) => [...ck].filter((k) => k === `p.${rid}` || k.startsWith(`p.${rid}.`) || k.startsWith(`p.${rid}~`));
     const flavorsMade = new Set([...ck].map((k) => k.split('~')[1]).filter(Boolean));
     const rows = (list) =>
@@ -1569,8 +1704,15 @@ async function init() {
           const fishN = new Set(m.map((k) => k.split('~')[0].split('.')[2]).filter(Boolean)).size;
           const flN = new Set(m.map((k) => k.split('~')[1]).filter(Boolean)).size;
           const name = r.need.includes('F') || r.fishT ? t(r.zh, { fish: t('魚') }) : t(r.zh);
-          if (m.length)
-            return `<div class="craft-row"><i class="dex-emoji">${r.icon}</i><div class="craft-info"><b>${name}</b><small>${[fishN ? t('做過 {n} 種魚', { n: fishN }) : '', t('口味 {n}／{all}', { n: flN, all: FLAVOR_TOTAL })].filter(Boolean).join('・')}</small>${r.basic ? '' : `<div class="needs">${r.need.map((sp) => `<span class="need ok">${specText(sp)}</span>`).join('')}</div>`}</div></div>`;
+          if (m.length) {
+            let again = '';
+            if (canAgain(r)) {
+              const pk = againPick(r);
+              const fls = [...new Set(m.map((k) => k.split('~')[1]).filter(Boolean))];
+              again = `<div class="again-row">${fls.length ? `<select class="mini-sel" data-againfl="${r.id}"><option value="">${t('原味')}</option>${fls.map((f) => `<option value="${f}">${t(FLAVORS[f])}</option>`).join('')}</select>` : ''}<button type="button" class="mini-btn" data-again="${r.id}" ${pk.items && here && net.online ? '' : 'disabled'}>${t('🍳 再煮一次')}</button></div>${pk.items ? '' : `<small class="again-miss">${t('還缺：')}${pk.miss.map(specText).join('、') || t('材料')}</small>`}`;
+            }
+            return `<div class="craft-row"><i class="dex-emoji">${r.icon}</i><div class="craft-info"><b>${name}</b><small>${[fishN ? t('做過 {n} 種魚', { n: fishN }) : '', t('口味 {n}／{all}', { n: flN, all: FLAVOR_TOTAL })].filter(Boolean).join('・')}</small>${bookFx(r)}${r.basic ? '' : `<div class="needs">${r.need.map((sp) => `<span class="need ok">${specText(sp)}</span>`).join('')}</div>`}${again}</div></div>`;
+          }
           if (r.kind === 'unlock') {
             const have = unlockHave(pot, r.unlock);
             const open = have >= r.unlock.n;
@@ -1630,19 +1772,22 @@ async function init() {
     body.querySelector('[data-potagain]')?.addEventListener('click', () => ((potDone = null), re()));
     body.querySelector('[data-potgo]')?.addEventListener('click', async (e) => {
       e.currentTarget.disabled = true;
-      const res = await net.request('potCook', { items: potSel, sea: potSea });
-      if (res?.ok) {
-        pot = res;
-        dishes = res.dishes;
-        cooked = new Set(res.cooked);
-        basket = res.basket;
-        potSel = [];
-        potSea = {};
-        potDone = res;
-        audio.sfx('bell');
-      } else hud.toast(res?.reason === 'notHere' ? t('到營火旁的料理鍋才能煮') : res?.reason === 'later' ? t('11/20 才開放喔') : t('材料不夠喔'));
+      await potCookNow(potSel, potSea);
       re();
     });
+    // 🍳 料理圖鑑「再煮一次」：自動挑材料（口味版本照選的加調味料），煮好跳到結果卡
+    for (const b of body.querySelectorAll('[data-again]'))
+      b.addEventListener('click', async () => {
+        const r = POT_RECIPES.find((x) => x.id === b.dataset.again);
+        const pk = r && againPick(r);
+        if (!pk?.items) return hud.toast(t('材料不夠喔'));
+        const fl = body.querySelector(`[data-againfl="${r.id}"]`)?.value ?? '';
+        const sea = seaOfFlavor(fl);
+        if (!sea || Object.entries(sea).some(([k, n]) => (pot?.sea?.[k] ?? 0) < n)) return hud.toast(t('調味料不夠喔，先到「🍳 自由料理鍋」→「🧂 調味料」買一包'));
+        b.disabled = true;
+        if (await potCookNow(pk.items, sea)) cookView = 'pot';
+        re();
+      });
   }
   fishingUI.extraTabs.push({
     id: 'cook',
@@ -2404,15 +2549,59 @@ async function init() {
   const qRow = (q, x, extra = '') => `<div class="qb-q${x.have >= x.need ? ' done' : ''}"><span class="qb-ic">${q.icon}</span><div class="qb-t"><b>${t(q.zh)}</b><small>${x.have}／${x.need}</small>${qBar(x.have, x.need)}</div>${extra}</div>`;
   const outName = (id) => (OUTFIT_BY_ID[id] ? `${OUTFIT_BY_ID[id].icon} ${t(OUTFIT_BY_ID[id].zh)}` : '');
   const furnName = (id) => (FURNITURE_BY_ID[id] ? `${FURNITURE_BY_ID[id].icon} ${FURNITURE_BY_ID[id].name}` : '');
+  /**
+   * 🕒 任務本「今天」分頁（作者 11/25，模擬圖 sched_mock.png）：今天的活動時間表
+   *   早上營火、中午釣魚大賽、晚上 7～11 點每半小時、9:30 營火時間、守護神出沒、週六日假日活動
+   *   結束的變淡、進行中橘色、下一場寫「N 分鐘後」；最下面「👉 帶我去」現在那場。時間從伺服器拿（miniSlots、營火時間）
+   */
+  function todayHtml(v) {
+    const sc = v.sched;
+    if (!sc) return [`<div class="dex-note">${t('讀取中⋯')}</div>`, null];
+    const now = sc.now;
+    const hm = (x) => `${Math.floor(x / 3600) % 24}:${String(Math.floor((x % 3600) / 60)).padStart(2, '0')}`;
+    const rows = [];
+    for (const st of sc.ev) rows.push({ at: st, len: sc.evLen, icon: '🌠', name: st < 12 * 3600 ? t('早上營火時間') : t('營火時間'), desc: t('流星雨、松果加倍、限定魚和魚王 🐉'), go: 'forest_main' });
+    for (const [at, kind] of sc.mini) rows.push({ at, len: sc.miniLen, icon: '', name: MINI_NAME[kind]?.() ?? kind, desc: at < 15 * 3600 ? t('中午場') : '', go: kind === 'fish' ? 'lake_dock' : 'forest_main' });
+    const xmasOn = isXmas();
+    for (const L of LEGENDS) {
+      if (L.xmas && !xmasOn) continue;
+      const [a, b] = L.hours;
+      const allDay = a === 0 && b >= 24;
+      rows.push({ at: a * 3600, len: ((b > a ? b : b + 24) - a) * 3600, icon: L.icon, name: t(L.zh), desc: t('偶爾經過，第一次遇見 +{n} 🌰', { n: 20 }), go: L.rooms[0], soft: true, allDay });
+    }
+    const h = v.hol ?? {};
+    const today = taipeiDay().key;
+    const holDef = HOLIDAYS[h.id] ?? (h.next?.day === today ? HOLIDAYS[h.next.id] : null);
+    if (holDef) rows.push({ at: HOL_START * 3600, len: (HOL_END - HOL_START) * 3600, icon: holDef.icon, name: t(holDef.zh), desc: t('🎉 假日活動：全營地一起完成目標'), go: 'holiday', soft: true });
+    rows.sort((x, y) => (x.allDay ? -1 : y.allDay ? 1 : x.at - y.at));
+    const nextAt = rows.filter((r) => !r.allDay && r.at > now).reduce((m, r) => Math.min(m, r.at), Infinity);
+    let cur = null;
+    const html = rows
+      .map((r) => {
+        const on = r.allDay || (now >= r.at && now < r.at + r.len);
+        const past = !on && now >= r.at + r.len;
+        if (on && (!cur || (cur.soft && !r.soft))) cur = r;
+        const mins = Math.ceil((r.at - now) / 60);
+        const tag = on ? `<span class="qd-tag on">${r.allDay ? t('整天') : t('進行中')}</span>` : r.at === nextAt ? `<span class="qd-tag next">${mins >= 60 ? t('{h} 小時 {m} 分後', { h: Math.floor(mins / 60), m: mins % 60 }) : t('{m} 分鐘後', { m: mins })}</span>` : '';
+        return `<div class="qd-row${on ? ' on' : past ? ' past' : ''}"><span class="qd-time">${r.allDay ? t('整天') : `${hm(r.at)}${r.len > 30 * 60 ? `～${hm(r.at + r.len)}` : ''}`}</span><span class="qd-name">${r.icon ? `${r.icon} ` : ''}${r.name}${r.desc ? `<small>${r.desc}</small>` : ''}</span>${tag}</div>`;
+      })
+      .join('');
+    const foot = cur
+      ? `<button type="button" class="shop-buy-tent" data-qgo>${t('👉 帶我去：{name}', { name: `${cur.icon ? `${cur.icon} ` : ''}${cur.name}` })}</button>`
+      : `<div class="dex-note">${t('現在沒有進行中的活動，時間到了會提醒你 ⏰')}</div>`;
+    return [`<div class="dex-note">${t('今天的活動（台灣時間）')}</div><div class="qd-list">${html}</div>${foot}`, cur?.go ?? null];
+  }
   async function openQuest(tab = questTab) {
     if (!net.online) return hud.toast(t('連上伺服器才能看任務'));
     const v = await net.request('questInfo', {});
     if (!v?.ok) return;
     questTab = tab;
     questOpen = true;
-    const tabs = [['newbie', t('🌱 新手')], ['daily', t('📅 每日')], ['weekly', t('🗓️ 每週')], ['holiday', t('🎉 假日')]];
+    const tabs = [['newbie', t('🌱 新手')], ['daily', t('📅 每日')], ['weekly', t('🗓️ 每週')], ['holiday', t('🎉 假日')], ['today', t('🕒 今天')]];
     let body = '';
-    if (tab === 'newbie') {
+    let goNow = null;
+    if (tab === 'today') [body, goNow] = todayHtml(v);
+    else if (tab === 'newbie') {
       const st = ritual?.introStatus?.() ?? { done: 0, total: 6 };
       // 作者 11/22：不是新來的玩家（沒在做新手小任務）一律算完成
       body = st.done >= st.total || !ritual?.kidMode
@@ -2457,6 +2646,14 @@ async function init() {
       (b) => {
         for (const btn of b.querySelectorAll('[data-qtab]')) btn.addEventListener('click', () => openQuest(btn.dataset.qtab));
         b.querySelector('[data-qintro]')?.addEventListener('click', () => (modal.close(), ritual?.open()));
+        // 🕒 今天：帶我去現在那場
+        b.querySelector('[data-qgo]')?.addEventListener('click', () => {
+          if (!goNow) return;
+          if (goNow === 'holiday') return openQuest('holiday');
+          modal.close();
+          if (goNow === roomMgr.current.id) hud.toast(t('你已經在這裡了 👍'));
+          else hud.onGo(goNow);
+        });
         for (const btn of b.querySelectorAll('[data-qswap]'))
           btn.addEventListener('click', async () => {
             const r = await net.request('questSwap', { id: btn.dataset.qswap });
@@ -6386,24 +6583,36 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
 
   /** 布置時選到的格子＋第幾層 */
   let furnSel = null;
+  // ↩️ 布置復原（作者 11/24）：每次動到家具之前，先記下整間的樣子（最近 20 步；離開布置、擴建、換造型就清掉）
+  const UNDO_MAX = 20;
+  let undoStack = [];
+  const ITEM_OPS = new Set(['place', 'rotate', 'remove', 'move', 'clearAll', 'fish', 'setFloor']);
+  const snapItems = () => (homeRoom.home?.items ?? []).map((it) => ({ ...it }));
   const buildPanel = new BuildPanel({
     getHome: () => homeRoom.home,
     onShop: () => shopPanel.open('furn'), // 🛒 布置時直接買家具，買完回背包就能擺
-    onEdit: async (op, data) => {
+    onEdit: async (op, data, { noUndo = false } = {}) => {
+      const before = ITEM_OPS.has(op) && !noUndo ? snapItems() : null;
       const res = await homeReq('homeEdit', { op, ...data });
+      if (res?.ok && before) {
+        undoStack.push(before);
+        if (undoStack.length > UNDO_MAX) undoStack.shift();
+      }
+      if (res?.ok && (op === 'shape' || op === 'style')) undoStack = []; // 換造型後格子可能不一樣，不能復原回去
       if (res?.ok) {
         setMyHome({ ...res.home });
         audio.sfx(op === 'remove' || op === 'clearAll' ? 'tap' : 'stone');
         if (op === 'clearAll') hud.toast(t('📦 全部收回背包了，可以重新擺囉'));
         // 選取框跟著：搬過去就框新的那格，轉向框同一層，收起後框剩下的
-        if (op === 'clearAll') furnSel = null;
+        if (op === 'clearAll' || op === 'setFloor') furnSel = null;
         else if (op === 'move') furnSel = { x: data.tx, z: data.tz, layer: 0 };
         else if (op === 'remove' && furnSel) furnSel.layer = 0;
         else if (op === 'place') furnSel = { x: data.x, z: data.z, layer: stackAt(res.home.items, data.x, data.z).length - 1 };
         if (furnSel) homeRoom.select(furnSel, furnSel.layer);
         return true;
       }
-      if (res?.reason === 'taken') hud.toast(t('這格已經有東西了'));
+      if (op === 'setFloor') hud.toast(t('沒擺成，再試一次吧'));
+      else if (res?.reason === 'taken') hud.toast(t('這格已經有東西了'));
       else if (res?.reason === 'noStack') hud.toast(op === 'move' ? t('那一格放不上去，換一格試試') : t('這件不能疊在上面喔'));
       else if (res?.reason === 'stackFull') hud.toast(t('這一格已經疊滿了'));
       else if (res?.reason === 'tooMany') hud.toast(t('帳篷放滿了，收起一些再擺吧'));
@@ -6412,7 +6621,36 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     },
     onExit: () => stopBuild(),
     onExpand: async () => {
-      if (await confirmBuy.ask({ ...shopItemInfo('expand'), coins: pinecones })) return buyItem('expand');
+      if (await confirmBuy.ask({ ...shopItemInfo('expand'), coins: pinecones })) {
+        undoStack = []; // 擴建後家具位置整個挪過，不能復原回擴建前
+        return buyItem('expand');
+      }
+    },
+    canUndo: () => undoStack.length > 0,
+    onUndo: async () => {
+      const prev = undoStack.pop();
+      if (!prev) return false;
+      const items = [...prev].sort((a, b) => (a.l ?? 0) - (b.l ?? 0));
+      const ok = await buildPanel.onEdit('setFloor', { floor: 0, items }, { noUndo: true });
+      if (ok) {
+        furnSel = null;
+        homeRoom.select(null);
+        hud.toast(t('↩️ 回到上一步了'));
+      } else undoStack.push(prev);
+      return ok;
+    },
+    // ✨ 一鍵布置：只擺勾的家具，已經擺好的不動；算好整層送給伺服器
+    onAuto: async (picks, floor) => {
+      const h = homeRoom.home;
+      if (!h) return false;
+      const r = autoLayout({ items: h.items ?? [], picks, grid: gridOf(h), floor: hasLoft(h) ? floor : 1, cellWorld: (x, z) => homeRoom.cellWorld(x, z), cap: maxItems(gridOf(h), hasLoft(h)) });
+      if (!r.placed) {
+        hud.toast(t('沒有空位可以擺了，收起一些或擴建帳篷再試試'));
+        return false;
+      }
+      const ok = await buildPanel.onEdit('setFloor', { floor: hasLoft(h) ? floor : 1, items: r.items });
+      if (ok) hud.toast(r.left.length ? t('✨ 擺好 {n} 件！還有 {m} 件沒位置，留在背包', { n: r.placed, m: r.left.length }) : t('✨ 擺好 {n} 件！拖一拖微調，不喜歡可以按「↩️ 復原」', { n: r.placed }));
+      return ok;
     },
     onToggleOpen: async () => {
       const res = await homeReq('homeOpen', { open: !(myHome?.open !== false) });
@@ -6439,6 +6677,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     cameraRig.target.distance = buildDistance();
   };
   const stopBuild = () => {
+    undoStack = []; // ↩️ 離開布置就清掉
     document.body.classList.remove('building');
     onResize();
     if (buildCam) {

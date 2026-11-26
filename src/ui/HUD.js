@@ -279,16 +279,21 @@ export class HUD {
     if (!ev) return (this._evWant = false), this.#mergeLines();
     el.classList.toggle('active', ev.active);
     // 手機：短短一行；營火時間快到了（1 小時內）或進行中才顯示
+    // 作者 11/26：新玩家只看到「營火時間」不知道有什麼不一樣 → 手機也寫上最大的好處，整行可以點開說明（›）
+    if (!el._tap) {
+      el._tap = true;
+      el.addEventListener('click', () => this.onEventInfo?.());
+    }
     if (compactScreen()) {
-      if (ev.active) el.textContent = t('🌠 營火時間・剩 {m} 分', { m: Math.max(1, Math.ceil(ev.endsIn / 60)) });
-      else if (ev.startsIn < 1800) el.textContent = t('🌙 營火時間 {m} 分後開始', { m: Math.max(1, Math.ceil(ev.startsIn / 60)) }); // 作者 11/24：30 分鐘內才顯示
+      if (ev.active) el.textContent = t('🌠 營火時間：松果 ×2・稀有魚變多・剩 {m} 分 ›', { m: Math.max(1, Math.ceil(ev.endsIn / 60)) });
+      else if (ev.startsIn < 1800) el.textContent = t('🌙 {m} 分後營火時間：松果 ×2 ›', { m: Math.max(1, Math.ceil(ev.startsIn / 60)) }); // 作者 11/24：30 分鐘內才顯示
       else el.hidden = true;
       this._evWant = !el.hidden;
       this.#mergeLines();
       return;
     }
     if (ev.active) {
-      el.textContent = t('🌠 營火時間：流星雨、松果加倍、限定魚和魚王 🐉（還剩 {m} 分）', { m: Math.max(1, Math.ceil(ev.endsIn / 60)) });
+      el.textContent = t('🌠 營火時間：流星雨、松果加倍、限定魚和魚王 🐉（還剩 {m} 分）', { m: Math.max(1, Math.ceil(ev.endsIn / 60)) }) + ' ›';
     } else if (ev.startsIn < 3 * 3600) {
       const h = Math.floor(ev.startsIn / 3600);
       const m = Math.ceil((ev.startsIn % 3600) / 60);

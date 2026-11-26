@@ -40,7 +40,7 @@ import { LEGENDS, LEGEND_GAIN, legendHour, taipeiHour } from '../src/game/legend
 import { RIVER_FROM, COOP_GAIN, COOP_MIN_TAPS, COOP_SEC, SKIP_PER_DAY, SKIP_GOOD, skipBounces, DUCK_PER_DAY, DUCK_MS, DUCK_FIRST_GAIN } from '../src/game/river.js';
 import { BOATS, BOAT_FROM, BOAT_MS, BOAT_MAX, BOAT_SLOTS, FEED_PRICE, FEED_MS, BOAT_LUCK, DOCK_END, keepOnLake, seatAt } from '../src/game/boats.js';
 import { SOOTY_AT, potResult, parseToken, SEASON_BY_ID, SEASON_PRICE, SEASON_USES, SEASON_CAP, SEASON_MAX, POT_MAX, FISH_KEEP_CAP, POT_BY_ID } from '../src/game/potCooking.js';
-import { MUSEUM_BY_ID, DONATE_PER_DAY } from '../src/game/museum.js';
+import { MUSEUM_BY_ID, DONATE_PER_DAY, dishFits } from '../src/game/museum.js';
 import { TRASH, TRASH_BY_ID, TRASH_MAX, TRASH_ROOM, RECYCLE_GAIN, RECYCLE_DAILY_CAP, TRASH_FIRST_GAIN, TRASH_DEX_OUTFIT, pickTrash } from '../src/game/trash.js';
 import { LAYOUT as CAMP_LAYOUT } from '../src/rooms/campLayout.js';
 import { PASS, PASS_TIERS, PASS_PLANS, FREE, SPONSOR, SPONSOR_BOX, sponsorAmounts, sponsorMin, sponsorTier, SPONSOR_END, SPONSOR_END_DAY, PASS_MONTH_FURN, passMonthLooks, passLookMonth } from '../src/game/pass.js';
@@ -48,7 +48,7 @@ import { BOARD_ON, BOARD_GAMES, BOARD_MIN, BOARD_MAX as BG_MAX, BOARD_WIN, BOARD
 import crypto from 'node:crypto';
 import { SHOP, hashPassword, checkPassword, validateCredentials, newHome, available, validCell, TENT_STYLES, TENT_SHAPES, homeId, GIFTS, GIFT_FURNITURE, CATALOG_BY_ID, gridOf, expandPrice, expandHome, maxItems, stackAt, stackCheck, moveStack, hasLoft } from './homes.js';
 import { cleanNameText, AUTHOR_MARK } from '../src/game/nameRules.js';
-import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS, isLoftCell } from '../src/game/furnitureCatalog.js';
+import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS, isLoftCell, ITEMS_CAP } from '../src/game/furnitureCatalog.js';
 import { YARD_BY_ID, hasYard, isBigYard, isDoorYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
 import { HOLIDAYS, HOL_TASK_GAIN, HOL_STEP_GAIN, HOL_GOLD_GAIN, holidayNow, nextHoliday, holGoal } from '../src/game/holiday.js';
@@ -376,9 +376,10 @@ function movePrice(vid) {
 const plotLabel = (p) => (p ? `${zoneName(p.z)} 區 ${p.n} 號` : '');
 const isAuthorVid = (vid) => !!vid && vid === campMeta.author;
 /** 🌰 /stats 不算的自己人（作者 11/25：貓鈴鐺是自己人，作者會直接給他松果）。只排除統計，不影響玩 */
+//   ⚠️ 11/26 修正：ItHBnIf-LbSO 是 /admin、/stats 上顯示的「玩家編號」（homeId，vid 算出來的），不是 vid 本身 → 兩種都比對
 const STATS_SKIP_VIDS = new Set(['ItHBnIf-LbSO']);
 /** /stats 松果存量、固定玩家、小精靈表要不要跳過這個人：作者帳號＋自己人 */
-const statsSkip = (vid) => isAuthorVid(vid) || !!players[vid]?.author || STATS_SKIP_VIDS.has(vid);
+const statsSkip = (vid) => isAuthorVid(vid) || !!players[vid]?.author || STATS_SKIP_VIDS.has(vid) || STATS_SKIP_VIDS.has(homeId(vid));
 /** 最近一次上線（每天第一次進來記的 wal.last，和帳篷最近有動靜的時間，取比較晚的） */
 function lastSeen(vid) {
   const d = players[vid]?.last ? Date.parse(`${players[vid].last}T23:59:00+08:00`) : 0;
@@ -726,6 +727,11 @@ function taipeiClock(now = new Date()) {
       .map((p) => [p.type, p.value]),
   );
   return { h: Number(parts.hour), sec: Number(parts.minute) * 60 + Number(parts.second) };
+}
+/** 🕒 任務本「今天」分頁（作者 11/25）：今天的活動時間表，時間都從這裡拿（台北時間、一天中的第幾秒） */
+function schedView(now = new Date()) {
+  const { h, sec } = taipeiClock(now);
+  return { now: h * 3600 + sec, mini: miniSlots().map((x) => [x.at, x.kind]), miniLen: MINI_LEN, ev: EVENT_STARTS, evLen: EVENT_LEN };
 }
 function miniInfo(now = new Date()) {
   const { h, sec: s } = taipeiClock(now);
@@ -3063,7 +3069,7 @@ io.on('connection', (socket) => {
   // 📒 打開任務本
   socket.on('questInfo', (_d, ack) => {
     if (!player?.vid || !wal) return ack?.({ ok: false });
-    ack?.({ ok: true, ...questView(player.vid) });
+    ack?.({ ok: true, ...questView(player.vid), sched: schedView() });
   });
   // 🔄 每日換一題（一天一次，換同一類：互動換互動）
   socket.on('questSwap', (data = {}, ack) => {
@@ -4100,6 +4106,41 @@ io.on('connection', (socket) => {
       io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) });
       return ack?.({ ok: true, home: publicHome(h) });
     }
+    if (data.op === 'setFloor') {
+      // ✨ 一鍵布置、↩️ 復原（作者 11/24、11/25）：前端算好整層（或整間）的樣子，這裡一件一件檢查後整個換掉
+      //   floor：1＝一樓、2＝二樓、0＝整間（復原用）；items：[{ i, x, z, r, c, fish }]，同一格照疊的順序（下面先）
+      //   檢查：家具有在背包（available）、格子在地板上（validCell）、疊得上去（stackCheck）、不超過件數上限、魚缸的魚釣過而且放得下
+      const fl = Number(data.floor);
+      if (![0, 1, 2].includes(fl) || !Array.isArray(data.items) || data.items.length > ITEMS_CAP) return ack?.({ ok: false, reason: 'bad' });
+      const onFloor = (it) => fl === 0 || (fl === 2) === isLoftCell(it.z);
+      const h2 = { ...h, items: (h.items ?? []).filter((it) => !onFloor(it)) };
+      const g = gridOf(h);
+      const cap = maxItems(g, hasLoft(h));
+      for (const [n, raw] of data.items.entries()) {
+        const i = String(raw?.i ?? '');
+        const x = Number(raw?.x);
+        const z = Number(raw?.z);
+        const f = CATALOG_BY_ID[i];
+        if (!f || i === 'tent') return ack?.({ ok: false, reason: 'unknown', n });
+        if (!validCell(x, z, g, h) || !onFloor({ z })) return ack?.({ ok: false, reason: 'cell', n });
+        const chk = stackCheck(h2, x, z, i);
+        if (chk.reason) return ack?.({ ok: false, reason: chk.reason, n });
+        const c = hasColors(f) ? Math.floor(num(raw.c, 0, ALL_COLORS.length - 1, 0)) : 0;
+        if (available(h2, i, c) <= 0) return ack?.({ ok: false, reason: 'none', n });
+        if (h2.items.length >= cap) return ack?.({ ok: false, reason: 'tooMany', n });
+        const it = { i, x, z, r: Math.floor(num(raw.r, 0, 3, 0)), l: chk.l };
+        if (c) it.c = c;
+        const fi = raw.fish == null ? -1 : Math.floor(num(raw.fish, -1, FISH_COUNT - 1, -1));
+        if (fi >= 0 && f.fish && !JUNK.has(fi) && fi in (wal?.dex ?? {}) && fishFits(f, FISH[fi])) it.fish = fi;
+        h2.items.push(it);
+      }
+      h.items = h2.items;
+      fixDine(h, player.vid);
+      saveJson('homes.json', homes);
+      saveJson('players.json', players);
+      io.to(rkey).emit('homeUpdate', { owner: homeId(homeOwner), home: publicHome(h) });
+      return ack?.({ ok: true, home: publicHome(h), ...(h.dine ? dishView() : {}) });
+    }
     const x = Number(data.x);
     const z = Number(data.z);
     if (!validCell(x, z, gridOf(h), h)) return ack?.({ ok: false, reason: 'cell' });
@@ -4675,7 +4716,7 @@ io.on('connection', (socket) => {
 
   // ---------- 🏛️ 營地標本櫃：大家一起捐，寫上第一個捐的人 ----------
   const donatedToday = () => (wal?.mday === dayKey() ? wal.mcount ?? 1 : 0);
-  socket.on('museumInfo', (data, ack) => ack?.({ ok: true, museum, left: wal ? Math.max(0, DONATE_PER_DAY - donatedToday()) : 0, fishDex: Object.keys(dexView(wal)), shinyDex: Object.keys(wal?.shiny ?? {}), crops: Object.keys(wal?.crops ?? {}), tbag: wal?.tbag ?? {}, tdex: Object.keys(wal?.tdex ?? {}) }));
+  socket.on('museumInfo', (data, ack) => ack?.({ ok: true, museum, dishes: wal?.dish ?? {}, cooked: Object.keys(wal?.cooked ?? {}), lg: wal?.lg ?? {}, left: wal ? Math.max(0, DONATE_PER_DAY - donatedToday()) : 0, fishDex: Object.keys(dexView(wal)), shinyDex: Object.keys(wal?.shiny ?? {}), crops: Object.keys(wal?.crops ?? {}), tbag: wal?.tbag ?? {}, tdex: Object.keys(wal?.tdex ?? {}) }));
   socket.on('donate', (data = {}, ack) => {
     if (!wal || !player) return ack?.({ ok: false });
     const id = String(data.id ?? '');
@@ -4688,6 +4729,14 @@ io.on('connection', (socket) => {
       if (!(dexView(wal)[it.fish] > 0)) return ack?.({ ok: false, reason: 'none' }); // 釣過才能捐魚拓
     } else if (it.type === 'shiny') {
       if (!(wal.shiny?.[it.fish] > 0)) return ack?.({ ok: false, reason: 'none' }); // ✨ 釣過那種的異色魚
+    } else if (it.type === 'legend') {
+      return ack?.({ ok: false, reason: 'unknown' }); // 🌟 傳說目擊牆不能捐：傳說經過時第一個遇見的人自動寫上
+    } else if (it.type === 'dish') {
+      // 🍳 料理展示：捐 1 份那道料理（原味優先，哪種魚、什麼口味都可以）
+      const ks = Object.keys(wal.dish ?? {}).filter((k) => wal.dish[k] > 0 && dishFits(it, k)).sort((a, b) => a.length - b.length);
+      if (!ks.length) return ack?.({ ok: false, reason: 'none' });
+      wal.dish[ks[0]]--;
+      if (!wal.dish[ks[0]]) delete wal.dish[ks[0]];
     } else if (it.type === 'trash') {
       // ♻️ 垃圾袋裡的優先，沒有再看採集籃（留著做手作的）
       const bag = wal.tbag?.[it.trash] > 0 ? wal.tbag : wal.bk?.[it.trash] > 0 ? wal.bk : null;
@@ -4709,7 +4758,7 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     bump('donates');
     emitAllChannels('forest_main', 'museum', { id, n: player.name });
-    ack?.({ ok: true, gain, count: wal.bk?.[id] ?? 0, tbag: wal.tbag ?? {}, basket: wal.bk ?? {}, left: Math.max(0, DONATE_PER_DAY - donatedToday()) });
+    ack?.({ ok: true, gain, count: wal.bk?.[id] ?? 0, tbag: wal.tbag ?? {}, basket: wal.bk ?? {}, dishes: wal.dish ?? {}, left: Math.max(0, DONATE_PER_DAY - donatedToday()) });
   });
 
   // ---------- 🔨 手作家具：用採集籃的東西做，放進帳篷背包 ----------
@@ -4934,6 +4983,14 @@ io.on('connection', (socket) => {
     const first = !wal.lg[lg.id];
     wal.lg[lg.id] = (wal.lg[lg.id] ?? 0) + 1;
     if (first) award(LEGEND_GAIN, 'legend');
+    // 🌟 傳說目擊牆（標本櫃）：開了以後第一個遇見的人自動寫上
+    const wallId = `legend_${lg.id}`;
+    if (MUSEUM_BY_ID[wallId] && isOpen(MUSEUM_BY_ID[wallId]) && !museum[wallId]) {
+      museum[wallId] = { n: player.name, at: Date.now() };
+      saveJson('museum2.json', museum);
+      emitAllChannels('forest_main', 'museum', { id: wallId, n: player.name });
+      console.log(`[標本櫃] ${player.name} 寫上傳說目擊牆：${lg.id}`);
+    }
     saveJson('players.json', players);
     bump('legends');
     chal('legend'); // 📒

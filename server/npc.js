@@ -25,7 +25,7 @@ const DOCK_ROOT = { x: 0, z: 3.0 }; // 湖畔碼頭：碼頭和岸邊接起來�
 const PLACES = {
   forest_main: {
     // 添柴火：只在火邊待一下下（挑沒有玩家的位置），添完就回自己的地方
-    fireSeat: () => polar(rand(0, Math.PI * 2), 2.6),
+    fireSeat: () => polar(rand(0, Math.PI * 2), 2.7), // 圓木外面（不走進圓木之間）
     // 每個居民在外圍有自己的固定位置（不佔玩家的座位、不擠在營火邊）
     own: {
       oak: polar(0.11, 5.6), // 撿柴的小橡：往祈福處的小路旁
@@ -83,6 +83,9 @@ export const RESIDENTS = [
 ];
 
 const WALK_SPEED = 1.25;
+/** 🪵 營火圓木座位最外緣（fireSeats.js：離火 1.56～1.9、半徑到 0.33）＋身體，直線擦到這圈就要繞 */
+const LOG_RING = 2.45;
+const AROUND_R = 2.8;
 
 /**
  * 建立一個分流的居民。
@@ -139,17 +142,6 @@ export function createResidents(api) {
   /** 從 A 走到 B：在森林裡，路線會繞過營火 */
   function route(n, to) {
     const pts = [];
-    if (n.room === 'forest_main') {
-      const ax = n.x, az = n.z;
-      const dx = to.x - ax, dz = to.z - az;
-      const len2 = dx * dx + dz * dz || 1;
-      const u = Math.max(0, Math.min(1, -(ax * dx + az * dz) / len2));
-      const cx = ax + dx * u, cz = az + dz * u;
-      if (Math.hypot(cx, cz) < 1.8) {
-        const a = Math.atan2(ax, az) + (Math.atan2(to.x, to.z) - Math.atan2(ax, az) > 0 ? 1.2 : -1.2);
-        pts.push(polar(a, 2.9));
-      }
-    }
     // 湖畔碼頭：碼頭伸進湖裡，碼頭上和岸上之間一定要先走到碼頭根部，不能斜斜穿過湖面
     if (n.room === 'lake_dock') {
       const onDock = (p) => p.z < 2.0 && Math.abs(p.x) < 1.3;
@@ -157,6 +149,29 @@ export function createResidents(api) {
     }
     pts.push(to);
     return pts.map((p) => ({ type: 'go', to: p }));
+  }
+
+  /** 🪵 森林裡從現在的位置走到 to：直線會擦到營火、圓木那圈，就回傳沿著圓木外面繞的轉折點（出發當下才算，位置才準） */
+  function aroundFire(n, to) {
+    const pts = [];
+    {
+      const ax = n.x, az = n.z;
+      const dx = to.x - ax, dz = to.z - az;
+      const len2 = dx * dx + dz * dz || 1;
+      const u = Math.max(0, Math.min(1, -(ax * dx + az * dz) / len2));
+      const cx = ax + dx * u, cz = az + dz * u;
+      // 🪵 作者 11/24：居民去添柴常卡在圓木座位那圈 → 圓木最外緣約 2.25 公尺，直線會擦進去就沿著圓木外面（2.8）繞
+      if (Math.hypot(cx, cz) < LOG_RING) {
+        const a0 = Math.atan2(ax, az);
+        let span = Math.atan2(to.x, to.z) - a0;
+        while (span > Math.PI) span -= Math.PI * 2;
+        while (span < -Math.PI) span += Math.PI * 2;
+        const r0 = Math.max(AROUND_R, Math.hypot(ax, az));
+        const steps = Math.max(1, Math.ceil(Math.abs(span) / 0.5));
+        for (let i = 1; i < steps; i++) pts.push(polar(a0 + (span * i) / steps, Math.min(r0, AROUND_R + 0.4)));
+      }
+    }
+    return pts;
   }
 
   /** 從 A 到 B 若會經過湖：回傳沿著湖岸外圈的轉折點 */
@@ -335,6 +350,7 @@ export function createResidents(api) {
         // 要走的直線會穿過營火河畔：改成沿著湖岸外圈繞過去（出發當下才算，位置才準）
         if (n.step.type === 'go' && n.room === 'forest_main' && !n.step.direct) {
           const via = aroundPond(n, n.step.to);
+          if (!via.length) via.push(...aroundFire(n, n.step.to));
           if (via.length) {
             n.plan.unshift(...via.slice(1).map((p) => ({ type: 'go', to: p, direct: true })), { ...n.step, direct: true });
             n.step = { type: 'go', to: via[0], direct: true };
@@ -346,6 +362,15 @@ export function createResidents(api) {
         const dx = s.to.x - n.x;
         const dz = s.to.z - n.z;
         const d = Math.hypot(dx, dz);
+        // 🪵 卡住保險：走一段路花了正常時間的 2 倍＋4 秒還沒到，就不走了（添柴的話就地放柴，不在原地一直卡）
+        s.used = (s.used ?? 0) + dt;
+        s.need ??= d / WALK_SPEED * 2 + 4;
+        if (s.used > s.need) {
+          n.step = null;
+          n.blocked = 0;
+          setAction(n, 'idle');
+          continue;
+        }
         if (d < 0.08) {
           n.step = null;
           setAction(n, 'idle');

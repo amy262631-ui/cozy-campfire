@@ -180,6 +180,12 @@ export function createHomeRoom() {
         o.scale.set(o.geometry.parameters.width > 1 ? 1 : 1 / k, 1 / ky, o.geometry.parameters.depth > 0.5 ? 1 : 1 / k);
       }
       if (o.userData.handOff != null) o.position.y = CABIN.loftY / 2 + o.userData.handOff / ky;
+      // 🪵 二樓前緣的橫樑：厚度、深度維持原本的樣子，前面貼齊二樓地板邊
+      if (o.userData.loftEdge) {
+        o.scale.set(1, 1 / ky, 1 / k);
+        o.position.y = CABIN.loftY - 0.12 / ky;
+        o.position.z = CABIN.loftFront - 0.11 / k;
+      }
     });
     shell.add(body);
     floor = buildTentFloor(sh.id, floorMat);
@@ -445,7 +451,8 @@ export function createHomeRoom() {
     const ramp = clamp((C.stairBottom - pos.z / k) / (C.stairBottom - C.loftFront), 0, 1);
     pos.y = (level === 2 ? C.loftY : level === 1 ? ramp * C.loftY : 0) * scaleY;
     // 站在一樓、而且在二樓底下：二樓地板變半透明，看得到自己
-    const under = level === 0 && pos.z / k < C.loftFront + 0.6;
+    // 作者 11/24：擴建後（20×20 放大快 3 倍）離二樓前緣 2 公尺多就變透明，看起來二樓懸空 → 改用實際距離 0.6 公尺
+    const under = level === 0 && pos.z < C.loftFront * k + 0.6;
     const want = building ? (buildFloor === 1 ? 0.15 : 1) : under ? 0.25 : 1;
     mats.loft.opacity += (want - mats.loft.opacity) * 0.2;
     mats.loft.depthWrite = mats.loft.opacity > 0.9;

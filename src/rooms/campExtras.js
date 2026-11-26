@@ -60,7 +60,7 @@ function buildMuseum() {
   }
   // 正面玻璃格子（畫布貼圖）
   const ITEMS = museumItems(); // 11/22 擴充後格子變多：一排放 16 格
-  const COLS = ITEMS.length > 160 ? 16 : 12;
+  const COLS = ITEMS.length > 300 ? 20 : ITEMS.length > 160 ? 16 : 12; // 11/28 加料理展示、傳說目擊牆：一排 20 格
   const ROWS = Math.ceil(ITEMS.length / COLS);
   const c = document.createElement('canvas');
   c.width = 1024;

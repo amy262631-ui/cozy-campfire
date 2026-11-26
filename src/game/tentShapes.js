@@ -725,6 +725,9 @@ function buildCabin(sh, mats, add, outside) {
   const loft = add(new THREE.BoxGeometry(W * 2 - 0.02, 0.16, -loftFront + D), mats.loft ?? mats.wood, 0, loftY - 0.08, (loftFront - D) / 2);
   loft.userData.loft = true;
   loft.name = 'loft';
+  // 🪵 作者 11/24：從一樓看二樓（地板變半透明時），樓梯頂、欄杆像浮在半空中 → 二樓前緣加一根不透明的實木橫樑，樓梯和欄杆都接在它上面
+  const edge = add(new THREE.BoxGeometry(W * 2 - 0.02, 0.24, 0.22), mats.wood, 0, loftY - 0.12, loftFront - 0.11);
+  edge.userData.loftEdge = true; // 擴建放大時 homeRoom 讓它維持原本的粗細
   // 閣樓前緣的欄杆（樓梯那邊留開口）
   const railEnd = stairX0 - 0.05;
   const railLen = railEnd + W;

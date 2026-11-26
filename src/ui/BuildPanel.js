@@ -4,6 +4,7 @@ import { TENT_STYLES } from '../game/tentStyles.js';
 import { TENT_SHAPES } from '../game/tentShapes.js';
 import { CATALOG_BY_ID, canAddTo, fishFits, stackAt, gridOf, expandPrice, MAX_STACK, ALL_COLORS, hasLoft, inCat } from '../game/furnitureCatalog.js';
 import { FISH } from '../fishing/fishData.js';
+import { fitLeftStack, watchLeftStack } from './fitLeftStack.js';
 
 /**
  * 布置帳篷：畫面下方的一條面板。
@@ -17,8 +18,8 @@ import { FISH } from '../fishing/fishData.js';
  *   onToggleOpen()   開放／關閉參觀
  */
 export class BuildPanel {
-  constructor({ getHome, onEdit, onExit, onToggleOpen, onExpand, onShop, root = document.getElementById('ui') }) {
-    Object.assign(this, { getHome, onEdit, onExit, onToggleOpen, onExpand, onShop });
+  constructor({ getHome, onEdit, onExit, onToggleOpen, onExpand, onShop, onUndo, canUndo, onAuto, root = document.getElementById('ui') }) {
+    Object.assign(this, { getHome, onEdit, onExit, onToggleOpen, onExpand, onShop, onUndo, canUndo, onAuto });
     this.cell = null;
     this.bagCat = 'all';
     root.insertAdjacentHTML(
@@ -28,6 +29,7 @@ export class BuildPanel {
         <div class="build-head">
           <span id="build-title">${t('🛠️ 布置模式：點地板上的格子')}</span>
           <span class="build-floor" id="build-floor" hidden><button type="button" data-floor="1" class="on">${t('1 樓')}</button><button type="button" data-floor="2">${t('2 樓')}</button></span>
+          <button type="button" class="build-undo" id="build-undo" disabled>${t('↩️ 復原')}</button>
           <button type="button" class="build-shop" id="build-shop">${t('🛒 買家具')}</button>
           <button type="button" class="build-done" id="build-done">${t('完成')}</button>
         </div>
@@ -47,8 +49,20 @@ export class BuildPanel {
     this.tools = $('#home-tools');
     this.openBtn = $('#home-open');
     for (const el of [this.el, this.tools]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
+    watchLeftStack(() => [this.tools, document.getElementById('guest-tools')]);
     $('#build-done').addEventListener('click', () => this.onExit?.());
     $('#build-shop').addEventListener('click', () => this.onShop?.()); // 🛒 在帳篷裡直接打開小舖的家具分頁
+    // ↩️ 復原（作者 11/24）：回到上一步（最近 20 步，離開布置就清掉）
+    this.undoBtn = $('#build-undo');
+    this.undoBtn.addEventListener('click', async () => {
+      if (this.busy) return;
+      this.busy = true;
+      await this.onUndo?.();
+      this.busy = false;
+      this.cell = null;
+      this.moving = null;
+      this.render();
+    });
     // 🏡 小木屋：切換布置一樓、二樓
     this.floorEl = $('#build-floor');
     this.floor = 1;
@@ -84,6 +98,62 @@ export class BuildPanel {
       const tb = e.target.closest('[data-bagcat]');
       if (tb) {
         this.bagCat = tb.dataset.bagcat;
+        this.render();
+        return;
+      }
+      // ✨ 一鍵布置（作者 11/25）：先勾選背包裡想擺的家具 → 按「✨ 一鍵布置」只擺勾的
+      if (e.target.closest('[data-autopick]')) {
+        this.pick = new Map();
+        this.render();
+        return;
+      }
+      // 有好幾件的：「－」少勾一件（例如床買 8 張，2 樓勾 6、1 樓勾 2）
+      const pm = e.target.closest('[data-pickminus]');
+      if (pm && this.pick) {
+        const k = pm.dataset.pickminus;
+        const cur = this.pick.get(k) ?? 0;
+        if (cur <= 1) this.pick.delete(k);
+        else this.pick.set(k, cur - 1);
+        this.render();
+        return;
+      }
+      const pk = e.target.closest('[data-pick]');
+      if (pk && this.pick) {
+        const k = pk.dataset.pick;
+        const max = Number(pk.dataset.n) || 1;
+        const cur = this.pick.get(k) ?? 0;
+        // 點一下勾 1 件；有好幾件的再點一下多勾一件，勾滿了再點就取消
+        if (cur >= max) this.pick.delete(k);
+        else this.pick.set(k, cur + 1);
+        this.render();
+        return;
+      }
+      if (e.target.closest('[data-pickall]') && this.pick) {
+        for (const x of this.#avail(this.getHome() ?? {})) this.pick.set(`${x.f.id}~${x.c}`, x.n);
+        this.render();
+        return;
+      }
+      if (e.target.closest('[data-pickclear]') && this.pick) {
+        this.pick.clear();
+        this.render();
+        return;
+      }
+      if (e.target.closest('[data-pickcancel]')) {
+        this.pick = null;
+        this.render();
+        return;
+      }
+      if (e.target.closest('[data-autogo]') && this.pick?.size && !this.busy) {
+        const picks = [];
+        for (const [k, n] of this.pick) {
+          const [i, c] = k.split('~');
+          for (let j = 0; j < n; j++) picks.push({ i, c: Number(c) || 0 });
+        }
+        this.busy = true;
+        const ok = await this.onAuto?.(picks, this.floor);
+        this.busy = false;
+        if (ok) this.pick = null;
+        this.cell = null;
         this.render();
         return;
       }
@@ -157,6 +227,7 @@ export class BuildPanel {
     this.tools.hidden = !show;
     this.openBtn.textContent = open ? t('🚪 開放參觀中') : t('🔒 休息中（不開放）');
     this.openBtn.classList.toggle('closed', !open);
+    if (show) requestAnimationFrame(() => fitLeftStack(this.tools)); // 📱 平板、手機：放不下就縮小／換兩欄，不壓到聊天列、搖桿
   }
 
   start() {
@@ -172,6 +243,7 @@ export class BuildPanel {
     this.el.hidden = true;
     this.cell = null;
     this.moving = null;
+    this.pick = null;
   }
 
   select(cell) {
@@ -222,7 +294,7 @@ export class BuildPanel {
    * 🎒 背包格子（作者 11/14：像時下遊戲的背包，一格一件、上面分類）
    *   items：[{ f, n, c }]；attr(f, c)：按鈕上的 data-…（放新家具或放到這格）
    */
-  #bagGrid(items, attr) {
+  #bagGrid(items, attr, extra = null) {
     if (!items.length) return '';
     const cats = CATS.filter((c) => items.some(({ f }) => inCat(CATALOG_BY_ID[f.id], c.id)));
     if (this.bagCat !== 'all' && !cats.some((c) => c.id === this.bagCat)) this.bagCat = 'all';
@@ -236,7 +308,7 @@ export class BuildPanel {
     const slots = shown
       .map(
         ({ f, n, c }) =>
-          `<button type="button" class="bag-slot" ${attr(f, c)} title="${f.name}"><span class="bs-ic">${f.icon}</span><span class="bs-nm">${f.name}</span>${n > 1 ? `<b class="bs-n">${n}</b>` : ''}${c ? `<em class="bs-c">${ALL_COLORS[c]?.icon}</em>` : ''}</button>`,
+          `<button type="button" class="bag-slot${extra?.(f, c, n)?.cls ?? ''}" ${attr(f, c, n)} title="${f.name}"><span class="bs-ic">${f.icon}</span><span class="bs-nm">${f.name}</span>${n > 1 ? `<b class="bs-n">${n}</b>` : ''}${c ? `<em class="bs-c">${ALL_COLORS[c]?.icon}</em>` : ''}${extra?.(f, c, n)?.badge ?? ''}</button>`,
       )
       .join('');
     return `${tabs}<div class="bag-grid">${slots}</div>`;
@@ -264,6 +336,7 @@ export class BuildPanel {
 
   render() {
     if (!this.active) return;
+    this.undoBtn.disabled = !this.canUndo?.();
     const home = this.getHome() ?? { inv: {}, items: [] };
     const loft = hasLoft(home);
     this.floorEl.hidden = !loft;
@@ -286,12 +359,34 @@ export class BuildPanel {
       const cur = home.style ?? 'classic';
       const g = gridOf(home);
       const price = expandPrice(home);
+      // ✨ 一鍵布置：勾選模式（點背包裡的家具＝勾起來，不會馬上擺出來）
+      if (this.pick) {
+        const av = this.#avail(home);
+        for (const k of [...this.pick.keys()]) if (!av.some((x) => `${x.f.id}~${x.c}` === k)) this.pick.delete(k);
+        const n = [...this.pick.values()].reduce((a, b) => a + b, 0);
+        this.title.textContent = t('✨ 一鍵布置：勾選要擺的家具');
+        const grid = this.#bagGrid(
+          av,
+          (f, c, m) => `data-pick="${f.id}~${c}" data-n="${m}"`,
+          (f, c) => {
+            const k = this.pick.get(`${f.id}~${c}`) ?? 0;
+            const n = av.find((x) => x.f.id === f.id && x.c === c)?.n ?? 1;
+            return k ? { cls: ' picked', badge: `<i class="bs-pick">✓${n > 1 ? ` ${k}/${n}` : ''}</i>${n > 1 ? `<span class="bs-minus" data-pickminus="${f.id}~${c}">－</span>` : ''}` } : null;
+          },
+        );
+        this.body.innerHTML = `<div class="build-tip">${loft ? t('只擺在現在這一樓（{f} 樓）；已經擺好的不會動', { f: this.floor }) : t('已經擺好的不會動，勾的家具會自動找位置擺好，再自己微調')}</div>
+          <div class="pick-bar"><button type="button" class="build-act" data-pickall="1">${t('全選')}</button><button type="button" class="build-act" data-pickclear="1" ${n ? '' : 'disabled'}>${t('清除')}</button><button type="button" class="build-act" data-pickcancel="1">${t('取消')}</button></div>
+          <div class="build-tip build-sub">${t('同一種有好幾件的：點一下多勾一件，按「－」少勾一件')}</div>
+          ${grid || `<div class="build-tip">${t('背包裡沒有可以擺的家具')}</div>`}
+          <button type="button" class="build-act build-auto" data-autogo="1" ${n ? '' : 'disabled'}>${n ? t('✨ 一鍵布置（擺 {n} 件）', { n }) : t('✨ 一鍵布置（先勾選家具）')}</button>`;
+        return;
+      }
       // 🆕 背包裡的家具：點一下就擺到中間的空格，再拖去想放的地方（作者 11/14）
       const bag = this.#bagGrid(this.#avail(home), (f, c) => `data-new="${f.id}" ${c ? `data-c="${c}"` : ''}`);
       this.body.innerHTML =
         (total
           ? `<div class="build-tip">${t('點住家具拖到別格；點一下家具可以轉向、收起；點遠處的格子，畫面會移過去')}</div>` +
-            (bag ? `<div class="build-tip build-sub">${t('🎒 背包（點一下就擺出來）')}</div>${bag}` : '') +
+            (bag ? `<div class="build-tip build-sub bag-head"><span>${t('🎒 背包（點一下就擺出來）')}</span><button type="button" class="build-auto-mini" data-autopick="1">${t('✨ 一鍵布置')}</button></div>${bag}` : '') +
             ((home.items ?? []).length ? `<button type="button" class="build-act build-clear" data-clearall="1">${hasLoft(home) ? t('📦 這一樓全部收起') : t('📦 全部收起')}</button>` : '')
           : `<div class="build-tip">${t('背包是空的，按上面的「🛒 買家具」挑幾件吧')}</div>`) +
         `<div class="build-styles"><span class="build-styles-label">${t('📐 地板 {n}×{n}', { n: g })}</span>${

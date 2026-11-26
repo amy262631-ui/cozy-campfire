@@ -1,4 +1,5 @@
 import { t } from '../i18n/i18n.js';
+import { fitLeftStack } from './fitLeftStack.js';
 import { addCloseX } from './CloseX.js';
 
 /**
@@ -98,6 +99,7 @@ export class GuestPanel {
       if (this.tools.parentElement !== homeTools) homeTools.prepend(this.tools);
     } else if (this.tools.parentElement !== this.root) this.root.append(this.tools);
     this.tools.classList.toggle('stacked', this.tools.parentElement === homeTools);
+    requestAnimationFrame(() => fitLeftStack(this.tools.classList.contains('stacked') ? homeTools : this.tools)); // 📱 不壓到聊天列、搖桿
     if (!home) this.close();
     this.render();
   }
