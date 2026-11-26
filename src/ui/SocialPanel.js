@@ -249,7 +249,7 @@ export class SocialPanel {
   }
 
   /** 加一則聊天紀錄（會慢慢淡掉；畫面上大約 6 則的高度，往上滑看最近 80 則） */
-  addLog(name, text, { system = false, feed = false, big = false } = {}) {
+  addLog(name, text, { system = false, feed = false, big = false, seen = false } = {}) {
     const log = this.el.log;
     // 正在往上看舊的，就不要硬拉回最新。作者 11/25：打字時新訊息不會往上跑 → 改成看「玩家自己有沒有往上滑」
     //（鍵盤打開、輸入框移位時版面會變，原本用位置判斷常常誤判成「在看舊的」）
@@ -264,6 +264,12 @@ export class SocialPanel {
       requestAnimationFrame(() => (log.scrollTop = log.scrollHeight)); // 版面算好後再捲一次
     }
     setTimeout(() => line.classList.add('old'), 15000);
+    // 📣 大聲公（作者 11/26）：畫面上方已經有大大的橫幅顯示 8 秒，看到了就不算「沒看過」（螢幕關著時來的才算）
+    if (seen && this.compact && !document.body.classList.contains('chat-open') && !this.typing) {
+      if (document.hidden) this.unread++;
+      this.#peek();
+      return line;
+    }
     if (this.compact && !document.body.classList.contains('chat-open') && !this.typing) {
       // 作者 11/25：小條上已經顯示過、看過的話，不要再算成紅色「沒看過」。
       // 只有這兩種才算沒看過：切到別的分頁／螢幕關著時來的；或上一句才出現不到 2 秒就被下一句蓋掉（來不及看）。

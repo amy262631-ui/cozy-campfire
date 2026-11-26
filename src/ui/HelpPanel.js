@@ -146,6 +146,8 @@ export class HelpPanel {
       {
         q: t('🍾 漂流瓶怎麼玩？'),
         a: t('在湖畔碼頭或營火河畔釣魚時，旁邊有「🍾 寫信」：寫一封信（最多 60 字，🌰 2，一天 3 瓶）丟進湖裡。別人撈到漂流瓶時，有一半機會讀到大家的信，可以回一顆 💗。'),
+        btn: t('👉 帶我去湖邊'), // 作者 11/26：這題原本沒有按鈕，畫面上變成「undefined」
+        go: 'lake_dock',
       },
       {
         q: t('🎉 假日活動是什麼？'),
@@ -262,7 +264,7 @@ export class HelpPanel {
       t('❓ 常見問題'),
       `<div class="help-faq">
         <div class="help-top"><button type="button" class="mini-btn" id="help-news">${t('📢 看更新公告')}</button><button type="button" class="mini-btn" id="help-manual-top">${t('📖 營地手冊')}</button></div>
-        ${faq.map((f, i) => `<div class="hf-row"><b class="hf-q">${f.q}</b><div class="hf-a">${f.a}</div><button type="button" class="mini-btn hf-go" data-hgo="${i}">${f.btn}</button></div>`).join('')}
+        ${faq.map((f, i) => `<div class="hf-row"><b class="hf-q">${f.q}</b><div class="hf-a">${f.a}</div>${f.btn && f.go ? `<button type="button" class="mini-btn hf-go" data-hgo="${i}">${f.btn}</button>` : ''}</div>`).join('')}
         <button type="button" class="help-manual-btn" id="help-manual">${t('📖 看營地手冊')}</button>
       </div>`,
       (body) => {

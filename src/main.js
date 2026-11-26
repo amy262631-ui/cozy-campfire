@@ -2166,7 +2166,7 @@ async function init() {
     setTimeout(nextShout, 8000);
   };
   net.on('shout', (m) => {
-    social.addLog(`📣 ${m.name}`, m.text);
+    social.addLog(`📣 ${m.name}`, m.text, { seen: true }); // 上方橫幅已經顯示，不算沒看過
     shoutQ.push(m);
     if (!shoutBusy) nextShout();
   });

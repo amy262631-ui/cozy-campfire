@@ -28,6 +28,10 @@ export function autoProfile(allowSpecies = true) {
     name: saved.custom && saved.name ? saved.name : randomName(),
     species: allowSpecies ? (saved.customLook && SPECIES[saved.species] ? saved.species : pick(SPECIES.length)) : 0,
     fur: saved.customLook && Number.isInteger(saved.fur) ? saved.fur : pick(BASE_FUR),
+    // 🐾 作者 11/26：有玩家每次進來尾巴都變回去 → 原本這裡沒有把換過的尾巴、耳朵讀回來（重新整理就變回動物預設的，
+    //    接著又被 pushLook 存回帳號，連帳號裡的也被蓋掉）。選過外型的，尾巴、耳朵也照存的用
+    tail: saved.customLook && typeof saved.tail === 'string' ? saved.tail : '',
+    ear: saved.customLook && typeof saved.ear === 'string' ? saved.ear : '',
     code: saved.code || '',
     custom: !!saved.custom,
     customLook: !!saved.customLook,
