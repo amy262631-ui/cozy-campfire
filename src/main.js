@@ -3307,7 +3307,33 @@ async function init() {
     lake.boats.set(list);
     syncMyBoat();
   });
-  net.on('boatPos', ([id, x, z, ry]) => lake.boats.move(id, x, z, ry));
+  // 🛶 作者 11/27「人物在海上」：手機進湖畔比較慢時，伺服器先送的船名單會被丟掉 → 別人看起來坐在水面上、沒有船
+  //   收到不認得的船、或剛進湖畔：跟伺服器重新要一次名單（最多 4 秒一次）
+  let boatResyncAt = 0;
+  const resyncBoats = async () => {
+    if (roomMgr?.current?.id !== 'lake_dock' || Date.now() - boatResyncAt < 4000) return;
+    boatResyncAt = Date.now();
+    const r = await net.request('boatInfo', {});
+    if (!r?.list || roomMgr?.current?.id !== 'lake_dock') return;
+    lake.boats.setSelf(net.id);
+    lake.boats.set(r.list);
+    syncMyBoat();
+  };
+  lake.resyncBoats = resyncBoats;
+  // 💥 自己坐的船被撞：鏡頭震一下、咚一聲（作者 11/27：有震動但不影響位置）
+  let lastBump = 0;
+  lake.boats.setBumpFn((d) => {
+    if (!d.r?.includes(net.id) || roomMgr?.current?.id !== 'lake_dock') return;
+    const now = performance.now();
+    if (now - lastBump < 400) return;
+    lastBump = now;
+    cameraRig.shake?.(0.06);
+    audio.sfx('bump');
+    navigator.vibrate?.(30); // Android 手機輕輕震一下（iPhone 不支援，沒關係）
+  });
+  net.on('boatPos', ([id, x, z, ry]) => {
+    if (!lake.boats.move(id, x, z, ry)) resyncBoats();
+  });
   net.on('boatOff', ({ why, x, z }) => {
     if (!actions.boat) return;
     leaveBoatLocal({ x, z });
@@ -5012,6 +5038,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       setRemoteSpot(room.id === 'campground' ? rooms.campground.remoteSpot : null); // 🪢 別人坐在樹屋鞦韆上也跟著盪
       setRemoteBoat(room.id === 'lake_dock' ? (id) => rooms.lake_dock.boats.seatOf(id) : null); // ⛵ 別人坐在船上
       if (room.id !== 'lake_dock') rooms.lake_dock.boats.clear();
+      else setTimeout(() => rooms.lake_dock.resyncBoats?.(), 2500); // 🛶 進湖畔後再對一次船名單（伺服器先送的可能被丟掉）
       // 🦆 離開營火廣場：別人的小鴨收起來；自己的小鴨在河邊等（回來時從河邊跑過來）
       rooms.forest_main.river.clearDucks();
       rooms.forest_main.river.cancelAim();

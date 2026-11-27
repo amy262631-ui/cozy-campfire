@@ -666,6 +666,11 @@ export class AudioEngine {
       case 'daikichi':
         [659, 784, 988, 1319].forEach((f, i) => tone(f, now + i * 0.1, 0.5, { type: 'triangle', amp: 0.1 }));
         break;
+      case 'bump': // ⛵ 船撞到：低低的木頭「咚」＋一點水聲
+        noise(now, 0.14, 240, 0.45);
+        tone(150, now, 0.18, { type: 'triangle', amp: 0.14, to: 90 });
+        noise(now + 0.05, 0.3, 700, 0.12);
+        break;
       case 'tap': // 捲線「喀」
         noise(now, 0.04, 2600, 0.18);
         break;

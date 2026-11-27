@@ -335,7 +335,11 @@ export function createLakeRoom() {
           const reach = k.r * 0.8 + 1.4;
           this.fishSpot = { x: p.x, z: p.z, face: Math.atan2(dir[0], dir[1]) };
           actions.start('fish');
-          this.fishing?.start(actions, { x: p.x, z: p.z, dir, group, waterY: WATER_Y, place: 'lake', boat: true, reach: [reach, reach + 1.6], side: 1.6 });
+          this.fishing?.start(actions, { x: p.x, z: p.z, dir, group, waterY: WATER_Y, place: 'lake', boat: true, reach: [reach, reach + 1.6], side: 1.6, follow: () => {
+            const mm = boats.mine();
+            const pp = actions.player.position;
+            return mm ? { x: pp.x, z: pp.z, ry: boats.center(mm.id)?.ry ?? 0 } : null;
+          } });
           return true;
         }
         if (name === 'interact') {
@@ -356,6 +360,15 @@ export function createLakeRoom() {
         actions.start('fish');
         this.fishing?.start(actions, { x: p.x, z: p.z, dir: spot.dir, group, waterY: WATER_Y, place: 'lake' });
         return true;
+      }
+      // 🗑️ 作者 11/27：租船看板旁邊的垃圾撿不到（一直跳租船）→ 旁邊有垃圾、可以撿的石頭貝殼，先撿
+      if (name === 'interact') {
+        const tb = trash.near(actions.player.position);
+        if (tb) {
+          actions.onTrash?.(tb);
+          return true;
+        }
+        if (gather.spotNear(actions) && gather.tryPick(actions)) return true;
       }
       if (name === 'interact' && nearBoatSign(actions.player.position)) {
         actions.onBoatSign?.();
@@ -386,6 +399,8 @@ export function createLakeRoom() {
 
     prompt(actions) {
       if (this.boat) return t('<kbd>F</kbd> 🎣 甩竿釣魚　<kbd>E</kbd> 下船');
+      if (trash.near(actions.player.position)) return isHolEgg(trash.near(actions.player.position).item) ? t('<kbd>E</kbd> 🥚 撿起彩蛋') : t('<kbd>E</kbd> ♻️ 撿起垃圾');
+      if (gather.spotNear(actions)) return gather.prompt(actions);
       if (nearBoatSign(actions.player.position)) return t('<kbd>E</kbd> ⛵ 租船');
       if (boatOpen()) {
         const b = boats.boardable(actions.player.position);
@@ -398,6 +413,8 @@ export function createLakeRoom() {
     /** 手機的互動按鈕：岸邊的石頭、貝殼旁邊變「撿起來」 */
     interactHint(actions) {
       if (this.boat) return ['⛵', t('下船')];
+      if (trash.near(actions.player.position)) return isHolEgg(trash.near(actions.player.position).item) ? ['🥚', t('撿起來')] : ['♻️', t('撿起來')];
+      if (gather.spotNear(actions)) return ['🧺', t('撿起來')];
       if (nearBoatSign(actions.player.position)) return ['⛵', t('租船')];
       if (boatOpen() && boats.boardable(actions.player.position)) return ['⛵', t('上船')];
       if (trash.near(actions.player.position)) return isHolEgg(trash.near(actions.player.position).item) ? ['🥚', t('撿起來')] : ['♻️', t('撿起來')];

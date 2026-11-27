@@ -31,7 +31,9 @@ export function createBoatLayer(group, waterY) {
       o.material.depthWrite = false;
       canopy.push(o);
     });
-    const b = { d, mesh, x: d.x, z: d.z, ry: d.ry, bob: Math.random() * 6, canopy };
+    mesh.rotation.order = 'YXZ'; // 先轉船頭方向，再前後、左右晃（碰撞搖晃用）
+    // wob：碰撞搖晃（只有畫面，不動位置）；edge：上一張有沒有貼著湖邊／碼頭
+    const b = { d, mesh, x: d.x, z: d.z, ry: d.ry, bob: Math.random() * 6, canopy, wob: null, edge: false, px: d.x, pz: d.z, spd: 0 };
     boats.set(d.id, b);
     return b;
   };
@@ -42,13 +44,41 @@ export function createBoatLayer(group, waterY) {
     b.mesh.traverse((o) => o.geometry?.dispose?.());
     boats.delete(id);
   };
-  const boatY = (b, t) => waterY - 0.12 + Math.sin(t * 1.6 + b.bob) * 0.025;
+  // 💥 作者 11/27「碰船能有點物理震動但不影響位移」：撞到別的船、湖邊、碼頭 → 船身晃一晃、往下沉一點點再浮起來
+  //   每個人的畫面自己算（大家看到的都會晃），位置完全不變
+  const WOB_T = 1.1; // 晃幾秒
+  const wobY = (b) => {
+    const w = b.wob;
+    if (!w) return 0;
+    return -0.05 * w.a * Math.exp(-4 * w.t) * Math.sin(Math.min(1, w.t * 6) * Math.PI);
+  };
+  const boatY = (b, t) => waterY - 0.12 + Math.sin(t * 1.6 + b.bob) * 0.025 + wobY(b);
+  /** 撞到：nx, nz＝從撞的東西指向這艘船的方向（船往反方向晃） */
+  const bump = (b, nx, nz, a) => {
+    if (b.wob && b.wob.t < 0.35) return; // 剛撞過，不要一直重來
+    const n = Math.hypot(nx, nz) || 1;
+    nx /= n;
+    nz /= n;
+    // 撞的方向換成船自己的座標：前後（pitch）、左右（roll）
+    const c = Math.cos(b.ry);
+    const s = Math.sin(b.ry);
+    const fwd = nx * s + nz * c; // 船頭方向（ry＝0 朝 +z）
+    const side = nx * c - nz * s;
+    b.wob = { t: 0, a: Math.min(1, a), px: -fwd, pz: side };
+    onBump?.(b.d);
+  };
+  let onBump = null;
+  const pairTouch = new Set();
 
   let showFn = null;
   return {
     /** fn(riders)：這艘船上有沒有人正在舉魚 */
     setShowFn(fn) {
       showFn = fn;
+    },
+    /** fn(d)：哪艘船被撞了（main.js：自己的船就震一下鏡頭、出聲音） */
+    setBumpFn(fn) {
+      onBump = fn;
     },
     setSelf(id) {
       selfId = id;
@@ -67,6 +97,7 @@ export function createBoatLayer(group, waterY) {
     move(id, x, z, ry) {
       const b = boats.get(id);
       if (b && b.d.o !== selfId) [b.tx, b.tz, b.tr] = [x, z, ry];
+      return !!b; // false＝這艘船我這邊沒有（名單漏收）
     },
     clear() {
       for (const id of [...boats.keys()]) remove(id);
@@ -153,9 +184,55 @@ export function createBoatLayer(group, waterY) {
             o.material.depthWrite = false;
           }
         }
+        // 速度（畫面上的，用來決定撞得多大力）
+        const v = dt > 0 ? Math.hypot(b.x - b.px, b.z - b.pz) / dt : 0;
+        b.spd += (v - b.spd) * k;
+        b.px = b.x;
+        b.pz = b.z;
+        // 貼到湖邊、碼頭：用比較大一點的半徑試推，被推動＝碰到了
+        const kk = BOATS[b.d.k] ?? BOATS.row;
+        const c = { x: b.x, z: b.z };
+        keepOnLake(c, kk.r * 0.6 + 0.04);
+        const edge = Math.abs(c.x - b.x) + Math.abs(c.z - b.z) > 0.002;
+        if (edge && !b.edge && b.spd > 0.4) bump(b, c.x - b.x, c.z - b.z, b.spd / 2.5);
+        b.edge = edge;
+      }
+      // 船跟船：剛碰到的那一下兩艘都晃
+      const list = [...boats.values()];
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const a = list[i];
+          const o = list[j];
+          const rr = (BOATS[a.d.k]?.r ?? 1) * 0.75 + (BOATS[o.d.k]?.r ?? 1) * 0.75 + 0.06;
+          const dx = a.x - o.x;
+          const dz = a.z - o.z;
+          const d = Math.hypot(dx, dz);
+          const key = a.d.id < o.d.id ? `${a.d.id}|${o.d.id}` : `${o.d.id}|${a.d.id}`;
+          const touch = d < rr;
+          if (touch && !pairTouch.has(key) && d > 1e-4) {
+            const f = Math.max(0.35, (a.spd + o.spd) / 2.5);
+            bump(a, dx / d, dz / d, f);
+            bump(o, -dx / d, -dz / d, f);
+          }
+          if (touch) pairTouch.add(key);
+          else if (d > rr + 0.15) pairTouch.delete(key);
+        }
+      }
+      for (const b of boats.values()) {
+        let px = 0;
+        let pz = 0;
+        if (b.wob) {
+          const w = b.wob;
+          w.t += dt;
+          const e = Math.exp(-3.2 * w.t) * Math.sin(w.t * 13) * 0.09 * w.a; // 搖幾下、越來越小
+          px = w.px * e;
+          pz = w.pz * e;
+          if (w.t > WOB_T) b.wob = null;
+        }
         b.mesh.position.set(b.x, boatY(b, t), b.z);
         b.mesh.rotation.y = b.ry;
-        b.mesh.rotation.z = Math.sin(t * 1.3 + b.bob) * 0.02;
+        b.mesh.rotation.x = px;
+        b.mesh.rotation.z = Math.sin(t * 1.3 + b.bob) * 0.02 + pz;
       }
     },
     seatY(id, t = performance.now() / 1000) {

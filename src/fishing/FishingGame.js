@@ -480,6 +480,38 @@ export class FishingGame {
     }
   }
 
+  /**
+   * ⛵ 作者 11/27：坐別人的船釣魚，船主一直划 → 浮標留在原地、釣線拉得超長。
+   *   spot.follow() 回傳現在的 { x, z, ry }：浮標、落點跟著船平移＋轉向（相對船的位置不變）
+   */
+  #followBoat() {
+    const s = this.spot;
+    const f = s?.follow?.();
+    if (!f) return;
+    s._ry ??= f.ry;
+    const dx = f.x - s.x;
+    const dz = f.z - s.z;
+    const da = f.ry - s._ry;
+    if (Math.abs(dx) + Math.abs(dz) + Math.abs(da) < 1e-5) return;
+    const c = Math.cos(da);
+    const sn = Math.sin(da);
+    const move = (v) => {
+      // 先跟著船平移，再繞著人轉（three.js 的 rotation.y：x' = x cos + z sin、z' = -x sin + z cos）
+      const rx = v.x + dx - f.x;
+      const rz = v.z + dz - f.z;
+      v.x = f.x + rx * c + rz * sn;
+      v.z = f.z - rx * sn + rz * c;
+    };
+    move(this.target);
+    move(this.from);
+    move(this.bobber.position);
+    const [ox, oz] = s.dir;
+    s.dir = [ox * c + oz * sn, -ox * sn + oz * c];
+    s.x = f.x;
+    s.z = f.z;
+    s._ry = f.ry;
+  }
+
   update(dt, time) {
     // 漣漪動畫
     for (const r of this.rings) {
@@ -502,6 +534,7 @@ export class FishingGame {
       }
     }
     if (this.phase === 'idle') return;
+    this.#followBoat();
 
     this.t += dt;
     // 主視角變成浮標：等魚的時候鏡頭焦點拉到浮標附近，拉竿、炫耀時回到人身上
