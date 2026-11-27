@@ -7284,7 +7284,9 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     tuneQuality(now);
     if (lowPower) {
       const idle = document.body.classList.contains('is-idle');
-      const minGap = idle ? 1000 / 12 : 1000 / 30;
+      // 🔋 作者 11/27「手機很耗電」：手放開超過 8 秒、角色也沒在走（坐著、釣魚等魚、聊天看別人）→ 每秒 20 張就夠順
+      const calm = !idle && !actions.boat && input.idleSeconds > 8 && Math.hypot(player.velocity.x, player.velocity.z) < 0.05;
+      const minGap = idle ? 1000 / 12 : calm ? 1000 / 20 : 1000 / 30;
       if (now - lastFrame < minGap - 2) return; // 跳過這一張，省電
       lastFrame = now;
     }

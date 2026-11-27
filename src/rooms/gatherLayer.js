@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GATHER_SPOTS, GATHER_R, BUG_WANDER, BUG_CATCH_R, isNight } from '../game/gathering.js';
 import { t } from '../i18n/i18n.js';
 import { makeRadialTexture } from '../scene/textures.js';
+import { mergeStatic } from '../scene/mergeStatic.js';
 
 /** 螢火蟲光暈：圓形漸層（沒有貼圖的 Sprite 會變成四方形） */
 let haloTex = null;
@@ -233,11 +234,23 @@ export function buildDecor(type, rand) {
   return BUILDERS[type](rand).group;
 }
 
+/** ⚡ 效能（11/27）：採集點的小零件合起來（地上的部分一塊、會被拔起來的部分一塊）；蟲蟲會拍翅膀，不合 */
+function mergeSpot(b) {
+  if (b.bug) return;
+  const inRipe = (o) => {
+    for (let p = o; p; p = p.parent) if (p === b.ripe) return true;
+    return false;
+  };
+  mergeStatic(b.group, inRipe, { keepShadow: true });
+  mergeStatic(b.ripe, undefined, { keepShadow: true });
+}
+
 export function createGatherLayer(group, roomId, rand) {
   const spots = [];
   GATHER_SPOTS.forEach((sp, i) => {
     if (sp.room !== roomId) return;
     const b = BUILDERS[sp.type](rand);
+    mergeSpot(b);
     b.group.position.set(sp.x, 0, sp.z);
     if (!b.bug) b.group.rotation.y = rand() * Math.PI * 2;
     group.add(b.group);

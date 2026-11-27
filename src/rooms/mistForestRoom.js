@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeStatic } from '../scene/mergeStatic.js';
 import { makeResolver, makeSign, lowpoly } from './shared.js';
 import { seededRandom } from '../scene/textures.js';
 import { GATHER_SPOTS, MIST_R } from '../game/gathering.js';
@@ -98,20 +99,26 @@ export function createMistForestRoom() {
   const xmasDeco = buildXmasExtras({ trees: xmasTrees, glowTrees: trees.filter((tr) => tr.inner) });
   group.add(xmasDeco.group);
 
+  // ⚡ 效能（11/27）：不會動的造景（樹墩、蘑菇圈、造景蘑菇野花、蕨類）先放進這一包，最後合成幾塊
+  //   分成 6 塊扇形，各自合，鏡頭看不到的那幾塊就不用畫
+  const SECT = 6;
+  const sectors = Array.from({ length: SECT }, () => new THREE.Group());
+  group.add(...sectors);
+  const still = { add: (o) => sectors[Math.floor(((Math.atan2(o.position.x, o.position.z) / (Math.PI * 2)) + 1) * SECT) % SECT].add(o) };
   // 中央：長青苔的大樹墩＋發光小蘑菇圈
   const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 0.7, 12), lowpoly(0x5a4030));
   stump.position.y = 0.35;
-  group.add(stump);
+  still.add(stump);
   const top = new THREE.Mesh(new THREE.CylinderGeometry(0.88, 0.88, 0.04, 12), lowpoly(0x8a6a48));
   top.position.y = 0.72;
-  group.add(top);
+  still.add(top);
   colliders.push({ x: 0, z: 0, r: 1.1 });
   const ringGlow = new THREE.MeshBasicMaterial({ color: 0x9ff0e0 });
   for (let i = 0; i < 14; i++) {
     const a = (i / 14) * Math.PI * 2;
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), ringGlow);
     m.position.set(Math.sin(a) * 1.6, 0.02, Math.cos(a) * 1.6);
-    group.add(m);
+    still.add(m);
   }
   const sign = makeSign(t('🍄 迷霧森林'), { height: 0.3 });
   sign.position.set(0, 1.9, 0);
@@ -121,14 +128,15 @@ export function createMistForestRoom() {
   group.add(exitSign);
 
   // 霧裡飄的光點（晚上變成螢火蟲）
-  const motes = [];
+  // ⚡ 40 顆光點用同一個 InstancedMesh 一次畫完
   const moteMat = new THREE.MeshBasicMaterial({ color: 0xe8f4ff, transparent: true, opacity: 0.5, fog: false });
-  for (let i = 0; i < 40; i++) {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(0.03, 5, 4), moteMat);
-    m.userData = { x: (rand() - 0.5) * MIST_R * 1.8, z: (rand() - 0.5) * MIST_R * 1.8, y: 0.5 + rand() * 2.2, p: rand() * 6 };
-    group.add(m);
-    motes.push(m);
-  }
+  const MOTE_N = 40;
+  const moteMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.03, 5, 4), moteMat, MOTE_N);
+  moteMesh.frustumCulled = false;
+  const motes = [];
+  for (let i = 0; i < MOTE_N; i++) motes.push({ x: (rand() - 0.5) * MIST_R * 1.8, z: (rand() - 0.5) * MIST_R * 1.8, y: 0.5 + rand() * 2.2, p: rand() * 6 });
+  const moteM4 = new THREE.Matrix4();
+  group.add(moteMesh);
 
   // ---------- 造景：到處都是可愛的蘑菇、野花、小樹叢（不能採；能採的地上有發光的圈圈） ----------
   const spotList = GATHER_SPOTS.filter((p) => p.room === 'mist_forest');
@@ -142,7 +150,7 @@ export function createMistForestRoom() {
     d.position.set(x, 0, z);
     d.rotation.y = rand() * Math.PI * 2;
     d.scale.setScalar(0.85 + rand() * 0.5);
-    group.add(d);
+    still.add(d);
     i++;
   }
   // 蕨類小草叢
@@ -152,8 +160,9 @@ export function createMistForestRoom() {
     const r = 3 + rand() * (MIST_R - 2.5);
     const f = new THREE.Mesh(new THREE.ConeGeometry(0.18 + rand() * 0.12, 0.35 + rand() * 0.25, 5), fern);
     f.position.set(Math.sin(a) * r, 0.15, Math.cos(a) * r);
-    group.add(f);
+    still.add(f);
   }
+  for (const sg of sectors) mergeStatic(sg, undefined, { keepShadow: true });
 
   // ---------- 採集點（每個人各自的） ----------
   const gather = createGatherLayer(group, 'mist_forest', rand);
@@ -202,10 +211,12 @@ export function createMistForestRoom() {
     update(dt, time, _camera, actions) {
       snowfall.update(dt, time, _camera?.position);
       xmasDeco.update(dt, time);
-      for (const m of motes) {
-        const u = m.userData;
-        m.position.set(u.x + Math.sin(time * 0.3 + u.p) * 0.6, u.y + Math.sin(time * 0.7 + u.p) * 0.25, u.z + Math.cos(time * 0.25 + u.p) * 0.6);
+      for (let i = 0; i < MOTE_N; i++) {
+        const u = motes[i];
+        moteM4.makeTranslation(u.x + Math.sin(time * 0.3 + u.p) * 0.6, u.y + Math.sin(time * 0.7 + u.p) * 0.25, u.z + Math.cos(time * 0.25 + u.p) * 0.6);
+        moteMesh.setMatrixAt(i, moteM4);
       }
+      moteMesh.instanceMatrix.needsUpdate = true;
       const night = gather.night;
       moteMat.color.setHex(night ? 0xd8ff7a : 0xe8f4ff);
       moteMat.opacity = night ? 0.6 + Math.sin(time * 2) * 0.3 : 0.4;

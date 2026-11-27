@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { lowpoly } from './shared.js';
 import { isXmas } from '../game/season.js';
+import { mergeStatic } from '../scene/mergeStatic.js';
 
 /**
  * 🎄 營火廣場的聖誕造景（作者 11/10、11/12、11/18）：只在聖誕期間（12/1～1/6，season.js）顯示。
@@ -24,9 +25,49 @@ function flakeTex() {
   _flakeTex = new THREE.CanvasTexture(c);
   return _flakeTex;
 }
-/** 燈泡一閃一閃（每顆時間錯開） */
+/** 燈泡一閃一閃（每顆時間錯開）；bulbs 可以是一顆一顆的 Mesh，或 packBulbs 包好的 */
 function blink(bulbs, time) {
+  if (bulbs.packed) return bulbs.packed(time);
   for (const b of bulbs) b.visible = Math.sin(time * 2 + b.userData.ph) > -0.5;
+}
+/**
+ * ⚡ 效能（11/27）：一整區的小燈泡改成一個 InstancedMesh（原本每顆燈泡各畫一次，聖誕樹一多手機就卡）。
+ *   長相、顏色、閃的節奏都一樣；熄掉的那顆縮成 0。
+ */
+export function packBulbs(root, bulbs, { speed = 2, th = -0.5 } = {}) {
+  if (!bulbs.length) return bulbs;
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const im = new THREE.InstancedMesh(bulbs[0].geometry, new THREE.MeshBasicMaterial({ color: 0xffffff }), bulbs.length);
+  im.castShadow = bulbs[0].castShadow;
+  const mats = [];
+  const phs = [];
+  const col = new THREE.Color();
+  bulbs.forEach((b, i) => {
+    const m = new THREE.Matrix4().multiplyMatrices(inv, b.matrixWorld);
+    mats.push(m);
+    phs.push(b.userData.ph);
+    im.setMatrixAt(i, m);
+    im.setColorAt(i, col.copy(b.material.color));
+    b.parent.remove(b);
+  });
+  im.computeBoundingSphere();
+  root.add(im);
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  const on = bulbs.map(() => true);
+  const out = [];
+  out.packed = (time) => {
+    let dirty = false;
+    for (let i = 0; i < phs.length; i++) {
+      const v = Math.sin(time * speed + phs[i]) > th;
+      if (v === on[i]) continue;
+      on[i] = v;
+      im.setMatrixAt(i, v ? mats[i] : zero);
+      dirty = true;
+    }
+    if (dirty) im.instanceMatrix.needsUpdate = true;
+  };
+  return out;
 }
 const BULB_COLS = [0xffd27a, 0xff7a7a, 0x9fe39f, 0xffd27a, 0x8ac4ff];
 let _bulbGeo = null;
@@ -147,6 +188,8 @@ export function buildXmasExtras({ trees = [], glowTrees = [], strings = [], y = 
       bulbs.push(b);
     }
   });
+  const packed = packBulbs(g, bulbs);
+  mergeStatic(g, (o) => glows.includes(o), { keepShadow: true });
   let on = isXmas();
   g.visible = on;
   let check = 0;
@@ -160,7 +203,7 @@ export function buildXmasExtras({ trees = [], glowTrees = [], strings = [], y = 
         g.visible = on;
       }
       if (!on) return;
-      blink(bulbs, time);
+      blink(packed, time);
       for (const h of glows) h.material.opacity = 0.18 + 0.12 * Math.sin(time * 1.2 + h.userData.ph);
     },
   };
@@ -246,12 +289,14 @@ export function buildXmasDecor(spots = []) {
   g.traverse((o) => {
     if (o.isMesh && o.material !== snowMat && !o.material.isMeshBasicMaterial) o.castShadow = true;
   });
+  const packed = packBulbs(g, bulbs);
+  mergeStatic(g, undefined, { keepShadow: true });
 
   return {
     group: g,
     /** center：跟著誰下雪（鏡頭或玩家的位置） */
     update(dt, time, center) {
-      blink(bulbs, time);
+      blink(packed, time);
       const a = geo.attributes.position;
       for (let i = 0; i < FLAKES; i++) {
         let y = a.getY(i) - dt * (0.6 + (i % 5) * 0.12);

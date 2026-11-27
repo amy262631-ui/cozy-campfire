@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeStatic } from '../scene/mergeStatic.js';
 import { GlowLight } from '../scene/GlowLight.js'; // 裝飾小燈用光暈代替真的光源（效能）
 import { makeSign, lowpoly, fadeNear } from './shared.js';
 import { POND, POND_U, POND_V, pondQ, pondLocal, pondWorld } from '../game/pondShape.js';
@@ -109,6 +110,8 @@ export function buildPond(world, forestGroup) {
   post.name = 'pondPost';
   fadeNear(post); // 離鏡頭太近就變透明
   group.add(post);
+  // ⚡ 效能（11/27）：石頭、蘆葦、蠟燭台合成幾塊（水面、月影、木樁、火焰不動）
+  mergeStatic(group, (o) => o === water || o === bank || o === moon || o === post, { keepShadow: true });
 
   // 碰撞：沿長軸排幾個圓，近似橢圓（水不能走進去）
   for (let i = 0; i < 9; i++) {

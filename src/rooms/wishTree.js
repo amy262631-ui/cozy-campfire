@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { mergeStatic } from '../scene/mergeStatic.js';
+import { packBulbs } from './xmasDecor.js';
 import { GlowLight } from '../scene/GlowLight.js'; // 裝飾小燈用光暈代替真的光源（效能）
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeSign, lowpoly, shadowAll } from './shared.js';
@@ -180,6 +182,7 @@ export function buildWishTree(world) {
   group.add(ring);
 
   shadowAll(group);
+  mergeStatic(normal, undefined, { keepShadow: true }); // ⚡ 樹枝＋樹冠合成幾塊
 
   // 裝飾越多、發光的越多，樹越亮
   const glowLight = new GlowLight(0xffc98a, 0, 9);
@@ -389,10 +392,13 @@ function buildXmasCrown() {
     g.add(box);
   }
   shadowAll(g);
+  // ⚡ 效能（11/27）：110 顆小燈泡一次畫完；圓錐、禮物盒合成幾塊（星星會轉、光暈會閃，不合）
+  const packed = packBulbs(g, bulbs, { speed: 2.2, th: -0.6 });
+  mergeStatic(g, (o) => o === star || o === halo, { keepShadow: true });
   g.userData.update = (time) => {
     star.rotation.y = time * 0.6;
     halo.material.opacity = 0.2 + Math.sin(time * 2) * 0.08;
-    for (const b of bulbs) b.visible = Math.sin(time * 2.2 + b.userData.ph) > -0.6;
+    packed.packed?.(time);
   };
   return g;
 }

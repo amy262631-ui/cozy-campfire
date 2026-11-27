@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeStatic } from '../scene/mergeStatic.js';
 import { GlowLight } from '../scene/GlowLight.js'; // 裝飾小燈用光暈代替真的光源（效能）
 import { makeSign, lowpoly, shadowAll } from './shared.js';
 import { t } from '../i18n/i18n.js';
@@ -276,6 +277,12 @@ export function buildShrine() {
 
   shadowAll(group);
   lanterns.forEach((l) => (l.light.castShadow = false));
+  // ⚡ 效能（11/27）：石板、地藏、鳥居、燈籠、供花⋯合成幾塊（鈴鐺會晃，不合；繪馬之後才掛）
+  const inBell = (o) => {
+    for (let p = o; p; p = p.parent) if (p === torii.bell) return true;
+    return false;
+  };
+  mergeStatic(group, inBell, { keepShadow: true });
 
   let bellSwing = 0;
   const emas = [];
