@@ -72,12 +72,12 @@ export const FISH = [
   { name: t('聖誕紅鰭魚'), rarity: 3, min: 20, max: 42, color: 0x3f8f4f, patch: 0xffffff, fin: 0xe23a3a, weight: 5, pull: 13, fight: 0.08, window: 1.25, month: 12, note: t('12 月限定：紅紅的鰭像聖誕裝飾') },
   // ---- ⛵ 船釣限定（作者 11/19，11/27 開）：只有坐在租來的船上才釣得到；不算進全收集，圖鑑「🗓️ 限定」 ----
   //   time：day 白天（6～18 點）、night 晚上；keep: false＝放回湖裡（不進保冷箱、不能煮）
-  { name: t('大白鯊'), rarity: 5, min: 150, max: 260, color: 0x8a96a6, fin: 0x6a7686, weight: 2, pull: 30, fight: 0.16, window: 0.95, where: 'boat', boat: true, shape: 'shark', from: '2026-11-27', keep: false, note: t('⛵ 船釣限定：湖裡怎麼會有鯊魚？！') },
+  { name: t('大白鯊'), rarity: 5, min: 150, max: 260, color: 0x8a96a6, fin: 0x6a7686, weight: 1, /* 作者 11/27：船上 ★5 太容易 → 2 調到 1 */ pull: 30, fight: 0.16, window: 0.95, where: 'boat', boat: true, shape: 'shark', from: '2026-11-27', keep: false, note: t('⛵ 船釣限定：湖裡怎麼會有鯊魚？！') },
   { name: t('翻車魚'), rarity: 4, min: 80, max: 180, color: 0xb8c4cc, patch: 0x9aa8b2, weight: 4, pull: 20, fight: 0.12, window: 1.1, where: 'boat', boat: true, shape: 'mola', time: 'day', from: '2026-11-27', keep: false, note: t('⛵ 船釣限定：白天浮在水面曬太陽') },
-  { name: t('皇帶魚'), rarity: 5, min: 200, max: 320, color: 0xdfe6ee, fin: 0xe2483c, weight: 2, pull: 30, fight: 0.16, window: 0.95, where: 'boat', boat: true, shape: 'ribbon', time: 'night', from: '2026-11-27', keep: false, note: t('⛵ 船釣限定：晚上才從深水游上來') },
+  { name: t('皇帶魚'), rarity: 5, min: 200, max: 320, color: 0xdfe6ee, fin: 0xe2483c, weight: 1, /* 作者 11/27：船上 ★5 太容易 → 2 調到 1 */ pull: 30, fight: 0.16, window: 0.95, where: 'boat', boat: true, shape: 'ribbon', time: 'night', from: '2026-11-27', keep: false, note: t('⛵ 船釣限定：晚上才從深水游上來') },
   { name: t('鬼頭刀'), rarity: 3, min: 50, max: 110, color: 0x3fb87a, patch: 0xf2d23a, fin: 0x2a8ad0, weight: 11, pull: 15, fight: 0.1, window: 1.2, where: 'boat', boat: true, shape: 'mahi', from: '2026-11-27', note: t('⛵ 船釣限定：顏色超鮮豔') },
   { name: t('湖裡的小海豹'), rarity: 4, min: 60, max: 95, color: 0xb8b2aa, weight: 4, pull: 18, fight: 0.11, window: 1.15, where: 'boat', boat: true, shape: 'seal', from: '2026-11-27', keep: false, note: t('⛵ 船釣限定：拍拍手就游走了') },
-  { name: t('藍鯨寶寶'), rarity: 5, legend: true, min: 300, max: 399, color: 0x4a7fc8, glow: 0x9fd0ff, weight: 0.55, pull: 40, fight: 0.18, window: 0.9, where: 'boat', boat: true, shape: 'whale', from: '2026-11-27', keep: false, note: t('⛵ 船釣傳說：釣到送 🐳 藍鯨帳篷') },
+  { name: t('藍鯨寶寶'), rarity: 5, legend: true, min: 300, max: 399, color: 0x4a7fc8, glow: 0x9fd0ff, weight: 0.14, /* 作者 11/27：第一天就 3 頂帳篷 → 0.55 調到約 1/4 */ pull: 40, fight: 0.18, window: 0.9, where: 'boat', boat: true, shape: 'whale', from: '2026-11-27', keep: false, note: t('⛵ 船釣傳說：釣到送 🐳 藍鯨帳篷') },
   // ---- 🔥 營火河畔限定（作者 11/20，11/27 開）：不算進全收集，圖鑑「🗓️ 限定」 ----
   //   fire：營火超旺（75% 以上）才游出來；coop：河神大鯉魚，一個人拉不動，要附近的人按「🤝 幫忙拉」
   { name: t('火光魚'), rarity: 4, min: 25, max: 50, color: 0xff7a2a, glow: 0xffb030, fin: 0xffd060, weight: 3, pull: 18, fight: 0.11, window: 1.15, where: 'pond', fire: true, from: '2026-11-22', note: t('🔥 營火超旺的時候才游出來') },
