@@ -1,3 +1,4 @@
+import { seasonMonths } from './season.js';
 /**
  * 採集（前端、伺服器共用的資料）：迷霧森林 50 種＋湖邊石頭貝殼 24 種＋營火寶藏 16 種（11/14 加 8 種）。
  *
@@ -163,7 +164,10 @@ export function gatherOpen(x, now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(now) >= x.from;
 }
 /** 這個月採得到嗎（每月限定、冬天限定） */
-export const inSeason = (x, month = taipeiMonth()) => (!x.month || x.month === month) && (!x.months || x.months.includes(month));
+export const inSeason = (x, month) => {
+  const ms = month == null ? seasonMonths() : [month]; // 11/27～11/30 也算 12 月（season.js）
+  return (!x.month || ms.includes(x.month)) && (!x.months || x.months.some((m) => ms.includes(m)));
+};
 /** 算進全收集的（不含限定、還沒開放的） */
 export const gatherDexItems = () => GATHER_ITEMS.filter((x) => !isLimited(x) && gatherOpen(x));
 /** 台北時間現在是幾月（1～12） */
@@ -244,7 +248,7 @@ export function isNight(now = new Date()) {
 
 /** 在某一型的採集點採到什麼（依稀有度抽：★★★ 很難遇到；白天、晚上的種類不一樣） */
 /** boost：📅 今天特別多的採集物 id（dailySpecial.js），比較容易採到 */
-export function gatherItemAt(type, night, rand = Math.random, month = taipeiMonth(), boost = null) {
+export function gatherItemAt(type, night, rand = Math.random, month = undefined, boost = null) {
   const pool = GATHER_ITEMS.filter((x) => x.type === type && (night ? !x.day : !x.night) && inSeason(x, month) && gatherOpen(x));
   const weight = (x) => (x.id === boost ? Math.max([0, 14, 3, 0.5][x.rarity] * 4, 8) : [0, 14, 3, 0.5][x.rarity]);
   const total = pool.reduce((a, x) => a + weight(x), 0);

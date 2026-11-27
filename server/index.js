@@ -54,7 +54,7 @@ import { SIGN_BY_ID } from '../src/game/signCatalog.js';
 import { HOLIDAYS, HOL_TASK_GAIN, HOL_STEP_GAIN, HOL_GOLD_GAIN, holidayNow, nextHoliday, holGoal } from '../src/game/holiday.js';
 import { DAILY_BY_ID, WEEKLY_BY_ID, CAT_TROPHY, MAKEUP_ORDER, DAILY_GAIN, STAMP_MONTH, STAMP_DAILY, STAMP_WEEKLY, WEEKLY_PLANT_AT, WEEKLY_BAIT_AT, CAT_TROPHY_AT, dailyOf, dailySwapTo, weeklyOf, weekKey } from '../src/game/quests.js';
 import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_FIRST_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, SPIRIT_ACT_KIND, SPIRIT_NIGHT_STAR, SPIRIT_PLAY_DAY, SPIRIT_ACCS, SPIRIT_ACC_BY_ID, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
-import { isXmasDay as isXmasDay0, isXmasShopDay as isXmasShopDay0 } from '../src/game/season.js';
+import { isXmasDay as isXmasDay0, isXmasShopDay as isXmasShopDay0, monthOn } from '../src/game/season.js';
 const isXmasDay = (k) => process.env.XMAS_TEST === '1' || isXmasDay0(k);
 const isXmasShopDay = (k) => process.env.XMAS_TEST === '1' || isXmasShopDay0(k); // 🛒 聖誕商品賣到 1/15 // 本機測試用：XMAS_TEST=1 假裝現在是聖誕期間（Render 不要設）
 import { FUR_TOTAL, BASE_FUR, PREMIUM_FUR, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from '../src/game/looks.js';
@@ -4794,7 +4794,7 @@ io.on('connection', (socket) => {
     if (!d) return ack?.({ ok: false, reason: 'unknown' });
     if (atHome && !homeCanCook(d, at)) return ack?.({ ok: false, reason: at === 'oven' ? 'oven' : 'grill' });
     if (d.grill && !atGrill) return ack?.({ ok: false, reason: 'grill' });
-    if (d.month && d.month !== taipeiMonth()) return ack?.({ ok: false, reason: 'season' }); // 🗓️ 每月限定
+    if (d.month && !monthOn(d.month)) return ack?.({ ok: false, reason: 'season' }); // 🗓️ 每月限定
     wal.bk ??= {};
     if (!canMake(wal.bk, d.need)) return ack?.({ ok: false, reason: 'need' });
     // 🍲 作者 11/27：一次煮好幾份（n＝1～10，材料不夠就煮到夠的為止）；大菜一次只煮一份（會分給旁邊的人）

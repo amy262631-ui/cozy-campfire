@@ -1,4 +1,5 @@
 import { t } from '../i18n/i18n.js';
+import { monthOn } from '../game/season.js';
 
 /**
  * 魚的種類。前端與伺服器共用索引（伺服器只檢查索引範圍與尺寸上限）。
@@ -114,7 +115,7 @@ export const FISH_MAX_CM = Math.max(...FISH.map((f) => f.max));
 // ⛵ 船上（ctx.boat）：湖畔的魚＋船釣限定；time：day／night（ctx.night）；from：開放日（ctx.open 判斷，沒給就當還沒開）
 export const fishAvailable = (f, ctx = {}) =>
   (!f.where || f.where === ctx.place || (f.where === 'boat' && !!ctx.boat)) &&
-  (!f.month || f.month === (ctx.month ?? fishMonth())) &&
+  (!f.month || (ctx.month != null ? f.month === ctx.month : monthOn(f.month))) && // 11/27～11/30 也算 12 月
   (!f.when || (f.when === 'event' && ctx.event) || (f.when === 'contest' && ctx.contest)) &&
   (!f.time || (f.time === 'night') === !!ctx.night) &&
   (!f.fire || !!ctx.fire) &&

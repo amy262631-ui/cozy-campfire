@@ -1,4 +1,5 @@
 import { FISH, stars, dexGain, DEX_BONUS, DEX_TOTAL, SHINY_TOTAL, SHINY_DEX_GAIN, SHINY_BONUS, fishMonth, isLimitedFish } from '../fishing/fishData.js';
+import { monthOn } from '../game/season.js';
 import { shinyLook } from '../fishing/fishModel.js';
 import { t } from '../i18n/i18n.js';
 import { isOpen } from '../game/dailySpecial.js';
@@ -303,7 +304,7 @@ export class FishingUI {
         .filter(([f, i]) => f.month || ((f.boat || f.fire || f.coop) && (isOpen(f) || this.creel[i]?.count)))
         .map(([f, i]) => {
           const e = this.creel[i];
-          const tag = f.boat || f.fire || f.coop ? (f.note ?? t('⛵ 船釣限定')) : f.month === now ? t('🟢 這個月釣得到') : t('{m} 月限定', { m: f.month });
+          const tag = f.boat || f.fire || f.coop ? (f.note ?? t('⛵ 船釣限定')) : monthOn(f.month) ? t('🟢 這個月釣得到') : t('{m} 月限定', { m: f.month });
           if (!e?.count) return unknown(f, tag);
           return `<div class="dex-card rarity-${f.rarity}"><i class="dex-fish" style="${look(f)}"></i><b>${f.name}</b><small>${rank(f)}</small><em>${t('最大 {size} 公分・×{n}', { size: e.best, n: e.count })}<br>${tag}</em></div>`;
         })

@@ -70,7 +70,7 @@ import { CairnPanel } from './ui/CairnPanel.js';
 import { zoneName, LAYOUT as CAMP_LAYOUT } from './rooms/campLayout.js';
 import { RitualGuide } from './ui/RitualGuide.js';
 import { HelpPanel, spiritRuleLines } from './ui/HelpPanel.js';
-import { isXmas } from './game/season.js';
+import { isXmas, monthOn } from './game/season.js';
 import { setupFrameFocus } from './ui/FrameFocus.js';
 import { BoardGameUI } from './ui/BoardGameUI.js';
 import { GIFT_CATS, giftInfo, basketCat, GIFT_DAILY_CAP, GIFT_MIN_DAYS } from './game/gifts.js';
@@ -1843,8 +1843,8 @@ async function init() {
             .join('')
         : `<div class="dex-note">${t('還沒有料理，煮一道吧！')}</div>`;
       // 🗓️ 每月限定的料理：那個月才出現在食譜（煮過的一直看得到）
-      const recipes = DISHES.filter((d) => !d.month || d.month === taipeiMonth() || cooked.has(d.id)).map((d) => {
-        const season = !d.month || d.month === taipeiMonth();
+      const recipes = DISHES.filter((d) => !d.month || monthOn(d.month) || cooked.has(d.id)).map((d) => {
+        const season = !d.month || monthOn(d.month);
         const ok = canMake(basket, d.need) && (homeAt ? homeCanCook(d, homeAt) : !d.grill || grill) && season;
         const tag = d.grill ? `<small class="grill-tag">${t('🍖 門口烤肉爐限定')}</small>` : homeAt === 'oven' && !homeCanCook(d, 'oven') ? `<small class="grill-tag">${t('🥧 烤箱做不了，用瓦斯爐或灶台')}</small>` : d.month ? `<small class="grill-tag">${t('🗓️ {m} 月限定', { m: d.month })}</small>` : '';
         return `<div class="craft-row ${cooked.has(d.id) ? '' : 'new-dish'}"><i class="dex-emoji">${cooked.has(d.id) ? d.icon : '❔'}</i><div class="craft-info"><b>${cooked.has(d.id) ? dishName(d, t) : t('？？？（還沒煮過）')}</b>${tag}${cooked.has(d.id) ? fxTag(d.id) : ''}<div class="needs">${needHtml(d.need)}</div></div>${ok && here && !d.big ? qtySel(`data-cookn="${d.id}"`, menuTimes(d.need)) : ''}<button type="button" class="mini-btn" data-cook="${d.id}" ${ok && here && net.online ? '' : 'disabled'}>${t('煮')}</button></div>`;

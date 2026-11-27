@@ -10,6 +10,17 @@ const taipeiMD = (now = new Date()) => {
   const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric' }).formatToParts(now);
   return { m: Number(p.find((x) => x.type === 'month').value), d: Number(p.find((x) => x.type === 'day').value) };
 };
+/**
+ * 🗓️ 現在算哪幾個月（每月限定、冬天限定用）。作者 11/27：聖誕從 11/27 開始，12 月限定的魚、採集物、料理也一起開
+ *   → 11/27～11/30 同時算 11 月和 12 月（11 月的不會提早收掉）
+ */
+export function seasonMonths(now = new Date()) {
+  const { m, d } = taipeiMD(now);
+  return m === XMAS_FROM.m && d >= XMAS_FROM.d ? [m, 12] : [m];
+}
+/** 這個月份限定的東西現在拿得到嗎 */
+export const monthOn = (month, now = new Date()) => seasonMonths(now).includes(month);
+
 export function isXmas(now = new Date()) {
   try {
     const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('xmas') : null;
