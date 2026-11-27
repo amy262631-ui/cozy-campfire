@@ -29,9 +29,28 @@ export const CATS = FURNITURE_CATS.map(withName);
 
 // 同一種顏色的材質共用一份（家具一多，材質數量差很多）
 const matCache = new Map();
+/** 共用的材質（快取裡的）：清掉家具時不能丟 */
+const SHARED = new WeakSet();
+const share = (m) => (SHARED.add(m), m);
+/**
+ * 🧹 作者 11/27「布置太久會跳到營火區」：每擺一次家具，帳篷裡的家具會整個重畫，
+ *   舊的模型沒有從顯示卡記憶體清掉 → 平板、手機布置久了記憶體不夠，畫面被收回、自動重新整理（就回到營火）。
+ *   重畫前用這個把舊家具清乾淨（共用材質留著）。
+ */
+export function disposeFurniture(obj) {
+  obj.traverse((o) => {
+    o.geometry?.dispose?.();
+    const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+    for (const m of ms) {
+      if (SHARED.has(m)) continue;
+      if (m.map && m.map !== _glowDot) m.map.dispose();
+      m.dispose();
+    }
+  });
+}
 const mat = (color, extra) => {
   const key = extra ? `${color}|${JSON.stringify(extra)}` : color;
-  if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...extra }));
+  if (!matCache.has(key)) matCache.set(key, share(new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...extra })));
   return matCache.get(key);
 };
 /** 圓形柔光貼圖（豪華聖誕樹的星星光暈） */
@@ -52,7 +71,7 @@ const glowDot = () => {
 };
 const glow = (color) => {
   const key = `g${color}`;
-  if (!matCache.has(key)) matCache.set(key, new THREE.MeshBasicMaterial({ color }));
+  if (!matCache.has(key)) matCache.set(key, share(new THREE.MeshBasicMaterial({ color })));
   return matCache.get(key);
 };
 const glass = (color, opacity = 0.35) => mat(color, { transparent: true, opacity, roughness: 0.2, flatShading: false, depthWrite: false });
@@ -2453,7 +2472,7 @@ export function buildFurniture(id, opts = {}) {
       stick(-1);
       const wave = stick(1);
       g.userData.tick = (dt, t) => {
-        const want = g.userData.near ? 1 : 0;
+        const want = g.userData.near ? 1 : 0.5; // 作者 11/27「揮手雪人根本沒在揮手」：平常也輕輕揮，有人走近揮更大
         g.userData.w = (g.userData.w ?? 0) + (want - (g.userData.w ?? 0)) * Math.min(1, dt * 4);
         wave.rotation.z = g.userData.w * (0.9 + Math.sin(t * 8) * 0.35);
       };
@@ -3540,7 +3559,7 @@ function tint(g, cv) {
     if (!tintCache.has(key)) {
       m.color.getHSL(hsl);
       const wood = hsl.h > 0.03 && hsl.h < 0.13 && hsl.l < 0.42;
-      if (hsl.s < 0.15 || wood || m.transparent) tintCache.set(key, m);
+      if (hsl.s < 0.15 || wood || m.transparent) tintCache.set(key, share(m));
       else {
         const c = m.clone();
         c.color.setHSL(cv.hue, Math.max(cv.sat, hsl.s * 0.7), Math.min(0.85, Math.max(0.15, hsl.l + cv.light)));
@@ -3548,7 +3567,7 @@ function tint(g, cv) {
         const shade = (h, sa, l) => c.color.setHSL(h, sa, Math.min(0.94, Math.max(0.2, l + (hsl.l - 0.6) * 0.35)));
         if (cv.l != null) shade(cv.hue, cv.sat, cv.l);
         if (cv.duo && role === 'g') shade(cv.duo.hue, cv.duo.sat, cv.duo.l);
-        tintCache.set(key, c);
+        tintCache.set(key, share(c));
       }
     }
     o.material = tintCache.get(key);

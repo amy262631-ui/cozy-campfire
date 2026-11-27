@@ -121,6 +121,7 @@ export class RoomManager {
     room.update?.(dt, elapsed, camera, this.actions);
 
     if (this.busy || this.actions.state !== 'free') return null;
+    if (this.holdExit?.()) return null; // 🛠️ 作者 11/27：布置中不會因為走到門口就被送出帳篷（要按「離開」才出去）
     const p = this.player.position;
     for (const e of room.entrances ?? []) {
       if (Math.hypot(p.x - e.x, p.z - e.z) < e.r) return e.to;

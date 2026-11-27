@@ -230,7 +230,32 @@ export class BuildPanel {
     if (show) requestAnimationFrame(() => fitLeftStack(this.tools)); // 📱 平板、手機：放不下就縮小／換兩欄，不壓到聊天列、搖桿
   }
 
+  /**
+   * 🆕 作者 11/27：玩家買了月票家具「一開始沒跑出來」（背包停在別的分類、或要往下滑才看得到）
+   *   → 上次布置之後新買的家具：排在背包最前面、標「🆕」，背包自動切回「全部」；這次布置結束後就不算新的
+   *   記在瀏覽器裡（cozy-bag-seen：家具 id → 上次看到的數量）；第一次用的人不標（免得全部都是新的）
+   */
+  #seenLoad() {
+    try {
+      return JSON.parse(localStorage.getItem('cozy-bag-seen') ?? 'null');
+    } catch {
+      return null;
+    }
+  }
+  #seenSave(inv) {
+    try {
+      localStorage.setItem('cozy-bag-seen', JSON.stringify(inv ?? {}));
+    } catch {
+      /* 無痕模式 */
+    }
+  }
+
   start() {
+    const inv = this.getHome()?.inv ?? {};
+    const seen = this.#seenLoad();
+    this.newIds = new Set(seen ? Object.keys(inv).filter((id) => (inv[id] ?? 0) > (seen[id] ?? 0)) : []);
+    if (!seen) this.#seenSave(inv);
+    if (this.newIds.size) this.bagCat = 'all';
     this.el.hidden = false;
     this.tools.hidden = true;
     this.cell = null;
@@ -240,6 +265,8 @@ export class BuildPanel {
   }
 
   stop() {
+    if (!this.el.hidden) this.#seenSave(this.getHome()?.inv ?? {}); // 🆕 看過了，下次不算新的
+    this.newIds = null;
     this.el.hidden = true;
     this.cell = null;
     this.moving = null;
@@ -298,7 +325,9 @@ export class BuildPanel {
     if (!items.length) return '';
     const cats = CATS.filter((c) => items.some(({ f }) => inCat(CATALOG_BY_ID[f.id], c.id)));
     if (this.bagCat !== 'all' && !cats.some((c) => c.id === this.bagCat)) this.bagCat = 'all';
-    const shown = this.bagCat === 'all' ? items : items.filter(({ f }) => inCat(CATALOG_BY_ID[f.id], this.bagCat));
+    let shown = this.bagCat === 'all' ? items : items.filter(({ f }) => inCat(CATALOG_BY_ID[f.id], this.bagCat));
+    const isNew = (f) => !!this.newIds?.has(f.id);
+    if (this.newIds?.size) shown = [...shown.filter(({ f }) => isNew(f)), ...shown.filter(({ f }) => !isNew(f))]; // 🆕 新買的排前面
     const tabs =
       cats.length > 1
         ? `<div class="bag-tabs"><button type="button" data-bagcat="all" class="${this.bagCat === 'all' ? 'on' : ''}">${t('全部')}</button>${cats
@@ -308,7 +337,7 @@ export class BuildPanel {
     const slots = shown
       .map(
         ({ f, n, c }) =>
-          `<button type="button" class="bag-slot${extra?.(f, c, n)?.cls ?? ''}" ${attr(f, c, n)} title="${f.name}"><span class="bs-ic">${f.icon}</span><span class="bs-nm">${f.name}</span>${n > 1 ? `<b class="bs-n">${n}</b>` : ''}${c ? `<em class="bs-c">${ALL_COLORS[c]?.icon}</em>` : ''}${extra?.(f, c, n)?.badge ?? ''}</button>`,
+          `<button type="button" class="bag-slot${extra?.(f, c, n)?.cls ?? ''}" ${attr(f, c, n)} title="${f.name}"><span class="bs-ic">${f.icon}</span><span class="bs-nm">${f.name}</span>${n > 1 ? `<b class="bs-n">${n}</b>` : ''}${c ? `<em class="bs-c">${ALL_COLORS[c]?.icon}</em>` : ''}${isNew(f) ? '<i class="bs-new">🆕</i>' : ''}${extra?.(f, c, n)?.badge ?? ''}</button>`,
       )
       .join('');
     return `${tabs}<div class="bag-grid">${slots}</div>`;

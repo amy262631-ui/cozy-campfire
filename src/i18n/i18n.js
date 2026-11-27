@@ -1,8 +1,17 @@
-import { DICT } from './dict.js';
-import { RU } from './dict_ru.js';
 import { T2S, S as T2S_TO } from './t2s_data.js';
 
-DICT.ru = RU; // 🇷🇺 俄文（作者 11/15：有俄羅斯玩家）；還沒翻到的句子先顯示英文
+/**
+ * ⚡ 省流量（作者 11/27：Render 流量超過免費額度）：翻譯字典（英日韓約 1.1MB＋俄文 0.46MB）
+ *   不再跟遊戲包在一起，只有選外文的人才下載（src/boot.js 先 loadDict() 再載入遊戲）。
+ *   繁中、簡中的玩家（大多數）不用下載字典。
+ */
+const DICT = {};
+export async function loadDict() {
+  if (lang === 'zh-Hant' || lang === 'zh-Hans') return;
+  const [d, ru] = await Promise.all([import('./dict.js'), lang === 'ru' ? import('./dict_ru.js') : null]);
+  Object.assign(DICT, d.DICT);
+  if (ru) DICT.ru = ru.RU; // 🇷🇺 俄文（作者 11/15：有俄羅斯玩家）；還沒翻到的句子先顯示英文
+}
 
 /**
  * 多國語言：用「繁體中文原文」當作翻譯的索引。
@@ -59,7 +68,7 @@ export function t(zh, vars) {
   let s = zh;
   if (lang === 'zh-Hans') s = toHans(zh);
   else if (lang !== 'zh-Hant') {
-    const tr = DICT[lang]?.[zh] ?? (lang === 'ru' ? DICT.en[zh] : null);
+    const tr = DICT[lang]?.[zh] ?? (lang === 'ru' ? DICT.en?.[zh] : null);
     if (tr != null) s = tr;
     else if (import.meta.env?.DEV && !missing.has(zh)) {
       missing.add(zh);

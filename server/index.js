@@ -671,7 +671,11 @@ const homeRoom = (owner) => {
   return homeRooms.get(owner);
 };
 /** 存檔：統計和錢包更新很頻繁，等 10 秒合併成一次；其他 2 秒 */
-const saveJson = (file, data) => storage.save(file, data, file === 'stats.json' || file === 'players.json' ? 45000 : 8000);
+// ⚡ 省流量（作者 11/27：Render 流量超過免費額度，其中約 3GB 是存檔送到 Upstash）：
+//   大檔（玩家錢包、統計）最多 3 分鐘存一次（原本 2 分鐘）；帳篷布置連續擺家具時 20 秒沒動才存（原本 8 秒）
+//   重新部署、關機前一定會先存完（storage.flush），不會因為這樣掉資料
+const saveJson = (file, data) =>
+  file === 'stats.json' || file === 'players.json' ? storage.save(file, data, 45000, 180000) : file === 'homes.json' ? storage.save(file, data, 20000, 120000) : storage.save(file, data, 8000);
 
 // ---------- 營火時間（台北時間早上 9:30、晚上 9:30，各 30 分鐘）：流星雨、松果加倍、限定流星吊飾 ----------
 const envNum = (k, def) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : def);
@@ -4047,6 +4051,8 @@ io.on('connection', (socket) => {
     saveJson('homes.json', homes);
     bump('buys');
     socket.emit('wallet', { pc: wal.pc, delta: -price, reason: 'buy' });
+    // 🛠️ 作者 11/27「家具買了布置沒有，重進才有」：同一個帳號開著的其他畫面（另一台手機、平板、另一個分頁）也馬上更新背包
+    if (id !== 'tent') io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) });
     ack?.({ ok: true, pc: wal.pc, home: publicHome(h) });
   });
 
@@ -4510,6 +4516,7 @@ io.on('connection', (socket) => {
     d.passBuy[id] = (d.passBuy[id] ?? 0) + 1;
     saveJson('players.json', players);
     if (!look) saveJson('homes.json', homes);
+    if (!look) io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) }); // 🛠️ 其他畫面也更新背包
     socket.emit('wallet', { pc: wal.pc, delta: -price, reason: 'buy' });
     console.log(`[月票本月] ${player.name} 買了 ${id}（${price} 松果）`);
     ack?.({ ok: true, pc: wal.pc, outfits: wal.outfits, home: look ? undefined : publicHome(h) });
@@ -4568,6 +4575,7 @@ io.on('connection', (socket) => {
     saveJson('players.json', players);
     saveJson('homes.json', homes);
     bump('passFree');
+    io.to(`home:${player.vid}`).emit('homeUpdate', { owner: homeId(player.vid), home: publicHome(h) }); // 🛠️ 其他畫面也更新背包
     console.log(`[月票] ${player.name} 星空每月免費家具：${f.zh}`);
     ack?.({ ok: true, home: publicHome(h), pass: passView(wal) });
   });

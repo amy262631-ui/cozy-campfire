@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { makeResolver, lowpoly, shadowAll } from './shared.js';
-import { buildFurniture, FURNITURE_BY_ID } from '../game/furniture.js';
+import { disposeFurniture, buildFurniture, FURNITURE_BY_ID } from '../game/furniture.js';
 import { CATALOG_BY_ID, stackAt, stackY, stackOffset, gridOf, GRID_BASE, LOFT_Z, loftRows, isLoftCell, hasLoft, moveStack, DINE_SLOTS } from '../game/furnitureCatalog.js';
 import { DISH_BY_ID } from '../game/cooking.js';
 import { styleOf, tentTexture } from '../game/tentStyles.js';
@@ -307,6 +307,7 @@ export function createHomeRoom() {
   const seats = [];
   let rest = null;
   let lastPos = { x: 0, y: 0, z: 0 };
+  const _tickPos = new THREE.Vector3();
   /** 離自己最近、按 E 可以坐的家具 */
   /** 🎵 有小功能的家具（按 E）：收音機、木吉他、望遠鏡、小冰箱；小暖爐坐在旁邊會暖暖的 */
   const gadgets = [];
@@ -521,6 +522,21 @@ export function createHomeRoom() {
     mine = !!isMine;
     level = 0;
     applyStyle(home.style);
+    // ⚡ 作者 11/27「電腦布置移動、編輯很卡」：原本每動一件，整個帳篷的家具全部重做一次（還沒清掉舊的）
+    //   → 沒變的家具（同一件、同顏色）直接拿來重用，只做新的；用不到的舊家具從顯示卡記憶體清掉
+    const rackSig = JSON.stringify(home.rack ?? null);
+    const reuse = new Map();
+    for (const c of furnitureGroup.children) {
+      const k = c.userData.reuseKey;
+      if (k) {
+        // 住在家具上的小精靈：重畫後會重新放，舊的先拿下來（不然重用的家具上會疊好幾隻）
+        const sp = [];
+        c.traverse((o) => o.userData.homeSpirit && sp.push(o));
+        for (const o of sp) o.parent?.remove(o);
+        (reuse.get(k) ?? reuse.set(k, []).get(k)).push(c);
+      }
+      else disposeFurniture(c); // 餐桌上的盤子等：每次重做
+    }
     furnitureGroup.clear();
     underLoft = false; // 重畫後下一幀再判斷一次要不要藏二樓家具
     buildShape(home.shape, gridOf(home), home.frame);
@@ -554,7 +570,11 @@ export function createHomeRoom() {
       const stack = stackAt(home.items, x, z).filter((it) => FURNITURE_BY_ID[it.i]);
       const c = cellPos(x, z);
       stack.forEach((it, lv) => {
-        const m = buildFurniture(it.i, { rack: home.rack, color: it.c, fish: it.fish });
+        const rk = `${it.i}|${it.c ?? 0}|${it.fish ?? ''}|${rackSig}`;
+        const m = reuse.get(rk)?.pop() ?? buildFurniture(it.i, { rack: home.rack, color: it.c, fish: it.fish });
+        m.userData.reuseKey = rk;
+        m.visible = true;
+        m.userData.upHidden = m.userData.underHidden = false;
         // 展示櫃裡的東西：跟著櫃子的方向排在架子上
         const o = stackOffset(stack, lv);
         const base = stack.find((x) => CATALOG_BY_ID[x.i]?.shelf);
@@ -647,6 +667,7 @@ export function createHomeRoom() {
         if (Wd && L) list.push({ x: c.x + Wd * Math.cos(a) - L * Math.sin(a), z: c.z - Wd * Math.sin(a) - L * Math.cos(a), r: 0.34 }); // 2×2（錦鯉池）
       }
     }
+    for (const arr of reuse.values()) for (const m of arr) disposeFurniture(m); // 🧹 這次沒用到的舊家具清掉
     // 🍽️ 餐桌上擺的料理：白盤子＋料理的小圖示（跟著餐桌那一格，拖曳時一起搬）
     for (const [k, list] of Object.entries(home.dine ?? {})) {
       if (!list?.length) continue;
@@ -714,6 +735,7 @@ export function createHomeRoom() {
       const o = buildSpirit(x.p.type, x.p.stage, s.kind === 'nest' ? 'sleepy' : 'happy', undefined, x.p.acc, x.p.wing);
       o.scale.setScalar(x.p.stage === 0 ? 0.8 : 0.6);
       o.position.copy(s.local);
+      o.userData.homeSpirit = true;
       (s.seat ?? s.m).add(o);
       s.res = { o, base: s.local.clone(), face: s.kind === 'nest' ? 'sleepy' : 'happy', nm: x.n };
     });
@@ -1107,7 +1129,8 @@ export function createHomeRoom() {
       shellUpdate?.(dt, time);
       for (const m of tickers) {
         if (!m.visible) continue;
-        m.userData.near = Math.hypot(lastPos.x - m.position.x, lastPos.z - m.position.z) < 1.8; // ⛄ 雪人：有人走近就揮手
+        m.getWorldPosition(_tickPos); // 家具在帳篷裡的位置要換成世界座標（帳篷有縮放、位移），不然永遠算成「離很遠」
+        m.userData.near = Math.hypot(lastPos.x - _tickPos.x, lastPos.z - _tickPos.z) < 1.8; // ⛄ 雪人：有人走近就揮手
         m.userData.tick(dt, time);
       }
       // ✨ 精靈家具：鞦韆有小精靈就盪；住在家裡的小精靈睡覺、盪、在玩具旁邊跳

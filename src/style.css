@@ -6954,7 +6954,10 @@ body .idea-chip.kid-chip:not([hidden]) { display: inline-block !important; backg
 .hf-row { padding: 10px 12px; border-radius: 12px; background: rgba(255, 240, 220, 0.07); display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
 .hf-q { font-size: 17px; grid-column: 1; }
 .hf-a { font-size: 14px; opacity: 0.9; grid-column: 1; line-height: 1.45; }
+.hf-a .hf-sec { margin-top: 8px; } /* 🎣 大魚機率：每段之間空一點 */
 .hf-go { grid-column: 2; grid-row: 1 / span 2; white-space: nowrap; }
+.hf-wide { grid-template-columns: 1fr; }
+.hf-wide .hf-go { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 6px; }
 .help-manual-btn { margin-top: 6px; width: 100%; padding: 10px; border-radius: 12px; border: 1px solid rgba(255, 220, 170, 0.35); background: rgba(255, 220, 170, 0.12); color: inherit; font: inherit; font-size: 15px; cursor: pointer; }
 .hm-tabs { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-bottom: 8px; }
 .hm-tab { width: 38px; height: 38px; border-radius: 10px; border: 1px solid transparent; background: rgba(255, 240, 220, 0.07); font-size: 20px; cursor: pointer; }
@@ -7558,6 +7561,7 @@ body.touch .bg-panel { bottom: 250px; }
 .bag-slot .bs-ic { font-size: 26px; line-height: 1; }
 .bag-slot .bs-nm { font-size: 10.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
 .bag-slot .bs-n { position: absolute; top: 3px; right: 4px; min-width: 16px; padding: 0 4px; border-radius: 8px; background: #ffd56b; color: #3a1d0c; font-size: 10px; line-height: 16px; }
+.bag-slot .bs-new { position: absolute; bottom: 2px; left: 3px; font-style: normal; font-size: 12px; line-height: 1; } /* 🆕 上次布置之後新買的 */
 .bag-slot .bs-c { position: absolute; top: 2px; left: 3px; font-style: normal; font-size: 11px; }
 .build-body > .bag-tabs, .build-body > .bag-grid, .build-body > .build-tip { flex: 1 1 100%; width: 100%; min-width: 0; }
 .furn-pop button[hidden] { display: none; }

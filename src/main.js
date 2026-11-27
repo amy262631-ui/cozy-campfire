@@ -176,6 +176,8 @@ async function init() {
     removeEventListener('pagehide', bootOk);
     try {
       localStorage.setItem('cozy-boot', '1');
+      // 🛠️ 作者 11/27：在自己帳篷布置時被重新整理 → 重新進來後自動回到帳篷（不要丟在營火）
+      if (roomMgr?.current?.id === 'home' && roomMgr.current.mine) sessionStorage.setItem('cozy-back-home', '1');
     } catch {
       /* 無痕模式 */
     }
@@ -4022,16 +4024,21 @@ async function init() {
   const fmtDate = (ms) => new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric' }).format(new Date(ms));
   // ---------- 💇 假髮的照片（支持營地頁用） ----------
   const wigPics = new Map();
+  let wigR = null; // 🧹 同一個畫布重複用（每張開一個新的會把遊戲畫面擠掉，見 snapshot）
   /** 假髮的樣子：用一隻小貓戴著拍一張照（只畫一次，存成圖片） */
   const wigPicture = (id, yaw = 0.45) => {
     const pk = `${id}|${yaw}`;
     if (wigPics.has(pk)) return wigPics.get(pk);
     let url = '';
     try {
-      const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-      r.setSize(220, 220, false);
-      r.outputColorSpace = THREE.SRGBColorSpace;
-      r.toneMapping = THREE.ACESFilmicToneMapping;
+      if (!wigR) {
+        wigR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+        wigR.setSize(220, 220, false);
+        wigR.outputColorSpace = THREE.SRGBColorSpace;
+        wigR.toneMapping = THREE.ACESFilmicToneMapping;
+        wigR.domElement.addEventListener('webglcontextlost', () => (wigR = null));
+      }
+      const r = wigR;
       const sc = new THREE.Scene();
       sc.add(new THREE.HemisphereLight(0xfff6ea, 0x8a7060, 1.5));
       const key = new THREE.DirectionalLight(0xfff0dc, 2.2);
@@ -4049,8 +4056,7 @@ async function init() {
       cam.lookAt(0, 0.85, 0);
       r.render(sc, cam);
       url = r.domElement.toDataURL('image/png');
-      r.dispose();
-      r.forceContextLoss?.();
+      r.renderLists.dispose();
     } catch {
       /* 畫不出來就只顯示文字 */
     }
@@ -4764,6 +4770,14 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       document.getElementById('new-ver').addEventListener('click', () => location.reload());
     }
     if (res.myHome) setMyHome(res.myHome);
+    try {
+      if (sessionStorage.getItem('cozy-back-home') === '1') {
+        sessionStorage.removeItem('cozy-back-home');
+        if (res.myHome?.tent) setTimeout(() => goHome(), 1200); // 🛠️ 剛剛在帳篷裡畫面被重新整理：自動回家
+      }
+    } catch {
+      /* 無痕模式 */
+    }
     // 🏕️ 固定營位的提示（搬遷後第一次進來、或之前太久沒來營位讓出去了）
     if (res.plotNote) {
       const p = res.plotNote.plot;
@@ -5777,14 +5791,25 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       img.src = img._fr[img._fi];
     }
   }, 300);
+  // 🧹 作者 11/27「布置太久會跳到營火區」：原本每張預覽圖都開一個新的 WebGL 畫布，
+  //   小舖、布置看很多家具時，瀏覽器的 WebGL 數量到上限，會把最舊的（遊戲主畫面）收掉 → 自動重新整理回到營火
+  //   → 改成只用一個預覽用的畫布，一直重複用
+  let snapR = null;
+  const snapRenderer = () => {
+    if (snapR) return snapR;
+    const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    r.setSize(240, 240, false);
+    r.outputColorSpace = THREE.SRGBColorSpace;
+    r.toneMapping = THREE.ACESFilmicToneMapping;
+    r.domElement.addEventListener('webglcontextlost', () => (snapR = null)); // 被收掉了：下次再開一個
+    snapR = r;
+    return r;
+  };
   const snapshot = (key, makeObj) => {
     if (snapCache.has(key)) return snapCache.get(key);
     let url = '';
     try {
-      const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-      r.setSize(240, 240, false);
-      r.outputColorSpace = THREE.SRGBColorSpace;
-      r.toneMapping = THREE.ACESFilmicToneMapping;
+      const r = snapRenderer();
       const sc = new THREE.Scene();
       sc.background = new THREE.Color(0xf3e6d3);
       sc.add(new THREE.HemisphereLight(0xfff6ea, 0x8a7060, 1.6));
@@ -5820,8 +5845,9 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
         }
         snapAnim.set(url, frames);
       }
-      r.dispose();
-      r.forceContextLoss?.();
+      // 畫完就把這個模型的形狀從顯示卡清掉（材質可能是共用的，不動）
+      obj.traverse((o) => o.geometry?.dispose?.());
+      r.renderLists.dispose();
     } catch {
       /* 畫不出來就只顯示圖示 */
     }
@@ -6833,6 +6859,7 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
     cameraRig.focusMix = 1;
   };
   buildPanel.onLeave = () => leaveHome();
+  roomMgr.holdExit = () => buildPanel.active && inHome(); // 🛠️ 布置中走到門口不會被送去營地
   actions.onBuild = () => (buildPanel.active ? stopBuild() : startBuild());
   // ✋ 布置模式（作者 11/14：像線上遊戲）：點住家具直接拖到別格，放開就放好；點一下＝選這格（轉向、收起）；在空地上拖＝轉鏡頭
   buildPanel.freeCell = () => homeRoom.freeCell();
@@ -7341,6 +7368,24 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
 
   let lastFrame = 0;
   let frameNo = 0;
+  /** 📱 平板每秒 60 張（跑不動自動退回 30 張；網址 ?fps30 可以強制 30 張） */
+  const tabletFast = {
+    on: tablet && !safeMode && !params.has('fps30'),
+    sum: 0,
+    n: 0,
+    check(gap) {
+      if (gap > 250) return; // 切出去回來、載入卡一下不算
+      this.sum += gap;
+      this.n++;
+      if (this.sum < 3000) return;
+      const avg = this.sum / this.n;
+      this.sum = this.n = 0;
+      if (avg > 25) {
+        this.on = false;
+        console.info(`[Cozy] 平板跑不到每秒 60 張（平均 ${avg.toFixed(0)}ms），改回每秒 30 張`);
+      }
+    },
+  };
   // ?fps：畫面左下角顯示每秒張數（比對效能用）
   let fpsEl = null;
   let fpsN = 0;
@@ -7358,8 +7403,12 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
       const idle = document.body.classList.contains('is-idle');
       // 🔋 作者 11/27「手機很耗電」：手放開超過 8 秒、角色也沒在走（坐著、釣魚等魚、聊天看別人）→ 每秒 20 張就夠順
       const calm = !idle && !actions.boat && input.idleSeconds > 8 && Math.hypot(player.velocity.x, player.velocity.z) < 0.05;
-      const minGap = idle ? 1000 / 12 : calm ? 1000 / 20 : 1000 / 30;
+      // 📱 作者 11/27「平板玩有點頓」：平板螢幕大，每秒 30 張看得出來 → 平板先試每秒 60 張（手放開時 30 張），
+      //   跑不動（連續 3 秒平均不到約 40 張）就自動退回跟手機一樣，不會更卡
+      const fast = tabletFast.on;
+      const minGap = idle ? 1000 / 12 : calm ? 1000 / (fast ? 30 : 20) : 1000 / (fast ? 60 : 30);
       if (now - lastFrame < minGap - 2) return; // 跳過這一張，省電
+      if (fast && !idle && !calm && lastFrame) tabletFast.check(now - lastFrame);
       lastFrame = now;
     }
     try {

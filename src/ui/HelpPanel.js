@@ -105,9 +105,40 @@ export class HelpPanel {
         ? [
             {
               q: t('🐟 魚飼料怎麼用？'),
-              a: t('在小舖「🎣 釣具」買，會放進背包。釣魚時右邊有「🐟 撒」按鈕，按了 10 分鐘內魚上鉤比較快（只有自己）。只是比較快，不會讓稀有魚變多；想要稀有魚，吃「釣魚好運」料理或把營火燒旺。'),
+              a: t('釣魚時右邊有「🐟 撒」按鈕，按了 10 分鐘內魚上鉤比較快（只有自己）。背包裡沒有的話，按鈕會變「🐟 買」，買了直接撒；也可以在小舖「🎣 釣具」先買起來。只是比較快，不會讓稀有魚變多；想要稀有魚，吃「釣魚好運」料理或把營火燒旺。'),
               btn: t('👉 打開小舖'),
               go: 'shop',
+            },
+            {
+              // 🎣 作者 11/27：把魚的機率簡單講給玩家聽（數字＝平均大約幾竿 1 條，fishData.js 的 weight 算出來的）
+              q: t('🎣 大魚有多難釣？'),
+              wide: true, // 內容長：按鈕放到下面，文字才不會擠成一條
+              a: (() => {
+                // 作者 11/27：一行一條魚、分段，不要全部連在一起
+                const row = (icon, name, where, n) => `・${icon} ${t(name)}${where ? `（${t(where)}）` : ''}：${t('約 {n} 竿', { n })}`;
+                const sec = (title, lines) => `<div class="hf-sec"><b>${title}</b><br>${lines.join('<br>')}</div>`;
+                return [
+                  `<div>${t('每個人每一竿都是自己抽，跟別人釣多少沒關係。')}<br>${t('下面是平均大約甩幾竿會釣到 1 條（運氣好會更快）：')}</div>`,
+                  sec(t('👑 傳說魚'), [
+                    row('🐳', '藍鯨寶寶', '船上', '1,600'),
+                    row('🐋', '遠古湖神鯨', '', '2,000'),
+                    row('🔥', '熔岩火龍魚', '營火河畔', '1,500'),
+                    row('🌌', '星河龍王', '9:30 營火時間', '900'),
+                    row('🤝', '河神大鯉魚', '營火河畔', '130'),
+                  ]),
+                  sec(t('⭐ 五星'), [row('🦈', '大白鯊', '船上', '230'), row('🎏', '皇帶魚', '船上・晚上', '230'), row('👑', '黃金鯉魚王', '', '400'), row('🦄', '彩虹獨角魚', '', '1,000')]),
+                  sec(t('⭐ 四星'), [row('🦭', '湖裡的小海豹', '船上', '60'), row('🐟', '翻車魚', '船上', '60'), row('🌸', '櫻花鉤吻鮭', '', '80'), `・${t('其他四星')}：${t('約 {n} 竿', { n: '100～250' })}`]),
+                  sec(t('💡 想多釣大魚'), [
+                    `・${t('⛵ 坐船釣')}`,
+                    `・${t('🔥 營火很旺時去河畔')}`,
+                    `・${t('🍲 吃「釣魚好運」料理（最多 ×2）')}`,
+                    `・${t('🌠 早晚 9:30 營火時間、釣魚大賽有限定魚')}`,
+                    `・${t('🐟 魚飼料：魚上鉤變快，同樣時間能多甩幾竿')}`,
+                  ]),
+                ].join('');
+              })(),
+              btn: t('👉 帶我去湖邊'),
+              go: 'lake_dock',
             },
             {
               q: t('🏆 釣魚排行在哪看？'),
@@ -264,7 +295,7 @@ export class HelpPanel {
       t('❓ 常見問題'),
       `<div class="help-faq">
         <div class="help-top"><button type="button" class="mini-btn" id="help-news">${t('📢 看更新公告')}</button><button type="button" class="mini-btn" id="help-manual-top">${t('📖 營地手冊')}</button></div>
-        ${faq.map((f, i) => `<div class="hf-row"><b class="hf-q">${f.q}</b><div class="hf-a">${f.a}</div>${f.btn && f.go ? `<button type="button" class="mini-btn hf-go" data-hgo="${i}">${f.btn}</button>` : ''}</div>`).join('')}
+        ${faq.map((f, i) => `<div class="hf-row${f.wide ? ' hf-wide' : ''}"><b class="hf-q">${f.q}</b><div class="hf-a">${f.a}</div>${f.btn && f.go ? `<button type="button" class="mini-btn hf-go" data-hgo="${i}">${f.btn}</button>` : ''}</div>`).join('')}
         <button type="button" class="help-manual-btn" id="help-manual">${t('📖 看營地手冊')}</button>
       </div>`,
       (body) => {

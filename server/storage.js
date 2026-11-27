@@ -148,12 +148,12 @@ async function write(file) {
  * 存一份資料。連續修改時延遲合併成一次（省 Upstash 的使用量）。
  * @param {number} delay 毫秒
  */
-export function save(file, data, delay = 2000) {
+export function save(file, data, delay = 2000, maxWait = MAX_WAIT) {
   pending.set(file, data);
   clearTimeout(timers[file]);
   // 一直有人在改（例如很多人在玩）時，最多等 MAX_WAIT 就一定寫一次，不會一直往後延
   firstAt[file] ??= Date.now();
-  const wait = Math.max(0, Math.min(delay, firstAt[file] + MAX_WAIT - Date.now()));
+  const wait = Math.max(0, Math.min(delay, firstAt[file] + maxWait - Date.now()));
   timers[file] = setTimeout(() => {
     delete firstAt[file];
     write(file);
