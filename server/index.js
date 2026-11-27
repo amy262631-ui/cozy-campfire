@@ -5795,7 +5795,7 @@ io.on('connection', (socket) => {
     lastBoat = now;
     wal.pc -= k.price;
     const st = BOAT_SLOTS[slot];
-    const b = { id: ++boatSeq, k: k.id, o: socket.id, on: player.name, ov: player.vid, r: Array(k.people).fill(null), p: new Map(), slot, x: st.x, z: st.z, ry: st.ry, until: now + BOAT_MS };
+    const b = { id: ++boatSeq, k: k.id, o: socket.id, on: player.name, ov: player.vid, r: Array(k.people).fill(null), p: new Map(), slot, x: st.x, z: st.z, ry: st.ry, until: now + (Number(process.env.BOAT_TEST_MS) || BOAT_MS) } // BOAT_TEST_MS：本機測試用短時間（Render 不要設）;
     b.r[0] = socket.id;
     b.p.set(socket.id, player);
     map.set(b.id, b);
@@ -5810,6 +5810,26 @@ io.on('connection', (socket) => {
     console.log(`[租船] ${player.name} ${k.zh}（分流 ${chan.ch}）`);
     boatSync();
     ack?.({ ok: true, boat: boatPublic(b), seat: 0, pc: wal.pc });
+  });
+  // ⏰ 作者 11/27：時間快到時船主可以續 10 分鐘（再付一次租金），船上的人不用下船
+  socket.on('boatExtend', (_d, ack) => {
+    const b = boatNow();
+    if (!b || !wal) return ack?.({ ok: false, reason: 'gone' });
+    if (b.o !== socket.id) return ack?.({ ok: false, reason: 'owner' });
+    const k = BOATS[b.k];
+    const now = Date.now();
+    if (b.until - now > 3 * 60 * 1000) return ack?.({ ok: false, reason: 'early' }); // 剩 3 分鐘以內才能續（不會一次疊很多）
+    if (wal.pc < k.price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
+    wal.pc -= k.price;
+    b.until = Math.max(b.until, now) + BOAT_MS;
+    const d = today();
+    d.boatExt ??= {};
+    d.boatExt[k.id] = (d.boatExt[k.id] ?? 0) + 1;
+    saveJson('players.json', players);
+    socket.emit('wallet', { pc: wal.pc, delta: -k.price, reason: 'boat' });
+    console.log(`[續船] ${player.name} ${k.zh}`);
+    boatSync();
+    ack?.({ ok: true, until: b.until, pc: wal.pc });
   });
   socket.on('boatJoin', (data = {}, ack) => {
     if (!player || roomId !== 'lake_dock') return ack?.({ ok: false, reason: 'place' });

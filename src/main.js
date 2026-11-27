@@ -3402,8 +3402,11 @@ async function init() {
   baitBtn.type = 'button';
   baitBtn.className = 'bait-btn';
   baitBtn.hidden = true;
-  baitBtn.addEventListener('click', (e) => {
+  baitBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
+    if (baitBtn._buy && !baitBag) {
+      if (!(await buyBait())) return;
+    }
     useBait();
   });
   document.getElementById('ui').appendChild(baitBtn);
@@ -3521,12 +3524,15 @@ async function init() {
     if (rb) rb.hidden = isOpen({ from: BOAT_FROM });
     placeBuff();
     const fishingNow = ['fish', 'boat'].includes(actions.state);
-    const btnOn = fishingNow && baitBag > 0 && isOpen({ from: BOAT_FROM });
+    // 🐟 作者 11/27：坐船的朋友走不到看板、小舖 → 釣魚時一直有「🐟 撒」按鈕；背包沒有魚飼料時按鈕變「買」（確認後買一包、直接撒）
+    const buyOnBoat = fishingNow && !baitBag && baitUntil <= Date.now() && isOpen({ from: BOAT_FROM });
+    const btnOn = fishingNow && (baitBag > 0 || buyOnBoat) && isOpen({ from: BOAT_FROM });
     baitBtn.hidden = !btnOn;
+    baitBtn._buy = buyOnBoat;
     bottleBtn.hidden = !fishingNow;
     bottleBtn.classList.toggle('up', btnOn);
     if (btnOn) {
-      const txt = `🐟<small>${t('撒')} ×${baitBag}</small>`;
+      const txt = buyOnBoat ? `🐟<small>${t('買')} ${FEED_PRICE}🌰</small>` : `🐟<small>${t('撒')} ×${baitBag}</small>`;
       if (baitBtn._t !== txt) (baitBtn._t = txt), (baitBtn.innerHTML = txt);
     }
     const left = baitUntil - Date.now();
@@ -3577,10 +3583,49 @@ async function init() {
     );
   };
   let boatSendT = 0;
+  // ⏰ 作者 11/27：船的時間快到了 → 船主問「再划 10 分鐘？還是回碼頭？」；坐別人船的人提醒一下
+  let boatAskedFor = 0; // 這段時間（until）已經問過了
+  const boatTimeAsk = () => {
+    const m = lake.boats.mine();
+    if (!m) return;
+    const left = m.d.until - Date.now();
+    if (left > 60 * 1000 || left <= 0 || boatAskedFor === m.d.until) return;
+    boatAskedFor = m.d.until;
+    if (!m.owner) return hud.toast(t('⏰ 船還剩 1 分鐘，時間到會划回碼頭'), 5000);
+    const k = BOAT_LIST.find((x) => x.id === m.d.k) ?? BOAT_LIST[0];
+    modal.open(
+      t('⏰ 船的時間快到了'),
+      `<div class="dex-note">${t('還剩大約 1 分鐘。要再划 10 分鐘嗎？船上的朋友不用下船。')}</div>
+      <div class="boat-pick"><button type="button" class="boat-card" data-ext><span class="bc-icon">${k.icon}</span><b>${t('再划 10 分鐘')}</b><em>🌰 ${k.price}</em></button>
+      <button type="button" class="boat-card" data-end><span class="bc-icon">🏁</span><b>${t('結束，回碼頭')}</b><small>${t('大家一起回到碼頭上')}</small></button></div>
+      <button type="button" class="mini-btn" data-feed>${t('🐟 順便買一包魚飼料 🌰 {n}', { n: FEED_PRICE })}${baitBag ? `（${t('背包裡 {n} 包', { n: baitBag })}）` : ''}</button>
+      <div class="shop-hint">${t('關掉的話，時間到會自己划回碼頭')}</div>`,
+      (body) => {
+        body.querySelector('[data-ext]')?.addEventListener('click', async () => {
+          const r = await net.request('boatExtend', {});
+          if (r?.ok) {
+            modal.close();
+            hud.toast(t('⛵ 再划 10 分鐘！'), 3000);
+          } else hud.toast(r?.reason === 'poor' ? t('松果不夠喔') : t('現在續不了，等一下再試'));
+        });
+        // 🐟 作者 11/27：續船時順便買魚飼料（買完視窗不關，還可以按續船）
+        const feedBtn = body.querySelector('[data-feed]');
+        feedBtn?.addEventListener('click', async () => {
+          if (await buyBait()) feedBtn.textContent = `${t('🐟 順便買一包魚飼料 🌰 {n}', { n: FEED_PRICE })}（${t('背包裡 {n} 包', { n: baitBag })}）`;
+        });
+        body.querySelector('[data-end]')?.addEventListener('click', async () => {
+          modal.close();
+          lake._leaveAsk = 0;
+          await net.request('boatLeave', {});
+        });
+      },
+    );
+  };
   /** 每幀：船主把船的位置送出去（一秒 10 次） */
   const boatTick = (dt) => {
     if (!actions.boat) return;
     if (roomMgr.current?.id !== 'lake_dock') return leaveBoatLocal();
+    boatTimeAsk();
 
     if (!actions.boat.owner) return;
     boatSendT -= dt;
