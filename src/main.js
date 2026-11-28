@@ -1765,7 +1765,9 @@ async function init() {
       <div class="dex-note">${t('🧂 做過的口味')}</div><div class="needs">${Object.entries(FLAVORS).map(([k, v]) => `<span class="need ${flavorsMade.has(k) ? 'ok' : ''}">${flavorsMade.has(k) ? t(v) : '？？？'}</span>`).join('')}</div>
       <div class="dex-note">${t('💀 黑暗料理（吃了臉會焦黑 😵）')}・${t('煮失敗 {n}/{m} 次 → 😵 灰頭土臉造型', { n: Math.min(pot.cnt?.dark ?? 0, SOOTY_AT), m: SOOTY_AT })}</div><div class="inv-grid">${DARK.map((d) => `<div class="inv-cell ${ck.has(`p.d_${d.id}`) ? '' : 'off'}"><i>${ck.has(`p.d_${d.id}`) ? d.icon : '❔'}</i><small>${ck.has(`p.d_${d.id}`) ? t(d.zh) : '？？？'}</small></div>`).join('')}</div>`;
   }
+  let potAt = 0; // 上次跟伺服器拿料理鍋資料的時間
   async function loadPot() {
+    potAt = Date.now();
     const res = await net.request('potInfo');
     if (res?.ok) {
       pot = res;
@@ -1828,6 +1830,9 @@ async function init() {
     label: t('🍲 料理'),
     title: () => t('🍲 營火料理 {n}／{total}', { n: DISHES.filter((d) => !d.month && cooked.has(d.id)).length, total: DISHES.filter((d) => !d.month).length }),
     render: () => {
+      // 🍡 作者 11/27「烤焦棉花糖數量一直卡住（4/10）」：上次停在自由料理／圖鑑，下次打開料理時直接顯示舊資料（只有切分頁才重拿）
+      //   → 打開時超過 5 秒沒更新就跟伺服器重拿一次（拿到會自己重畫）
+      if (cookView !== 'menu' && net.online && Date.now() - potAt > 5000) loadPot();
       if (cookView === 'pot') return cookTabs() + potHtml();
       if (cookView === 'book') return cookTabs() + bookHtml();
       const grill = atGrill();
@@ -3431,8 +3436,13 @@ async function init() {
     const right = Math.max(...row.map((r) => r.right));
     const h = row[0].height;
     const w = el.getBoundingClientRect().width || 80;
-    if (window.innerWidth - right > w + 26) el.style.top = `${Math.round(lastTop + (h - el.offsetHeight) / 2)}px`;
-    else el.style.top = `${Math.round(Math.max(...rects.map((r) => r.bottom)) + 6)}px`;
+    let top = window.innerWidth - right > w + 26 ? Math.round(lastTop + (h - el.offsetHeight) / 2) : Math.round(Math.max(...rects.map((r) => r.bottom)) + 6);
+    // 作者 11/27（電腦寬螢幕）：按鈕排成一排時，料理時間會放到右上角，剛好被「🌐 語言」「🎧 聲音」按鈕蓋住 → 放到它們下面
+    for (const id of ['mixer-toggle', 'lang-toggle']) {
+      const r = document.getElementById(id)?.getBoundingClientRect();
+      if (r && r.width && r.bottom > top && r.top < top + el.offsetHeight && r.left < window.innerWidth - 14 && r.right > window.innerWidth - 14 - w) top = Math.round(r.bottom + 6);
+    }
+    el.style.top = `${top}px`;
     el.style.right = '14px';
     el.style.left = 'auto';
   };
@@ -3538,18 +3548,35 @@ async function init() {
       if (baitBtn._t !== txt) (baitBtn._t = txt), (baitBtn.innerHTML = txt);
     }
     const left = baitUntil - Date.now();
-    const chipOn = fishingNow && left > 0 && !document.getElementById('fish-card')?.classList.contains('show');
+    // 😋 作者 11/27「吃料理的時間沒看到了，只有魚餌剩下時間」：釣魚時料理效果也一起顯示在這條（右上角的小字太不明顯）
+    const fb = activeBuff(buff);
+    const mmss = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
+    const chipOn = fishingNow && (left > 0 || !!fb) && !document.getElementById('fish-card')?.classList.contains('show');
     baitChip.hidden = !chipOn;
+    // 料理效果已經寫在這條裡：右上角那顆小的先藏起來（手機上兩個疊在一起）
+    const bc = document.getElementById('buff-chip');
+    if (bc) bc.classList.toggle('dup-hide', chipOn && !!fb);
     if (chipOn) {
-      baitChip.textContent = t('🐟 飼料 {t}・魚上鉤比較快', { t: `${Math.floor(left / 60000)}:${String(Math.floor((left % 60000) / 1000)).padStart(2, '0')}` });
-      // 營火河畔的「火多旺」小條在的話排在它下面
+      const parts = [];
+      if (fb) parts.push(`${fb.icon} ${t(fb.zh)} ${mmss(fb.until - Date.now())}`);
+      // 📱 作者 11/28「平板、手機位置也要留意」：手機（窄或橫放矮）只寫「🐟 飼料 9:57」，短一點不擋畫面
+      const small = window.innerWidth < 600 || window.innerHeight < 500;
+      if (left > 0) parts.push(small ? `🐟 ${t('飼料')} ${mmss(left)}` : t('🐟 飼料 {t}・魚上鉤比較快', { t: mmss(left) }));
+      baitChip.textContent = parts.join('　');
+      // 📌 作者 11/28（電腦）：飼料這條會上上下下（原本有提示跳出來就往下躲，有時候躲到浮標、釣魚按鈕上）
+      //   → 固定在上方活動提示那幾行的正下方、靠左對齊（不跟著提示跑，不擋畫面中間）
       const fc = document.querySelector('.river-fire');
       let y = belowHud();
-      if (fc && !fc.hidden) y = Math.round(fc.getBoundingClientRect().bottom + 6);
-      const ts = document.getElementById('toasts');
-      const tr = ts?.children.length ? ts.getBoundingClientRect() : null;
-      if (tr && tr.top < y + 30) y = Math.max(y, Math.round(tr.bottom + 6));
-      baitChip.style.top = `${y}px`;
+      if (fc && !fc.hidden) y = Math.max(y, Math.round(fc.getBoundingClientRect().bottom + 6)); // 營火河畔的「火多旺」小條在的話排在它下面
+      const ref = ['event-line', 'today'].map((id) => document.getElementById(id)).find((e) => e && !e.hidden && e.offsetParent);
+      const x = ref ? Math.max(8, Math.round(ref.getBoundingClientRect().left)) : 14;
+      if (baitChip._y !== y || baitChip._x !== x) {
+        baitChip._y = y;
+        baitChip._x = x;
+        baitChip.style.top = `${y}px`;
+        baitChip.style.left = `${x}px`;
+        baitChip.style.transform = 'none';
+      }
     }
   };
   const fmtLeft = (ms) => t('{m} 分 {s} 秒', { m: Math.floor(ms / 60000), s: Math.floor((ms % 60000) / 1000) });
@@ -6207,10 +6234,42 @@ ${t('點連結會直接出現在我旁邊，免安裝打開就能玩：')}`,
   shopPanel.onBait = async () => {
     if (await buyBait()) shopPanel.refresh?.();
   };
-  shopPanel.onNeedPass = () => {
-    hud.toast(t('🎫 這是月票限定，有月票才能買'));
-    openPass();
+  // 🎫 作者 11/28：沒有月票的人也能點月票商品「先看樣子」（看了才會想買），視窗裡的按鈕是「🎫 看月票」
+  shopPanel.onNeedPass = async (id, kind) => {
+    if (!id) {
+      hud.toast(t('🎫 這是月票限定，有月票才能買'));
+      return openPass();
+    }
+    let info = null;
+    try {
+      if (kind === 'look') {
+        const o = OUTFIT_BY_ID[id];
+        const sp = profile?.species ?? 0;
+        const lk = { fur: profile?.fur ?? 0, species: sp, tail: profile?.tail || SPECIES_TAIL[sp], ears: profile?.ear || SPECIES_EARS[sp] };
+        const img = snapshot(`wear:${id}:${sp}:${lk.fur}:${lk.tail}:${lk.ears}`, () => {
+          const ch = new ProceduralFox(lk);
+          ch.setOutfit({ [o.slot]: id });
+          ch.root.rotation.y = o.slot === 'clip' ? -0.6 : 0.45;
+          const g = new THREE.Group();
+          g.add(ch.root);
+          return g;
+        });
+        const x = shopPanel.passMonth?.looks?.find((y) => y.id === id);
+        info = { icon: o?.icon, name: t(o?.zh ?? ''), img, price: x?.price ?? 0 };
+      } else {
+        info = shopItemInfo(id, 0);
+        const x = shopPanel.passMonth?.furn?.find((y) => y.id === id);
+        if (x) info.price = x.price;
+      }
+    } catch {
+      /* 畫不出來就只顯示圖示 */
+    }
+    if (!info) return openPass();
+    const go = await confirmBuy.ask({ ...info, title: t('👀 月票商品'), desc: `🌰 ${info.price}・${t('🎫 月票限定：有月票的人才能用松果買，買了永久是你的')}`, yes: t('🎫 看月票') });
+    if (go) openPass();
   };
+  shopPanel.onOpenPass = () => openPass();
+  shopPanel.passInfo = () => ({ active: !!passState?.active, tier: passState?.tier ?? null, days: Math.max(0, Math.ceil(((passState?.until ?? 0) - Date.now()) / 86400000)) });
 
   // ---------- 👫 好友、💌 密頻、✉️ 聯絡作者 ----------
   let friendView = null; // 'list' | { hid } | 'support'（收到新訊息時重畫用）

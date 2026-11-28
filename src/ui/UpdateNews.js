@@ -57,6 +57,27 @@ export const NEWS_TENTS = {
   ],
 };
 
+/**
+ * 📰 作者 11/28：韓國 MetaMoa 的線上雜誌「Moazine」專訪了營地 → 放進公告，讓玩家知道營地被報導了
+ *   連結、徽章都是 MetaMoa 給的（徽章是他們網站上的圖片，點了會連到那篇專訪）
+ */
+const PRESS_URL = 'https://metamoa.com/moazine/mistforest';
+const PRESS_BADGE = `<a class="upd-badge" href="${PRESS_URL}?ref=badge&amp;utm_source=badge&amp;utm_medium=referral&amp;utm_campaign=moazine-badge" target="_blank" rel="noopener"><img src="https://metamoa.com/moazine/badge-dark.svg" alt="모아진에 실린 공간" width="195" height="40" onerror="this.parentNode.style.display='none'"></a>`; // 圖片載不到就藏起來（上面還有文字連結）
+export const pressNewsOn = () => isOpen({ from: '2026-11-28' });
+export const NEWS_PRESS = {
+  id: '2026-11-28',
+  title: () => t('📰 營地被韓國雜誌報導了！'),
+  items: () => [
+    {
+      pic: '📰',
+      title: t('Moazine 專訪：迷霧森林露營地'),
+      text: `${t('韓國的 MetaMoa 線上雜誌「Moazine」寫了一篇營地的專訪，標題是「不說話，只是看著火光也沒關係」。')}<br><a class="upd-link" href="${PRESS_URL}" target="_blank" rel="noopener">${t('👉 看報導（韓文，上方可以切換英文）')}</a>${PRESS_BADGE}`,
+    },
+    { pic: '🤝', title: t('文章裡寫到的'), text: t('大家一起添柴、烤棉花糖、湖邊釣魚、布置帳篷、森林傳說，還有陌生人一起把河神大鯉魚拉上來的那一刻') },
+    { pic: '🔥', title: t('謝謝每一位旅人'), text: t('營地 11 月初開門，到現在已經有好幾千次的拜訪。疲憊的時候，就來營火旁坐一下吧') },
+  ],
+};
+
 /** 🎄 12/1 聖誕更新（作者 11/16：精靈家具、小精靈造型、每日限定也跟聖誕一起發）。12/1 起（台北時間）才出現；?xmas=1 可以先看 */
 const XMAS_AT = Date.parse('2026-11-27T00:00:00+08:00'); // 作者 11/19：提早到 11/27
 export const xmasNewsOn = () => Date.now() >= XMAS_AT || isXmas();
@@ -196,6 +217,7 @@ export class UpdateNews {
 
   /** 現在要顯示的公告 */
   get news() {
+    if (pressNewsOn()) return NEWS_PRESS; // 📰 11/28 起：營地被報導了（看過一次就換回聖誕那則的順序）
     if (xmasNewsOn()) return NEWS_XMAS; // 🎄 12/1 起先給聖誕這則
     if (news1122On()) return NEWS_1122; // 🏞️ 11/22 起
     if (news1120On()) return NEWS_1120; // 🗓️ 11/20 起
@@ -226,7 +248,7 @@ export class UpdateNews {
 
   /** 全部的公告（新的在前面）：月票開了才有月票那份 */
   get pages() {
-    return [...(xmasNewsOn() ? [NEWS_XMAS] : []), ...(news1122On() ? [NEWS_1122] : []), ...(news1120On() ? [NEWS_1120] : []), NEWS_TENTS, ...(this.payOn() ? [NEWS_PASS] : []), NEWS, ...NEWS_OLD];
+    return [...(pressNewsOn() ? [NEWS_PRESS] : []), ...(xmasNewsOn() ? [NEWS_XMAS] : []), ...(news1122On() ? [NEWS_1122] : []), ...(news1120On() ? [NEWS_1120] : []), NEWS_TENTS, ...(this.payOn() ? [NEWS_PASS] : []), NEWS, ...NEWS_OLD];
   }
 
   /** page：0＝最新；往前翻看以前的更新 */

@@ -8066,3 +8066,31 @@ body.touch :is(.home-tools.ls-grid, .home-tools.ls-row) > .guest-tools.stacked:n
 .pot-donebar > div { flex: 1; text-align: left; }
 .pot-donebar b { display: block; }
 .pot-donebar small { opacity: 0.8; }
+
+/* 🎫 作者 11/28：小舖「月票」分頁最上面的購買／狀態卡 */
+.pass-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0 10px; padding: 10px 12px; border-radius: 14px; background: linear-gradient(135deg, rgba(255, 170, 80, 0.22), rgba(150, 110, 255, 0.2)); border: 1px solid rgba(255, 210, 140, 0.45); }
+.pass-top b { font-size: 15px; }
+.pass-top small { flex: 1 1 100%; opacity: 0.85; font-size: 12px; }
+.pass-top .build-act { margin-left: auto; }
+.pass-top .pass-top-buy { background: linear-gradient(135deg, #ffb35c, #f08a3c); color: #3a1d0c; font-weight: 700; border: 0; }
+.pass-top.on { background: rgba(255, 220, 150, 0.12); }
+.buff-chip.dup-hide { visibility: hidden; } /* 釣魚時料理時間已經顯示在飼料那條 */
+/* 📰 公告裡的報導連結、MetaMoa 徽章 */
+.upd-item .upd-link { display: inline-block; margin-top: 6px; color: #ffd27a; font-weight: 700; text-decoration: underline; }
+.upd-item .upd-badge { display: block; margin-top: 8px; width: 195px; max-width: 100%; }
+.upd-item .upd-badge img { display: block; width: 195px; max-width: 100%; height: auto; }
+/* 📌 告示牌置頂（作者 11/28） */
+.notice-pins { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.notice-pin { padding: 10px 12px; border-radius: 12px; background: linear-gradient(135deg, rgba(255, 196, 110, 0.22), rgba(255, 150, 90, 0.12)); border: 1px solid rgba(255, 210, 140, 0.55); color: #fff3e0; font-size: 13.5px; line-height: 1.5; text-align: left; }
+.notice-pin .np-head { margin-bottom: 4px; font-size: 14.5px; }
+.notice-pin .np-tag { display: inline-block; margin-right: 6px; padding: 0 7px; border-radius: 999px; background: #ffb35c; color: #3a1d0c; font-size: 11.5px; font-weight: 700; vertical-align: 1px; }
+.notice-pin a { color: #ffd27a; font-weight: 700; text-decoration: underline; }
+.notice-pin .pin-badge { display: block; margin-top: 8px; width: 195px; max-width: 100%; text-decoration: none; }
+.notice-pin .pin-badge img { display: block; width: 195px; max-width: 100%; height: auto; }
+/* 📱 手機：置頂縮成「標題＋看報導」兩行，留言多留一點位置（作者 11/28：看留言的地方不要被擋） */
+@media (max-width: 600px), (max-height: 520px) {
+  .notice-pin { padding: 7px 10px; font-size: 13px; }
+  .notice-pin .np-head { margin-bottom: 2px; font-size: 13.5px; }
+  .notice-pin .np-desc, .notice-pin .pin-badge { display: none; }
+  .notice-pins { margin-bottom: 6px; }
+}

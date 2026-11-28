@@ -9,6 +9,19 @@ export const NOTE_COLORS = ['#fff3b0', '#ffd6dc', '#d4f0d0', '#d6e6ff'];
 const NOTE_MAX = 60;
 const NOTE_COOLDOWN = 20000;
 
+/**
+ * 📌 作者 11/28：告示牌最上面的「置頂」（公告會被新的洗掉，這裡一直都在）
+ *   要加新的置頂：往這個陣列加一筆（html 可以放連結；新的放最前面）
+ */
+const PRESS_URL = 'https://metamoa.com/moazine/mistforest';
+const PINNED = () => [
+  {
+    icon: '📰',
+    title: t('營地被韓國雜誌報導了！'),
+    html: `<span class="np-desc">${t('韓國的 MetaMoa 線上雜誌「Moazine」寫了一篇營地的專訪：「不說話，只是看著火光也沒關係」。')}<br></span><a href="${PRESS_URL}" target="_blank" rel="noopener">${t('👉 看報導（韓文，上方可以切換英文）')}</a><a class="pin-badge" href="${PRESS_URL}?ref=badge&amp;utm_source=badge&amp;utm_medium=referral&amp;utm_campaign=moazine-badge" target="_blank" rel="noopener"><img src="https://metamoa.com/moazine/badge-dark.svg" alt="모아진에 실린 공간" width="195" height="40" onerror="this.parentNode.style.display='none'"></a>`,
+  },
+];
+
 /** 幾分鐘前／幾小時前 */
 function ago(at) {
   const m = Math.floor((Date.now() - at) / 60000);
@@ -52,6 +65,9 @@ export class NoticePanel {
           </div>
 
           <div class="notice-page" data-page="notes">
+            <div class="notice-pins">${PINNED()
+              .map((p) => `<div class="notice-pin"><div class="np-head"><span class="np-tag">${t('📌 置頂')}</span>${p.icon} <b>${p.title}</b></div><div class="np-body">${p.html}</div></div>`)
+              .join('')}</div>
             <form class="notice-form" id="notice-form" autocomplete="off">
               <textarea id="notice-text" maxlength="${NOTE_MAX}" rows="2" placeholder="${t('留一句話給之後來烤火的人⋯')}"></textarea>
               <div class="notice-form-row">

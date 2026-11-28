@@ -109,13 +109,29 @@ export function buildClip(kind) {
 }
 
 /** 放到頭的右前側（耳朵前面一點），頭髮越蓬放越外面；戴帽子時往下一點避開帽簷 */
-export function clipFit(g, hair = '', hat = false) {
+export function clipFit(g, hair = '', hat = false, hairObj = null) {
   const vol = hair ? (HAIR_VOLUME[hair] ?? 0.04) : 0;
   const dir = new THREE.Vector3(hat ? 0.86 : 0.72, hat ? 0.05 : 0.48, hat ? 0.4 : 0.5).normalize();
   // 頭是 0.37 的球、縮放 [1.1, 0.95, 1]
   const R = 0.37;
   const p = new THREE.Vector3(dir.x * R * 1.1, dir.y * R * 0.95, dir.z * R);
-  const out = 0.03 + vol * 1.2 + (hair ? 0.025 : 0);
+  let out = 0.03 + vol * 1.2 + (hair ? 0.025 : 0);
+  // 📎 作者 11/28「髮夾跟男生短髮有點距離」：短髮（刺刺頭⋯）那個位置沒什麼頭髮，照蓬度推出去就浮在空中
+  //   → 有頭髮模型的話，從頭的中心往那個方向找頭髮的表面，貼在表面上；那裡沒頭髮就貼在頭上
+  if (hairObj?.parent) {
+    const head = hairObj.parent;
+    head.updateWorldMatrix(true, true);
+    const o0 = head.localToWorld(new THREE.Vector3());
+    const o1 = head.localToWorld(dir.clone());
+    const rc = new THREE.Raycaster(o0, o1.sub(o0).normalize(), 0, 5);
+    let far = 0;
+    for (const h of rc.intersectObject(hairObj, true)) {
+      if (!h.object.visible) continue;
+      far = Math.max(far, head.worldToLocal(h.point.clone()).length()); // 頭的座標裡離中心多遠
+    }
+    const base = p.length();
+    out = far > base ? far - base + 0.012 : 0.02; // 有頭髮：貼在最外層頭髮上；沒有：貼在頭上
+  }
   p.addScaledVector(dir, out);
   g.position.copy(p);
   g.lookAt(p.clone().add(dir));

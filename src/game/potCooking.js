@@ -84,7 +84,7 @@ export const unlockLabel = (u, tr = (s) => s) =>
     : u.crop
       ? tr('收成{crop} {n} 個', { crop: tr(materialOf(u.crop)?.zh ?? ''), n: u.n })
       : u.k === 'burnt'
-        ? tr('把棉花糖烤焦 {n} 次', { n: u.n })
+        ? tr('把棉花糖烤成黑炭 {n} 次（烤到全黑才算）', { n: u.n }) // 作者 11/27：「有點焦」不算，寫清楚
         : tr('烤棉花糖 {n} 次', { n: u.n });
 
 export const POT_RECIPES = [

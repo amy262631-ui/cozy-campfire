@@ -759,7 +759,7 @@ export class ProceduralFox {
     const co = OUTFIT_BY_ID[wear.clip];
     if (co?.kind === 'clip') {
       const g = mergeStatic(buildClip(co.clip)); // ⚡ 雪花有 20 多個小零件，合成幾塊
-      clipFit(g, OUTFIT_BY_ID[wear.hair]?.hair ?? (wear.hair ? 'x' : ''), !!wear.head);
+      clipFit(g, OUTFIT_BY_ID[wear.hair]?.hair ?? (wear.hair ? 'x' : ''), !!wear.head, this.outfit.hair);
       g.traverse((o) => o.isMesh && (o.castShadow = true));
       this.head.add(g);
       this.outfit.clip = g;
