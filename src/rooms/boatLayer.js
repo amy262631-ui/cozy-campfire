@@ -33,6 +33,15 @@ export function createBoatLayer(group, waterY) {
     });
     mesh.rotation.order = 'YXZ'; // 先轉船頭方向，再前後、左右晃（碰撞搖晃用）
     // wob：碰撞搖晃（只有畫面，不動位置）；edge：上一張有沒有貼著湖邊／碼頭
+    // 🚣 別人的比賽船：半透明（大家擠在一起出發時看得到自己的船）
+    if (d.race && d.o !== selfId)
+      mesh.traverse((o) => {
+        if (!o.isMesh) return;
+        o.material = o.material.clone();
+        o.material.transparent = true;
+        o.material.opacity = 0.5;
+        o.material.depthWrite = false;
+      });
     const b = { d, mesh, x: d.x, z: d.z, ry: d.ry, bob: Math.random() * 6, canopy, wob: null, edge: false, px: d.x, pz: d.z, spd: 0 };
     boats.set(d.id, b);
     return b;
@@ -133,7 +142,7 @@ export function createBoatLayer(group, waterY) {
       const c = centerFromSeat(b.d.k, pos.x, pos.z, ry, 0);
       keepOnLake(c, k.r * 0.6);
       for (const o of boats.values()) {
-        if (o === b) continue;
+        if (o === b || b.d.race || o.d.race) continue; // 🚣 比賽船互相穿過、也不撞租的船
         const rr = (BOATS[o.d.k]?.r ?? 1) * 0.75 + k.r * 0.75;
         const dx = c.x - o.x;
         const dz = c.z - o.z;
@@ -203,6 +212,7 @@ export function createBoatLayer(group, waterY) {
         for (let j = i + 1; j < list.length; j++) {
           const a = list[i];
           const o = list[j];
+          if (a.d.race || o.d.race) continue; // 🚣 比賽船不晃
           const rr = (BOATS[a.d.k]?.r ?? 1) * 0.75 + (BOATS[o.d.k]?.r ?? 1) * 0.75 + 0.06;
           const dx = a.x - o.x;
           const dz = a.z - o.z;

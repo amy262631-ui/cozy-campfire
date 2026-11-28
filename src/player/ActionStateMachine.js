@@ -298,6 +298,7 @@ export class ActionStateMachine {
     r.pose = null;
     r.faceAngle = null;
     r.speedMul = 1;
+    r.fixedSpeed = undefined;
 
     // 坐著時一移動就起身
     const fishingLocked = this.state === 'fish' && this.room?.fishing?.lockMove;
@@ -442,6 +443,11 @@ export class ActionStateMachine {
         r.state = 'boat';
         r.speedMul = 1.15;
         if (!this.boat.owner) r.locked = true;
+        // 🚣 划船競速：出發前不能動；出發後大家一樣快（走路跑步、吃料理加速都不算）
+        if (this.boat.race) {
+          if (Date.now() < this.boat.race.goAt) r.locked = true;
+          else r.fixedSpeed = this.boat.race.speed;
+        }
       }
       if (s) {
         p.y = s.y;
@@ -454,7 +460,9 @@ export class ActionStateMachine {
       }
     }
     // 👟 吃了「腳步輕快」的料理：走路變快（騎腳踏車時取比較快的那個，不疊加）
-    if (this.buffSpeed > 1) r.speedMul = Math.max(r.speedMul ?? 1, this.buffSpeed);
+    if (r.fixedSpeed) {
+      /* 🚣 比賽中不吃加速 */
+    } else if (this.buffSpeed > 1) r.speedMul = Math.max(r.speedMul ?? 1, this.buffSpeed);
     else if (this.buffSpeed < 1) r.speedMul = (r.speedMul ?? 1) * this.buffSpeed; // 😵 黑暗料理後遺症：走路慢一點
     return r;
   }

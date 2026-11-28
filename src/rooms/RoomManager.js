@@ -83,9 +83,9 @@ export class RoomManager {
    * @param {string} id
    * @param {(id: string) => Promise<any>} [network] 回傳伺服器的房間資料
    */
-  async switchTo(id, network) {
+  async switchTo(id, network, { force = false } = {}) {
     const target = this.rooms[id];
-    if (!target || this.busy || target === this.current) return;
+    if (!target || this.busy || (target === this.current && !force)) return; // force：同一個房間也重進（別人帳篷 → 我的帳篷）
     this.busy = true;
     const from = this.current.id;
 

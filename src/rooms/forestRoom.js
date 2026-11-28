@@ -17,7 +17,8 @@ import { isXmas } from '../game/season.js';
 import { buildShop, nearShop, SHOP_FRONT, SHOP_CLEARING } from './shop.js';
 import { buildCampExtras, createTreasures, EXTRA_CLEARINGS } from './campExtras.js';
 import { buildFireSeats, SEAT_LIFT } from './fireSeats.js';
-import { isHolEgg, createTrashLayer } from './trashLayer.js';
+import { pickHint, pickPrompt, createTrashLayer } from './trashLayer.js';
+import { createXevBox, createSnowman } from './xmasEvent3d.js';
 import { EMOTE_IDS } from '../social/emotes.js';
 import { t } from '../i18n/i18n.js';
 
@@ -610,6 +611,10 @@ export function createForestRoom() {
   xmasCheck();
   setInterval(xmasCheck, 10 * 60 * 1000); // 跨日（12/1、1/7）不用重新整理也會換
 
+  // ---------- 🎄 12/24～27 聖誕 4 天活動：樹下自己的禮物盒、大家一起堆的大雪人（main.js 照伺服器的資料 set） ----------
+  const xevBox = createXevBox(group, wishTree.pos);
+  const snowman = createSnowman(group, world);
+
   // ---------- 整點小活動的道具（燈籠賽跑、金松果） ----------
   const mini = buildMiniLayer();
   group.add(mini.group);
@@ -663,6 +668,8 @@ export function createForestRoom() {
     nearPot: extras.nearPot,
     treasures,
     trash,
+    xevBox,
+    snowman,
     /** 手機的 F 按鈕：在水邊變成「釣魚」、釣魚中變成「拉竿」 */
     roastHint(actions) {
       if (river.aiming) return ['🪨', t('丟')];
@@ -783,6 +790,18 @@ export function createForestRoom() {
         actions.onTree?.();
         return true;
       }
+      // 🎄 樹下的禮物盒、大雪人（雪人在祈福處旁邊，比石塔優先）
+      if (name === 'interact' && actions.state === 'free' && !carrying) {
+        const pos = actions.player.position;
+        if (xevBox.near(pos)) {
+          actions.onXevBox?.();
+          return true;
+        }
+        if (snowman.canBuild && snowman.near(pos)) {
+          actions.onSnowPush?.();
+          return true;
+        }
+      }
       if (name === 'interact' && actions.state === 'free') {
         const pos = actions.player.position;
         const ci = cairnGarden.nearCairn(pos);
@@ -824,8 +843,10 @@ export function createForestRoom() {
       const p0 = actions.player.position;
       if (seatedOn()) return ['🪵', t('添柴')];
       if (!carrying && fireSeats.near(p0, 0.75)) return ['🪵', t('坐下')];
+      if (!carrying && xevBox.near(p0)) return ['🎁', t('拆禮物')];
+      if (!carrying && snowman.canBuild && snowman.near(p0)) return ['⛄', t('堆雪人')];
       if (!carrying && treasures.near(p0)) return ['✨', t('撿寶藏')];
-      if (!carrying && trash.near(p0)) return isHolEgg(trash.near(p0).item) ? ['🥚', t('撿起來')] : ['♻️', t('撿起來')];
+      if (!carrying && trash.near(p0)) return pickHint(trash.near(p0).item);
       if (extras.nearBin(p0)) return ['♻️', t('回收')];
       if (extras.nearMuseum(p0)) return ['🏛️', t('標本櫃')];
       if (extras.nearPot(p0)) return ['🍲', t('料理')];
@@ -855,8 +876,10 @@ export function createForestRoom() {
       if (river.nearSign(p0)) return t('<kbd>E</kbd> 🏆 看排行（打水漂、釣魚）');
       if (!carrying && river.nearPile(p0)) return t('<kbd>E</kbd> 🪨 撿扁石頭打水漂');
       if (!carrying && river.nearBank(p0) && pond.spotAt(p0)) return actions.compact ? t('<kbd>F</kbd> 釣魚　<kbd>E</kbd> 🦆 餵小鴨') : t('<kbd>F</kbd> 坐下釣魚　<kbd>E</kbd> 🦆 餵小鴨');
+      if (!carrying && xevBox.near(p0)) return t('<kbd>E</kbd> 🎁 拆開給你的聖誕禮物');
+      if (!carrying && snowman.canBuild && snowman.near(p0)) return t('<kbd>E</kbd> ⛄ 一起堆大雪人');
       if (!carrying && treasures.near(p0)) return t('<kbd>E</kbd> ✨ 撿起閃閃發光的東西');
-      if (!carrying && trash.near(p0)) return isHolEgg(trash.near(p0).item) ? t('<kbd>E</kbd> 🥚 撿起彩蛋') : t('<kbd>E</kbd> ♻️ 撿起垃圾');
+      if (!carrying && trash.near(p0)) return pickPrompt(trash.near(p0).item);
       if (extras.nearBin(p0)) return t('<kbd>E</kbd> ♻️ 把垃圾丟進回收桶');
       if (extras.nearMuseum(p0)) return t('<kbd>E</kbd> 🏛️ 營地標本櫃・捐出採集到的東西');
       if (extras.nearPot(p0)) return t('<kbd>E</kbd> 🍲 營火料理');
@@ -882,6 +905,8 @@ export function createForestRoom() {
       if (actions) lastActions = actions;
       extras.update(dt, t);
       treasures.update(dt, t, actions?.player?.position);
+      xevBox.update(dt, t);
+      snowman.update(dt, t);
       shrine.update(dt, t);
       cairnGarden.update(dt, t);
       wishTree.update(dt, t);

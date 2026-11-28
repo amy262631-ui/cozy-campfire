@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeStatic } from '../scene/mergeStatic.js';
 import { makeResolver, makeSign, lowpoly } from './shared.js';
+import { buildMiniLayer } from './miniLayer.js';
 import { seededRandom } from '../scene/textures.js';
 import { GATHER_SPOTS, MIST_R } from '../game/gathering.js';
 import { createGatherLayer, buildDecor } from './gatherLayer.js';
@@ -167,6 +168,10 @@ export function createMistForestRoom() {
   // ---------- 採集點（每個人各自的） ----------
   const gather = createGatherLayer(group, 'mist_forest', rand);
 
+  // ✨ 找金松果：迷霧森林也會冒（作者 11/28）
+  const mini = buildMiniLayer();
+  group.add(mini.group);
+
   const resolveCollision = makeResolver(colliders, { type: 'circle', r: MIST_R });
 
   return {
@@ -183,6 +188,7 @@ export function createMistForestRoom() {
     audio: { fire: 0, wind: 0.7, ambient: 1, water: 0, music: 0.45, song: 0 },
     resolveCollision,
     gather,
+    mini,
 
     onAction(name, actions) {
       if (actions.state !== 'free') return false;
@@ -221,6 +227,7 @@ export function createMistForestRoom() {
       moteMat.color.setHex(night ? 0xd8ff7a : 0xe8f4ff);
       moteMat.opacity = night ? 0.6 + Math.sin(time * 2) * 0.3 : 0.4;
       gather.update(dt, time, actions);
+      mini.update(dt, time);
     },
   };
 }

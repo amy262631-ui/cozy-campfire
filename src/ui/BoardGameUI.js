@@ -70,6 +70,10 @@ export class BoardGameUI {
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
     net.on('bgame', (v) => this.#onGame(v));
+    // 🫧 作者 11/28「離開回來又跑出這個畫面，但是玩家走了」：切到背景／走開時漏收了結束的通知 → 回到畫面就問一次
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && this.g) this.peek();
+    });
     this._key = '';
   }
 
@@ -95,7 +99,7 @@ export class BoardGameUI {
 
   #onGame(v) {
     if (!v || v.state === 'gone') {
-      if (!v || !this.g || v.id === this.g.id) {
+      if (!v || !this.g || v.id == null || v.id === this.g.id) { // 問伺服器回來「現在沒有在玩」（沒有 id）也要收掉
         this.g = null;
         this.#clearProps();
       }
@@ -114,6 +118,7 @@ export class BoardGameUI {
     if (v.state === 'invite' && (!prev || prev.id !== v.id) && v.host.id !== me.id && me.sitting && !this.off) this.#sfx('ding');
     if (v.state === 'play' && v.turn === me.id && prev?.turn !== me.id) this.#sfx('ding');
     if (v.game === 'frog' && prev?.id === v.id && (v.holes ?? []).some((h, i) => h === me.id && prev.holes?.[i] !== me.id)) this.#sfx('tap'); // 我戳了一下
+    if (v.state === 'done' && (prev?.state !== 'done' || prev?.id !== v.id)) this._doneAt = Date.now();
     if (v.state === 'done' && prev?.state !== 'done') {
       if (inIt) this.#sfx('ding');
       const gain = v.gain?.[me.id];
@@ -403,6 +408,15 @@ export class BoardGameUI {
       if (performance.now() - this.sentAt > 250) this.#sendBlow(false);
       const bar = this.el.querySelector('.bg-meter i');
       if (bar) bar.style.width = `${Math.min(100, this.mySize * 100)}%`;
+    }
+    // 🫧 卡住保險：倒數到 0 之後 4 秒還沒收到下一步、或結果已經放超過 20 秒（伺服器 15 秒就收掉）→ 跟伺服器確認一次（最多 5 秒問一次）
+    if (g && me.inForest && performance.now() - (this._peekAt ?? -1e9) > 5000) {
+      const now = Date.now();
+      const stale = (g.state !== 'done' && g.endsAt && now > g.endsAt + 4000) || (g.state === 'done' && now - (this._doneAt ?? now) > 20000);
+      if (stale) {
+        this._peekAt = performance.now();
+        this.peek();
+      }
     }
     // 小視窗：內容變了才重畫（倒數秒數也算）
     const left = g?.endsAt && g.state !== 'done' ? Math.max(0, Math.ceil((g.endsAt - Date.now()) / 1000)) : 0; // 結束後不再倒數（不然每秒重畫，青蛙動畫一直重來）

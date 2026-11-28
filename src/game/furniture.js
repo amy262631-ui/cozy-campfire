@@ -3278,13 +3278,14 @@ export function buildFurniture(id, opts = {}) {
     case 'q_tro_river':
     case 'q_tro_game':
     case 'q_tro_friend':
+    case 'q_tro_xmas':
     case 'q_trophy': {
       // 🏆 任務獎盃（作者 11/22：要多幾種）：同一個杯子，顏色和杯子上面的小圖案不一樣
       const TRO = {
         q_trophy: [0xf2c14a, 'seal'], q_tro_silver: [0xd4d8de, 'star'], q_tro_heart: [0xf2a8b4, 'heart'], q_tro_fish: [0x7cc8de, 'fish'],
         q_tro_garden: [0x9ccf72, 'carrot'], q_tro_hen: [0xf6ead2, 'egg'], q_tro_leaf: [0x7fbf6a, 'leaf'], q_tro_duck: [0xf6d84a, 'duck'],
         q_tro_cook: [0xd8935a, 'pan'], q_tro_camp: [0xf2a050, 'flame'], q_tro_clean: [0x8fd0c0, 'broom'], q_tro_eggfest: [0xf3b6d0, 'pegg'], q_tro_fishfest: [0x5a9ad8, 'rod'], q_tro_cookday: [0xf0c070, 'pot'],
-        q_tro_forest: [0xa8d088, 'mush'], q_tro_river: [0x9ab8c8, 'stone'], q_tro_game: [0xc8a0e0, 'dice'], q_tro_friend: [0xf8b8a8, 'letter'],
+        q_tro_forest: [0xa8d088, 'mush'], q_tro_river: [0x9ab8c8, 'stone'], q_tro_game: [0xc8a0e0, 'dice'], q_tro_friend: [0xf8b8a8, 'letter'], q_tro_xmas: [0xe05a4a, 'xtree'],
       };
       const [cc, top] = TRO[id] ?? TRO.q_trophy;
       const cup = mat(cc, { metalness: 0.25, roughness: 0.35 });
@@ -3346,6 +3347,10 @@ export function buildFurniture(id, opts = {}) {
         const dc = box(0.06, 0.06, 0.06, mat(0xffffff), 0, y, 0);
         dc.rotation.set(0.4, 0.6, 0.2);
         for (const [dx, dy] of [[0, 0]]) ball(0.009, mat(0xd8443a), dx, y + 0.035, dy);
+      } else if (top === 'xtree') {
+        // 🎄 聖誕交換禮物：小聖誕樹＋金星
+        add(new THREE.ConeGeometry(0.045, 0.09, 8), mat(0x2f8a4a), 0, y, 0);
+        stand(star(0.022), 0.01, mat(0xf2c14a), 0, y + 0.06, 0);
       } else if (top === 'letter') {
         box(0.08, 0.055, 0.008, mat(0xfff4e0), 0, y, 0);
         stand(heart(0.016), 0.006, mat(0xe8506a), 0, y - 0.005, 0.006);
@@ -3426,6 +3431,16 @@ export function buildFurniture(id, opts = {}) {
         cyl(0.015, 0.02, 0.04, mat(c), x, 0.045, z, 10);
         ball(0.014, mat(c), x, 0.075, z);
       }
+      break;
+    }
+    case 'q_snowglobe': {
+      // 🔮 聖誕雪花水晶球（聖誕交換禮物）：木底座＋透明玻璃球＋裡面一棵小聖誕樹和雪
+      cyl(0.11, 0.12, 0.07, mat(0x8f6440), 0, 0.035, 0, 16);
+      cyl(0.1, 0.1, 0.012, mat(0xd8433a), 0, 0.07, 0, 16);
+      add(new THREE.ConeGeometry(0.045, 0.1, 8), mat(0x2f8a4a), 0, 0.14, 0);
+      ball(0.018, mat(0xfafafa), -0.05, 0.09, 0.03, 1.6, 0.6, 1.2);
+      for (const [x, y, z] of [[0.04, 0.17, 0.03], [-0.03, 0.2, -0.04], [0.05, 0.12, -0.03], [-0.06, 0.15, 0.02], [0.01, 0.23, 0.05]]) ball(0.007, mat(0xffffff), x, y, z);
+      add(new THREE.SphereGeometry(0.1, 20, 14), new THREE.MeshStandardMaterial({ color: 0xdff2ff, transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0.1, depthWrite: false }), 0, 0.16, 0);
       break;
     }
     case 'q_letterbox': {

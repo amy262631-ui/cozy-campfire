@@ -2,13 +2,14 @@ import * as THREE from 'three';
 import { makeResolver, makeSign, lowpoly, shadowAll } from './shared.js';
 import { seededRandom } from '../scene/textures.js';
 import { createGatherLayer } from './gatherLayer.js';
-import { isHolEgg, createTrashLayer } from './trashLayer.js';
+import { pickHint, pickPrompt, createTrashLayer } from './trashLayer.js';
 import { FOG_COLOR } from '../scene/World.js';
 import { createFishMesh, fishScale } from '../fishing/fishModel.js';
 import { rollFish, rollSize } from '../fishing/fishData.js';
 import { t } from '../i18n/i18n.js';
 import { buildSnowfall, buildXmasExtras } from './xmasDecor.js';
 import { createBoatLayer } from './boatLayer.js';
+import { createBoatRaceLayer } from './boatRaceLayer.js';
 import { BOAT_FROM, BOATS } from '../game/boats.js';
 import { isOpen } from '../game/dailySpecial.js';
 
@@ -234,6 +235,7 @@ export function createLakeRoom() {
   group.add(boatSignGroup);
   fishSign.position.x = 3.6; // 釣魚看板往右挪一點，讓出位置
   const boats = createBoatLayer(group, WATER_Y);
+  const boatRace = createBoatRaceLayer(group, WATER_Y); // 🚣 划船競速的浮標、終點線（11/28）
   const boatOpen = () => isOpen({ from: BOAT_FROM });
   const nearBoatSign = (p) => boatOpen() && Math.hypot(p.x - BOAT_SIGN.x, p.z - BOAT_SIGN.z) < 1.6;
 
@@ -302,6 +304,7 @@ export function createLakeRoom() {
     /** ⛵ 坐在船上：main.js 設 { owner, ry() }；船主的位置交給 boats.steer（湖面上、碰到別的船推開） */
     boat: null,
     boats,
+    boatRace,
     resolveCollision(pos, r) {
       if (this.boat) {
         if (this.boat.owner) boats.steer(pos, this.boat.ry());
@@ -323,6 +326,8 @@ export function createLakeRoom() {
         return true;
       }
       if (this.boat && actions.state === 'free') {
+        // 🚣 比賽船：專心划，不能釣魚
+        if (this.boat.race && name === 'roast') return true;
         // ⛵ 在船上：F 甩竿（在哪裡都能釣）、E 下船
         if (name === 'roast') {
           // 往船的旁邊甩（左邊座位往左、其他往右），浮標才不會掉在船裡
@@ -398,32 +403,34 @@ export function createLakeRoom() {
     trash,
 
     prompt(actions) {
+      if (this.boat?.race) return t('🚣 划船競速中：依序繞浮標　<kbd>E</kbd> 下船（放棄）');
       if (this.boat) return t('<kbd>F</kbd> 🎣 甩竿釣魚　<kbd>E</kbd> 下船');
-      if (trash.near(actions.player.position)) return isHolEgg(trash.near(actions.player.position).item) ? t('<kbd>E</kbd> 🥚 撿起彩蛋') : t('<kbd>E</kbd> ♻️ 撿起垃圾');
+      if (trash.near(actions.player.position)) return pickPrompt(trash.near(actions.player.position).item);
       if (gather.spotNear(actions)) return gather.prompt(actions);
       if (nearBoatSign(actions.player.position)) return t('<kbd>E</kbd> ⛵ 租船');
       if (boatOpen()) {
         const b = boats.boardable(actions.player.position);
         if (b) return t('<kbd>E</kbd> ⛵ 坐上 {name} 的船', { name: b.on });
       }
-      if (trash.near(actions.player.position)) return isHolEgg(trash.near(actions.player.position).item) ? t('<kbd>E</kbd> 🥚 撿起彩蛋') : t('<kbd>E</kbd> ♻️ 撿起垃圾');
+      if (trash.near(actions.player.position)) return pickPrompt(trash.near(actions.player.position).item);
       return gather.prompt(actions) ?? (fishingSpot(actions.player.position) ? t('<kbd>F</kbd> 坐下釣魚') : null);
     },
 
     /** 手機的互動按鈕：岸邊的石頭、貝殼旁邊變「撿起來」 */
     interactHint(actions) {
       if (this.boat) return ['⛵', t('下船')];
-      if (trash.near(actions.player.position)) return isHolEgg(trash.near(actions.player.position).item) ? ['🥚', t('撿起來')] : ['♻️', t('撿起來')];
+      if (trash.near(actions.player.position)) return pickHint(trash.near(actions.player.position).item);
       if (gather.spotNear(actions)) return ['🧺', t('撿起來')];
       if (nearBoatSign(actions.player.position)) return ['⛵', t('租船')];
       if (boatOpen() && boats.boardable(actions.player.position)) return ['⛵', t('上船')];
-      if (trash.near(actions.player.position)) return isHolEgg(trash.near(actions.player.position).item) ? ['🥚', t('撿起來')] : ['♻️', t('撿起來')];
+      if (trash.near(actions.player.position)) return pickHint(trash.near(actions.player.position).item);
       return gather.spotNear(actions) ? ['🧺', t('撿起來')] : null;
     },
 
     /** 手機的 F 按鈕：舉魚時變成「繼續」 */
     roastHint(actions) {
       if (actions.state === 'fish') return this.fishing?.phase === 'show' ? ['🎣', t('繼續')] : ['🎣', t('拉竿')];
+      if (this.boat?.race) return false; // 🚣 比賽中不能釣：F 按鈕變淡
       if (this.boat && actions.state === 'free') return ['🎣', t('釣魚')];
       return null;
     },
@@ -434,6 +441,7 @@ export function createLakeRoom() {
       xmasDeco.update(dt, t);
       water.material.uniforms.uTime.value = t;
       boats.update(dt, t);
+      boatRace.update(dt, t);
       if ((this._bsT = (this._bsT ?? 0) - dt) <= 0) {
         this._bsT = 5;
         boatSignGroup.visible = boatOpen();

@@ -84,11 +84,12 @@ export function buildMiniLayer() {
     raceLight.intensity = on && p ? 6 : 0;
   }
 
-  function setHunt(spots = []) {
+  /** room：這一層在哪個地方（營火森林／🍄 迷霧森林）；別的地方的金松果先不放（號碼照伺服器的順序，撿的時候才對得上） */
+  function setHunt(spots = [], room = 'forest_main') {
     for (const c of cones) group.remove(c.g);
     cones = spots.map((p) => {
-      // 還沒冒出來的（h）：先不放，也不能撿
-      if (p.h) return { g: new THREE.Group(), cone: null, taken: true, hidden: true, x: 9999, z: 9999 };
+      // 還沒冒出來的（h）、在別的地方的：先不放，也不能撿
+      if (p.h || (p.room ?? 'forest_main') !== room) return { g: new THREE.Group(), cone: null, taken: true, hidden: true, x: 9999, z: 9999 };
       const g = new THREE.Group();
       g.position.set(p.x, 0, p.z);
       const cone = new THREE.Mesh(coneGeo, goldMat);

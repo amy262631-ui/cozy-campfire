@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TRASH_BY_ID } from '../game/trash.js';
+import { t } from '../i18n/i18n.js';
 
 /**
  * ♻️ 地上的垃圾（湖邊、帳篷營地路邊、中央營火區）：伺服器說哪裡有就畫在哪裡，走近按 E 撿起來。
@@ -14,6 +15,38 @@ const mat = (c, extra) => {
 /** 垃圾的小模型（躺在地上） */
 /** 🥚 假日雞蛋節的彩蛋（hegg）、整點大金蛋（hgold）：混在垃圾清單裡 */
 export const isHolEgg = (id) => id === 'hegg' || id === 'hgold';
+/** 🎄 雪橇灑的小禮物（xgift）、聖誕交換禮物整點的大禮物（xbig）：也混在垃圾清單裡 */
+export const isXGift = (id) => id === 'xgift' || id === 'xbig';
+/** 手機互動按鈕：撿垃圾／彩蛋／禮物 */
+export const pickHint = (id) => (isXGift(id) ? ['🎁', t('撿起來')] : isHolEgg(id) ? ['🥚', t('撿起來')] : ['♻️', t('撿起來')]);
+/** 電腦提示：撿垃圾／彩蛋／禮物 */
+export const pickPrompt = (id) => (isXGift(id) ? t('<kbd>E</kbd> 🎁 撿起禮物') : isHolEgg(id) ? t('<kbd>E</kbd> 🥚 撿起彩蛋') : t('<kbd>E</kbd> ♻️ 撿起垃圾'));
+const GIFT_COLORS = [[0xd8433a, 0xffe066], [0x2f9a5a, 0xd8433a], [0x3a7fd8, 0xffffff], [0xf2c14e, 0xd8433a], [0xb06ad8, 0xffffff]];
+/** 🎁 小禮物盒（大的會發光） */
+function buildXGift(big) {
+  const g = new THREE.Group();
+  const [c, rib] = big ? [0xd8433a, 0xf2c14a] : GIFT_COLORS[Math.floor(Math.random() * GIFT_COLORS.length)];
+  const w = big ? 0.5 : 0.26;
+  const h = big ? 0.42 : 0.22;
+  const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), new THREE.MeshStandardMaterial({ color: c, roughness: 0.55, emissive: big ? 0x501008 : 0x000000 }));
+  box.position.y = h / 2;
+  box.castShadow = true;
+  g.add(box);
+  const rm = new THREE.MeshStandardMaterial({ color: rib, roughness: 0.4, metalness: big ? 0.5 : 0.1, emissive: big ? 0x6a4a00 : 0x000000 });
+  for (const [sx, sz] of [[1.03, 0.18], [0.18, 1.03]]) {
+    const r = new THREE.Mesh(new THREE.BoxGeometry(w * sx, h * 1.02, w * sz), rm);
+    r.position.y = h / 2;
+    g.add(r);
+  }
+  for (const a of [0.6, -0.6]) {
+    const bow = new THREE.Mesh(new THREE.TorusGeometry(w * 0.16, w * 0.05, 6, 10), rm);
+    bow.position.set(Math.sin(a) * w * 0.12, h + w * 0.1, 0);
+    bow.rotation.set(0, Math.PI / 2, a);
+    g.add(bow);
+  }
+  g.rotation.y = Math.random() * Math.PI;
+  return g;
+}
 const EGG_COLORS = [[0xffc8dc, 0x8fd0f0], [0x9ad8f0, 0xffe07a], [0xffe07a, 0xf2a8b4], [0xc8e8a0, 0xd8b4f0], [0xd8b4f0, 0x9ad8f0]];
 function buildHolEgg(gold) {
   const g = new THREE.Group();
@@ -33,6 +66,7 @@ function buildHolEgg(gold) {
 }
 export function buildTrashModel(id) {
   if (isHolEgg(id)) return buildHolEgg(id === 'hgold');
+  if (isXGift(id)) return buildXGift(id === 'xbig');
   const it = TRASH_BY_ID[id];
   const g = new THREE.Group();
   const c = it?.color ?? 0xcccccc;
@@ -247,6 +281,7 @@ export function createTrashLayer(group, { y = () => 0 } = {}) {
   const items = new Map(); // k → { g, x, z, item, ring }
   const ringMat = new THREE.MeshBasicMaterial({ color: 0xbfe6a8, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false });
   return {
+    items, // 測試用：現在地上有哪些
     setList(list = []) {
       const keep = new Set(list.map((x) => x.k));
       for (const [k, it] of items) {

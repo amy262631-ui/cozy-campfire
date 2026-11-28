@@ -1,6 +1,7 @@
 import { t } from '../i18n/i18n.js';
 import { fitLeftStack } from './fitLeftStack.js';
 import { addCloseX } from './CloseX.js';
+import { translateChatEx } from '../network/chatTranslate.js';
 
 /**
  * 帳篷裡的「按讚」「留言本」：拜訪別人的帳篷時可以按讚、留一句話；主人看得到大家的留言。
@@ -11,9 +12,9 @@ import { addCloseX } from './CloseX.js';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 export class GuestPanel {
-  constructor({ onLike, onNote, onDelNote, onLeave, root = document.getElementById('ui') }) {
+  constructor({ onLike, onNote, onDelNote, onLeave, onHome, root = document.getElementById('ui') }) {
     this.root = root;
-    Object.assign(this, { onLike, onNote, onDelNote, onLeave });
+    Object.assign(this, { onLike, onNote, onDelNote, onLeave, onHome });
     this.home = null;
     this.mine = false;
     this.liked = false;
@@ -24,6 +25,7 @@ export class GuestPanel {
         <button type="button" id="guest-like"></button>
         <button type="button" id="guest-book"></button>
         <button type="button" id="guest-exit">${t('🚪 出去')}</button>
+        <button type="button" id="guest-home" hidden>${t('🏠 回我家')}</button>
       </div>
       <div class="guest-panel" id="guest-panel">
         <div class="guest-card">
@@ -69,6 +71,9 @@ export class GuestPanel {
     });
     this.bookBtn.addEventListener('click', () => this.open());
     root.querySelector('#guest-exit').addEventListener('click', () => this.onLeave?.());
+    // 🏠 作者 11/28：在別人帳篷裡直接回自己的帳篷（不用先出去再走回家）
+    this.homeBtn = root.querySelector('#guest-home');
+    this.homeBtn.addEventListener('click', () => this.onHome?.());
     $('#guest-close').addEventListener('click', () => this.close());
     addCloseX($('#guest-close'), '.guest-card'); // 右上角 ✕
     window.addEventListener('keydown', (e) => {
@@ -133,8 +138,20 @@ export class GuestPanel {
     this.list.innerHTML = notes.length
       ? [...notes]
           .reverse()
-          .map((n) => `<div class="guest-note"><b>${esc(n.n)}${this.mine && n.v ? ` <small class="guest-id">${esc(n.v)}</small>` : ''}</b><span>${esc(n.t)}</span>${this.mine ? `<button type="button" class="guest-del" data-gdel="${n.at}" title="${t('刪掉這則留言？')}">🗑️</button>` : ''}</div>`)
+          .map((n, i) => `<div class="guest-note" data-gi="${i}"><b>${esc(n.n)}${this.mine && n.v ? ` <small class="guest-id">${esc(n.v)}</small>` : ''}</b><span>${esc(n.t)}</span>${this.mine ? `<button type="button" class="guest-del" data-gdel="${n.at}" title="${t('刪掉這則留言？')}">🗑️</button>` : ''}</div>`)
           .join('')
       : `<div class="guest-empty">${this.mine ? t('還沒有人留言，開放參觀後旅人就能來留言') : t('還沒有人留言，當第一個吧')}</div>`;
+    // 🌐 作者 11/28：別國語言的留言自動翻成自己的語言（每則下面多一行；伺服器翻過的大家共用，翻不了就只顯示原文）
+    const list = this.list;
+    [...notes].reverse().slice(0, 40).forEach((n, i) => {
+      translateChatEx(n.t, true).then((r) => {
+        const el = r?.out && list.querySelector(`.guest-note[data-gi="${i}"]`);
+        if (!el || el.querySelector('.guest-tr')) return;
+        const tr = document.createElement('div');
+        tr.className = 'guest-tr';
+        tr.textContent = `🌐 ${r.out}`;
+        el.querySelector('span')?.after(tr);
+      });
+    });
   }
 }

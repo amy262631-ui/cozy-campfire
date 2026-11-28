@@ -103,7 +103,7 @@ export class MobileControls {
 
   /** 依所在位置換掉 F 按鈕（營火河畔變「🎣 釣魚」、釣魚中變「拉竿」）；null 表示回到房間預設 */
   setRoast(conf) {
-    const k = conf ? conf.join('|') : '';
+    const k = conf === false ? 'off' : conf ? conf.join('|') : ''; // false＝這個按鈕先不能用（🚣 划船競速中）
     if (k === this.roastOverride) return;
     this.roastOverride = k;
     this.roastConf = conf;
@@ -120,6 +120,7 @@ export class MobileControls {
   #apply(override = null) {
     let layout = override ? { ...this.layout, interact: override } : this.layout;
     if (this.roastConf) layout = { ...layout, roast: this.roastConf };
+    else if (this.roastConf === false) layout = { ...layout, roast: null };
     document.querySelectorAll('.action-btn').forEach((btn) => {
       const a = btn.dataset.action;
       const def = BUTTONS.find((b) => b.action === a);

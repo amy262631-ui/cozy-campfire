@@ -10,7 +10,7 @@ import { LAYOUT, CAMP_SIZE, ENTRY_Z, BOUNDS, LOOP_CENTER, plotSpots, frame, zone
 import { buildSoil, buildCrop } from './gardenModels.js';
 import { buildChicken, buildPen, PEN_IN } from './chickens.js';
 import { slotLocal } from '../game/garden.js';
-import { isHolEgg, createTrashLayer } from './trashLayer.js';
+import { pickHint, pickPrompt, createTrashLayer } from './trashLayer.js';
 import { buildYard, yardRadius } from './yardModels.js';
 import { buildSign } from './signModels.js';
 import { buildSnowfall, xmasTree } from './xmasDecor.js';
@@ -1603,7 +1603,7 @@ export function createCampgroundRoom() {
     },
     prompt(actions) {
       lastActions = actions;
-      if (trash.near(actions.player.position)) return isHolEgg(trash.near(actions.player.position).item) ? t('<kbd>E</kbd> 🥚 撿起彩蛋') : t('<kbd>E</kbd> ♻️ 撿起垃圾');
+      if (trash.near(actions.player.position)) return pickPrompt(trash.near(actions.player.position).item);
       if (actions.state === 'free' && nearPubBike(actions.player.position)) return t('<kbd>E</kbd> 🚲 騎公用腳踏車（再按 E 下車）');
       if (actions.state === 'free' && nearMapBoard(actions.player.position)) return t('<kbd>E</kbd> 🗺️ 看營地地圖（點帳篷就能過去）');
       const tg = targetAt(actions.player.position);
@@ -1620,9 +1620,9 @@ export function createCampgroundRoom() {
     },
     interactHint(actions) {
       lastActions = actions;
-      if (actions.state === 'ride' && trash.near(actions.player.position)) return isHolEgg(trash.near(actions.player.position).item) ? ['🥚', t('撿起來')] : ['♻️', t('撿起來')];
+      if (actions.state === 'ride' && trash.near(actions.player.position)) return pickHint(trash.near(actions.player.position).item);
       if (seatedOn() || actions.state === 'ride') return ['🧍', t('起身')];
-      if (trash.near(actions.player.position)) return isHolEgg(trash.near(actions.player.position).item) ? ['🥚', t('撿起來')] : ['♻️', t('撿起來')];
+      if (trash.near(actions.player.position)) return pickHint(trash.near(actions.player.position).item);
       if (nearPubBike(actions.player.position)) return ['🚲', t('騎車')];
       if (nearMapBoard(actions.player.position)) return ['🗺️', t('地圖')];
       const yd0 = pickYard(actions.player.position);

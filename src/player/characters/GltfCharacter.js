@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createCarriedStone } from '../../rooms/cairns.js';
-import { createRoastStick, createLogProp, createBlanket, createFishingRod } from '../props.js';
+import { createRoastStick, createLogProp, createBlanket, createFishingRod, swapRodSkin, twinkleRod } from '../props.js';
 import { createFishMesh, fishScale } from '../../fishing/fishModel.js';
 import { buildAccessory } from '../accessories.js';
 
@@ -182,8 +182,14 @@ export class GltfCharacter {
     return this.log.getWorldPosition(target);
   }
 
+  /** 🎄 釣竿皮膚（'' 原本、'xmas' 聖誕竿） */
+  setRodSkin(skin) {
+    swapRodSkin(this, skin);
+  }
+
   update(dt, t, speed) {
     this.poseTime += dt;
+    twinkleRod(this.rod, t);
     // 走路動畫速度跟著移動速度
     if (this.current && (this.pose === 'walk' || this.pose === 'run')) {
       this.current.timeScale = THREE.MathUtils.clamp(speed / 3, 0.6, 1.8);

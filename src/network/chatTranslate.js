@@ -2,7 +2,7 @@ import { lang } from '../i18n/i18n.js';
 
 /**
  * 聊天自動翻譯：別人用其他語言打字時，翻成你現在的介面語言。
- * 用 MyMemory 免費翻譯（不用金鑰，在每個人自己的瀏覽器裡呼叫；每人每天約 5000 字的額度）。
+ * 用 MyMemory 免費翻譯：先請伺服器翻（大家共用快取），不行才在自己的瀏覽器裡呼叫（每個網路一天約 5000 字）。
  */
 const TARGET = { 'zh-Hant': 'zh-TW', 'zh-Hans': 'zh-TW', en: 'en', ja: 'ja', ko: 'ko', ru: 'ru' }[lang] ?? 'en';
 const KEY = 'cozy-translate';
@@ -33,13 +33,14 @@ export function detectLang(text) {
   return null; // 只有表情、數字之類，不用翻
 }
 
-/** 翻成自己的語言；不用翻或翻不了回傳 null */
-export async function translateChat(text, force = false) {
-  if (!force && !translateEnabled()) return null;
-  const src = detectLang(text);
-  if (!src || src === TARGET) return null;
-  const k = `${src}|${TARGET}|${text}`;
-  if (cache.has(k)) return cache.get(k);
+// 🌐 作者 11/28：先請伺服器翻（同一句大家共用，只翻一次）；伺服器額度用完、連不上才用自己的瀏覽器翻（以前的做法）
+let askServer = null;
+/** main.js 連上伺服器後設定：(text, src, to) => Promise<{ out } | { fail } | null> */
+export function setTranslateServer(fn) {
+  askServer = fn;
+}
+
+async function viaBrowser(text, src) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 6000);
   try {
@@ -47,16 +48,37 @@ export async function translateChat(text, force = false) {
     const res = await fetch(url, { signal: ctrl.signal });
     const data = await res.json();
     let out = data?.responseData?.translatedText;
-    if (data?.responseStatus !== 200 || !out || /MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(out)) return null;
+    if (Number(data?.responseStatus) !== 200 || !out || /MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(out)) return { fail: 'err' };
     out = out.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&').trim();
-    if (out.toLowerCase() === text.toLowerCase()) return null;
-    cache.set(k, out);
-    return out;
+    return { out: out.toLowerCase() === text.toLowerCase() ? '' : out };
   } catch {
-    return null; // 沒網路、額度用完：就只顯示原文
+    return { fail: 'err' }; // 沒網路、額度用完
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * 翻成自己的語言（詳細版）：
+ * null＝不用翻（同一種語言、只有表情、🌐 關著）；{ out }＝翻好了；{ fail: true }＝翻不了（可以讓玩家按 🌐 再試）
+ */
+export async function translateChatEx(text, force = false) {
+  if (!force && !translateEnabled()) return null;
+  text = String(text ?? '').trim();
+  const src = detectLang(text);
+  if (!src || src === TARGET) return null;
+  const k = `${src}|${TARGET}|${text}`;
+  if (cache.has(k)) return cache.get(k) ? { out: cache.get(k) } : null;
+  let r = askServer ? await askServer(text, src, TARGET).catch(() => null) : null;
+  if (!r || !('out' in r)) r = await viaBrowser(text, src);
+  if (!('out' in r)) return { fail: true };
+  cache.set(k, r.out);
+  return r.out ? { out: r.out } : null;
+}
+
+/** 翻成自己的語言；不用翻或翻不了回傳 null */
+export async function translateChat(text, force = false) {
+  return (await translateChatEx(text, force))?.out ?? null;
 }
 
 // ---------- 留言板、繪馬：點 🌐 才翻譯那一則（不自動翻，免得一次送出太多請求） ----------

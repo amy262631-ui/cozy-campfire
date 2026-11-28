@@ -24,6 +24,7 @@ export class SocialPanel {
           <button type="button" class="social-btn" id="chat-btn">💬<small>${t('聊天')}</small></button>
           <button type="button" class="social-btn" id="bag-btn">🎒<small>${t('背包')}</small></button>
           <button type="button" class="social-btn" id="friend-btn">👫<small>${t('好友')}</small><i class="social-badge" id="friend-badge" hidden></i></button>
+          <button type="button" class="social-btn" id="photo-btn">📷<small>${t('拍照')}</small></button>
         </div>
       </div>
 
@@ -293,6 +294,22 @@ export class SocialPanel {
     const atBottom = !this._userUp || log.scrollHeight - log.scrollTop - log.clientHeight < 60;
     line.appendChild(tr);
     if (atBottom) log.scrollTop = log.scrollHeight;
+  }
+
+  /** 翻譯失敗：那一行後面放一顆 🌐，按了再翻一次（作者 11/28） */
+  addTrRetry(line, retry) {
+    if (!line?.isConnected || line.querySelector('.tr-retry')) return;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tr-retry';
+    b.textContent = '🌐';
+    b.title = t('翻譯失敗，按一下再試');
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      b.remove();
+      retry();
+    });
+    line.appendChild(b);
   }
 
   clearLog() {

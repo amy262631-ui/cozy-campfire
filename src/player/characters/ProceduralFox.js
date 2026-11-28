@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createCarriedStone } from '../../rooms/cairns.js';
-import { createRoastStick, createLogProp, createBlanket, createFishingRod, donenessColor } from '../props.js';
+import { createRoastStick, createLogProp, createBlanket, createFishingRod, swapRodSkin, twinkleRod, donenessColor } from '../props.js';
 import { FUR_PALETTES } from './furPalettes.js';
 import { SPECIES } from './species.js';
 import { buildAccessory } from '../accessories.js';
@@ -268,6 +268,24 @@ function makeFaceTextures(kind = 'fox', makeup = '') {
   const pair = { open: draw(false), closed: draw(true) };
   faceCache.set(key, pair);
   return pair;
+}
+
+/**
+ * ⚡ 效能（作者 11/28：營火旁 8 個人只剩 43 fps、807 次繪製）：造型（假髮 20 多顆小球、帽子、圍巾、背包）同一種材質的零件合成一塊
+ *   一個穿滿的人從約 38 塊變成約 10 塊。會動的（翅膀 userData.wingL/R）、有名字的（紅鼻子）、被 userData 記住的（燈籠）不合
+ */
+function mergeOutfit(g) {
+  const keep = new Set();
+  for (const v of Object.values(g.userData)) for (const x of [v].flat()) if (x?.isObject3D) x.traverse((o) => keep.add(o));
+  g.traverse((o) => o.name && o.traverse((c) => keep.add(c)));
+  mergeStatic(
+    g,
+    (o) => {
+      for (let p = o; p && p !== g; p = p.parent) if (keep.has(p)) return true;
+      return false;
+    },
+    { keepShadow: true },
+  );
 }
 
 export class ProceduralFox {
@@ -723,6 +741,7 @@ export class ProceduralFox {
       const old = this.outfit[slot];
       if (old) old.parent?.remove(old);
       const g = wear[slot] ? buildOutfit(wear[slot], slot === 'hair' ? fit : undefined) : null;
+      if (g) mergeOutfit(g);
       this.outfit[slot] = g;
       if (g) (slot === 'head' || slot === 'hair' ? this.head : this.torso).add(g);
     }
@@ -890,8 +909,14 @@ export class ProceduralFox {
     });
   }
 
+  /** 🎄 釣竿皮膚（'' 原本、'xmas' 聖誕竿） */
+  setRodSkin(skin) {
+    swapRodSkin(this, skin);
+  }
+
   update(dt, t, speed) {
     this.poseTime += dt;
+    twinkleRod(this.rod, t);
     if (this.burnt) {
       for (const p of this.burnt.puffs) {
         const f = (t * 0.45 + p.userData.ph) % 1;

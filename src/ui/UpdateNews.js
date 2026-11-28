@@ -78,6 +78,20 @@ export const NEWS_PRESS = {
   ],
 };
 
+/** 🎄 聖誕活動（作者 11/24 同意方向；11/28：公告提早、跟樹下禮物盒同一天 12/17 出現；要改日子改這裡） */
+export const xevNewsOn = () => isOpen({ from: '2026-12-17' });
+export const NEWS_XEV = {
+  id: '2026-12-17',
+  title: () => t('🎄 聖誕活動開始了！'),
+  items: () => [
+    { pic: '🎁', title: t('樹下有你的聖誕禮物'), text: t('12/17～27 每天到營火廣場的大聖誕樹下，有一個「給你的」禮物盒，拆開 +10 🌰') },
+    { pic: '🎣', title: t('拆開就送：拐杖糖聖誕釣竿'), text: t('紅白條紋、竿子上一圈小燈泡會閃、浮標也變聖誕色，別人也看得到；聖誕活動限定，不賣') },
+    { pic: '🛷', title: t('12/24 晚上 9 點：聖誕老人來了'), text: t('雪橇一定會飛過營火廣場，灑下一地小禮物盒，每人最多撿 3 個（每個 +5 🌰）；8:55 會先提醒') },
+    { pic: '⛄', title: t('12/25：大家一起堆大雪人'), text: t('祈福處旁邊的雪堆按 E 一起堆：身體 → 頭 → 帽子圍巾，每完成一段有參加的人 +10 🌰；堆好的雪人會一直站到 1/6') },
+    { pic: '💝', title: t('12/26～27：聖誕交換禮物'), text: t('假日活動特別場（早上 10 點到晚上 10 點）：全營地一起送出 100 個禮物；每到整點，大聖誕樹下冒出一個大禮物，先拿到的 +20 🌰') },
+  ],
+};
+
 /** 🎄 12/1 聖誕更新（作者 11/16：精靈家具、小精靈造型、每日限定也跟聖誕一起發）。12/1 起（台北時間）才出現；?xmas=1 可以先看 */
 const XMAS_AT = Date.parse('2026-11-27T00:00:00+08:00'); // 作者 11/19：提早到 11/27
 export const xmasNewsOn = () => Date.now() >= XMAS_AT || isXmas();
@@ -198,6 +212,8 @@ export const NEWS_OLD = [
 ];
 
 const KEY = 'cozy-news';
+const SEEN_KEY = 'cozy-news-seen';
+const UNSEEN_MAX = 3;
 
 export class UpdateNews {
   constructor(root = document.getElementById('ui')) {
@@ -210,6 +226,7 @@ export class UpdateNews {
     this.el.addEventListener('click', (e) => {
       const pg = e.target.closest('[data-page]');
       if (pg) return this.show(Number(pg.dataset.page));
+      if (e.target.closest('[data-next]') && this.queue?.length) return this.show(this.pages.indexOf(this.queue.shift()));
       if (e.target === this.el || e.target.closest('[data-upd]')) this.hide();
     });
     window.addEventListener('keydown', (e) => e.code === 'Escape' && this.visible && this.hide());
@@ -217,6 +234,7 @@ export class UpdateNews {
 
   /** 現在要顯示的公告 */
   get news() {
+    if (xevNewsOn()) return NEWS_XEV; // 🎄 12/20 起：聖誕 4 天活動
     if (pressNewsOn()) return NEWS_PRESS; // 📰 11/28 起：營地被報導了（看過一次就換回聖誕那則的順序）
     if (xmasNewsOn()) return NEWS_XMAS; // 🎄 12/1 起先給聖誕這則
     if (news1122On()) return NEWS_1122; // 🏞️ 11/22 起
@@ -228,39 +246,90 @@ export class UpdateNews {
     return !this.el.hidden;
   }
 
-  /** 還沒看過這次的公告？ */
-  get unseen() {
+  // 📰 作者 11/28：原本只記「最後看過哪一則」，一上線只跳最新那則 → 昨天沒來的人看不到之前的大更新。
+  // 改成記「看過哪些」（cozy-news-seen），上線時依序給他看還沒看過的（太久沒來最多 3 則，舊的先、最新的最後）。
+  #seen() {
+    let ids = [];
     try {
-      return localStorage.getItem(KEY) !== this.news.id;
+      ids = JSON.parse(localStorage.getItem(SEEN_KEY) || '[]');
     } catch {
-      return false;
+      ids = [];
     }
+    const set = new Set(Array.isArray(ids) ? ids : []);
+    if (!set.size) {
+      // 舊的存法：只記一則 → 那一則和比它舊的都算看過
+      let last = null;
+      try {
+        last = localStorage.getItem(KEY);
+      } catch {
+        /* 無痕模式 */
+      }
+      const list = this.pages;
+      const i = list.findIndex((n) => n.id === last);
+      if (i >= 0) for (const n of list.slice(i)) set.add(n.id);
+    }
+    return set;
   }
 
-  /** 第一次來的新朋友不用看「更新了什麼」，直接記成看過 */
-  markSeen() {
+  #save(set) {
     try {
-      localStorage.setItem(KEY, this.news.id);
+      localStorage.setItem(SEEN_KEY, JSON.stringify([...set].slice(-60)));
+      localStorage.setItem(KEY, this.news.id); // 舊的欄位也留著
     } catch {
       /* 無痕模式 */
     }
   }
 
+  /** 還沒看過的公告（最多 3 則；舊的在前面，最新的最後） */
+  get unseenList() {
+    const seen = this.#seen();
+    return this.pages
+      .filter((n) => !seen.has(n.id))
+      .slice(0, UNSEEN_MAX)
+      .reverse();
+  }
+
+  /** 有沒看過的公告？ */
+  get unseen() {
+    try {
+      return this.unseenList.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 第一次來的新朋友不用看「更新了什麼」，直接全部記成看過 */
+  markSeen() {
+    this.#save(new Set(this.pages.map((n) => n.id)));
+  }
+
+  /** 上線時：從最舊的那則沒看過的開始，一則一則看 */
+  showUnseen() {
+    this.queue = this.unseenList;
+    if (!this.queue.length) return;
+    this.show(this.pages.indexOf(this.queue.shift()));
+  }
+
   /** 全部的公告（新的在前面）：月票開了才有月票那份 */
   get pages() {
-    return [...(pressNewsOn() ? [NEWS_PRESS] : []), ...(xmasNewsOn() ? [NEWS_XMAS] : []), ...(news1122On() ? [NEWS_1122] : []), ...(news1120On() ? [NEWS_1120] : []), NEWS_TENTS, ...(this.payOn() ? [NEWS_PASS] : []), NEWS, ...NEWS_OLD];
+    return [...(xevNewsOn() ? [NEWS_XEV] : []), ...(pressNewsOn() ? [NEWS_PRESS] : []), ...(xmasNewsOn() ? [NEWS_XMAS] : []), ...(news1122On() ? [NEWS_1122] : []), ...(news1120On() ? [NEWS_1120] : []), NEWS_TENTS, ...(this.payOn() ? [NEWS_PASS] : []), NEWS, ...NEWS_OLD];
   }
 
   /** page：0＝最新；往前翻看以前的更新 */
   show(page = 0) {
-    this.markSeen();
     const list = this.pages;
     page = Math.max(0, Math.min(list.length - 1, page));
     const n = list[page];
+    const seen = this.#seen(); // 看到哪一則就記哪一則
+    const fresh = !seen.has(n.id); // 這一則之前沒看過（上線時依序給他看的那幾則）
+    seen.add(n.id);
+    this.#save(seen);
+    this.queue = (this.queue ?? []).filter((x) => !seen.has(x.id));
+    const left = this.queue.length;
     const date = n.id.slice(5, 10).replace('-', '/');
     this.card.innerHTML = `
       <div class="upd-title">${n.title()}</div>
-      <div class="upd-date">${date}${page ? t('・以前的更新') : ''}</div>
+      <div class="upd-date">${date}${fresh && page ? t('・你還沒看過') : page ? t('・以前的更新') : ''}</div>
       <div class="upd-list">${n.items(this.payOn())
         .map((x) => `<div class="upd-item"><div class="upd-pic">${x.pic}</div><div><b>${x.title}</b><p>${x.text}</p></div></div>`)
         .join('')}</div>
@@ -269,12 +338,17 @@ export class UpdateNews {
         <span>${page + 1}／${list.length}</span>
         <button type="button" data-page="${page - 1}" ${page <= 0 ? 'disabled' : ''}>${t('較新的 ▶')}</button>
       </div>
-      <button type="button" class="upd-ok" data-upd="ok">${t('好，去逛逛 ✨')}</button>`;
+      ${
+        left
+          ? `<button type="button" class="upd-ok upd-next" data-next="1">${t('還有 {n} 則你沒看過 →', { n: left })}</button>`
+          : `<button type="button" class="upd-ok" data-upd="ok">${t('好，去逛逛 ✨')}</button>`
+      }`;
     this.el.hidden = false;
     this.card.scrollTop = 0; // 翻頁後從最上面開始看
   }
 
   hide() {
     this.el.hidden = true;
+    this.queue = []; // 按 ✕／點外面＝先不看，下次上線再給他看剩下的
   }
 }

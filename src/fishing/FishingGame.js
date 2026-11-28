@@ -41,8 +41,10 @@ export class FishingGame {
     // 顏色分得清楚：純紅、純黃、純綠，中間夾一條黑線
     const segColors = [0xff2020, 0xffe020, 0x20ff40, 0xff2020, 0xffe020, 0x20ff40];
     const sepMat = new THREE.MeshBasicMaterial({ color: 0x101010 });
+    this.segs = [];
     segColors.forEach((c, i) => {
       const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.056, 8), new THREE.MeshBasicMaterial({ color: c }));
+      this.segs.push(seg);
       seg.position.y = 0.035 + i * 0.065;
       this.bobber.add(seg);
       const sep = new THREE.Mesh(new THREE.CylinderGeometry(0.0125, 0.0125, 0.009, 8), sepMat);
@@ -53,6 +55,8 @@ export class FishingGame {
     const tipMesh = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 8), new THREE.MeshBasicMaterial({ color: 0xeaff9a }));
     tipMesh.position.y = tipY;
     this.bobber.add(tipMesh);
+    this.tipMesh = tipMesh;
+    this.skin = '';
     // 光暈（一直面向鏡頭）
     const gc = document.createElement('canvas');
     gc.width = gc.height = 64;
@@ -136,6 +140,15 @@ export class FishingGame {
     this.tip = new THREE.Vector3();
     this.head = new THREE.Vector3();
     this.flying = null; // 飛到手上的魚
+  }
+
+  /** 🎄 浮標皮膚：'' 原本（紅黃綠＋螢光頂）；'xmas' 紅白綠＋金頂（跟著聖誕釣竿） */
+  setSkin(skin = '') {
+    if (this.skin === skin) return;
+    this.skin = skin;
+    const cols = skin === 'xmas' ? [0xff2020, 0xfafafa, 0x20c040, 0xff2020, 0xfafafa, 0x20c040] : [0xff2020, 0xffe020, 0x20ff40, 0xff2020, 0xffe020, 0x20ff40];
+    this.segs.forEach((m, i) => m.material.color.setHex(cols[i]));
+    this.tipMesh.material.color.setHex(skin === 'xmas' ? 0xffd24a : 0xeaff9a);
   }
 
   get active() {

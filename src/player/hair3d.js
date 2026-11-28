@@ -91,8 +91,8 @@ export function buildHair(kind, c1, c2, fit = {}) {
           const body = Math.sin(PI * u) ** 0.8 * (1 - v) ** 0.45;
           return sph(p, th, R + 0.008 + thick * body + curl * v * v);
         },
-        14,
-        16,
+        10, // ⚡ 11/28：14×16 → 10×12（一撮頭髮很小，看不出差別；捲髮假髮有 20 撮，一個人少了 4 千多個三角形）
+        12,
       ),
       m,
     );
@@ -309,8 +309,8 @@ export function buildHair(kind, c1, c2, fit = {}) {
           }
           return sph(phi, th, R + (lift + bump) * tuck + 0.004);
         },
-        160,
-        40,
+        120, // ⚡ 11/28：160×40 → 120×32（雲朵捲 1 萬 2 千多個三角形，營火旁人多會卡；邊緣 16 個波浪還是很圓）
+        32,
       ),
     );
   };

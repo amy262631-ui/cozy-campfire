@@ -23,7 +23,8 @@ import * as storage from './storage.js';
 import { createResidents, publicNpc } from './npc.js';
 import geoip from 'geoip-country';
 import { FISH, DEX_BONUS, dexGain, catchGain, FISH_MAX_CM, rollFish, rollSize, DEX_TOTAL, SHINY_CHANCE, SHINY_DEX_GAIN, SHINY_BONUS, SHINY_TOTAL, canShiny, isLimitedFish } from '../src/fishing/fishData.js';
-import { RACE_LANTERNS, makeRaceRoute, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R } from '../src/game/miniSpots.js';
+import { BOAT_RACE, RACE_CPS, raceGrid, raceTouch } from '../src/game/boatRace.js';
+import { RACE_LANTERNS, makeRaceRoute, HUNT_SPOTS, HUNT_COUNT, HUNT_GAIN, TOUCH_R, spotFree, HUNT_MIST, MIST_HUNT_SPOTS, huntShowTimes } from '../src/game/miniSpots.js';
 import { OUTFITS, OUTFIT_BY_ID, outfitCode, dailyOutfit, weeklyOutfit, nextDateOutfit, sponsorOutfits, XMAS_OUTFITS, XMAS_STREAK } from '../src/game/outfits.js';
 import { todaySpecial, SHINY_DAY_MULT, isOpen } from '../src/game/dailySpecial.js';
 import { GATHER_SPOTS, GATHER_ITEMS, isLimited, gatherDexItems, regrowMs, GATHER_FIRST_GAIN, GATHER_DEX_BONUS, gatherItemAt, isNight, GATHER_R, NET_PRICE, BUG_WANDER, BUG_CATCH_R } from '../src/game/gathering.js';
@@ -36,7 +37,7 @@ import { canMake, takeMaterials, materialOf } from '../src/game/materials.js';
 import { RECIPE_BY_ID } from '../src/game/crafting.js';
 import { DISH_BY_ID, dishFirstGain, BUFF_MS, DISH_FX, activeBuff, homeCanCook } from '../src/game/cooking.js';
 import { HEN_FROM, COOP_PRICE, HEN_PRICE, HEN_MAX, FEED_PER_DAY, GOLD_EGG, HEN_COLORS, fatOf, fatNext, eggsOf, eggIn, canFeed, henMigrate, feedWait, layOnFeed } from '../src/game/hens.js';
-import { LEGENDS, LEGEND_GAIN, legendHour, taipeiHour } from '../src/game/legendRules.js';
+import { LEGENDS, LEGEND_BY_ID, LEGEND_GAIN, legendHour, taipeiHour } from '../src/game/legendRules.js';
 import { RIVER_FROM, COOP_GAIN, COOP_MIN_TAPS, COOP_SEC, SKIP_PER_DAY, SKIP_GOOD, skipBounces, DUCK_PER_DAY, DUCK_MS, DUCK_FIRST_GAIN } from '../src/game/river.js';
 import { BOATS, BOAT_FROM, BOAT_MS, BOAT_MAX, BOAT_SLOTS, FEED_PRICE, FEED_MS, BOAT_LUCK, DOCK_END, keepOnLake, seatAt } from '../src/game/boats.js';
 import { SOOTY_AT, potResult, parseToken, SEASON_BY_ID, SEASON_PRICE, SEASON_USES, SEASON_CAP, SEASON_MAX, POT_MAX, FISH_KEEP_CAP, POT_BY_ID } from '../src/game/potCooking.js';
@@ -51,12 +52,14 @@ import { cleanNameText, AUTHOR_MARK } from '../src/game/nameRules.js';
 import { hasColors, ALL_COLORS, fishFits, LOGIN_GIFTS, isLoftCell, ITEMS_CAP } from '../src/game/furnitureCatalog.js';
 import { YARD_BY_ID, hasYard, isBigYard, isDoorYard, normYard, YARD_SMALL_MAX } from '../src/game/yardCatalog.js';
 import { SIGN_BY_ID } from '../src/game/signCatalog.js';
-import { HOLIDAYS, HOL_TASK_GAIN, HOL_STEP_GAIN, HOL_GOLD_GAIN, holidayNow, nextHoliday, holGoal } from '../src/game/holiday.js';
+import { HOLIDAYS, HOL_TASK_GAIN, HOL_STEP_GAIN, HOL_GOLD_GAIN, holidayNow, nextHoliday, holGoal, taipeiHM } from '../src/game/holiday.js';
+import { XEV_BOX_GAIN, XEV_GIFTS, XEV_ROD, XEV_STREAK, boxDays, SLEIGH_DROP, SNOWMAN, SNOWMAN_POS, xevIndex, boxOn, boxStreak, boxDaysLeft, snowmanOn, snowStage } from '../src/game/xmasEvent.js';
 import { DAILY_BY_ID, WEEKLY_BY_ID, CAT_TROPHY, MAKEUP_ORDER, DAILY_GAIN, STAMP_MONTH, STAMP_DAILY, STAMP_WEEKLY, WEEKLY_PLANT_AT, WEEKLY_BAIT_AT, CAT_TROPHY_AT, dailyOf, dailySwapTo, weeklyOf, weekKey } from '../src/game/quests.js';
 import { SPIRIT_STAGE_AT, SPIRIT_XP, SPIRIT_DAY_CAP, SPIRIT_FEED_DAY, SPIRIT_FEED_XP, SPIRIT_FAV_XP, SPIRIT_CHANGE_PRICE, SPIRIT_KINDS, SPIRIT_FAV, SPIRIT_EGG_PRICE, SPIRIT_FIRST_PRICE, SPIRIT_EGG_MS, SPIRIT_MAX, SPIRIT_ACT_KIND, SPIRIT_NIGHT_STAR, SPIRIT_PLAY_DAY, SPIRIT_ACCS, SPIRIT_ACC_BY_ID, spiritStage, autoKind, spiritCode } from '../src/game/spiritRules.js';
 import { isXmasDay as isXmasDay0, isXmasShopDay as isXmasShopDay0, monthOn } from '../src/game/season.js';
 const isXmasDay = (k) => process.env.XMAS_TEST === '1' || isXmasDay0(k);
 const isXmasShopDay = (k) => process.env.XMAS_TEST === '1' || isXmasShopDay0(k); // 🛒 聖誕商品賣到 1/15 // 本機測試用：XMAS_TEST=1 假裝現在是聖誕期間（Render 不要設）
+import { translate, translateStats } from './translate.js';
 import { FUR_TOTAL, BASE_FUR, PREMIUM_FUR, TAIL_BY_ID, EAR_BY_ID, SPECIES_TAIL, SPECIES_EARS } from '../src/game/looks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -537,7 +540,7 @@ function tickTreasures() {
     if (!c.nextTreasure) c.nextTreasure = now + 20000; // 剛開始：20 秒後冒第一個
     if (c.treasures.length >= TREASURE_MAX || now < c.nextTreasure) continue;
     const used = new Set(c.treasures.map((x) => x.spot));
-    const free = HUNT_SPOTS.map((p, i) => ({ ...p, i })).filter((p) => !used.has(p.i));
+    const free = HUNT_SPOTS.map((p, i) => ({ ...p, i })).filter((p) => !used.has(p.i) && spotFree(p, xevDay())); // ⛄ 雪人旁邊不放
     const p = free[Math.floor(Math.random() * free.length)];
     if (!p) continue;
     c.treasures.push({ k: ++treasureSeq, spot: p.i, x: p.x + (Math.random() - 0.5) * 1.2, z: p.z + (Math.random() - 0.5) * 1.2, item: pickTreasure().id });
@@ -564,7 +567,8 @@ function trashSpot(place) {
     const side = r() < 0.5 ? -1 : 1;
     return { x: p.x - (p.tz ?? 0) * 1.25 * side, z: p.z + (p.tx ?? 0) * 1.25 * side };
   }
-  const p = HUNT_SPOTS[Math.floor(r() * HUNT_SPOTS.length)];
+  const okSpots = HUNT_SPOTS.filter((q) => spotFree(q, xevDay())); // ⛄ 雪人旁邊不放
+  const p = okSpots[Math.floor(r() * okSpots.length)];
   return { x: p.x + (r() - 0.5) * 1.6, z: p.z + (r() - 0.5) * 1.6 };
 }
 const publicTrash = (c, place) => (c.trash?.[place] ?? []).map((x) => ({ k: x.k, x: x.x, z: x.z, item: x.item }));
@@ -583,8 +587,9 @@ function tickTrash() {
     for (const place of TRASH_PLACES) {
       let list = (c.trash[place] ??= []);
       let changed = false;
-      if (H?.id !== 'egg' && list.some((x) => x.egg)) {
-        list = c.trash[place] = list.filter((x) => !x.egg); // 雞蛋節結束：彩蛋收起來
+      const stale = (x) => x.egg && ((x.item === 'hegg' || x.item === 'hgold') ? H?.id !== 'egg' : x.item === 'xbig' ? H?.id !== 'xgift' : x.exp && now > x.exp);
+      if (list.some(stale)) {
+        list = c.trash[place] = list.filter((x) => !stale(x)); // 雞蛋節結束：彩蛋收起來；🎄 聖誕禮物時間到也收
         changed = true;
       }
       const junk = list.filter((x) => !x.egg).length;
@@ -598,6 +603,13 @@ function tickTrash() {
         list.push({ k: ++trashSeq, ...trashSpot(place), item: pickTrash(place).id });
         c.nextTrash[place] = now + (TRASH_EVERY[0] + Math.random() * (TRASH_EVERY[1] - TRASH_EVERY[0])) * 1000 * (clean ? 0.3 : 1);
         changed = true;
+      }
+      // 🎁 聖誕交換禮物：整點在大聖誕樹下冒一個大禮物（先拿到的 +20 🌰）
+      if (burst && H.id === 'xgift' && place === 'fire') {
+        const ang = Math.random() * Math.PI * 2;
+        list.push({ k: ++trashSeq, x: WISH_TREE_XZ.x + Math.sin(ang) * 2.3, z: WISH_TREE_XZ.z + Math.cos(ang) * 2.3, item: 'xbig', egg: true });
+        changed = true;
+        io.to(key(c.ch, 'forest_main')).emit('holGoldShow', { room: 'forest_main', kind: 'xbig' });
       }
       if (H?.id === 'egg') {
         const eggs = list.filter((x) => x.egg && x.item === 'hegg').length;
@@ -723,7 +735,21 @@ const MINI_SLOTS = (() => {
   return list;
 })();
 /** 今天有哪些場次（中午那場 11/20 才開） */
-const miniSlots = () => (isOpen({ from: '2026-11-19' }) ? MINI_SLOTS : MINI_SLOTS.filter((x) => !x.noon));
+/** 🎣 作者 11/28（玩家反映）：週六日白天多 3 場 10:30、14:30、16:30（半點，不撞假日活動整點的 2 倍） */
+// 🚣 作者 11/28 晚：「不要都是釣魚在一直比」→ 10:30、16:30 划船競速；14:30 週六燈籠賽跑、週日找金松果（12:30 釣魚照舊）
+const MINI_WEEKEND = (wd) => [
+  { at: 10.5 * 3600, kind: 'boat', wk: true },
+  { at: 14.5 * 3600, kind: wd === 6 ? 'race' : 'hunt', wk: true },
+  { at: 16.5 * 3600, kind: 'boat', wk: true },
+];
+const taipeiWeekday = (now = new Date()) => new Date(now.getTime() + 8 * 3600e3).getUTCDay();
+/** 今天有哪些場次（中午那場 11/20 才開；週六日多白天 3 場），照時間排好 */
+const miniSlots = (now = new Date()) => {
+  const base = isOpen({ from: '2026-11-19' }) ? MINI_SLOTS : MINI_SLOTS.filter((x) => !x.noon);
+  const wd = taipeiWeekday(now);
+  if (process.env.MINI_KIND || (wd !== 0 && wd !== 6)) return base;
+  return [...base, ...MINI_WEEKEND(wd)].sort((a, b) => a.at - b.at);
+};
 function taipeiClock(now = new Date()) {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-GB', { timeZone: process.env.STATS_TZ || 'Asia/Taipei', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
@@ -735,12 +761,12 @@ function taipeiClock(now = new Date()) {
 /** 🕒 任務本「今天」分頁（作者 11/25）：今天的活動時間表，時間都從這裡拿（台北時間、一天中的第幾秒） */
 function schedView(now = new Date()) {
   const { h, sec } = taipeiClock(now);
-  return { now: h * 3600 + sec, mini: miniSlots().map((x) => [x.at, x.kind]), miniLen: MINI_LEN, ev: EVENT_STARTS, evLen: EVENT_LEN };
+  return { now: h * 3600 + sec, mini: miniSlots(now).map((x) => [x.at, x.kind]), miniLen: MINI_LEN, ev: EVENT_STARTS, evLen: EVENT_LEN };
 }
 function miniInfo(now = new Date()) {
   const { h, sec: s } = taipeiClock(now);
   const sec = h * 3600 + s;
-  const slots = miniSlots();
+  const slots = miniSlots(now);
   const cur = slots.findIndex((x) => sec >= x.at && sec < x.at + MINI_LEN);
   if (cur >= 0) {
     const x = slots[cur];
@@ -749,7 +775,7 @@ function miniInfo(now = new Date()) {
   let next = slots.find((x) => x.at > sec);
   let startsIn = next ? next.at - sec : 0;
   if (!next) {
-    next = slots[0]; // 今晚都辦完了：明天第一場
+    next = miniSlots(new Date(now.getTime() + 86400e3))[0]; // 今晚都辦完了：明天第一場（明天是週六就是 10:30）
     startsIn = 86400 - sec + next.at;
   }
   return { kind: next.kind, active: false, startsIn, hour: Math.floor(next.at / 3600), minute: Math.floor((next.at % 3600) / 60) };
@@ -783,27 +809,44 @@ const miniNow = () => {
   if (miniRun.id !== m.id) {
     miniRun = { id: m.id, kind: m.kind, best: new Map(), got: new Map(), spots: [] };
     // 🏃 作者 11/24：燈籠位置每場隨機，同一場大家一樣
-    if (m.kind === 'race') miniRun.route = makeRaceRoute();
+    if (m.kind === 'race') miniRun.route = makeRaceRoute(Math.random, xevDay());
+    if (m.kind === 'boat') {
+      // 🚣 划船競速：前 5 分鐘報名，時間到一起出發（signEnd 照這場開始的時間算，伺服器中途重開也一樣）
+      const endAt = Date.now() + m.endsIn * 1000;
+      const testSec = Number(process.env.BRACE_SIGN_SEC); // 本機測試用：從現在起算幾秒（Render 不要設）
+      const signEnd = testSec ? Date.now() + testSec * 1000 : Math.min(endAt - 60e3, endAt - MINI_LEN * 1000 + BOAT_RACE.signSec * 1000);
+      miniRun.brace = { signEnd, goAt: signEnd + BOAT_RACE.countMs, sign: new Map(), started: false, endAt };
+    }
     if (m.kind === 'hunt') {
       // 從候選地點隨機挑幾個藏金松果
-      const pool = HUNT_SPOTS.map((p, i) => ({ ...p, i })).sort(() => Math.random() - 0.5);
+      const pool = HUNT_SPOTS.map((p, i) => ({ ...p, i })).filter((p) => spotFree(p, xevDay())).sort(() => Math.random() - 0.5); // ⛄ 雪人旁邊不放
       // 作者 11/14：不要一開始就全部出來（5 顆 30 秒內就被找光）→ 一顆一顆冒出來：第一顆開始後 20～90 秒，找到之後再等 40～150 秒冒下一顆
-      miniRun.spots = pool.slice(0, HUNT_COUNT).map((p) => ({ x: p.x, z: p.z, by: null, showAt: null }));
-      miniRun.spots[0].showAt = Date.now() + (20 + Math.random() * 70) * 1000;
+      // 作者 11/28 晚：營火森林 7 顆＋🍄 迷霧森林 3 顆，兩邊交錯著冒；全部照時間排好（前 7 分鐘內冒完）
+      const forestSpots = pool.slice(0, HUNT_COUNT).map((p) => ({ x: p.x, z: p.z, room: 'forest_main' }));
+      const mistSpots = [...MIST_HUNT_SPOTS].sort(() => Math.random() - 0.5).slice(0, HUNT_MIST).map((p) => ({ ...p, room: 'mist_forest' }));
+      const order = [];
+      for (let i = 0; order.length < forestSpots.length + mistSpots.length; i++) {
+        if (forestSpots[i]) order.push(forestSpots[i]);
+        if (i % 2 === 1 && mistSpots[(i - 1) / 2]) order.push(mistSpots[(i - 1) / 2]); // 大約每 2 顆森林夾 1 顆迷霧森林
+        if (i > 40) break;
+      }
+      const times = huntShowTimes(order.length);
+      const t0 = Date.now();
+      miniRun.spots = order.map((p, i) => ({ ...p, by: null, showAt: t0 + times[i] * 1000 }));
     }
   }
   return m;
 };
 /** 排行榜：釣魚比大（size），賽跑比快（time） */
 const miniRanked = () =>
-  [...miniRun.best.entries()].sort((a, b) => (miniRun.kind === 'race' ? a[1].time - b[1].time : b[1].size - a[1].size));
+  [...miniRun.best.entries()].sort((a, b) => (miniRun.kind === 'race' || miniRun.kind === 'boat' ? a[1].time - b[1].time : b[1].size - a[1].size));
 const miniTop = () => miniRanked().slice(0, 5).map(([, r]) => ({ ...r }));
 const miniPublic = () => {
   const m = miniInfo();
   const same = m.active && miniNow() && miniRun.id === m.id;
   // 還沒冒出來的金松果不給位置（h＝藏著）
   const now = Date.now();
-  return { ...m, top: same ? miniTop() : [], spots: same && m.kind === 'hunt' ? miniRun.spots.map((p) => (p.by || (p.showAt && p.showAt <= now) ? { x: p.x, z: p.z, by: p.by } : { h: 1 })) : [] };
+  return { ...m, top: same ? miniTop() : [], spots: same && m.kind === 'hunt' ? miniRun.spots.map((p) => (p.by || (p.showAt && p.showAt <= now) ? { x: p.x, z: p.z, by: p.by, room: p.room } : { h: 1, room: p.room })) : [] };
 };
 /** 🌱 來了幾天（第一次來那天算 0；以前的老玩家沒記錄，當作很久了），新手功能慢慢打開用 */
 const walletAge = (w) => {
@@ -1156,7 +1199,8 @@ function holView(vid) {
   const st = holState(H);
   const me = holMine(vid, H);
   const g = holGoal(H);
-  return { id: H.id, endIn: H.endIn, peak: H.peak, n: st.n, goal: g.n, steps: g.steps, got: st.got, joined: !!st.who[vid], all: me.all, tasks: def.tasks.map((q) => ({ id: q.id, have: Math.min(me.n[q.id] ?? 0, q.n), need: q.n })) };
+  const lastDone = !!st.got[g.steps.length - 1];
+  return { id: H.id, endIn: H.endIn, peak: H.peak, n: st.n, goal: g.n, steps: g.steps, got: st.got, joined: !!st.who[vid], all: me.all, late: g.late ?? 3, lateHave: lastDone ? (st.tro?.[vid] ? -1 : (st.late?.[vid] ?? 0)) : 0, tasks: def.tasks.map((q) => ({ id: q.id, have: Math.min(me.n[q.id] ?? 0, q.n), need: q.n })) };
 }
 /** 假日活動的事件（questEv 一開始呼叫）；回傳這次做完的題目 */
 function holEv(vid, ev, k = 1) {
@@ -1188,18 +1232,118 @@ function holEv(vid, ev, k = 1) {
     moved = true;
   }
   if (!moved) return done;
+  const lastI = g.steps.length - 1;
+  const doneBefore = !!st.got[lastI]; // 這一下之前全營地就已經達成了
+  if (doneBefore && !st.tro) {
+    // 11/28 以前的存檔沒記誰拿過獎盃 → 當時有參加、背包有這個獎盃的算拿過
+    st.tro = {};
+    for (const v of Object.keys(st.who)) if ((homes[v]?.inv?.[def.trophy] ?? 0) > 0) st.tro[v] = 1;
+  }
   st.who[vid] = 1; // 有參加
   g.steps.forEach((s, i) => {
     if (st.n < s || st.got[i]) return;
     st.got[i] = 1;
-    const last = i === g.steps.length - 1;
+    const last = i === lastI;
+    if (last) st.tro = { ...(st.tro ?? {}), ...st.who };
     for (const v of Object.keys(st.who)) last ? giveQuestFurn(v, def.trophy) : giveTo(v, HOL_STEP_GAIN, 'quest');
     io.emit('holStep', { id: H.id, step: i, last, n: s, who: Object.keys(st.who).length });
     console.log(`[假日] ${def.zh} 全營地到 ${s}（${Object.keys(st.who).length} 人參加）`);
   });
+  // 🏆 作者 11/28：全營地已經達成以後才來的人，幫忙 late 次（例如撿 5 個垃圾）也送主題獎盃
+  if (doneBefore && !st.tro[vid]) {
+    st.late ??= {};
+    st.late[vid] = (st.late[vid] ?? 0) + kk;
+    if (st.late[vid] >= (g.late ?? 3)) {
+      st.tro[vid] = 1;
+      delete st.late[vid];
+      giveQuestFurn(vid, def.trophy);
+      bump('holLate');
+      console.log(`[假日] ${def.zh} 達成後才來，幫忙夠了送獎盃：${players[vid]?.name ?? vid}`);
+    }
+  }
   saveJson('totals.json', totals);
   saveJson('players.json', players);
   return done;
+}
+
+// ---------- 🎄 12/24～27 聖誕 4 天活動（作者 11/24；規則在 src/game/xmasEvent.js） ----------
+// 本機測試：XEV_TEST='2026-12-24T20:56' 假裝現在是那個時間（台北時間，只影響聖誕活動；Render 不要設）
+const XEV_OFF = process.env.XEV_TEST ? Date.parse(`${process.env.XEV_TEST}:00+08:00`) - Date.now() : 0;
+const xevClock = () => new Date(Date.now() + XEV_OFF);
+const xevDay = () => dayKey(xevClock());
+const WISH_TREE_XZ = { x: Math.sin(0.5) * 8.4, z: Math.cos(0.5) * 8.4 }; // 跟 src/rooms/wishTree.js 的 POS 一樣
+function snowState() {
+  const y = SNOWMAN.day.slice(0, 4);
+  if (totals.snow?.y !== y) totals.snow = { y, n: 0, got: {}, who: {} };
+  return totals.snow;
+}
+const snowView = () => {
+  const d = xevDay();
+  const st = snowState();
+  return { on: snowmanOn(d), n: st.n, stage: snowStage(st.n), steps: SNOWMAN.steps, who: Object.keys(st.who).length };
+};
+/** 前端要的：今天能不能拆、拆過沒、連續幾天、拿到釣竿了沒、雪人 */
+function xevView(w) {
+  const d = xevDay();
+  const box = boxOn(d);
+  return { i: xevIndex(d), box, today: d, cal: boxDays().map((k) => !!w?.xev?.d?.[k]), opened: !!w?.xev?.d?.[d], streak: boxStreak(w?.xev?.d, d), need: XEV_STREAK, left: box ? boxDaysLeft(d) : 0, hasRod: !!w?.rods?.includes(XEV_ROD), snow: snowmanOn(d) ? snowView() : null };
+}
+/** 🛷 12/24 晚上：8:55 公告、9:00 雪橇一定飛過營火廣場，灑小禮物盒 */
+function tickXev() {
+  const now = xevClock();
+  const d = dayKey(now);
+  if (d !== SLEIGH_DROP.day) return;
+  const { h, m } = taipeiHM(now);
+  totals.xev ??= {};
+  if (h === SLEIGH_DROP.h - 1 && m >= 60 - SLEIGH_DROP.warnMin && totals.xev.warn !== d) {
+    totals.xev.warn = d;
+    saveJson('totals.json', totals);
+    io.emit('xevSleighSoon', { min: 60 - m });
+  }
+  if (h !== SLEIGH_DROP.h || m >= 30 || totals.xev.drop === d) return;
+  totals.xev.drop = d;
+  saveJson('totals.json', totals);
+  const L = LEGEND_BY_ID.sleigh;
+  for (const c of channels.values()) {
+    const k = key(c.ch, 'forest_main');
+    const lg = { id: 'sleigh', t0: Date.now(), dur: L.dur, dir: 1 };
+    legendNow.set(k, lg);
+    io.to(k).emit('legend', legendMsg(lg));
+    setTimeout(() => {
+      c.trash ??= {};
+      const list = (c.trash.fire ??= []);
+      const [a, b] = SLEIGH_DROP.n;
+      const n = a + Math.floor(Math.random() * (b - a + 1));
+      const exp = Date.now() + SLEIGH_DROP.keepMin * 60000;
+      for (let i = 0; i < n; i++) {
+        // 撒在營火廣場一圈（離營火 3～12 公尺），不要掉進營火
+        const ang = Math.random() * Math.PI * 2;
+        const r = 3 + Math.random() * 9;
+        list.push({ k: ++trashSeq, x: Math.sin(ang) * r, z: Math.cos(ang) * r, item: 'xgift', egg: true, exp });
+      }
+      io.to(trashKeys(c, 'forest_main')).emit('trash', { room: 'forest_main', list: publicTrash(c, 'fire') });
+    }, SLEIGH_DROP.dropAt);
+  }
+  io.emit('xevSleigh', {});
+  console.log('[聖誕] 🛷 雪橇灑禮物');
+}
+setInterval(tickXev, 15000);
+let snowEmitAt = 0;
+let snowEmitTimer = null;
+/** ⛄ 雪人進度送給在營火廣場的人（最多 2 秒一次，省流量） */
+function emitSnow(force = false) {
+  const send = () => {
+    snowEmitAt = Date.now();
+    snowEmitTimer = null;
+    const v = snowView();
+    for (const c of channels.values()) io.to(key(c.ch, 'forest_main')).emit('snow', v);
+  };
+  if (force) {
+    clearTimeout(snowEmitTimer);
+    return send();
+  }
+  if (snowEmitTimer) return;
+  snowEmitTimer = setTimeout(send, Math.max(0, 2000 - (Date.now() - snowEmitAt)));
 }
 /** 蓋章（每月集滿 20 個：臉妝＋金獎盃） */
 function addStamp(vid, n) {
@@ -1331,7 +1475,7 @@ const outfitView = (w) => {
   const daily = dailyOutfit(d).id;
   const weekly = weeklyOutfit(d).id;
   const owned = w?.outfits ?? [];
-  return { outfits: owned, wear: w?.wear ?? {}, daily, dailyGot: owned.includes(daily), weekly, weeklyGot: owned.includes(weekly), dateNext: nextDateOutfit(owned, isOpen)?.id ?? null };
+  return { rods: w?.rods ?? [], rod: w?.rod ?? '', outfits: owned, wear: w?.wear ?? {}, daily, dailyGot: owned.includes(daily), weekly, weeklyGot: owned.includes(weekly), dateNext: nextDateOutfit(owned, isOpen)?.id ?? null };
 };
 
 function wallet(vid) {
@@ -1391,9 +1535,27 @@ const skipTop = () => {
 let boatSeq = 0;
 /** ⛵ 租船看板的位置（跟 lakeRoom.js 一樣） */
 const BOAT_SIGN = { x: 1.9, z: 2.3 };
-const boatPublic = (b) => ({ id: b.id, k: b.k, o: b.o, on: b.on, r: b.r, x: +b.x.toFixed(2), z: +b.z.toFixed(2), ry: +b.ry.toFixed(3), until: b.until, slot: b.slot });
+const boatPublic = (b) => ({ id: b.id, k: b.k, o: b.o, on: b.on, r: b.r, x: +b.x.toFixed(2), z: +b.z.toFixed(2), ry: +b.ry.toFixed(3), until: b.until, slot: b.slot, ...(b.race ? { race: 1, go: b.goAt } : {}) });
+/** 租船的數量（🚣 比賽船不算，不占停船位） */
+const rentCount = (map) => [...(map?.values() ?? [])].filter((b) => !b.race).length;
 const boatList = (key) => [...(boatRooms.get(key)?.values() ?? [])].map(boatPublic);
 const boatOf = (key, sid) => [...(boatRooms.get(key)?.values() ?? [])].find((b) => b.r.includes(sid)) ?? null;
+/** 湖畔能站的地方（跟 lakeRoom.js 的 landResolve 一樣：岸邊＋碼頭）。在水上 → 回傳最近的岸上位置；本來就在岸上 → null */
+const LAKE_LAND = [
+  { minX: -9, maxX: 9, minZ: 1.6, maxZ: 8.6 },
+  { minX: -0.72, maxX: 0.72, minZ: DOCK_END, maxZ: 2.6 },
+];
+function lakeLand(x, z) {
+  let best = null;
+  let bd = Infinity;
+  for (const r of LAKE_LAND) {
+    const p = { x: Math.max(r.minX, Math.min(r.maxX, x)), z: Math.max(r.minZ, Math.min(r.maxZ, z)) };
+    const d = Math.hypot(p.x - x, p.z - z);
+    if (d < 1e-6) return null;
+    if (d < bd) [best, bd] = [p, d];
+  }
+  return best;
+}
 /** 下船站到碼頭上：照停船位、座位錯開，大家不會擠在同一點 */
 function boatLanding(b, i) {
   const st = BOAT_SLOTS[b.slot] ?? BOAT_SLOTS[0];
@@ -1427,7 +1589,7 @@ function boatEnd(key, b, why) {
 }
 setInterval(() => {
   const now = Date.now();
-  for (const [key, map] of boatRooms) for (const b of [...map.values()]) if (now >= b.until) boatEnd(key, b, 'time');
+  for (const [key, map] of boatRooms) for (const b of [...map.values()]) if (now >= b.until) boatEnd(key, b, b.race ? 'race' : 'time');
 }, 3000);
 
 function today() {
@@ -2144,7 +2306,7 @@ app.get(['/stats', '/api/stats'], (req, res) => {
       .catch(function () { st.textContent = '❌ 連不到伺服器'; btn.disabled = false; });
   };
 })();
-</script><p>伺服器已經連續醒著 <b>${awakeText()}</b>（從 ${new Date(BOOT_AT).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })} 起；正常只有重新部署時才會歸零，如果常常歸零，代表定時叫醒沒有生效、伺服器睡著過）</p><p>現在在線：${online} 人（名單在下面「👥 固定玩家」右邊）· 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好；「新旅人」是第一次來的人（從 11/3 開始統計）。</p>
+</script><p>伺服器已經連續醒著 <b>${awakeText()}</b>（從 ${new Date(BOOT_AT).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })} 起；正常只有重新部署時才會歸零，如果常常歸零，代表定時叫醒沒有生效、伺服器睡著過）</p><p>現在在線：${online} 人（名單在下面「👥 固定玩家」右邊）· 🌐 今天聊天翻譯：伺服器翻 ${translateStats().call} 句（${translateStats().chars} 字）、共用快取 ${translateStats().hit} 次${translateStats().quotaOut ? '、<b>今天伺服器額度用完了（改用玩家自己的瀏覽器翻）</b>' : ''} · 時區 ${STATS_TZ} · 只統計數字，不記錄個人資料。「30秒內離開」越低越好；「新旅人」是第一次來的人（從 11/3 開始統計）。</p>
 <div class="wrap"><table><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="${head.length}">還沒有資料</td></tr>'}</table></div>${regTable}${pcTable}${kidTable}${srcTable}${passTable}${spiritTable}</body></html>`);
 });
 
@@ -2441,6 +2603,15 @@ app.post('/api/grant', express.json(), (req, res) => {
       for (const so of io.sockets.sockets.values()) if (so.data.vid === vid) so.emit('staffGift', { kind: 'furn', id, home: publicHome(h) });
     }
     what = `🪑 ${f.zh}`;
+  } else if (type === 'rod') {
+    // 🎣 聖誕釣竿（作者 11/28：客訴補給用）
+    const w = players[vid];
+    if (!w) return res.json({ ok: false, reason: '找不到這位玩家' });
+    if (w.rods?.includes(XEV_ROD)) return res.json({ ok: false, reason: '他已經有聖誕釣竿了' });
+    w.rods = [...(w.rods ?? []), XEV_ROD];
+    saveJson('players.json', players);
+    for (const so of io.sockets.sockets.values()) if (so.data.vid === vid) so.emit('staffGift', { kind: 'rod', id: XEV_ROD });
+    what = '🎣 聖誕釣竿';
   } else return res.json({ ok: false, reason: '不知道要送什麼' });
   grants.push({ at: Date.now(), hid: homeId(vid), name: nameOfVid(vid), what, note });
   if (grants.length > 300) grants.splice(0, grants.length - 300);
@@ -2467,6 +2638,12 @@ app.post('/api/take', express.json(), (req, res) => {
     saveJson('players.json', players);
     for (const so of socketsOf(vid)) so.emit('wallet', { pc: w.pc, delta: -took, reason: 'staff' });
     what = `🌰 ${took} 顆松果${took < n ? `（他只剩 ${took} 顆，要收 ${n} 顆）` : ''}`;
+  } else if (type === 'rod') {
+    if (!w.rods?.includes(XEV_ROD)) return res.json({ ok: false, reason: '他沒有聖誕釣竿' });
+    w.rods = w.rods.filter((x) => x !== XEV_ROD);
+    if (w.rod === XEV_ROD) w.rod = '';
+    saveJson('players.json', players);
+    what = '🎣 聖誕釣竿';
   } else if (type === 'outfit') {
     if (!w.outfits?.includes(id)) return res.json({ ok: false, reason: '他沒有這款造型' });
     w.outfits = w.outfits.filter((x) => x !== id);
@@ -2533,7 +2710,7 @@ app.get('/admin', (req, res) => {
 <div class="box"><b>🔍 查玩家</b><br><input id="q" placeholder="名字、玩家編號 或 帳號名稱" size="28"> <button id="find">查詢</button><div id="card"></div></div>
 <div class="box"><b>📢 全營地公告</b> <small>（所有分流、所有地方的人畫面上方跳出 15 秒，聊天紀錄也有；之後 10 分鐘內才進來的人也看得到。套版會照玩家的語言顯示，自己打的字會自動翻譯給外國玩家）</small><br>${Object.entries(ANNOUNCE_TPL).map(([k, v]) => `<button type="button" data-atpl="${k}" style="margin:3px 4px 3px 0">${escH(v)}</button>`).join('')}<br><input id="atext" maxlength="${ANNOUNCE_MAX}" size="56" placeholder="點上面的套版，或自己打字（最多 ${ANNOUNCE_MAX} 字）"> <button id="asend">📢 發公告</button> <span id="ares"></span>${announces.length ? `<div style="margin-top:6px;font-size:13px;color:#bba">最近發過：${announces.slice(-5).reverse().map((a) => `<br>${new Date(a.at).toLocaleString('zh-TW', { timeZone: STATS_TZ, hour12: false })}　${escH(a.tpl ? ANNOUNCE_TPL[a.tpl] : a.text)}`).join('')}</div>` : ''}</div>
 <div class="box" id="gbox" hidden><b>🎁 發補償／收回：<span id="gname"></span></b><br>
-<select id="gtype"><option value="outfit">👒 造型</option><option value="pc">🌰 松果</option><option value="furn">🪑 家具</option></select>
+<select id="gtype"><option value="outfit">👒 造型</option><option value="pc">🌰 松果</option><option value="furn">🪑 家具</option><option value="rod">🎣 聖誕釣竿</option></select>
 <select id="gout">${outfitOpts}</select><select id="gfurn" hidden>${furnOpts}</select><input id="gn" type="number" min="1" value="10" hidden>
 <input id="gnote" placeholder="備註（例：同網路沒算到的邀請補發）" size="30"> <button id="give">送出</button> <button id="take" class="ghost">➖ 收回</button> <span id="gmsg"></span><div class="hint">「➖ 收回」：把選的造型、松果（填數量，最多扣到 0）、家具要回來；家具擺在家裡的也會拿掉。</div></div>
 <section class="tab" data-tab="money"><div class="box"><b>💸 退款後收回</b><br><span class="hint">先在綠界後台退款，再在這裡輸入那筆的訂單編號（/stats 月票表格最右邊那欄）。會扣回月票天數、先送的松果（已花掉就扣到 0）；支持營地會收回假髮。</span><br><input id="rno" placeholder="訂單編號" size="28"> <button id="refund">收回</button> <span id="rmsg"></span></div>
@@ -2688,7 +2865,7 @@ app.get('/admin', (req, res) => {
   };
   $('take').onclick = function () {
     var v = $('gtype').value;
-    var label = v === 'pc' ? $('gn').value + ' 顆松果' : v === 'outfit' ? $('gout').selectedOptions[0].textContent : $('gfurn').selectedOptions[0].textContent;
+    var label = v === 'pc' ? $('gn').value + ' 顆松果' : v === 'rod' ? '🎣 聖誕釣竿' : v === 'outfit' ? $('gout').selectedOptions[0].textContent : $('gfurn').selectedOptions[0].textContent;
     var body = { q: cur, type: v, id: v === 'outfit' ? $('gout').value : $('gfurn').value, n: $('gn').value, note: $('gnote').value };
     if (!confirm('確定從 ' + $('gname').textContent + ' 收回 ' + label + '？')) return;
     $('take').disabled = true;
@@ -2842,7 +3019,7 @@ const packState = (p) => [
   p.zz | 0, // 😴 打瞌睡（舊版前端只讀前 6 格，不受影響）
 ];
 
-const publicInfo = (p) => ({ id: p.id, name: p.name, fur: p.fur, sp: p.sp, tl: p.tl || undefined, er: p.er || undefined, rw: p.rw, ot: p.ot, pb: p.pb, sr: p.sr || undefined, sn: (p.sr && p.sn) || undefined, spk: p.spk || undefined, dk: p.dk > Date.now() ? p.dk : undefined, s: packState(p) }); // dk：🦆 小鴨跟到幾點
+const publicInfo = (p) => ({ id: p.id, name: p.name, fur: p.fur, sp: p.sp, tl: p.tl || undefined, er: p.er || undefined, rw: p.rw, ot: p.ot, pb: p.pb, rd: p.rd || undefined, sr: p.sr || undefined, sn: (p.sr && p.sn) || undefined, spk: p.spk || undefined, dk: p.dk > Date.now() ? p.dk : undefined, s: packState(p) }); // dk：🦆 小鴨跟到幾點
 
 /** 某個分流的某個房間，給新進玩家的完整資料 */
 function roomSnapshot(c, rid, selfId) {
@@ -3215,6 +3392,11 @@ io.on('connection', (socket) => {
     chan = c;
     if (player) (player.ch = c.ch), (player.spk = undefined); // 換地方：小精靈不在精靈家具上了
     roomId = id;
+    // 🌊 作者 11/28「玩家上線直接站在海上」：斷線前坐在船上，重連時用了船上的位置（船已經不在）→ 拉回岸上／碼頭
+    if (id === 'lake_dock' && player) {
+      const land = lakeLand(player.x, player.z);
+      if (land) [player.x, player.z, player.dirty] = [land.x, land.z, true];
+    }
     const rid = id === 'campground' ? campRid(campZone) : id; // 帳篷營地：照現在在哪一區
     room = ensureRoom(c, rid);
     rkey = key(c.ch, rid);
@@ -3383,6 +3565,7 @@ io.on('connection', (socket) => {
     if (session && firstVisit) session.newbie = true; // 統計：新旅人留不留得住
     wal = wallet(myVid);
     if (wal) player.ot = wearCodes(wal);
+    if (wal?.rod && wal.rods?.includes(wal.rod)) player.rd = wal.rod; // 🎄 釣竿皮膚
     if (wal) {
       // ✨ 小精靈：好幾天沒來，它會衝過來（前端看 away）
       const sp = spiritOf();
@@ -3546,7 +3729,7 @@ io.on('connection', (socket) => {
       id: socket.id,
       name: player.name, // 隨機名字撞名時，伺服器換過的名字
       reward: player.rw,
-      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, age: walletAge(wal), dex: dexView(wal), shiny: wal.shiny ?? {}, look: wal.look ?? null, outfit: outfitView(wal), basket: wal.bk ?? {}, gdex: gdexOf(wal), ...trashView(wal), dishes: wal.dish ?? {}, cooked: Object.keys(wal.cooked ?? {}), buff: activeBuff(wal.buff) ? wal.buff : null, net: !!wal.net, pass: passView(wal) } : null,
+      wallet: wal ? { pc: wal.pc, streak: wal.streak, daily, age: walletAge(wal), dex: dexView(wal), shiny: wal.shiny ?? {}, look: wal.look ?? null, outfit: outfitView(wal), basket: wal.bk ?? {}, gdex: gdexOf(wal), ...trashView(wal), dishes: wal.dish ?? {}, cooked: Object.keys(wal.cooked ?? {}), buff: activeBuff(wal.buff) ? wal.buff : null, net: !!wal.net, pass: passView(wal), xev: xevView(wal) } : null,
       myHome: publicHome(homes[player.vid]),
       plotNote, // 🏕️ 「你的帳篷有了固定門牌／搬到 X 區 N 號了」
       code: player.vid ? homeId(player.vid) : null, // 邀請連結用的公開代號
@@ -3783,6 +3966,15 @@ io.on('connection', (socket) => {
     io.emit('shout', { name: authorName(player), text, at: now });
     console.log(`[大聲公] ${player.name}：${text}`);
     ack?.({ ok: true, pc: wal.pc });
+  });
+  // 🌐 聊天翻譯（作者 11/28）：伺服器幫大家翻，同一句只翻一次；額度用完回 quota，前端改用自己的瀏覽器翻
+  let trTimes = [];
+  socket.on('tr', async (data = {}, ack) => {
+    const now = Date.now();
+    trTimes = trTimes.filter((x) => now - x < 60000);
+    if (trTimes.length >= 40) return ack?.({ fail: 'busy' });
+    trTimes.push(now);
+    ack?.(await translate(data.text, data.src, data.to));
   });
   let lastSpiritChat = 0;
   socket.on('chat', (data = {}) => {
@@ -4372,6 +4564,86 @@ io.on('connection', (socket) => {
     ack?.({ ok: true, wear: wal.wear });
   });
 
+  // 🎄 換釣竿皮膚（'' 原本的木頭竿；其他要有拿到：wal.rods）
+  socket.on('rodSkin', (data = {}, ack) => {
+    if (!wal || !player) return ack?.({ ok: false });
+    const id = String(data.id ?? '');
+    if (id && !wal.rods?.includes(id)) return ack?.({ ok: false, reason: 'notOwned' });
+    wal.rod = id;
+    player.rd = id;
+    saveJson('players.json', players);
+    socket.to(rkey).emit('rodSkin', { id: socket.id, rd: id });
+    ack?.({ ok: true, rod: id });
+  });
+
+  // 🎄 聖誕 4 天活動
+  socket.on('xevInfo', (data, ack) => ack?.(wal ? { ok: true, ...xevView(wal) } : { ok: false }));
+  /** 🎁 拆今天大聖誕樹下自己的禮物盒（12/17～27 每天一次；連續 3 天拆到送聖誕釣竿） */
+  socket.on('xevBox', (data, ack) => {
+    if (!wal || !player || roomId !== 'forest_main') return ack?.({ ok: false });
+    const d = xevDay();
+    if (!boxOn(d)) return ack?.({ ok: false, reason: 'notToday' });
+    if (Math.hypot(player.x - WISH_TREE_XZ.x, player.z - WISH_TREE_XZ.z) > 7) return ack?.({ ok: false, reason: 'far' });
+    wal.xev ??= {};
+    wal.xev.d ??= {};
+    if (wal.xev.d[d]) return ack?.({ ok: false, reason: 'opened', ...xevView(wal) });
+    wal.xev.d[d] = 1;
+    // 🎁 今天的禮物（每天不一樣：松果、料理材料、家具）
+    const g = XEV_GIFTS[d] ?? {};
+    const gain = XEV_BOX_GAIN + (g.pc ?? 0);
+    giveTo(player.vid, gain, 'xev');
+    const bk = {};
+    for (const [id, n] of Object.entries(g.bk ?? {})) {
+      if (!GATHER_BY_ID[id]) continue;
+      wal.bk ??= {};
+      wal.bk[id] = (wal.bk[id] ?? 0) + n;
+      discover(wal, id);
+      bk[id] = wal.bk[id];
+    }
+    let furn = null;
+    if (g.furn && CATALOG_BY_ID[g.furn]) {
+      const h = (homes[player.vid] ??= newHome());
+      h.inv[g.furn] = (h.inv[g.furn] ?? 0) + 1;
+      saveJson('homes.json', homes);
+      furn = g.furn;
+      socket.emit('staffGift', { kind: 'furn', id: furn, home: publicHome(h), why: 'xev' });
+    }
+    let rod = false;
+    if (boxStreak(wal.xev.d, d) >= XEV_STREAK && !wal.rods?.includes(XEV_ROD)) {
+      wal.rods = [...(wal.rods ?? []), XEV_ROD];
+      rod = true;
+      bump('xevRod');
+    }
+    saveJson('players.json', players);
+    bump('xevBox');
+    ack?.({ ok: true, gain, bk, furn, ...xevView(wal), rod });
+  });
+  /** ⛄ 堆一下大雪人（12/25 開始，堆完為止） */
+  socket.on('snowPush', (data, ack) => {
+    if (!wal || !player || roomId !== 'forest_main') return ack?.({ ok: false });
+    const d = xevDay();
+    const st = snowState();
+    if (d < SNOWMAN.day || !snowmanOn(d)) return ack?.({ ok: false, reason: 'notToday' });
+    if (snowStage(st.n) >= SNOWMAN.steps.length) return ack?.({ ok: false, reason: 'done' });
+    if (Math.hypot(player.x - SNOWMAN_POS.x, player.z - SNOWMAN_POS.z) > 4.5) return ack?.({ ok: false, reason: 'far' });
+    const now = Date.now();
+    if (now - (player.snowAt ?? 0) < SNOWMAN.cd - 300) return ack?.({ ok: false, reason: 'cd' });
+    player.snowAt = now;
+    const before = snowStage(st.n);
+    st.n++;
+    st.who[player.vid] = 1;
+    const after = snowStage(st.n);
+    if (after > before && !st.got[before]) {
+      st.got[before] = 1;
+      for (const v of Object.keys(st.who)) giveTo(v, SNOWMAN.gain, 'xev');
+      io.emit('snowStep', { step: before, who: Object.keys(st.who).length, last: after >= SNOWMAN.steps.length });
+      console.log(`[聖誕] ⛄ 雪人第 ${after} 段完成（${Object.keys(st.who).length} 人）`);
+      emitSnow(true);
+    } else emitSnow();
+    saveJson('totals.json', totals);
+    ack?.({ ok: true, ...snowView() });
+  });
+
   // 🍄 迷霧森林採集：每個人的採集點各自分開
   socket.on('gatherInfo', (data, ack) => {
     if (!wal) return ack?.({ ok: false });
@@ -4407,7 +4679,24 @@ io.on('connection', (socket) => {
     const tr = list?.find((x) => x.k === k);
     if (!tr) return ack?.({ ok: false, reason: 'gone' });
     if (Math.hypot(player.x - tr.x, player.z - tr.z) > TOUCH_R + 2.5) return ack?.({ ok: false, reason: 'far' });
+    // 🛷 雪橇灑的小禮物：一個人最多撿 3 個（大家都撿得到）
+    const xd = xevDay();
+    if (tr.item === 'xgift') {
+      wal.xev ??= {};
+      if (wal.xev.sg?.day !== xd) wal.xev.sg = { day: xd, n: 0 };
+      if (wal.xev.sg.n >= SLEIGH_DROP.cap) return ack?.({ ok: false, reason: 'xcap', cap: SLEIGH_DROP.cap });
+    }
     chan.trash[place] = list.filter((x) => x !== tr);
+    if (tr.item === 'xgift' || tr.item === 'xbig') {
+      io.to(trashKeys(chan, roomId)).emit('trash', { room: roomId, list: publicTrash(chan, place) });
+      const big = tr.item === 'xbig';
+      if (big) io.emit('holGold', { name: player.name, kind: 'xbig' });
+      else wal.xev.sg.n++;
+      giveTo(player.vid, big ? HOL_GOLD_GAIN : SLEIGH_DROP.gain, 'xev');
+      saveJson('players.json', players);
+      bump(big ? 'xevBig' : 'xevSleigh');
+      return ack?.({ ok: true, egg: true, xgift: true, big, gain: big ? HOL_GOLD_GAIN : SLEIGH_DROP.gain, left: big ? null : SLEIGH_DROP.cap - wal.xev.sg.n });
+    }
     // 🥚 假日雞蛋節的彩蛋（混在垃圾清單裡，同一套撿的方式）
     if (tr.egg) {
       io.to(trashKeys(chan, roomId)).emit('trash', { room: roomId, list: publicTrash(chan, place) });
@@ -5022,11 +5311,18 @@ io.on('connection', (socket) => {
   socket.on('giftDish', (data = {}, ack) => {
     if (!wal || !player) return ack?.({ ok: false });
     const d = DISH_BY_ID[String(data.id ?? '')];
-    if (!d || !(wal.dish?.[d.id] > 0)) return ack?.({ ok: false });
+    // 作者 11/28「送料理給朋友，後來都送不出去」：送料理沒有次數限制；以前失敗一律說「對方剛好離開了」→ 分清楚原因、記在伺服器紀錄
+    const fail = (reason) => {
+      console.log(`[送料理失敗] ${player.name} → ${String(data.to ?? '').slice(0, 8)} ${d?.id ?? data.id}：${reason}（${roomId}）`);
+      return ack?.({ ok: false, reason, ...dishView() });
+    };
+    if (!d) return fail('unknown');
+    if (!(wal.dish?.[d.id] > 0)) return fail('none'); // 自己這道已經沒有了
     const to = room?.players.get(String(data.to ?? ''));
     const toSock = to && io.sockets.sockets.get(to.id);
-    const toWal = to?.vid && players[to.vid];
-    if (!to || to.id === socket.id || !toSock || !toWal) return ack?.({ ok: false, reason: 'gone' });
+    if (!to || to.id === socket.id || !toSock) return fail('gone'); // 不在同一個地方（或剛重新連線）
+    const toWal = to.vid && players[to.vid];
+    if (!toWal) return fail('noWallet'); // 對方還沒有松果錢包（剛進來、或用無痕視窗）
     wal.dish[d.id]--;
     if (!wal.dish[d.id]) delete wal.dish[d.id];
     toWal.dish ??= {};
@@ -5782,7 +6078,7 @@ io.on('connection', (socket) => {
   const boatSync = () => rkey && io.to(rkey).emit('boats', { list: boatList(rkey) });
   socket.on('boatInfo', (_d, ack) => {
     const now = Date.now();
-    ack?.({ ok: true, open: isOpen({ from: BOAT_FROM }), list: boatList(rkey ?? ''), mine: boatNow()?.id ?? null, feedLeft: Math.max(0, (wal?.feedUntil ?? 0) - now), bait: wal?.bait ?? 0, full: (boatRooms.get(rkey)?.size ?? 0) >= BOAT_MAX });
+    ack?.({ ok: true, open: isOpen({ from: BOAT_FROM }), list: boatList(rkey ?? ''), mine: boatNow()?.id ?? null, feedLeft: Math.max(0, (wal?.feedUntil ?? 0) - now), bait: wal?.bait ?? 0, full: rentCount(boatRooms.get(rkey)) >= BOAT_MAX });
   });
   let lastBoat = 0;
   socket.on('boatRent', (data = {}, ack) => {
@@ -5796,7 +6092,7 @@ io.on('connection', (socket) => {
     const map = boatRooms.get(rkey) ?? new Map();
     const used = new Set([...map.values()].map((b) => b.slot));
     const slot = BOAT_SLOTS.findIndex((_, i) => !used.has(i));
-    if (map.size >= BOAT_MAX || slot < 0) return ack?.({ ok: false, reason: 'full' });
+    if (rentCount(map) >= BOAT_MAX || slot < 0) return ack?.({ ok: false, reason: 'full' });
     if (wal.pc < k.price) return ack?.({ ok: false, reason: 'poor', pc: wal.pc });
     const now = Date.now();
     if (now - lastBoat < 1500) return ack?.({ ok: false, reason: 'tooFast' });
@@ -5843,7 +6139,7 @@ io.on('connection', (socket) => {
     if (!player || roomId !== 'lake_dock') return ack?.({ ok: false, reason: 'place' });
     if (boatNow()) return ack?.({ ok: false, reason: 'already' });
     const b = boatRooms.get(rkey)?.get(Number(data.id));
-    if (!b) return ack?.({ ok: false, reason: 'gone' });
+    if (!b || b.race) return ack?.({ ok: false, reason: 'gone' }); // 🚣 比賽船不能上
     const i = b.r.indexOf(null);
     if (i < 0) return ack?.({ ok: false, reason: 'full' });
     if (Math.hypot(player.x - b.x, player.z - b.z) > 4.5) return ack?.({ ok: false, reason: 'far' });
@@ -5875,6 +6171,7 @@ io.on('connection', (socket) => {
     const b = boatNow();
     if (!b || b.o !== socket.id || !Array.isArray(d)) return;
     const now = Date.now();
+    if (b.race && now < b.goAt) return; // 🚣 還沒出發：船停在起跑線
     const dt = Math.min(Math.max((now - (lastBoatMove || now)) / 1000, 0.05), 1.5);
     if (now - lastBoatMove < 60) return;
     lastBoatMove = now;
@@ -5885,6 +6182,77 @@ io.on('connection', (socket) => {
     keepOnLake(p, BOATS[b.k].r * 0.6);
     [b.x, b.z, b.ry] = [p.x, p.z, num(d[2], -1000, 1000, b.ry)];
     socket.to(rkey).emit('boatPos', [b.id, +b.x.toFixed(2), +b.z.toFixed(2), +b.ry.toFixed(3)]);
+  });
+  // 🚣 划船競速（作者 11/28）：op 'info' 看狀態、'sign' 報名、'cp' 碰到第 i 個浮標／終點線
+  //   出發那一刻由下面的 setInterval 呼叫每個報名的人自己的 go()（要用這條連線的 roomId、rkey）
+  socket.on('brace', (data = {}, ack) => {
+    const m = miniNow();
+    const br = m?.kind === 'boat' ? miniRun.brace : null;
+    const vid = socket.data.vid;
+    if (!br || !player || !vid) return ack?.({ ok: false, reason: 'off' });
+    const me = br.sign.get(vid);
+    const now = Date.now();
+    const view = () => ({ ok: true, signEnd: br.signEnd, goAt: br.goAt, started: br.started, signed: !!me || br.sign.has(vid), n: br.sign.size, next: br.sign.get(vid)?.next ?? 0, done: br.sign.get(vid)?.done ?? null, now });
+    if (data.op === 'info') return ack?.(view());
+    if (data.op === 'sign') {
+      if (me) return ack?.(view());
+      if (br.started || now >= br.signEnd) return ack?.({ ok: false, reason: 'late' });
+      if (roomId !== 'lake_dock') return ack?.({ ok: false, reason: 'place' });
+      if (boatNow()) return ack?.({ ok: false, reason: 'inBoat' });
+      br.sign.set(vid, {
+        sid: socket.id,
+        name: player.name,
+        next: 0,
+        done: null,
+        // 出發：這條連線還在湖畔、沒坐在別的船上 → 放一艘免費比賽船在起跑線
+        go(i) {
+          if (!socket.connected || roomId !== 'lake_dock' || !rkey || !player) return false;
+          if (boatNow()) return false;
+          const st = raceGrid(i);
+          const map = boatRooms.get(rkey) ?? new Map();
+          const k = BOATS[BOAT_RACE.kind];
+          const b = { id: ++boatSeq, k: k.id, o: socket.id, on: player.name, ov: vid, r: [socket.id], p: new Map([[socket.id, player]]), slot: -1, x: st.x, z: st.z, ry: st.ry, until: br.endAt, race: true, goAt: br.goAt };
+          map.set(b.id, b);
+          boatRooms.set(rkey, map);
+          const seat = seatAt(b, 0);
+          [player.x, player.z, player.posAt, player.dirty] = [seat.x, seat.z, Date.now(), true];
+          this.sid = socket.id;
+          this.bid = b.id;
+          this.key = rkey;
+          return true;
+        },
+      });
+      bump('braceSign');
+      console.log(`[划船競速] ${player.name} 報名（共 ${br.sign.size} 人）`);
+      return ack?.(view());
+    }
+    if (data.op === 'cp') {
+      if (!me || !br.started || me.done || now < br.goAt) return ack?.({ ok: false, reason: 'off' });
+      const b = boatNow();
+      if (!b?.race) return ack?.({ ok: false, reason: 'noBoat' });
+      const i = Math.floor(num(data.i, -1, RACE_CPS.length - 1, -1));
+      if (i !== me.next) return ack?.({ ok: false, reason: 'order', next: me.next });
+      if (!raceTouch(i, b.x, b.z, 1.6)) return ack?.({ ok: false, reason: 'far', next: me.next });
+      if (i < RACE_CPS.length - 1) {
+        me.next = i + 1;
+        return ack?.({ ok: true, next: me.next });
+      }
+      const time = Math.round((now - br.goAt) / 100) / 10;
+      if (time < BOAT_RACE.minSec) return ack?.({ ok: false, reason: 'tooFast', next: me.next });
+      me.done = time;
+      me.next = RACE_CPS.length;
+      miniRun.best.set(vid, { name: player.name, time });
+      io.emit('miniBoard', { top: miniTop() });
+      giveTo(vid, BOAT_RACE.finishGain, 'contest');
+      chal('braceDone');
+      bump('braceDone');
+      const rank = miniRanked().findIndex(([v]) => v === vid) + 1;
+      console.log(`[划船競速] ${player.name} 抵達 ${time} 秒（第 ${rank} 名）`);
+      const key = rkey;
+      setTimeout(() => boatEnd(key, b, 'race'), 2500); // 過終點線 2.5 秒後回碼頭
+      return ack?.({ ok: true, finish: true, time, rank, gain: BOAT_RACE.finishGain });
+    }
+    ack?.({ ok: false, reason: 'unknown' });
   });
   // 🐟 特殊魚飼料：10 分鐘稀有魚 ×2（再買一次往後延）
   // 🐟 魚飼料（作者 11/22）：買了放進背包（wal.bait 包數），釣魚時按「🐟 撒」才開始算 10 分鐘
@@ -6253,7 +6621,7 @@ io.on('connection', (socket) => {
   socket.on('race', (data = {}, ack) => {
     const m = miniNow();
     if (m?.kind !== 'race' || roomId !== 'forest_main' || !socket.data.vid) return ack?.({ ok: false, reason: 'off' });
-    const route = miniRun.route ?? (miniRun.route = makeRaceRoute());
+    const route = miniRun.route ?? (miniRun.route = makeRaceRoute(Math.random, xevDay()));
     if (race.mid !== m.id) race = { next: 0, t0: 0, mid: m.id };
     if (data.op === 'route') return ack?.({ ok: true, route, next: race.next });
     const i = Math.floor(num(data.i, -1, RACE_LANTERNS.length - 1, -1));
@@ -6283,23 +6651,17 @@ io.on('connection', (socket) => {
   // ✨ 找金松果：走到藏的地方就撿起來，先到先得
   socket.on('grab', (data = {}, ack) => {
     const m = miniNow();
-    if (m?.kind !== 'hunt' || roomId !== 'forest_main' || !socket.data.vid) return ack?.({ ok: false, reason: 'off' });
+    if (m?.kind !== 'hunt' || !socket.data.vid) return ack?.({ ok: false, reason: 'off' });
     const i = Math.floor(num(data.i, -1, miniRun.spots.length - 1, -1));
     const spot = miniRun.spots[i];
     if (!spot) return ack?.({ ok: false, reason: 'unknown' });
+    if ((spot.room ?? 'forest_main') !== roomId) return ack?.({ ok: false, reason: 'off' }); // 🍄 迷霧森林的要在迷霧森林撿
     if (spot.by) return ack?.({ ok: false, reason: 'taken', by: spot.by });
     if (!spot.showAt || spot.showAt > Date.now()) return ack?.({ ok: false, reason: 'hidden' });
     if (!nearSpot(spot)) return ack?.({ ok: false, reason: 'far' });
     spot.by = player.name;
     award(HUNT_GAIN, 'hunt');
-    // 下一顆：等一下才冒出來（時間不夠就不冒了）
-    const nxt = miniRun.spots.find((p) => !p.by && !p.showAt);
-    if (nxt) {
-      const endAt = Date.now() + (m.endsIn ?? 0) * 1000;
-      const at = Date.now() + (40 + Math.random() * 110) * 1000;
-      if (at < endAt - 20000) nxt.showAt = at;
-      else if (endAt - Date.now() > 40000) nxt.showAt = Date.now() + 15000;
-    }
+    // （11/28 起每顆冒出來的時間一開始就排好了，不用等上一顆被找到）
     const left = miniRun.spots.filter((p) => !p.by).length;
     io.emit('miniHunt', { i, by: player.name, left });
     ack?.({ ok: true, left });
@@ -6479,8 +6841,9 @@ io.on('connection', (socket) => {
     if (wal.gsc.n >= GIFT_SEND_MAX) return ack?.({ ok: false, reason: 'sendMax' });
     const tw = players[to];
     if (tw.grc?.d !== dk) tw.grc = { d: dk, v: 0 };
-    const value = info.value * n;
-    if (tw.grc.v + value > GIFT_DAILY_CAP) return ack?.({ ok: false, reason: 'cap', left: Math.max(0, GIFT_DAILY_CAP - tw.grc.v) });
+    // 🍲 作者 11/28（選 A）：料理不算進「每天收禮 50」的額度（料理要自己煮，不太會被拿來洗東西；營火旁直接送本來就沒限制），只算「每天送 20 次」
+    const value = cat === 'dish' ? 0 : info.value * n;
+    if (value > 0 && tw.grc.v + value > GIFT_DAILY_CAP) return ack?.({ ok: false, reason: 'cap', left: Math.max(0, GIFT_DAILY_CAP - tw.grc.v) });
     // 從自己身上拿走
     const h = homes[me];
     const th = homes[to];
@@ -6719,7 +7082,7 @@ setInterval(() => {
   }
   // 結束
   let winners = [];
-  if (miniRun.kind === 'fish' || miniRun.kind === 'race') {
+  if (miniRun.kind === 'fish' || miniRun.kind === 'race' || miniRun.kind === 'boat') {
     winners = miniRanked()
       .slice(0, MINI_PRIZES.length)
       .map(([vid, r], i) => {
@@ -6733,19 +7096,45 @@ setInterval(() => {
   console.log(`[小活動] ${miniRun.kind} 結束`, winners.map((w) => w.name + (w.size ? ` ${w.size}cm` : w.time ? ` ${w.time}s` : '')).join('、'));
 }, 5000);
 
+// 🚣 划船競速：報名時間到 → 每個報名的人放一艘比賽船在起跑線，倒數後一起出發
+setInterval(() => {
+  const m = miniInfo();
+  if (!m.active || m.kind !== 'boat' || !miniNow()) return;
+  const br = miniRun.brace;
+  if (!br || br.started || Date.now() < br.signEnd) return;
+  br.started = true;
+  const keys = new Set();
+  let i = 0;
+  let n = 0;
+  for (const [vid, e] of br.sign) {
+    const ok = e.go(i);
+    if (ok) {
+      i++;
+      n++;
+      keys.add(e.key);
+      io.to(e.sid).emit('braceGo', { goAt: br.goAt, now: Date.now(), n: br.sign.size });
+    } else {
+      e.done = -1; // 不在湖畔、離線、或坐在別人的船上：這場沒出發
+      for (const s of io.sockets.sockets.values()) if (s.data.vid === vid) s.emit('braceGo', { missed: true });
+    }
+  }
+  for (const k of keys) io.to(k).emit('boats', { list: boatList(k) });
+  console.log(`[划船競速] 出發！${n} 人（報名 ${br.sign.size}）`);
+}, 1000);
+
 // ✨ 找金松果：時間到就讓下一顆冒出來，通知大家
 setInterval(() => {
   const m = miniInfo();
   if (!m.active || m.kind !== 'hunt' || !miniNow()) return;
   const now = Date.now();
-  let fresh = false;
+  let fresh = null;
   for (const p of miniRun.spots) {
     if (p.showAt && p.showAt <= now && !p.shown) {
       p.shown = true;
-      fresh = true;
+      fresh = p.room ?? 'forest_main'; // 冒在哪裡（🍄 迷霧森林的通知寫清楚）
     }
   }
-  if (fresh) io.emit('miniHuntShow', miniPublic());
+  if (fresh) io.emit('miniHuntShow', { ...miniPublic(), fresh });
 }, 2000);
 
 // 營火時間開始／結束時通知所有人

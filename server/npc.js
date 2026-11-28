@@ -25,7 +25,7 @@ const DOCK_ROOT = { x: 0, z: 3.0 }; // 湖畔碼頭：碼頭和岸邊接起來�
 const PLACES = {
   forest_main: {
     // 添柴火：只在火邊待一下下（挑沒有玩家的位置），添完就回自己的地方
-    fireSeat: () => polar(rand(0, Math.PI * 2), 2.7), // 圓木外面（不走進圓木之間）
+    fireSeat: () => polar(rand(0, Math.PI * 2), 3.3), // 圓木外面（不走進圓木之間；11/28 外面多一圈圓木（離火 2.6），從 2.7 往外挪）
     // 每個居民在外圍有自己的固定位置（不佔玩家的座位、不擠在營火邊）
     own: {
       oak: polar(0.11, 5.6), // 撿柴的小橡：往祈福處的小路旁
@@ -83,9 +83,9 @@ export const RESIDENTS = [
 ];
 
 const WALK_SPEED = 1.25;
-/** 🪵 營火圓木座位最外緣（fireSeats.js：離火 1.56～1.9、半徑到 0.33）＋身體，直線擦到這圈就要繞 */
-const LOG_RING = 2.45;
-const AROUND_R = 2.8;
+/** 🪵 營火圓木座位最外緣（fireSeats.js：內圈離火 1.56～1.9、11/28 加的外圈 2.58～2.62、半徑到 0.31）＋身體，直線擦到這圈就要繞 */
+const LOG_RING = 3.05;
+const AROUND_R = 3.4;
 
 /**
  * 建立一個分流的居民。

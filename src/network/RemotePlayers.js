@@ -33,7 +33,7 @@ const POSE_OF = {
   boat: 'sit', // ⛵ 坐在船上
 };
 
-function makeNameTag(name, npc = false) {
+export function makeNameTag(name, npc = false) {
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
   const font = '600 34px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
@@ -78,13 +78,14 @@ const npcName = (name) => {
 };
 
 class RemotePlayer {
-  constructor({ id, name, fur, sp = 0, tl = '', er = '', rw = 0, ot = null, pb = 0, s, npc = false }) {
+  constructor({ id, name, fur, sp = 0, tl = '', er = '', rw = 0, ot = null, pb = 0, rd = '', s, npc = false }) {
     this.id = id;
     this.npc = npc; // 營地居民（電腦角色）
     this.name = name;
     this.character = new ProceduralFox({ fur, species: sp, tail: tl, ears: er });
     this.character.setOutfit(wearOfCodes(ot)); // 造型（帽子、背包、圍巾）
     this.character.setAccessory(rw); // 贊助者的小花
+    if (rd) this.character.setRodSkin(rd); // 🎄 釣竿皮膚
     this.group = new THREE.Group();
     this.group.add(this.character.root);
 
@@ -325,6 +326,11 @@ export class RemotePlayers {
 
   get(id) {
     return this.players.get(id);
+  }
+
+  /** 🎄 別人換了釣竿皮膚 */
+  setRodSkin(id, rd) {
+    this.players.get(id)?.character.setRodSkin(rd || '');
   }
 
   /** 別人換了造型 */

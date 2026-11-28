@@ -306,6 +306,8 @@ export const FURNITURE_CATALOG = [
   { id: 'q_stonejar', icon: '🪨', zh: '打水漂石頭罐', cat: 'deco', kind: 'small', quest: 1, trophy: true },
   { id: 'q_dice', icon: '🎲', zh: '迷你桌遊組', cat: 'deco', kind: 'small', quest: 1, trophy: true },
   { id: 'q_letterbox', icon: '💌', zh: '愛心小信箱', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_tro_xmas', icon: '🏆', zh: '聖誕交換禮物獎盃', cat: 'deco', kind: 'small', quest: 1, trophy: true },
+  { id: 'q_snowglobe', icon: '🔮', zh: '聖誕雪花水晶球', cat: 'deco', kind: 'small', quest: 1, trophy: true },
   { id: 'q_cabinet', icon: '🗄️', zh: '獎盃展示牆', price: 40, cat: 'table', shelf: 9, wide: 0.8, color: false }, // 一面牆的格子櫃：3×3 九格，擺獎盃、小東西
 ];
 /** 🍽️ 餐桌上的盤子放哪（相對格子中心；大餐桌往右多一格） */

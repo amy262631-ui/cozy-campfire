@@ -313,12 +313,14 @@ export class HUD {
     this._miT = m ? (m.active ? 0 : m.startsIn) : Infinity;
     if (!m) return (this._miWant = false), this.#mergeLines();
     el.classList.toggle('active', !!m.active);
-    const NAME = { fish: t('🎣 釣魚大賽'), stone: t('🪨 疊石接力'), wood: t('🔥 添柴時光'), race: t('🏃 燈籠賽跑'), hunt: t('✨ 找金松果') };
+    const NAME = { fish: t('🎣 釣魚大賽'), stone: t('🪨 疊石接力'), wood: t('🔥 添柴時光'), race: t('🏃 燈籠賽跑'), hunt: t('✨ 找金松果'), boat: t('🚣 划船競速') };
     if (compactScreen()) {
       // 手機：短短一行
-      if (m.active) {
+      if (m.active && m.kind === 'boat' && m.signIn > 0) {
+        el.textContent = t('🚣 划船競速報名中・{m} 分後出發', { m: Math.max(1, Math.ceil(m.signIn / 60)) });
+      } else if (m.active) {
         const top = m.top?.[0];
-        const lead = m.kind === 'fish' && top ? ` · 🥇${top.name} ${top.size}cm` : m.kind === 'race' && top ? ` · 🥇${top.name} ${top.time}s` : m.kind === 'hunt' ? ` · ${t('還有 {n} 顆', { n: m.left ?? 0 })}` : '';
+        const lead = m.kind === 'fish' && top ? ` · 🥇${top.name} ${top.size}cm` : (m.kind === 'race' || m.kind === 'boat') && top ? ` · 🥇${top.name} ${top.time}s` : m.kind === 'hunt' ? ` · ${t('還有 {n} 顆', { n: m.left ?? 0 })}` : '';
         el.textContent = t('{name}中・剩 {m} 分', { name: NAME[m.kind] ?? '', m: Math.max(1, Math.ceil(m.endsIn / 60)) }) + lead;
       } else if (m.startsIn > 2 * 3600) {
         el.hidden = true; // 白天：離晚上的活動還很久，手機不佔位置
@@ -337,17 +339,21 @@ export class HUD {
         wood: t('🔥 添柴時光！每添一根柴多 1 顆松果（還剩 {m} 分）', { m: left }),
         race: t('🏃 燈籠賽跑中！依序跑過 1→5 號燈籠，最快前三名送松果（還剩 {m} 分）', { m: left }),
         hunt: t('✨ 找金松果！森林裡還藏著 {n} 顆，找到一顆 +5 松果（還剩 {m} 分）', { n: m.left ?? 0, m: left }),
+        boat:
+          m.signIn > 0
+            ? t('🚣 划船競速報名中！到湖畔碼頭按「報名」（免費），{m} 分鐘後大家一起出發', { m: Math.max(1, Math.ceil(m.signIn / 60)) })
+            : t('🚣 划船競速比賽中！繞 4 個浮標兩圈再衝終點，最快前三名送松果（還剩 {m} 分）', { m: left }),
       };
       const top = m.top?.[0];
       const lead =
         m.kind === 'fish' && top
           ? ` · ${t('目前第一：{name} {size} 公分', { name: top.name, size: top.size })}`
-          : m.kind === 'race' && top
+          : (m.kind === 'race' || m.kind === 'boat') && top
             ? ` · ${t('目前最快：{name} {s} 秒', { name: top.name, s: top.time })}`
             : '';
       el.textContent = (RULE[m.kind] ?? '') + lead;
     } else if (m.startsIn > 2 * 3600) {
-      el.textContent = isOpen({ from: '2026-11-19' }) ? t('🎣 中午 12:30 釣魚大賽；🌙 每晚 7 點～11 點，每半小時一場小活動（早晚 9:30 營火時間有魚王）') : t('🌙 每晚 7 點～11 點，每半小時一場小活動（早晚 9:30 營火時間有魚王）');
+      el.textContent = isOpen({ from: '2026-11-19' }) ? t('🎣 中午 12:30 釣魚大賽（週末白天還有 🚣 划船競速等 3 場）；🌙 每晚 7 點～11 點，每半小時一場小活動（早晚 9:30 營火時間有魚王）') : t('🌙 每晚 7 點～11 點，每半小時一場小活動（早晚 9:30 營火時間有魚王）');
     } else {
       const mins = Math.max(1, Math.ceil(m.startsIn / 60));
       el.textContent = t('下一場 {name}：{time}（{m} 分鐘後）', { name: NAME[m.kind] ?? '', time: `${m.hour}:${String(m.minute ?? 0).padStart(2, '0')}`, m: mins });

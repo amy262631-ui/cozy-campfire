@@ -178,5 +178,34 @@ export function createFishingRod(skin = '') {
   const tip = new THREE.Object3D();
   tip.position.z = len;
   group.add(tip);
-  return { group, tip };
+  return { group, tip, skin };
+}
+
+/** 🎄 換釣竿皮膚：拿掉舊的竿子、在同一個位置換上新的（owner.rod 是 createFishingRod 回傳的） */
+export function swapRodSkin(owner, skin = '') {
+  const old = owner.rod;
+  if (!old || (old.skin ?? '') === (skin ?? '')) return;
+  const rod = createFishingRod(skin);
+  rod.group.position.copy(old.group.position);
+  rod.group.rotation.copy(old.group.rotation);
+  rod.group.visible = old.group.visible;
+  old.group.parent?.add(rod.group);
+  old.group.removeFromParent();
+  old.group.traverse((o) => {
+    o.geometry?.dispose();
+    o.material?.dispose?.();
+  });
+  owner.rod = rod;
+}
+
+/** 🎄 聖誕竿的小燈泡顏色輪流換（像在閃）；一秒換兩次，只改 instanceColor，不會卡 */
+export function twinkleRod(rod, t) {
+  const b = rod?.group.userData.bulbs;
+  if (!b || !rod.group.visible) return;
+  const k = Math.floor(t * 2);
+  if (b.userData.k === k) return;
+  b.userData.k = k;
+  const C = b.userData.bulbColors;
+  for (let i = 0; i < b.count; i++) b.setColorAt(i, C[(i + k) % C.length]);
+  b.instanceColor.needsUpdate = true;
 }
